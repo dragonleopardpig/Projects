@@ -183,7 +183,7 @@
       menus.dashboard.shortcuts.right.shortcut3 = {
         icon = "󰄀";
         tooltip = "Screenshot";
-        command = "bash -c 'grim -g \"$(slurp)\" - | swappy -f -'";
+        command = "~/.local/bin/screenshot";
       };
       menus.dashboard.shortcuts.left.shortcut4 = {
         icon = "";
@@ -451,7 +451,7 @@
     shellAliases = {
       ls = "eza --icons=always --group-directories-first --sort=extension";
       gc = "git commit -m";
-      rebuild = "~/Downloads/NixOS/unified/rebuild.sh";
+      rebuild = "~/Projects/NixOS/rebuild.sh";
     };
     initExtra = ''
       fastfetch
@@ -542,6 +542,14 @@
   # - M90aPro (laptop): uses intel_backlight
   # - X299 (desktop): uses ddcci external monitor backlight
   home.file.".face.icon".source = ./assets/face.png;
+
+  home.file.".local/bin/screenshot" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      grim -g "$(slurp)" - | swappy -f -
+    '';
+  };
 
   home.file.".local/bin/brightness-ctl" = {
     executable = true;
@@ -710,6 +718,11 @@
   # the home Manager release notes for a list of state version
   # changes in each release.
   # Replace HyprPanel config symlink with a writable copy and inject API key from secrets file
+  home.activation.createProjectsDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    mkdir -p "$HOME/Projects"
+    ${pkgs.glib}/bin/gio set "$HOME/Projects" metadata::custom-icon-name folder-development
+  '';
+
   home.activation.makeHyprpanelConfigWritable = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     if [ -L "$HOME/.config/hyprpanel/config.json" ]; then
       cp --remove-destination "$(readlink "$HOME/.config/hyprpanel/config.json")" "$HOME/.config/hyprpanel/config.json"

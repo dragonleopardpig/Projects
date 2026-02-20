@@ -3,6 +3,8 @@
 (setq package-enable-at-startup nil)
 
 ;; * Scimax
+(setq scimax-journal-root-dir "~/Projects/journal/"
+      nb-notebook-directory "~/Projects/")
 ;; (add-hook 'org-mode-hook 'scimax-autoformat-mode)
 
 ;; * Prevent undo tree files from polluting your git repo
@@ -93,7 +95,7 @@
 
 ;; * Pyvenv
 (require 'pyvenv)
-(pyvenv-activate "~/Downloads/NixOS/python/.devenv/state/venv/")
+(pyvenv-activate "~/Projects/python/.devenv/state/venv/")
 
 (setq global-jinx-mode nil)
 

@@ -10,8 +10,8 @@
 ;; * General Setting (disable some lsp features)
 (setq jinx-languages "en_US")
 
-(setenv "PATH" (concat (getenv "PATH") ":" "~/Downloads/NixOS/rust/.devenv/profile/bin"))
-(add-to-list 'exec-path "~/Downloads/NixOS/rust/.devenv/profile/bin")
+(setenv "PATH" (concat (getenv "PATH") ":" "~/Projects/rust/.devenv/profile/bin"))
+(add-to-list 'exec-path "~/Projects/rust/.devenv/profile/bin")
 
 (with-eval-after-load 'scimax-yas
   (yas-global-mode -1))
@@ -21,7 +21,7 @@
 ;;;; ------------------------------------------------------------
 ;; * Rust
 ;; * lsp-bridge-mode
-(add-to-list 'load-path "~/Downloads/lsp-bridge")
+(add-to-list 'load-path "~/Projects/lsp-bridge")
 
 
 (require 'lsp-bridge)

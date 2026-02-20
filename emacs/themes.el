@@ -2,7 +2,7 @@
 (use-package dashboard
   :ensure t
   :config 
-  (setq dashboard-startup-banner "~/Downloads/NixOS/emacs/Emacs-logo.xpm") ;convert svg to xpm
+  (setq dashboard-startup-banner "~/Projects/emacs/Emacs-logo.xpm") ;convert svg to xpm
   ;; Other dashboard configurations
   (dashboard-setup-startup-hook)
   (setq dashboard-items '((recents . 10)
@@ -84,7 +84,7 @@
 	  (dark . (ef-cherie doom-fairy-floss))))
   (setq heaven-and-hell-load-theme-no-confirm t)
   ;; Load custom org-mode styling for theme switching
-  (load "~/Downloads/NixOS/emacs/heaven-and-hell-custom.el")
+  (load "~/Projects/emacs/heaven-and-hell-custom.el")
   :hook (after-init . heaven-and-hell-init-hook)
   :bind (("C-c <f8>" . heaven-and-hell-load-default-theme)
          ("<f8>" . heaven-and-hell-toggle-theme)))

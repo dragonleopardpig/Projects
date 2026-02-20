@@ -95,7 +95,7 @@ git clone https://YOUR_REPO_URL /tmp/nixos-config
 ```bash
 mkdir -p /mnt-src
 mount /dev/nvme2n1p2 /mnt-src   # may need LUKS unlock first
-cp -r /mnt-src/home/thinky/Downloads/NixOS/unified /tmp/nixos-config
+cp -r /mnt-src/home/thinky/Projects/NixOS /tmp/nixos-config
 umount /mnt-src
 ```
 

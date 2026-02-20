@@ -13,17 +13,17 @@
 (setq lsp-completion-show-kind nil)
 
 ;; * lsp-bridge-mode
-(add-to-list 'load-path "~/Downloads/lsp-bridge")
-(add-to-list 'load-path "~/Downloads/flymake-bridge")
+(add-to-list 'load-path "~/Projects/lsp-bridge")
+(add-to-list 'load-path "~/Projects/flymake-bridge")
 
 ;; Set Python path for lsp-bridge - use the python devenv
-(setq lsp-bridge-python-command "~/Downloads/NixOS/python/.devenv/state/venv/bin/python")
+(setq lsp-bridge-python-command "~/Projects/python/.devenv/state/venv/bin/python")
 
 ;; Add devenv profile bins to PATH so lsp-bridge can find LSP servers
 ;; (clangd, rust-analyzer, basedpyright, etc.)
-(dolist (dir '("~/Downloads/NixOS/cpp/.devenv/profile/bin"
-              "~/Downloads/NixOS/rust/.devenv/profile/bin"
-              "~/Downloads/NixOS/python/.devenv/profile/bin"))
+(dolist (dir '("~/Projects/cpp/.devenv/profile/bin"
+              "~/Projects/rust/.devenv/profile/bin"
+              "~/Projects/python/.devenv/profile/bin"))
   (let ((expanded (expand-file-name dir)))
     (when (file-directory-p expanded)
       (add-to-list 'exec-path expanded)

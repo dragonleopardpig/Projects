@@ -46,7 +46,7 @@
 
 ;; Additional projectile configuration
 (with-eval-after-load 'projectile
-  (setq projectile-project-search-path '("~/Downloads/NixOS/"))
+  (setq projectile-project-search-path '("~/Projects/"))
   (setq projectile-cleanup-known-projects nil))
 
 
@@ -65,7 +65,7 @@
 (setq org-crypt-key nil)
 
 ;; * Org Capture
-(setq org-directory "~/Downloads/NixOS/org")
+(setq org-directory "~/Projects/org")
 (setq org-default-notes-file (concat org-directory "/tasks.org"))
 
 ;; * Org Alert

@@ -7,7 +7,7 @@ This is a minimal unified configuration for managing both X299 (desktop) and M90
 ## Structure
 
 ```
-unified/
+NixOS/
 ├── flake.nix                # Main flake defining both hosts
 ├── configuration.nix         # SHARED system configuration (identical for both)
 ├── home.nix                 # SHARED home-manager configuration (identical for both)
@@ -44,7 +44,7 @@ unified/
 
 - The flake build ONLY uses files from the flake directory (this unified folder)
 - `/etc/nixos/` is NOT required and NOT used when building with `--flake`
-- You can work directly from `~/Downloads/NixOS/unified/` without issues
+- You can work directly from `~/Projects/NixOS/` without issues
 - If both directories exist but differ, only the flake directory matters
 
 ## Usage
@@ -52,7 +52,7 @@ unified/
 ### Using the Helper Script (Easiest)
 
 ```bash
-cd ~/Downloads/NixOS/unified
+cd ~/Projects/NixOS
 
 # Auto-detect host and rebuild
 ./rebuild.sh
@@ -68,7 +68,7 @@ cd ~/Downloads/NixOS/unified
 
 1. **Work from your chosen directory**:
    ```bash
-   cd ~/Downloads/NixOS/unified
+   cd ~/Projects/NixOS
    # You can work directly from here, no need to copy to /etc/nixos
    ```
 
@@ -95,13 +95,13 @@ cd ~/Downloads/NixOS/unified
 
 **For X299 desktop**:
 ```bash
-cd ~/Downloads/NixOS/unified  # or wherever your unified directory is
+cd ~/Projects/NixOS  # or wherever your unified directory is
 sudo nixos-rebuild switch --flake .#X299
 ```
 
 **For M90aPro laptop**:
 ```bash
-cd ~/Downloads/NixOS/unified  # or wherever your unified directory is
+cd ~/Projects/NixOS  # or wherever your unified directory is
 sudo nixos-rebuild switch --flake .#M90aPro
 ```
 

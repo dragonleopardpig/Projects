@@ -5,12 +5,12 @@
 (setq lsp-completion-show-detail nil)
 (setq lsp-completion-show-kind nil)
 
-(setenv "PATH" (concat (getenv "PATH") ":" "/home/thinky/Downloads/NixOS/rust/.devenv/profile/bin"))
-(add-to-list 'exec-path "/home/thinky/Downloads/NixOS/rust/.devenv/profile/bin")
+(setenv "PATH" (concat (getenv "PATH") ":" "/home/thinky/Projects/rust/.devenv/profile/bin"))
+(add-to-list 'exec-path "/home/thinky/Projects/rust/.devenv/profile/bin")
 
 ;; * lsp-bridge-mode
-(add-to-list 'load-path "~/Downloads/lsp-bridge")
-(add-to-list 'load-path "~/Downloads/flymake-bridge")
+(add-to-list 'load-path "~/Projects/lsp-bridge")
+(add-to-list 'load-path "~/Projects/flymake-bridge")
 
 (require 'lsp-bridge)
 (global-lsp-bridge-mode)

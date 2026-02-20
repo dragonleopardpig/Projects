@@ -1,3 +1,22 @@
+# Third-party cloned repos (have their own .git)
+/scimax/
+/lsp-bridge/
+/flymake-bridge/
+
+# Generated/cache files
+.aider*
 /org/ltximg/
 /org/data/
-.aider*
+**/.devenv.flake.nix
+**/.devenv/
+**/.direnv/
+**/.cache/
+**/target/
+**/__pycache__/
+*.pyc
+
+# Backup files
+/backup/
+
+# Journal (private)
+/journal/
