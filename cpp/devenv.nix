@@ -7,6 +7,7 @@
   # https://devenv.sh/packages/
   packages =  with pkgs; [
     cmake
+    gcc                        # GNU C/C++ compiler
     pkg-config
     enchant
   ];

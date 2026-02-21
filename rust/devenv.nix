@@ -10,6 +10,7 @@
     rust-analyzer
     cargo-binstall
     rust-script
+    gcc                        # Linker for Rust builds
     pkg-config
     enchant
     enchant2

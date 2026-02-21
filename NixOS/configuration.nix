@@ -232,167 +232,178 @@
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-    # archives
-    zip
-    xz
-    unzip
-    p7zip
 
-    # utils
-    yq-go # yaml processor https://github.com/mikefarah/yq
+    # ── Archive & Compression ──
+    zip                        # Create ZIP archives
+    unzip                      # Extract ZIP archives
+    xz                         # XZ/LZMA compression
+    p7zip                      # 7-Zip archive manager
+    zstd                       # Zstandard fast compression
+    gnutar                     # GNU tar archiver
 
-    # networking tools
-    mtr # A network diagnostic tool
-    iperf3
-    dnsutils  # `dig` + `nslookup`
-    ldns # replacement of `dig`, it provide the command `drill`
-    aria2 # A lightweight multi-protocol & multi-source command-line download utility
-    socat # replacement of openbsd-netcat
-    nmap # A utility for network discovery and security auditing
-    ipcalc  # it is a calculator for the IPv4/v6 addresses
+    # ── Core Utilities ──
+    file                       # Determine file types
+    which                      # Locate commands in PATH
+    tree                       # Directory listing as tree
+    gnused                     # GNU stream editor
+    gawk                       # GNU pattern processing language
+    gnupg                      # GnuPG encryption and signing
+    wget                       # Download files from the web
+    yq-go                      # YAML/JSON/XML processor (CLI)
 
-    # misc
-    cowsay
-    file
-    which
-    tree
-    gnused
-    gnutar
-    gawk
-    zstd
-    gnupg
+    # ── Networking & Diagnostics ──
+    networkmanager             # Network connection manager
+    mtr                        # Traceroute + ping network diagnostic
+    iperf3                     # Network bandwidth measurement
+    dnsutils                   # DNS tools: dig, nslookup
+    ldns                       # DNS tool: drill (dig alternative)
+    aria2                      # Multi-protocol download utility
+    socat                      # Multipurpose network relay (netcat replacement)
+    nmap                       # Network discovery and security scanner
+    ipcalc                     # IPv4/IPv6 subnet calculator
+    traceroute                 # Trace packet route to host
+    inetutils                  # Basic networking tools (ftp, telnet, etc.)
+    ethtool                    # Ethernet device configuration
+    filezilla                  # GUI FTP/SFTP client
+    remmina                    # Remote desktop client (RDP, VNC, SSH)
+    protonvpn-gui              # ProtonVPN graphical client
 
-    # nix related
-    #
-    # it provides the command `nom` works just like `nix`
-    # with more details log output
-    nix-output-monitor
+    # ── System Monitoring & Debugging ──
+    sysstat                    # System performance tools (iostat, mpstat, sar)
+    lm_sensors                 # Hardware sensor monitoring (sensors command)
+    iotop                      # I/O usage monitor per process
+    iftop                      # Network bandwidth monitor per connection
+    strace                     # System call tracer
+    ltrace                     # Library call tracer
+    lsof                       # List open files and sockets
+    pciutils                   # PCI device info (lspci)
+    usbutils                   # USB device info (lsusb)
+    lshw                       # Detailed hardware listing
+    gpustat                    # GPU usage monitor (NVIDIA)
+    upower                     # Battery and power device info
+    mission-center             # GUI system monitor (CPU, RAM, disk, network)
+    resources                  # Lightweight GUI resource monitor
 
-    # productivity
-    hugo # static site generator
-    glow # markdown previewer in terminal
+    # ── Hardware & Power ──
+    brightnessctl              # Screen brightness control
+    ddcutil                    # External monitor brightness via DDC/CI
+    power-profiles-daemon      # Power profile management (balanced, performance, saver)
 
-    iotop # io monitoring
-    iftop # network monitoring
+    # ── Disk & Partitioning ──
+    gparted                    # GUI partition editor
+    usbimager                  # Write disk images to USB drives
 
-    # system call monitoring
-    strace # system call monitoring
-    ltrace # library call monitoring
-    lsof # list open files
+    # ── Hyprland & Wayland Desktop ──
+    swww                       # Animated wallpaper daemon for Wayland
+    hyprsysteminfo             # Hyprland system info utility
+    hyprpolkitagent            # Polkit authentication agent for Hyprland
+    waypaper                   # GUI wallpaper setter for Wayland
+    walker                     # Modern app launcher for Wayland
+    slurp                      # Wayland region selector (for screenshots)
+    grim                       # Wayland screenshot utility
+    satty                      # Screenshot annotation tool
+    wl-clipboard               # Wayland clipboard utilities (wl-copy, wl-paste)
+    libnotify                  # Desktop notification sending (notify-send)
+    xdg-desktop-portal         # Desktop integration portal (file picker, etc.)
+    xdg-desktop-portal-hyprland # Hyprland-specific portal backend
+    xdg-desktop-portal-gtk     # GTK portal backend (file dialogs)
 
-    # system tools
-    sysstat
-    lm_sensors # for `sensors` command
-    ethtool
-    pciutils # lspci
-    usbutils # lsusb
-    wget
-    remmina
-    protonvpn-gui
-    inetutils
-    lshw
-    gparted
-    usbimager
-    sassc
-    redshift
-    gpustat
-    hyprpaper
-    swww
-    hyprsunset
-    hyprsysteminfo
-    waypaper
-    satty
-    slurp
-    grim
-    xdg-desktop-portal
-    xdg-desktop-portal-hyprland
-    xdg-desktop-portal-gtk
-
-    # themes
-    variety
-    orchis-theme
-    tela-icon-theme
-    tela-circle-icon-theme
-    fluent-icon-theme
-    adwaita-icon-theme
-    (pkgs.sddm-astronaut.override {
+    # ── Themes & Appearance ──
+    orchis-theme               # GTK theme (Orchis)
+    tela-icon-theme            # Tela icon theme
+    tela-circle-icon-theme     # Tela Circle icon theme
+    fluent-icon-theme          # Fluent Design icon theme
+    adwaita-icon-theme         # GNOME default icon theme
+    sassc                      # SASS/SCSS CSS compiler (for theme building)
+    (pkgs.sddm-astronaut.override {  # SDDM login screen theme
       embeddedTheme = "pixel_sakura";
       themeConfig = {
         FormPosition = "left";
       };
     })
 
-    # others
-    git-credential-manager # type "unset SSH_ASKPASS" in command prompt
-    brightnessctl
-    ddcutil
-    wl-clipboard
-    upower
-    networkmanager
-    power-profiles-daemon
-    texliveFull
-    onlyoffice-desktopeditors
-    librecad
-    freecad
-    gimp
-    inkscape
-    pinta
-    mission-center
-    resources
-    filezilla
-    traceroute
-    imagemagick
-    ffmpeg
-    fim
-    sxiv
-    tiv
-    chafa
-    viu
-    distrobox
-    wofi
-    walker
-    nemo-with-extensions
-    hyprpolkitagent
-    libnotify
-    jsonrpc-glib
-    devenv
-    claude-code
-    claude-monitor
+    # ── File Managers ──
+    nemo-with-extensions       # Cinnamon file manager with plugins
+    spacedrive                 # Cross-platform file manager
+
+    # ── Image & Media Tools ──
+    imagemagick                # Image conversion and manipulation (CLI)
+    ffmpeg                     # Audio/video converter and streamer
+    gimp                       # GNU image editor (Photoshop alternative)
+    inkscape                   # Vector graphics editor (Illustrator alternative)
+    pinta                      # Simple raster image editor (Paint.NET alternative)
+    imv                        # Wayland-native image viewer
+    tiv                        # Terminal image viewer (ASCII art)
+    chafa                      # Terminal image viewer (Unicode/sixel)
+    viu                        # Terminal image viewer (Unicode)
+
+    # ── Office & Documents ──
+    texliveFull                # Full TeX/LaTeX distribution
+    onlyoffice-desktopeditors  # Office suite (Word, Excel, PowerPoint compatible)
+    hugo                       # Static site generator
+    glow                       # Terminal markdown previewer
+
+    # ── CAD & Engineering ──
+    librecad                   # 2D CAD application
+    freecad                    # 3D parametric CAD modeler
+
+    # ── Emacs & Editor Ecosystem ──
     ((emacsPackagesFor emacs-pgtk).emacsWithPackages (
       epkgs: with epkgs; [
-        vterm
-        direnv
-        lsp-pyright
-        zmq
+        vterm                  # Terminal emulator inside Emacs
+        direnv                 # Direnv integration for Emacs
+        lsp-pyright            # Python LSP client (Pyright)
+        zmq                    # ZeroMQ bindings for Jupyter
       ]
     ))
-    aspell
-    aspellDicts.en
-    aspellDicts.en-science
-    aspellDicts.en-computers
-    nodejs
-    yaml-language-server
-    vscode-json-languageserver
-    typescript-language-server
-    bash-language-server
-    systemd-language-server
-    nginx-language-server
-    kotlin-language-server
-    perlnavigator
-    nixd
-    nix-index
-    marksman
-    gcc
-    enchant
-    pkg-config
-    libxml2
-    glib
-    enchant_2
-    hunspell
-    hunspellDicts.en_US
-    nodejs_24
-    spacedrive
-    # sioyek wrapped to use XWayland (native Wayland has issues with NVIDIA)
+    enchant_2                  # Spell checking meta-library (used by jinx)
+    hunspell                   # Spell checker backend (used by enchant)
+    hunspellDicts.en_US        # US English dictionary for hunspell
+
+    # ── Language Servers (LSP) ──
+    # System-wide LSPs (used across all projects)
+    yaml-language-server       # YAML language server
+    vscode-json-languageserver # JSON language server
+    bash-language-server       # Bash/shell script language server
+    nixd                       # Nix language server
+    marksman                   # Markdown language server
+
+    # ── Development Tools ──
+    pkg-config                 # Compiler/linker flags helper
+    libxml2                    # XML parsing library
+    glib                       # GLib core library
+    jsonrpc-glib               # JSON-RPC library for GLib
+    nodejs_24                  # Node.js JavaScript runtime
+    nix-index                  # Nix package file index (nix-locate)
+    nix-output-monitor         # Pretty nix build output (nom)
+    devenv                     # Developer environment manager
+    repomix                    # Repository content mixer for LLM context
+
+    # ── AI Assistants ──
+    claude-code                # Anthropic Claude CLI coding assistant
+    claude-monitor             # Claude usage monitoring tool
+
+    # ── Containers & Compatibility ──
+    distrobox                  # Run other Linux distros in containers
+    # FHS environment for running non-NixOS binaries
+    (let base = pkgs.appimageTools.defaultFhsEnvArgs; in
+     pkgs.buildFHSEnv (base // {
+       name = "fhs";
+       targetPkgs = pkgs:
+         (base.targetPkgs pkgs) ++ (with pkgs; [
+           pkg-config
+           ncurses
+         ]);
+       profile = "export FHS=1";
+       runScript = "bash";
+       extraOutputsToInstall = ["dev"];
+     }))
+
+    # ── Git & Version Control ──
+    git-credential-manager     # Cross-platform Git credential storage
+
+    # ── PDF & Document Viewers ──
+    # Sioyek wrapped to use XWayland (native Wayland has issues with NVIDIA)
     (pkgs.symlinkJoin {
       name = "sioyek-wrapped";
       paths = [ pkgs.sioyek ];
@@ -402,27 +413,8 @@
       '';
     })
 
-    # Create an FHS environment using the command `fhs`,
-    #enabling the execution of non-NixOS packages in NixOS!
-    (let base = pkgs.appimageTools.defaultFhsEnvArgs; in
-     pkgs.buildFHSEnv (base // {
-       name = "fhs";
-       targetPkgs = pkgs:
-         # pkgs.buildFHSEnv provides only a minimal FHS environment,
-         # lacking many basic packages needed by most software.
-         # Therefore, we need to add them manually.
-         #
-         # pkgs.appimageTools provides basic packages required by most software.
-         (base.targetPkgs pkgs) ++ (with pkgs; [
-           pkg-config
-           ncurses
-           # Feel free to add more packages here if needed.
-         ]
-         );
-       profile = "export FHS=1";
-       runScript = "bash";
-       extraOutputsToInstall = ["dev"];
-     }))
+    # ── Fun ──
+    cowsay                     # Talking cow ASCII art
   ];
 
   services.blueman.enable = true;

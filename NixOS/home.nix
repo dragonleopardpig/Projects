@@ -69,7 +69,6 @@
           "$mod, E, exec, emacs"
           "$mod, P, exec, protonvpn-app"
           "$mod, W, exec, walker"
-          "$mod, A, exec, anyrun"
           "$mod, N, exec, nemo"
           "$mod, S, exec, sioyek"
           "$mod, Y, exec, kitty -e yazi"
@@ -101,6 +100,7 @@
           # Pyprland
           "$mod, T, exec, pypr toggle term"
           "$mod, V, exec, pypr toggle volume"
+          "$mod, X, exec, pypr toggle notepad"
           "$mod, Z, exec, pypr zoom"
           ", Pause, exec, pypr expose"
           ''$mod SHIFT, Escape, exec, pkill -SIGINT -f wf-recorder && sleep 1 && bash -c 'p=$(cat /tmp/last_recording_path 2>/dev/null); notify-send "Recording stopped" "Saved to: $p" -i video-x-generic -a "Screen Recorder" -t 10000 --action="scriptAction:-xdg-open $(dirname "$p")=Open Directory" --action="scriptAction:-xdg-open $p=Play"' ''
@@ -202,8 +202,6 @@
       };
     };
   };
-
-  services.hyprpaper.enable = false;
 
   # Pyprland configuration
   xdg.configFile."hypr/pyprland.toml".text = ''
@@ -386,7 +384,12 @@
     defaultApplications = {
       "inode/directory" = [ "nemo.desktop" ];
       "application/pdf" = [ "sioyek.desktop" ];
-      "image/svg+xml" = [ "pinta.desktop"];
+      "image/png" = [ "imv-dir.desktop" ];
+      "image/jpeg" = [ "imv-dir.desktop" ];
+      "image/gif" = [ "imv-dir.desktop" ];
+      "image/webp" = [ "imv-dir.desktop" ];
+      "image/bmp" = [ "imv-dir.desktop" ];
+      "image/svg+xml" = [ "imv-dir.desktop" ];
       "text/plain" = [ "xed.desktop" ];
       "text/markdown" = [ "xed.desktop" ];
     };
@@ -455,43 +458,6 @@
     };
     initExtra = ''
       fastfetch
-    '';
-  };
-
-  programs.anyrun = {
-    enable = true;
-    config = {
-      x = { fraction = 0.5; };
-      y = { fraction = 0.3; };
-      width = { fraction = 0.3; };
-      hideIcons = false;
-      ignoreExclusiveZones = false;
-      layer = "overlay";
-      hidePluginInfo = false;
-      closeOnClick = false;
-      showResultsImmediately = true;
-      maxEntries = null;
-
-      plugins = [
-        "${pkgs.anyrun}/lib/libapplications.so"
-        # "${pkgs.anyrun}/lib/libsymbols.so"
-      ];
-    };
-
-    # Inline comments are supported for language injection into
-    # multi-line strings with Treesitter! (Depends on your editor)
-    extraCss = /*css */ ''
-      .some_class {
-        background: red;
-      }
-    '';
-
-    extraConfigFiles."some-plugin.ron".text = ''
-      Config(
-        // for any other plugin
-        // this file will be put in ~/.config/anyrun/some-plugin.ron
-        // refer to docs of xdg.configFile for available options
-      )
     '';
   };
 
