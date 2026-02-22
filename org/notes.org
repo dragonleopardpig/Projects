@@ -107,6 +107,23 @@ jA0ECQMKoN6a/MRhkW7/0l4BVv0SP6wGsCf84oGmUcnSnqp/IfN0SaELvybcndBM
 kd2c/8/Y5AvcNa/741hl
 =ps+n
 -----END PGP MESSAGE-----
+* Weather Api Key :crypt:
+-----BEGIN PGP MESSAGE-----
+
+jA0ECQMKGBmr6tcJrYf/0lYBi2hSkIO0yKZScJAf0ZDwusOdLrLq2t/qK++CnqMQ
+ZkmuOU98n8Ej9t54mXX4YZRsbWFU+1g20dlOfU8J79xdF/dr0xl3qqsQsEfvLTeh
+mmTQyzuY0Q==
+=Kdxh
+-----END PGP MESSAGE-----
+* Claude Api Key :crypt:
+-----BEGIN PGP MESSAGE-----
+
+jA0ECQMKprKeXHg4re3/0qMBpqwVt2AjvUJxdoCtP/hgKeL292TiE6q8N8nWnFGY
+dOXBXnzGpuvLguefS9L/DomolmCPNPhyZQ3l0+1VQwEMWs3OpWXbc+AVoqulTnJF
+bQNpqBji2Bapx1e3qvMIg3rMwU7TrzY1OGcDlFVj/XXjElgsf1ohkEsokuGjd5L0
+11h1aPGRrTQBj6IBUxujlfvt57UAAUzsxQ1uV/HeOnlxogA2
+=YwcT
+-----END PGP MESSAGE-----
 * Rime
 - Create /default.custom.yaml/ file in location *~/.config/ibus/Rime/*
 #+BEGIN_SRC yaml

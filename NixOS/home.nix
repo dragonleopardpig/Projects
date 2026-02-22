@@ -137,6 +137,7 @@
                     "swww-daemon && waypaper --random"
                     "while true; do sleep 60; waypaper --random; done"
                     "systemctl --user start hyprpolkitagent"
+                    "solaar --window=hide"
                   ];
       misc = {
         mouse_move_enables_dpms = true;

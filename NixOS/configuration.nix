@@ -55,7 +55,9 @@
   };
 
   services.udev.extraRules = ''
-        KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
+    KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
+    # Disable USB autosuspend for Logitech G502X (fixes scroll wheel on boot)
+    ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="046d", ATTR{idProduct}=="c099", ATTR{power/autosuspend}="-1"
   '';
 
   # Console font configuration
@@ -72,6 +74,10 @@
   };
 
   hardware.i2c.enable = true;
+
+  # Logitech wireless/wired device support (G502X, PRO X TKL)
+  hardware.logitech.wireless.enable = true;
+  hardware.logitech.wireless.enableGraphical = true;  # Solaar GUI
 
   # GVFS for Nemo trash, network mounts, etc.
   services.gvfs.enable = true;
