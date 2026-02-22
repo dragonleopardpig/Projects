@@ -105,6 +105,29 @@
     };
   };
 
+  # USB reset for Logitech G502X on boot (fixes scroll wheel not initializing)
+  systemd.services.logitech-g502x-reset = {
+    description = "Reset Logitech G502X USB to fix scroll wheel";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "systemd-udevd.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStartPre = "${pkgs.coreutils}/bin/sleep 3";
+      ExecStart = pkgs.writeShellScript "g502x-reset" ''
+        for dev in /sys/bus/usb/devices/*/idProduct; do
+          if [ "$(cat "$dev" 2>/dev/null)" = "c099" ]; then
+            devpath=$(dirname "$dev")
+            echo "Resetting Logitech G502X at $devpath"
+            echo 0 > "$devpath/authorized"
+            sleep 1
+            echo 1 > "$devpath/authorized"
+          fi
+        done
+      '';
+    };
+  };
+
   # Enable networking
   networking.networkmanager.enable = true;
 
