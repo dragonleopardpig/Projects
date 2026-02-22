@@ -56,8 +56,10 @@
 
   services.udev.extraRules = ''
     KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"
-    # Disable USB autosuspend for Logitech G502X (fixes scroll wheel on boot)
+    # Disable USB autosuspend for Logitech G502X
     ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="046d", ATTR{idProduct}=="c099", ATTR{power/autosuspend}="-1"
+    # Trigger USB reset service when G502X is detected
+    ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="046d", ATTR{idProduct}=="c099", TAG+="systemd", ENV{SYSTEMD_WANTS}="logitech-g502x-reset.service"
   '';
 
   # Console font configuration
@@ -70,8 +72,11 @@
   nix.gc = {
     automatic = true;
     dates = "daily";
-    options = "--delete-older-than 7d";
+    options = "--delete-older-than 3d";
   };
+
+  # Limit boot entries to prevent /boot from filling up
+  boot.loader.grub.configurationLimit = 5;
 
   hardware.i2c.enable = true;
 
@@ -105,22 +110,19 @@
     };
   };
 
-  # USB reset for Logitech G502X on boot (fixes scroll wheel not initializing)
+  # USB reset for Logitech G502X (triggered by udev when device appears)
   systemd.services.logitech-g502x-reset = {
     description = "Reset Logitech G502X USB to fix scroll wheel";
-    wantedBy = [ "multi-user.target" ];
-    after = [ "systemd-udevd.service" ];
     serviceConfig = {
       Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStartPre = "${pkgs.coreutils}/bin/sleep 3";
       ExecStart = pkgs.writeShellScript "g502x-reset" ''
+        sleep 5
         for dev in /sys/bus/usb/devices/*/idProduct; do
           if [ "$(cat "$dev" 2>/dev/null)" = "c099" ]; then
             devpath=$(dirname "$dev")
             echo "Resetting Logitech G502X at $devpath"
             echo 0 > "$devpath/authorized"
-            sleep 1
+            sleep 2
             echo 1 > "$devpath/authorized"
           fi
         done
