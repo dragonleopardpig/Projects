@@ -124,6 +124,22 @@ bQNpqBji2Bapx1e3qvMIg3rMwU7TrzY1OGcDlFVj/XXjElgsf1ohkEsokuGjd5L0
 11h1aPGRrTQBj6IBUxujlfvt57UAAUzsxQ1uV/HeOnlxogA2
 =YwcT
 -----END PGP MESSAGE-----
+* Github SSH :crypt:
+-----BEGIN PGP MESSAGE-----
+
+jA0ECQMKaqa1STyz0Mr/0sElAUqGuncApFpeF4zUjKDveLpyVuf8Xmnmzy07JBSQ
+iuJRxv7LGbbARfh3VlpL6L5HVXlcwNFFMnwcekYLO6g0l9Xbxn8KIvRECElCX1Bs
+ds7h9BoyzOlqjYm/OzlvcTtqfmdVL/r7B3ATuzhDnJcDNDGDZZt1yr5HAZr2Zxq7
+JPG90EWrDnkBbQiNWRrSmX99C+cUgAsouzIFwbZR+HC8vZpAqIH3CI07JtBqmIfW
+dxmSp+mcKPCdoFeH5g3XnnEsuVYQKrSbYqB5rPwQgxnuMyHmy5HqB24rRPcnjurK
+GDlHP/6g79AAusE/L2Qv5BuUQozptQYJVhrMZ4aXzAlq+OfLVSo7KdBH7XqeK3oS
+7lFLSCt/rQt3O0Jp1lZ+z5wyYtdxYdgW7UI00VujYXQwmaEVNMOvR6znCmkKw1HX
+8oVGMGm5VLSpfe92z3XNYrMmRaGnp8zhpC46HjbV3Z0LrnpxrqGWqqVYaCDehIoc
+I/ZVV4xaBPJPAoS17fiEiZeLSvXX7u+JkLcPPACFwVjJiP2TxjYU15z8TpyzDQGY
+ZDNv6LtTiXO+x9CTN/KWxjvOId7kXho4NIMwhZ88R9KVxWbC5aJuLaM2Sf4MhtcH
+shhZQGJFPgoLBCLRVUylRgM+/vNNgHE=
+=ZOmj
+-----END PGP MESSAGE-----
 * Rime
 - Create /default.custom.yaml/ file in location *~/.config/ibus/Rime/*
 #+BEGIN_SRC yaml
