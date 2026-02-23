@@ -169,8 +169,8 @@
       (plist-put org-format-latex-options :background 'default))
 
 (with-eval-after-load 'org
-  (set-face-attribute 'org-block nil :background nil)
-  (set-face-attribute 'org-latex-and-related nil :background nil))
+  (set-face-attribute 'org-block nil :background 'unspecified)
+  (set-face-attribute 'org-latex-and-related nil :background 'unspecified))
 
 (defun my/org-latex-preview-no-bg (orig-fun &rest args)
   (let ((org-format-latex-options

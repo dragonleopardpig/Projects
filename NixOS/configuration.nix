@@ -383,7 +383,7 @@
         zmq                    # ZeroMQ bindings for Jupyter
       ]
     ))
-    enchant_2                  # Spell checking meta-library (used by jinx)
+    enchant                  # Spell checking meta-library (used by jinx)
     hunspell                   # Spell checker backend (used by enchant)
     hunspellDicts.en_US        # US English dictionary for hunspell
 
@@ -412,6 +412,7 @@
 
     # ── Containers & Compatibility ──
     distrobox                  # Run other Linux distros in containers
+    cryfs                      # Encrypts files locally
     # FHS environment for running non-NixOS binaries
     (let base = pkgs.appimageTools.defaultFhsEnvArgs; in
      pkgs.buildFHSEnv (base // {

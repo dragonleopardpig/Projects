@@ -137,7 +137,7 @@
 
 * RESULTS AND DISCUSSION
 
-#+BEGIN_SRC ipython :session :results raw drawer
+#+BEGIN_SRC ipython
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -149,18 +149,6 @@ plt.ylabel('cos(x)')
 #+END_SRC  
 
 #+RESULTS:
-:results:
-# Out [3]: 
-# text/plain
-: Text(0, 0.5, 'cos(x)')
-
-# text/plain
-: <Figure size 432x288 with 1 Axes>
-
-# image/png
-[[file:obipy-resources/52a7a04089b15592945a5f7cec4776e57a5c40d3/89d34c1b377e67bbbb843550190048e936d6b126.png]]
-:end:
-
 * CONCLUSIONS
 
 Summarize the main conclusions here.
