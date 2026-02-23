@@ -1,11 +1,200 @@
 { lib, config, inputs, pkgs, ... }:
-
 {
-  # TODO please change the username & home directory to your own
   home.username = "thinky";
   home.homeDirectory = "/home/thinky";
 
+  xdg.desktopEntries.sioyek-xcb = {
+    name = "Sioyek";
+    exec = "/home/thinky/.local/bin/sioyek-xcb %f";
+    icon = "sioyek";
+    comment = "Sioyek PDF viewer (XWayland)";
+    mimeType = [ "application/pdf" ];
+    categories = [ "Office" "Viewer" ];
+  };
+
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "inode/directory" = [ "nemo.desktop" ];
+      "application/pdf" = [ "sioyek-xcb.desktop" ];
+      "image/png" = [ "imv-dir.desktop" ];
+      "image/jpeg" = [ "imv-dir.desktop" ];
+      "image/gif" = [ "imv-dir.desktop" ];
+      "image/webp" = [ "imv-dir.desktop" ];
+      "image/bmp" = [ "imv-dir.desktop" ];
+      "image/svg+xml" = [ "imv-dir.desktop" ];
+      "text/plain" = [ "xed.desktop" ];
+      "text/markdown" = [ "xed.desktop" ];
+    };
+  };
+  
   xdg.configFile."uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
+  xdg.configFile."Kvantum/kvantum.kvconfig".text = ''
+    [General]
+    theme=KvArcDark
+  '';
+  
+  # Pyprland configuration
+  xdg.configFile."hypr/pyprland.toml".text = ''
+    [pyprland]
+    plugins = [
+      "scratchpads",
+      "magnify",
+      "expose",
+          ]
+
+    [scratchpads.term]
+    command = "kitty --class kitty-dropterm"
+    animation = "fromTop"
+    size = "75% 60%"
+
+    [scratchpads.notepad]
+    command = "xed"
+    animation = "fromRight"
+    size = "50% 70%"
+    lazy = true
+
+    [scratchpads.volume]
+    command = "pavucontrol"
+    animation = "fromRight"
+    size = "40% 90%"
+    lazy = true
+  '';
+
+  # Swappy screenshot editor config
+  xdg.configFile."swappy/config".text = ''
+    [Default]
+    save_dir=$HOME/Pictures/Screenshots
+    save_filename_format=screenshot-%Y%m%d-%H%M%S.png
+  '';
+
+  # Waypaper configuration (wallpaper manager using swww backend)
+  xdg.configFile."waypaper/config.ini".force = true;
+  xdg.configFile."waypaper/config.ini".text = ''
+    [Settings]
+    language = en
+    folder = ~/Pictures/Wallpapers
+    monitors = All
+    wallpaper = ~/Pictures/Wallpapers/Sollee.png
+    show_path_in_tooltip = True
+    backend = swww
+    fill = fill
+    sort = name
+    color = #ffffff
+    subfolders = False
+    all_subfolders = False
+    show_hidden = False
+    show_gifs_only = False
+    post_command =
+    number_of_columns = 3
+    swww_transition_type = any
+    swww_transition_step = 90
+    swww_transition_angle = 0
+    swww_transition_duration = 2
+    swww_transition_fps = 60
+    mpvpaper_sound = False
+    mpvpaper_options =
+    use_xdg_state = False
+    zen_mode = False
+  '';
+
+  home.file.".face.icon".source = ./assets/face.png;
+
+  # Sioyek wrapper: force XWayland to avoid NVIDIA Wayland window mapping issues
+  home.file.".local/bin/sioyek-xcb" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      exec env QT_QPA_PLATFORM=xcb sioyek "$@"
+    '';
+  };
+
+  home.file.".local/bin/screenshot" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      grim -g "$(slurp)" - | swappy -f -
+    '';
+  };
+
+  home.file.".local/bin/brightness-ctl" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      # Pick the right backlight device: prefer intel_backlight (laptop), fall back to ddcci (desktop)
+      if [ -d /sys/class/backlight/intel_backlight ]; then
+        DEV=intel_backlight
+      else
+        DEV=$(ls /sys/class/backlight/ | grep -m1 ddcci)
+      fi
+
+      case "$1" in
+        up)   brightnessctl -d "$DEV" set +10% ;;
+        down) brightnessctl -d "$DEV" set 10%- ;;
+        *)    echo "Usage: brightness-ctl {up|down}" ;;
+      esac
+    '';
+  };
+
+  # Daily wallpaper downloader script (Bing + NASA APOD)
+  home.file.".local/bin/wallpaper-of-the-day" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      set -eu
+
+      WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
+      TODAY=$(date +%Y-%m-%d)
+      mkdir -p "$WALLPAPER_DIR"
+
+      # --- Bing Wallpaper of the Day --- echo "Fetching Bing
+      wallpaper..."  BING_JSON=$(curl -s
+      "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
+      BING_DATE=$(echo "$BING_JSON" | jq -r '.images[0].startdate' |
+      sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') BING_PATH=$(echo
+      "$BING_JSON" | jq -r '.images[0].url')
+      BING_FILE="$WALLPAPER_DIR/bing-$BING_DATE.jpg" if [ ! -f
+      "$BING_FILE" ]; then if [ -n "$BING_PATH" ] && [ "$BING_PATH" !=
+      "null" ]; then
+          # Try UHD first, fall back to the default URL
+          BING_UHD=$(echo "$BING_PATH" | sed 's/1920x1080/UHD/g')
+          if ! curl -sf "https://www.bing.com$BING_UHD" -o "$BING_FILE"; then
+            curl -sf "https://www.bing.com$BING_PATH" -o "$BING_FILE"
+          fi
+          echo "Saved: $BING_FILE"
+        else
+          echo "Warning: Could not parse Bing image URL"
+        fi
+      else
+        echo "Bing wallpaper already exists: $BING_FILE"
+      fi
+
+      # --- NASA Astronomy Picture of the Day ---
+      echo "Fetching NASA APOD..."
+      # Use DEMO_KEY by default; set NASA_API_KEY env var for your own key
+      NASA_KEY="''${NASA_API_KEY:-DEMO_KEY}"
+      NASA_JSON=$(curl -s "https://api.nasa.gov/planetary/apod?api_key=$NASA_KEY")
+      NASA_DATE=$(echo "$NASA_JSON" | jq -r '.date')
+      MEDIA_TYPE=$(echo "$NASA_JSON" | jq -r '.media_type')
+      NASA_FILE="$WALLPAPER_DIR/nasa-apod-$NASA_DATE.jpg"
+      if [ ! -f "$NASA_FILE" ]; then
+        if [ "$MEDIA_TYPE" = "image" ]; then
+          # Prefer hdurl, fall back to url
+          NASA_URL=$(echo "$NASA_JSON" | jq -r '.hdurl // .url')
+          if [ -n "$NASA_URL" ] && [ "$NASA_URL" != "null" ]; then
+            curl -sf "$NASA_URL" -o "$NASA_FILE"
+            echo "Saved: $NASA_FILE"
+          else
+            echo "Warning: Could not parse NASA APOD image URL"
+          fi
+        else
+          echo "NASA APOD is not an image today (media_type=$MEDIA_TYPE), skipping"
+        fi
+      else
+        echo "NASA APOD already exists: $NASA_FILE"
+      fi
+    '';
+  };
 
   gtk = {
     enable = true;
@@ -19,11 +208,6 @@
     platformTheme.name = "kvantum";
     style.name = "kvantum";
   };
-
-  xdg.configFile."Kvantum/kvantum.kvconfig".text = ''
-    [General]
-    theme=KvArcDark
-  '';
 
   wayland.windowManager.hyprland = {
     enable = true;
@@ -61,19 +245,24 @@
       input = {
         follow_mouse = 1;
       };
+      windowrule = [                                                   
+        "match:class ^(sioyek)$, tile on"                                       
+      ];
       "$mod" = "SUPER";
       bind =
         [
           "$mod, F, exec, firefox"
           "$mod, Q, exec, kitty"
           "$mod, E, exec, emacs"
-          "$mod, P, exec, protonvpn-app"
+          "$mod, P, exec, env GDK_BACKEND=x11 protonvpn-app"
           "$mod, W, exec, walker"
           "$mod, N, exec, nemo"
-          "$mod, S, exec, sioyek"
+          "$mod, S, exec, ~/.local/bin/sioyek-xcb"
           "$mod, Y, exec, kitty -e yazi"
           "$mod, Escape, exit,"
           "$mod, K, killactive,"
+          "$mod, M, movetoworkspacesilent, special:minimized"
+          "$mod SHIFT, M, togglespecialworkspace, minimized"
           "$mod, left, movefocus, l"
           "$mod, right, movefocus, r"
           "$mod, up, movefocus, u"
@@ -133,7 +322,7 @@
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
-                    "protonvpn-app"
+                    "env GDK_BACKEND=x11 protonvpn-app"
                     "swww-daemon && waypaper --random"
                     "while true; do sleep 60; waypaper --random; done"
                     "systemctl --user start hyprpolkitagent"
@@ -203,70 +392,6 @@
       };
     };
   };
-
-  # Pyprland configuration
-  xdg.configFile."hypr/pyprland.toml".text = ''
-    [pyprland]
-    plugins = [
-      "scratchpads",
-      "magnify",
-      "expose",
-    ]
-
-    [scratchpads.term]
-    command = "kitty --class kitty-dropterm"
-    animation = "fromTop"
-    size = "75% 60%"
-
-    [scratchpads.notepad]
-    command = "xed"
-    animation = "fromRight"
-    size = "50% 70%"
-    lazy = true
-
-    [scratchpads.volume]
-    command = "pavucontrol"
-    animation = "fromRight"
-    size = "40% 90%"
-    lazy = true
-  '';
-
-  # Swappy screenshot editor config
-  xdg.configFile."swappy/config".text = ''
-    [Default]
-    save_dir=$HOME/Pictures/Screenshots
-    save_filename_format=screenshot-%Y%m%d-%H%M%S.png
-  '';
-
-  # Waypaper configuration (wallpaper manager using swww backend)
-  xdg.configFile."waypaper/config.ini".force = true;
-  xdg.configFile."waypaper/config.ini".text = ''
-    [Settings]
-    language = en
-    folder = ~/Pictures/Wallpapers
-    monitors = All
-    wallpaper = ~/Pictures/Wallpapers/Sollee.png
-    show_path_in_tooltip = True
-    backend = swww
-    fill = fill
-    sort = name
-    color = #ffffff
-    subfolders = False
-    all_subfolders = False
-    show_hidden = False
-    show_gifs_only = False
-    post_command =
-    number_of_columns = 3
-    swww_transition_type = any
-    swww_transition_step = 90
-    swww_transition_angle = 0
-    swww_transition_duration = 2
-    swww_transition_fps = 60
-    mpvpaper_sound = False
-    mpvpaper_options =
-    use_xdg_state = False
-    zen_mode = False
-  '';
 
   services.hypridle.enable = true;
   services.hypridle.settings = {
@@ -379,44 +504,6 @@
     };
   };
 
-  # Set Nemo as default file manager
-  xdg.mimeApps = {
-    enable = true;
-    defaultApplications = {
-      "inode/directory" = [ "nemo.desktop" ];
-      "application/pdf" = [ "sioyek.desktop" ];
-      "image/png" = [ "imv-dir.desktop" ];
-      "image/jpeg" = [ "imv-dir.desktop" ];
-      "image/gif" = [ "imv-dir.desktop" ];
-      "image/webp" = [ "imv-dir.desktop" ];
-      "image/bmp" = [ "imv-dir.desktop" ];
-      "image/svg+xml" = [ "imv-dir.desktop" ];
-      "text/plain" = [ "xed.desktop" ];
-      "text/markdown" = [ "xed.desktop" ];
-    };
-  };
-
-  # alacritty - a cross-platform, GPU-accelerated terminal emulator
-  programs.alacritty = {
-    enable = true;
-    # custom settings
-    settings = {
-      env.TERM = "xterm-256color";
-      font = {
-        size = 9;
-        # draw_bold_text_with_bright_colors = true;
-      };
-      scrolling.multiplier = 5;
-      general.live_config_reload = true;
-      selection.save_to_clipboard = true;
-      keyboard.bindings = [
-        { key = "W"; mods = "Alt"; action = "Copy"; }
-        { key = "Y"; mods = "Control"; action = "Paste"; }
-      ];
-    };
-    # theme = "github_dark_high_contrast";
-  };
-
   programs.kitty = {
     enable = true;
     font = {
@@ -505,97 +592,6 @@
     };
   };
 
-  # Unified brightness control script (works on both X299 and M90aPro)
-  # - M90aPro (laptop): uses intel_backlight
-  # - X299 (desktop): uses ddcci external monitor backlight
-  home.file.".face.icon".source = ./assets/face.png;
-
-  home.file.".local/bin/screenshot" = {
-    executable = true;
-    text = ''
-      #!/bin/sh
-      grim -g "$(slurp)" - | swappy -f -
-    '';
-  };
-
-  home.file.".local/bin/brightness-ctl" = {
-    executable = true;
-    text = ''
-      #!/bin/sh
-      # Pick the right backlight device: prefer intel_backlight (laptop), fall back to ddcci (desktop)
-      if [ -d /sys/class/backlight/intel_backlight ]; then
-        DEV=intel_backlight
-      else
-        DEV=$(ls /sys/class/backlight/ | grep -m1 ddcci)
-      fi
-
-      case "$1" in
-        up)   brightnessctl -d "$DEV" set +10% ;;
-        down) brightnessctl -d "$DEV" set 10%- ;;
-        *)    echo "Usage: brightness-ctl {up|down}" ;;
-      esac
-    '';
-  };
-
-  # Daily wallpaper downloader script (Bing + NASA APOD)
-  home.file.".local/bin/wallpaper-of-the-day" = {
-    executable = true;
-    text = ''
-      #!/bin/sh
-      set -eu
-
-      WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
-      TODAY=$(date +%Y-%m-%d)
-      mkdir -p "$WALLPAPER_DIR"
-
-      # --- Bing Wallpaper of the Day ---
-      echo "Fetching Bing wallpaper..."
-      BING_JSON=$(curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
-      BING_DATE=$(echo "$BING_JSON" | jq -r '.images[0].startdate' | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/')
-      BING_PATH=$(echo "$BING_JSON" | jq -r '.images[0].url')
-      BING_FILE="$WALLPAPER_DIR/bing-$BING_DATE.jpg"
-      if [ ! -f "$BING_FILE" ]; then
-        if [ -n "$BING_PATH" ] && [ "$BING_PATH" != "null" ]; then
-          # Try UHD first, fall back to the default URL
-          BING_UHD=$(echo "$BING_PATH" | sed 's/1920x1080/UHD/g')
-          if ! curl -sf "https://www.bing.com$BING_UHD" -o "$BING_FILE"; then
-            curl -sf "https://www.bing.com$BING_PATH" -o "$BING_FILE"
-          fi
-          echo "Saved: $BING_FILE"
-        else
-          echo "Warning: Could not parse Bing image URL"
-        fi
-      else
-        echo "Bing wallpaper already exists: $BING_FILE"
-      fi
-
-      # --- NASA Astronomy Picture of the Day ---
-      echo "Fetching NASA APOD..."
-      # Use DEMO_KEY by default; set NASA_API_KEY env var for your own key
-      NASA_KEY="''${NASA_API_KEY:-DEMO_KEY}"
-      NASA_JSON=$(curl -s "https://api.nasa.gov/planetary/apod?api_key=$NASA_KEY")
-      NASA_DATE=$(echo "$NASA_JSON" | jq -r '.date')
-      MEDIA_TYPE=$(echo "$NASA_JSON" | jq -r '.media_type')
-      NASA_FILE="$WALLPAPER_DIR/nasa-apod-$NASA_DATE.jpg"
-      if [ ! -f "$NASA_FILE" ]; then
-        if [ "$MEDIA_TYPE" = "image" ]; then
-          # Prefer hdurl, fall back to url
-          NASA_URL=$(echo "$NASA_JSON" | jq -r '.hdurl // .url')
-          if [ -n "$NASA_URL" ] && [ "$NASA_URL" != "null" ]; then
-            curl -sf "$NASA_URL" -o "$NASA_FILE"
-            echo "Saved: $NASA_FILE"
-          else
-            echo "Warning: Could not parse NASA APOD image URL"
-          fi
-        else
-          echo "NASA APOD is not an image today (media_type=$MEDIA_TYPE), skipping"
-        fi
-      else
-        echo "NASA APOD already exists: $NASA_FILE"
-      fi
-    '';
-  };
-
   # Systemd user service + timer for daily wallpaper downloads
   systemd.user.services.wallpaper-of-the-day = {
     Unit = {
@@ -625,8 +621,6 @@
 
   # Install firefox.
   programs.firefox.enable = true;
-
-  # --- Moved from environment.systemPackages for richer HM config ---
 
   programs.btop = {
     enable = true;
@@ -675,22 +669,13 @@
     enable = true;
     runAsService = true;
   };
-  
-  # This value determines the home Manager release that your
-  # configuration is compatible with. This helps avoid breakage
-  # when a new home Manager release introduces backwards
-  # incompatible changes.
-  #
-  # You can update home Manager without changing this value. See
-  # the home Manager release notes for a list of state version
-  # changes in each release.
-  # Replace HyprPanel config symlink with a writable copy and inject API key from secrets file
+
   home.activation.createProjectsDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     mkdir -p "$HOME/Projects"
-    ${pkgs.glib}/bin/gio set "$HOME/Projects" metadata::custom-icon-name folder-development
+    ${pkgs.glib}/bin/gio set "$HOME/Projects" metadata::custom-icon-name folder-development || true
   '';
 
-  home.activation.makeHyprpanelConfigWritable = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  home.activation.makeHyprpanelConfigWritable = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     if [ -L "$HOME/.config/hyprpanel/config.json" ]; then
       cp --remove-destination "$(readlink "$HOME/.config/hyprpanel/config.json")" "$HOME/.config/hyprpanel/config.json"
       chmod u+w "$HOME/.config/hyprpanel/config.json"
@@ -698,7 +683,7 @@
     # Inject the weather API key from secrets file
     if [ -f "$HOME/.config/secrets/weather-api-key" ] && [ -f "$HOME/.config/hyprpanel/config.json" ]; then
       API_KEY=$(cat "$HOME/.config/secrets/weather-api-key" | tr -d '\n')
-      ${pkgs.jq}/bin/jq --arg key "$API_KEY" '.["menus.clock.weather.key"] = $key' "$HOME/.config/hyprpanel/config.json" > "$HOME/.config/hyprpanel/config.json.tmp"
+      ${pkgs.jq}/bin/jq --arg key "$API_KEY" '.menus.clock.weather.key = $key' "$HOME/.config/hyprpanel/config.json" > "$HOME/.config/hyprpanel/config.json.tmp"
       mv "$HOME/.config/hyprpanel/config.json.tmp" "$HOME/.config/hyprpanel/config.json"
     fi
   '';

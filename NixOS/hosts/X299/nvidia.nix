@@ -15,10 +15,10 @@
     # Modesetting is required.
     modesetting.enable = true;
 
-    # Nvidia power management. Experimental, and can cause sleep/suspend to fail.
-    powerManagement.enable = false;
-    # Fine-grained power management. Turns off GPU when not in use.
-    # Experimental and only works on modern Nvidia GPUs (Turing or newer).
+    # Power management enables nvidia-suspend/resume/hibernate systemd services
+    # which ensure proper GPU teardown on shutdown (prevents hang on power-off).
+    powerManagement.enable = true;
+    # Fine-grained power management. Only for laptops with Turing+ GPUs.
     powerManagement.finegrained = false;
 
     # Use the NVidia open source kernel module (not to be confused with the
