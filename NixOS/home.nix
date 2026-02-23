@@ -222,6 +222,7 @@
     env = XDG_SESSION_DESKTOP,Hyprland
     env = GTK_IM_MODULE,
     env = QT_IM_MODULE,
+    windowrule = tile = true, match:class = sioyek
   '';
     settings = {
       general = {
@@ -245,9 +246,6 @@
       input = {
         follow_mouse = 1;
       };
-      windowrule = [                                                   
-        "match:class ^(sioyek)$, tile on"                                       
-      ];
       "$mod" = "SUPER";
       bind =
         [
@@ -685,6 +683,12 @@
       API_KEY=$(cat "$HOME/.config/secrets/weather-api-key" | tr -d '\n')
       ${pkgs.jq}/bin/jq --arg key "$API_KEY" '.menus.clock.weather.key = $key' "$HOME/.config/hyprpanel/config.json" > "$HOME/.config/hyprpanel/config.json.tmp"
       mv "$HOME/.config/hyprpanel/config.json.tmp" "$HOME/.config/hyprpanel/config.json"
+    fi
+    # Restart HyprPanel so it picks up the injected key (file monitor may miss it due to race)
+    if ${pkgs.procps}/bin/pgrep -f hyprpanel >/dev/null 2>&1; then
+      ${pkgs.procps}/bin/pkill -f hyprpanel || true
+      sleep 1
+      ${pkgs.coreutils}/bin/nohup uwsm app -- hyprpanel >/dev/null 2>&1 &
     fi
   '';
   home.stateVersion = "25.11";
