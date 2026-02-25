@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>eGrabber .NET migration guide</title>
+  <style type="text/css">
+      code{white-space: pre-wrap;}
+      span.smallcaps{font-variant: small-caps;}
+      span.underline{text-decoration: underline;}
+      div.column{display: inline-block; vertical-align: top; width: 50%;}
+  </style>
+  <style type="text/css">
+a.sourceLine { display: inline-block; line-height: 1.25; }
+a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
+a.sourceLine:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode { white-space: pre; position: relative; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+code.sourceCode { white-space: pre-wrap; }
+a.sourceLine { text-indent: -1em; padding-left: 1em; }
+}
+pre.numberSource a.sourceLine
+  { position: relative; left: -4em; }
+pre.numberSource a.sourceLine::before
+  { content: attr(title);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; pointer-events: all; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {  }
+@media screen {
+a.sourceLine::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <style type="text/css">body {width: 940px;}body, table, div, p, dl {background: #fff;background-color: #fff;margin-left: auto;margin-right: auto;text-align: justify;color: #797f84;font-family: "Open Sans", Verdana, sans-serif;font-weight: 400;line-height: 1.6em;font-size: 14px;}ol {padding-left: 25px;}table, th, td {border: 1px solid #797f84;border-collapse: collapse;padding: 1px 5px;}table {width: 100%;}th {border: 1px solid #797f84;color: #474c4f;font-weight: 600;border-collapse: collapse;padding: 1px 5px;}td {width: auto;}tr:hover td {background-color: #f6f6f6;}li:only-child{list-style-type:none;}.toc-section-number:after {content: ". ";}.header-section-number:after{content: ".";}pre {background-color: #f8f8f8;padding: 10px;margin: 0px;}pre:hover {background-color: #f2f2f2;}code {color: #4080c0;font-family: Consolas, monospace, serif;}pre code {color: #474c4f;font-weight: normal;line-height: 1.3em;}h1 {color: #474c4f;margin-bottom: 0.7em;font-family: "Source Sans Pro",sans-serif;font-size: 65px;font-weight: 100;text-align: left;}h1 code{color: #474c4f;font-weight: 300;font-family: "Source Sans Pro",sans-serif;} h2 code {color: #009dd8;}h3 code, th code, dt code {color: #474c4f;font-size: 1.1em;}#net-assembly em code {color: #474c4f;}h2 {color: #009dd8;margin-top: 35px;margin-bottom: 10px;font-family: Montserrat;font-weight: 400;text-transform: uppercase;}h3 {color:#474c4f;margin-top: 10px;margin-bottom: 15px;font-family: Montserrat;font-weight: 400;text-transform: uppercase;}pre.genicam-gentl code:before {float: right;color: #009dd8;font-style: italic;content: 'GenICam GenTL';}pre.egentl code:before {float: right;color: #009dd8;font-style: italic;content: 'EGenTL';}pre.multicam code:before {float: right;color: #009dd8;font-style: italic;content: 'MultiCam';}pre.egrabber code:before {float: right;color: #009dd8;font-style: italic;content: 'eGrabber';}li p {margin-bottom: 0.5em;margin-top: 0.5em;}dt {color: #474c4f;font-weight: 600;margin-top: 0.3em;}dd {margin-bottom: 0.8em;margin-left: 20px;}dd p {margin-top: 0.1em;margin-bottom: 0.1em;}dd pre, li pre {margin-top: 0.2em;margin-bottom: 0.2em;}dd table {margin-top: 0.5em;margin-bottom: 0.5em;}#acronyms dd {display: inline;margin: 0;}#acronyms dd:after {display: block;content: '';}#acronyms dt {display: inline-block;min-width: 5em;margin-top: 0em;}div.footnotes {font-size: 0.8em;}div.footnotes p {margin-top: 0;margin-bottom: 0;}div.footnotes code{color:#009dd8;}a {color: #009dd8;font-weight: normal;text-decoration: none;}a:hover {text-decoration: underline;}#TOC li {list-style-type: none;}li>ul>li{list-style-type: square;font-weight: normal;}li>ul>li>ul>li{list-style-type: circle;font-weight: normal;}code > span.kw { color: #67b145; font-weight: bold; } code > span.dt { color: #d98840; } code > span.ot { color: #2f6809; } code > span.va { color: #25254d; } code > span.cf { color: #2f6809; font-weight: bold; } @media print {@page {margin: 1.5cm;}body {font-size: 12px;}a {box-shadow: none;}a[href^="#fnref"] {display: none;}h1 {page-break-before: always;}#TOC h1 {page-break-before: auto;}dd {page-break-before: avoid;}h2, h3, dt {page-break-after: avoid;}pre, table {page-break-inside: avoid;}div[id$=".js"] pre {page-break-inside: auto;}}</style>
+  <style type="text/css">@import url(https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400);</style>
+  <style type="text/css">@import url(https://fonts.googleapis.com/css?family=Open+Sans:400,600);</style>
+</head>
+<body>
+<div style="width: 100%; height: 56px;">
+   <div style="height: 25px; left: 0; position: absolute; top: 0; background-color: #3e3e40; right: 0; color:#FFF; text-transform:uppercase; text-align:right; padding: 5px 15px 5px;">
+     eGrabber sample programs 26.01.0.3
+   </div>
+</div>
+<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHcAAAAjCAIAAAAhRAI8AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAGlmlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxNDggNzkuMTY0MDM2LCAyMDE5LzA4LzEzLTAxOjA2OjU3ICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtbG5zOnN0RXZ0PSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VFdmVudCMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDIxLjAgKFdpbmRvd3MpIiB4bXA6Q3JlYXRlRGF0ZT0iMjAxOS0xMi0xMlQwODo0NDozMSswMTowMCIgeG1wOk1vZGlmeURhdGU9IjIwMTktMTItMTJUMTA6NDA6MTQrMDE6MDAiIHhtcDpNZXRhZGF0YURhdGU9IjIwMTktMTItMTJUMTA6NDA6MTQrMDE6MDAiIGRjOmZvcm1hdD0iaW1hZ2UvcG5nIiBwaG90b3Nob3A6Q29sb3JNb2RlPSIzIiBwaG90b3Nob3A6SUNDUHJvZmlsZT0ic1JHQiBJRUM2MTk2Ni0yLjEiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6ZGY0MGQwYTctYmZjNC0zYzQ2LWE4NjktNWIxYjE4ZmZjZDdiIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOmRmNDBkMGE3LWJmYzQtM2M0Ni1hODY5LTViMWIxOGZmY2Q3YiIgeG1wTU06T3JpZ2luYWxEb2N1bWVudElEPSJ4bXAuZGlkOmRmNDBkMGE3LWJmYzQtM2M0Ni1hODY5LTViMWIxOGZmY2Q3YiI+IDx4bXBNTTpJbmdyZWRpZW50cz4gPHJkZjpCYWc+IDxyZGY6bGkgc3RSZWY6bGlua0Zvcm09IlJlZmVyZW5jZVN0cmVhbSIgc3RSZWY6ZmlsZVBhdGg9ImNsb3VkLWFzc2V0Oi8vY2MtYXBpLXN0b3JhZ2UuYWRvYmUuaW8vYXNzZXRzL2Fkb2JlLWxpYnJhcmllcy9hNWZjZDY1MC00Y2NmLTQwNTgtYTI5Yy0xZDA0MThmNDc5MWQ7bm9kZT0xMzAwNDAxNC1lOGVmLTQ5OGYtOTYxYy0xMThjZGMxMDFhYWYiIHN0UmVmOkRvY3VtZW50SUQ9InV1aWQ6ODI2NTE4ZDYtYmM2Yi00MDg0LWFlMDYtZjFmYzdlYjYwODk2Ii8+IDwvcmRmOkJhZz4gPC94bXBNTTpJbmdyZWRpZW50cz4gPHhtcE1NOkhpc3Rvcnk+IDxyZGY6U2VxPiA8cmRmOmxpIHN0RXZ0OmFjdGlvbj0iY3JlYXRlZCIgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDpkZjQwZDBhNy1iZmM0LTNjNDYtYTg2OS01YjFiMThmZmNkN2IiIHN0RXZ0OndoZW49IjIwMTktMTItMTJUMDg6NDQ6MzErMDE6MDAiIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkFkb2JlIFBob3Rvc2hvcCAyMS4wIChXaW5kb3dzKSIvPiA8L3JkZjpTZXE+IDwveG1wTU06SGlzdG9yeT4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz7odSyWAAAMiElEQVRoge2aeVxTxxbHDwkkIREoIaIBBTQRMYBaIYbWhbUIyKKtreKn9dNq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">
+<section id="egrabber-.net-migration-guide" class="level1">
+<h1>eGrabber .NET migration guide</h1>
+<p>This document explains how to migrate from the deprecated <code>Coaxlink_NetApi</code> assembly to the new <code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code> assemblies.</p>
+<section id="why-new-assemblies" class="level2">
+<h2>Why new assemblies?</h2>
+<p>The <code>Coaxlink_NetApi</code> assembly suffers from several limitations and annoyances.</p>
+<ul>
+<li>The API was not as rich as the eGrabber C++ classes from the beginning.</li>
+<li>It did not catch up with the latest eGrabber improvements (e.g. <em>camera discovery</em> and <em>multi-bank support</em> are not available).</li>
+<li>It’s departing from the new Python API, which is very close to the eGrabber C++ classes.</li>
+<li>Some API methods depend on the custom type <code>Euresys.SizeT</code><a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>, which cannot be used as a simple integer type.</li>
+<li>The event callbacks are defined as delegates rather than usual methods.</li>
+<li>For technical reasons, <code>Coaxlink_NetApi</code> object handles cannot be used accross <a href="https://learn.microsoft.com/en-us/dotnet/framework/app-domains/application-domains" title="Application domains">AppDomains</a>.</li>
+</ul>
+<p>The new <code>EGrabber.NETFramework</code> assembly fixes all those issues. It’s based on the same design as the new Python bindings but tailored to the .NET Framework runtime.</p>
+<p>The new <code>EGrabber.NET</code> assembly has the same benefits as <code>EGrabber.NETFramework</code> but targets the new open-source and cross-platform implementation of .NET previously called .NET Core.</p>
+</section>
+<section id="updating-the-assembly-reference" class="level2">
+<h2>Updating the assembly reference</h2>
+<p>Obviously, the project files referencing the old assembly need to be updated to reference the new one.</p>
+</section>
+<section id="intellisense-and-inline-documentation" class="level2">
+<h2>IntelliSense and inline documentation</h2>
+<p>Visual Studio is of great help while migrating from <code>Coaxlink_NetApi</code> to <code>EGrabber.NETFramework</code> or <code>EGrabber.NET</code>. You can explore the <code>Euresys.EGrabber</code> API with the IntelliSense auto-complete feature of the IDE. In addition, the API is fully documented and the documentation is directly available in the IDE<a href="#fn2" class="footnote-ref" id="fnref2"><sup>2</sup></a>.</p>
+</section>
+<section id="net-framework" class="level2">
+<h2>.NET Framework</h2>
+<p>The new <code>EGrabber.NETFramework</code> requires a more recent .NET Framework.</p>
+<table>
+<thead>
+<tr class="header">
+<th><code>Coaxlink_NetApi</code></th>
+<th><code>EGrabber.NETFramework</code></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>requires <em>.NET Framework 4.0</em></td>
+<td>requires <em>.NET Framework 4.6</em></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="net-core" class="level2">
+<h2>.NET (Core)</h2>
+<p>The new <code>EGrabber.NET</code> does not require .NET Framework but requires another version called .NET.</p>
+<table>
+<thead>
+<tr class="header">
+<th><code>Coaxlink_NetApi</code></th>
+<th><code>EGrabber.NET</code></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>requires <em>.NET Framework 4.0</em></td>
+<td>requires <em>.NET 6.0</em></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="namespaces" class="level2">
+<h2>Namespaces</h2>
+<p>The eGrabber classes are now in the namespace <code>Euresys.EGrabber</code>.</p>
+<table>
+<thead>
+<tr class="header">
+<th><code>Coaxlink_NetApi</code></th>
+<th><code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>using Euresys;</code></td>
+<td><code>using Euresys.EGrabber;</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="basic-migration-rules" class="level2">
+<h2>Basic migration rules</h2>
+<dl>
+<dt>Here are the basic migration rules.</dt>
+<dd><ul>
+<li>In the <code>Coaxlink_NetApi</code> API, method names are written in <code>camelCase</code> whereas in <code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code>, method names are written in <code>CamelCase</code> to improve consistency with .NET naming conventions; For example, the <code>Coaxlink_NetApi</code> method <code>reallocBuffers</code> becomes <code>ReallocBuffers</code> in <code>EGrabber.NETFramework</code>;</li>
+<li>Some methods are now properties (e.g. <code>EGrabber.Width</code>, <code>EGrabber.Height</code>), those changes are straightforward;</li>
+<li><p>Other differences:</p>
+<table style="width:98%;">
+<colgroup>
+<col style="width: 44%"></col>
+<col style="width: 53%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;"><code>Coaxlink_NetApi</code></th>
+<th style="text-align: left;"><code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><code>getInfo</code><em><code>MODULE</code></em><code>(cmd, out ...)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.GetInfo&lt;</code><em><code>TYPE</code></em><code>&gt;(cmd)</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>getInteger</code><em><code>MODULE</code></em><code>(f)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Get&lt;long&gt;(f)</code>, <em><code>Module</code></em><code>.Get&lt;int&gt;(f)</code>…</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><em>(cf. note below)</em></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Get&lt;bool&gt;(f)</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>getFloat</code><em><code>MODULE</code></em><code>(f)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Get&lt;double&gt;(f)</code>, <em><code>Module</code></em><code>.Get&lt;float&gt;(f)</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>getString</code><em><code>MODULE</code></em><code>(f)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Get&lt;string&gt;(f)</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>getStringList</code><em><code>MODULE</code></em><code>(f)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Get&lt;string[]&gt;(f)</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>setInteger</code><em><code>MODULE</code></em><code>(f, v)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Set&lt;long&gt;(f, v)</code>, <em><code>Module</code></em><code>.Set&lt;int&gt;(f, v)</code>…</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><em>(cf. note below)</em></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Set&lt;bool&gt;(f, v)</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>setFloat</code><em><code>MODULE</code></em><code>(f, v)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Set&lt;double&gt;(f, v)</code>, <em><code>Module</code></em><code>.Set&lt;float&gt;(f, v)</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>setString</code><em><code>MODULE</code></em><code>(f, v)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Set&lt;string&gt;(f, v)</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>execute</code><em><code>MODULE</code></em><code>(f)</code></td>
+<td style="text-align: left;"><em><code>Module</code></em><code>.Execute(f)</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><code>enable</code><em><code>EVENT_DATA</code></em><code>Event(f)</code></td>
+<td style="text-align: left;"><code>EnableEvent(EventType.</code><em><code>EVENT_DATA</code></em><code>)</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><code>disable</code><em><code>EVENT_DATA</code></em><code>Event(f)</code></td>
+<td style="text-align: left;"><code>DisableEvent(EventType.</code><em><code>EVENT_DATA</code></em><code>)</code></td>
+</tr>
+</tbody>
+</table>
+where
+<ul>
+<li><em><code>MODULE</code></em> can be replaced by <code>SystemModule</code>, <code>InterfaceModule</code>, <code>DeviceModule</code>, <code>StreamModule</code>, or <code>RemoteModule</code>;</li>
+<li><em><code>Module</code></em> can be replaced by <code>System</code>, <code>Interface</code>, <code>Device</code>, <code>Stream</code>, or <code>Remote</code>;</li>
+<li><em><code>EVENT_DATA</code></em> can be replaced by <code>NewBufferData</code>, <code>DataStreamData</code>, <code>IoToolboxData</code>, <code>CicData</code>, <code>CxpInterfaceData</code>, <code>DeviceErrorData</code>, <code>CxpDeviceData</code>, or <code>RemoteDeviceData</code>.</li>
+</ul></li>
+</ul>
+</dd>
+</dl>
+<p><strong>Note</strong>: with the <code>Coaxlink_NetApi</code> assembly, setting/getting <code>bool</code> values had to be done using methods <code>setIntegerMODULE</code>/<code>getIntegerMODULE</code> (with values <code>1</code> and <code>0</code>) or using methods <code>setStringMODULE</code>/<code>getStringMODULE</code> (with values <code>&quot;True&quot;</code> and <code>&quot;False&quot;</code>). Both of these options still work, but the new <code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code> assemblies improve <code>bool</code> support by providing explicit methods <code>Set&lt;bool&gt;</code> and <code>Get&lt;bool&gt;</code>.</p>
+</section>
+<section id="callback-models" class="level2">
+<h2>Callback models</h2>
+<p>The different callback models of <code>Coaxlink_NetApi</code> assembly are no longer present in the new <code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code> assemblies, which only expose an interface based on the “callback on demand” variant of <code>EGrabber</code>. The Python bindings only expose this model and this proved to be sufficient to support all the use cases as this model can be used to build the other variants.</p>
+<p>In the table below, we show how to migrate from an old callback model to the new API.</p>
+<table>
+<tr>
+<th>
+<code>Coaxlink_NetApi</code>
+</th>
+<th>
+<code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code>
+</th>
+</tr>
+<tr>
+<td>
+<code>EGrabberCallbackOnDemand</code>
+</td>
+<td>
+<code>EGrabber</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>EGrabberCallbackSingleThread</code>
+</td>
+<td>
+<code>EGrabber</code> + <code>ProcessEventsAsync(EventType.All, ct)</code>
+<ul>
+<li>
+<code>ProcessEventsAsync</code> can be used to process events repeatedly in a background task, <code>EventType.All</code> indicates all event types should be processed; this is the exact same behavior as the “singe thread” model.
+</li>
+<li>
+<code>ct</code> is a <a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=netframework-4.6" title="Cancellation token">CancellationToken</a>; this is the .NET way to cancel an operation.
+</li>
+</ul>
+</tr>
+<tr>
+<td>
+<code>EGrabberCallbackMultiThread</code>
+</td>
+<td>
+<code>EGrabber</code> + <strong>many</strong> <code>ProcessEventsAsync(EventType.&lt;EVENT&gt;, ct)</code>
+<ul>
+<li>
+where <code>&lt;EVENT&gt;</code> are different event types to process (e.g. <code>NewBufferData</code>, <code>IoToolboxData</code>, <code>CicData</code>…)
+</li>
+<li>
+<code>ProcessEventsAsync</code> can be used to process events of the same type repeatedly in a background task. Calling <code>ProcessEventsAsync</code> for each specific event type creates as many background tasks as event types; this is the exact same behavior as the “multi thread” model.
+</li>
+<li>
+<code>ct</code> is a <a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=netframework-4.6" title="Cancellation token">CancellationToken</a>, this is the .NET way to cancel an operation. Depending on the application needs, different <a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=netframework-4.6" title="Cancellation token">CancellationToken</a>s or the same <a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=netframework-4.6" title="Cancellation token">CancellationToken</a> can be used for the different event types. Please note that using the same <a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=netframework-4.6" title="Cancellation token">CancellationToken</a> allows to cancel all background tasks together with the same token source.
+</li>
+</ul>
+</tr>
+</table>
+<p>As you can see, the <code>ProcessEventsAsync</code> approach is superior to the previous callback models.</p>
+<ul>
+<li>It’s more flexible because it provides a finer grain control over event processing handling. It’s easier to configure different processing tasks focusing either on a unique event type or on a particular set of event types.
+<ul>
+<li>It follows the .NET common practices as it returns a <code>Task</code> object that can be operated using the standard API.</li>
+</ul></li>
+</ul>
+</section>
+<section id="discovery" class="level2">
+<h2>Discovery</h2>
+<p>The eGrabber discovery is now part of the new <code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code> assemblies, so we can easily</p>
+<ul>
+<li>discovery available grabbers or cameras;
+<ul>
+<li>create <code>EGrabber</code> objects for the discovered grabbers or cameras.</li>
+</ul></li>
+</ul>
+<p>For example, the following piece of code creates an <code>EGrabber</code> object for the first discovered camera (if available):</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode cs"><code class="sourceCode cs"><a class="sourceLine" id="cb1-1" title="1"><span class="kw">using</span> Euresys.<span class="fu">EGrabber</span>;</a>
+<a class="sourceLine" id="cb1-2" title="2"></a>
+<a class="sourceLine" id="cb1-3" title="3"><span class="dt">var</span> gentl = <span class="kw">new</span> <span class="fu">EGenTL</span>();</a>
+<a class="sourceLine" id="cb1-4" title="4"><span class="dt">var</span> discovery = <span class="kw">new</span> <span class="fu">EGrabberDiscovery</span>(gentl);</a>
+<a class="sourceLine" id="cb1-5" title="5">discovery.<span class="fu">Discover</span>();</a>
+<a class="sourceLine" id="cb1-6" title="6"><span class="kw">if</span> (discovery.<span class="fu">CameraCount</span> == <span class="dv">0</span>)</a>
+<a class="sourceLine" id="cb1-7" title="7">{</a>
+<a class="sourceLine" id="cb1-8" title="8">    <span class="kw">throw</span> <span class="kw">new</span> <span class="fu">Exception</span>(<span class="st">&quot;No cameras discovered&quot;</span>);</a>
+<a class="sourceLine" id="cb1-9" title="9">}</a>
+<a class="sourceLine" id="cb1-10" title="10"><span class="dt">var</span> grabber = <span class="kw">new</span> <span class="fu">EGrabber</span>(discovery.<span class="fu">Cameras</span>[<span class="dv">0</span>]);</a></code></pre></div>
+<p>Please refer to the <a href="https://documentation.euresys.com/Products/COAXLINK/COAXLINK/en-us/Content/04_eGrabber/programmers-guide/eGrabber/discovering-grabbers-and-cameras.htm" title="Programmer&#39;s guide">programmer’s guide</a> for further details about the eGrabber discovery.</p>
+</section>
+<section id="selecting-another-gentl-provider" class="level2">
+<h2>Selecting another GenTL provider</h2>
+<p>When an <code>EGenTL</code> object is created, the default GenTL producer is used (typically <code>coaxlink.cti</code>). However, it’s possible to select a specific producer in the code as follows:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode cs"><code class="sourceCode cs"><a class="sourceLine" id="cb2-1" title="1"><span class="dt">var</span> gentlCoaxlink = <span class="kw">new</span> <span class="fu">EGenTL</span>(CtiPath.<span class="fu">Coaxlink</span>); <span class="co">// loads `coaxlink.cti` -- Coaxlink cards and CoaXPress cameras</span></a>
+<a class="sourceLine" id="cb2-2" title="2"><span class="dt">var</span> gentlGigelink = <span class="kw">new</span> <span class="fu">EGenTL</span>(CtiPath.<span class="fu">Gigelink</span>); <span class="co">// loads `gigelink.cti` -- Network cards and GigE Vision cameras</span></a>
+<a class="sourceLine" id="cb2-3" title="3"><span class="dt">var</span> gentlGrablink = <span class="kw">new</span> <span class="fu">EGenTL</span>(CtiPath.<span class="fu">Grablink</span>); <span class="co">// loads `grablink.cti` -- Grablink Duo cards and Camera Link cameras</span></a></code></pre></div>
+</section>
+<section id="converting-buffers" class="level2">
+<h2>Converting buffers</h2>
+<p>The <code>FormatConverter</code> class is no longer present in the new <code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code> assemblies but the functionality is still available.</p>
+<p>There are three options for converting image buffers from a pixel format to another:</p>
+<ul>
+<li>Using the low-level <code>EGenTL.ImageConvert</code>, refer to the inline documentation available in the IDE;
+<ul>
+<li>Using <code>Buffer.Convert</code> or <code>ScopedBuffer.Convert</code>, which create a <code>ConvertedBuffer</code> object containing the converted buffer in an automatically allocated memory region; the pixel data can be accessed using the property <code>ConvertedBuffer.Pixels</code>;</li>
+<li>Using <code>Buffer.ConvertTo</code> or <code>ScopedBuffer.ConvertTo</code>, which convert the buffer into a destination buffer provided by the user.</li>
+</ul></li>
+</ul>
+</section>
+<section id="egrabber-exceptions" class="level2">
+<h2>eGrabber Exceptions</h2>
+<p>Like in the <code>Coaxlink_NetApi</code> assembly, all the eGrabber exception classes are available in the new <code>EGrabber.NETFramework</code> and <code>EGrabber.NET</code> assemblies but with the <code>CamelCase</code> naming convention. The migration should be straightforward.</p>
+</section>
+<section id="using-open-evision-egrabberbridge" class="level2">
+<h2>Using Open eVision EGrabberBridge</h2>
+<p>The <a href="https://documentation.euresys.com/Products/OPEN_EVISION/OPEN_EVISION/en-us/Content/03_Using/7_Advanced_Programming/2_EGrabberBridge/EGrabberBridge_-_Using_Images_from_eGrabber_Sources.htm?TocPath=Using%20Open%20eVision%7C_____14" title="EGrabberBridge">EGrabberBridge</a> now supports <code>Coaxlink_NetApi</code> and <code>EGrabber.NETFramework</code> assemblies (this requires Open eVision 24.02 or later).</p>
+<section id="using-coaxlink_netapi" class="level3">
+<h3>Using <code>Coaxlink_NetApi</code></h3>
+<p>To convert a <code>buffer</code> object (of type <code>Euresys.Buffer</code> or <code>Euresys.ScopedBuffer</code>) to an Open eVision data container, we use the buffer information (<code>Euresys.BufferInfo</code> object) returned by <code>buffer.getInfo()</code>.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode cs"><code class="sourceCode cs"><a class="sourceLine" id="cb3-1" title="1"><span class="kw">using</span> (EGrabberImageBW8 image = <span class="kw">new</span> <span class="fu">EGrabberImageBW8</span>(buffer.<span class="fu">getInfo</span>()))</a>
+<a class="sourceLine" id="cb3-2" title="2">{</a>
+<a class="sourceLine" id="cb3-3" title="3">    <span class="co">// Use the EGrabberImageBW8 as an Open eVision EImage Object</span></a>
+<a class="sourceLine" id="cb3-4" title="4">    <span class="co">// Here an inversion of the image is performed</span></a>
+<a class="sourceLine" id="cb3-5" title="5">    EImageBW8 invertedImage = <span class="kw">new</span> <span class="fu">EImageBW8</span>(image.<span class="fu">Width</span>, image.<span class="fu">Height</span>);</a>
+<a class="sourceLine" id="cb3-6" title="6">    EasyImage.<span class="fu">Oper</span>(EArithmeticLogicOperation.<span class="fu">Invert</span>, image, invertedImage);</a>
+<a class="sourceLine" id="cb3-7" title="7">}</a></code></pre></div>
+<p>The <a href="https://documentation.euresys.com/Products/OPEN_EVISION/OPEN_EVISION/en-us/Content/03_Using/7_Advanced_Programming/2_EGrabberBridge/EGrabberBridge_-_Using_Images_from_eGrabber_Sources.htm?TocPath=Using%20Open%20eVision%7C_____14" title="EGrabberBridge">EGrabberBridge</a> also provides an API to automatically convert an input buffer to the expected format using the <code>Euresys.FormatConverter</code>.</p>
+</section>
+<section id="using-egrabber.netframework-and-open-evision-24.02-or-later" class="level3">
+<h3>Using <code>EGrabber.NETFramework</code> (and Open eVision 24.02 or later)</h3>
+<p>Similarly, to convert a <code>buffer</code> object (of type <code>Euresys.EGrabber.Buffer</code> or <code>Euresys.EGrabber.ScopedBuffer</code>) to an Open eVision data container, we can also use the buffer information (<code>Euresys.EGrabber.BufferInfo</code> object) returned by <code>buffer.GetInfo()</code>.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode cs"><code class="sourceCode cs"><a class="sourceLine" id="cb4-1" title="1"><span class="kw">using</span> (EGrabberImageBW8 image = <span class="kw">new</span> <span class="fu">EGrabberImageBW8</span>(buffer.<span class="fu">GetInfo</span>()))</a>
+<a class="sourceLine" id="cb4-2" title="2">{</a>
+<a class="sourceLine" id="cb4-3" title="3">    <span class="co">// Use the EGrabberImageBW8 as an Open eVision EImage Object</span></a>
+<a class="sourceLine" id="cb4-4" title="4">    <span class="co">// Here an inversion of the image is performed</span></a>
+<a class="sourceLine" id="cb4-5" title="5">    EImageBW8 invertedImage = <span class="kw">new</span> <span class="fu">EImageBW8</span>(image.<span class="fu">Width</span>, image.<span class="fu">Height</span>);</a>
+<a class="sourceLine" id="cb4-6" title="6">    EasyImage.<span class="fu">Oper</span>(EArithmeticLogicOperation.<span class="fu">Invert</span>, image, invertedImage);</a>
+<a class="sourceLine" id="cb4-7" title="7">}</a></code></pre></div>
+<p><span class="underline">However</span>, it is also possible to pass <code>EGrabber.NETFramework</code> <code>buffer</code> objects <strong>directly</strong> to the <a href="https://documentation.euresys.com/Products/OPEN_EVISION/OPEN_EVISION/en-us/Content/03_Using/7_Advanced_Programming/2_EGrabberBridge/EGrabberBridge_-_Using_Images_from_eGrabber_Sources.htm?TocPath=Using%20Open%20eVision%7C_____14" title="EGrabberBridge">EGrabberBridge</a> so that internal format conversions can be automatically performed if necessary. The code will be shorter and smarter. This is the recommended way to convert a <code>buffer</code> object to an Open eVision data container.</p>
+<p>For example, below we can pass a <code>bufferMono8</code> (a buffer containing a <code>Mono8</code> image) to create an <code>EGrabberImageC24</code> object.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode cs"><code class="sourceCode cs"><a class="sourceLine" id="cb5-1" title="1"><span class="kw">using</span> (EGrabberImageC24 image = <span class="kw">new</span> <span class="fu">EGrabberImageC24</span>(bufferMono8))</a>
+<a class="sourceLine" id="cb5-2" title="2">{</a>
+<a class="sourceLine" id="cb5-3" title="3">    <span class="co">// The buffer containing Mono8 data is automatically converted</span></a>
+<a class="sourceLine" id="cb5-4" title="4">    <span class="co">// to BGR8 data before creating the EGrabberImageC24 object</span></a>
+<a class="sourceLine" id="cb5-5" title="5">    <span class="co">// ...</span></a>
+<a class="sourceLine" id="cb5-6" title="6">}</a></code></pre></div>
+<p>Please note that the <a href="https://documentation.euresys.com/Products/OPEN_EVISION/OPEN_EVISION/en-us/Content/03_Using/7_Advanced_Programming/2_EGrabberBridge/EGrabberBridge_-_Using_Images_from_eGrabber_Sources.htm?TocPath=Using%20Open%20eVision%7C_____14" title="EGrabberBridge">EGrabberBridge</a> API with the <code>FormatConverter</code> is <strong>not applicable</strong> to <code>EGrabber.NETFramework</code> (but does remain applicable to <code>Coaxlink_NetApi</code>).</p>
+</section>
+</section>
+<section id="sample-programs" class="level2">
+<h2>Sample programs</h2>
+<p>Please have a look at the samples in the cs and vb directories which have been adapted to use the new interface.</p>
+</section>
+</section>
+<section class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>Orignially, the size of <code>Euresys.SizeT</code> was 32-bit or 64-bit depending on which version of the assembly was used (<code>x86</code> or <code>x86_64</code>).<a href="#fnref1" class="footnote-back">↩</a></p></li>
+<li id="fn2"><p>Provided that the file <code>EGrabber.NETFramework.xml</code> (or <code>EGrabber.NET.xml</code>) is in the same directory as the assembly file <code>EGrabber.NETFramework.dll</code> (or <code>EGrabber.NET.dll</code>), the eGrabber installer takes care of this.<a href="#fnref2" class="footnote-back">↩</a></p></li>
+</ol>
+</section>
+<div style="width: 100%; left: 0; position: absolute; text-align: right;">
+    <hr style="border: none; border-top: 1px solid #C4CFE5;">
+    <address style="font-style: normal; color: #2A3D61;">
+        <small>© <a href="http://www.euresys.com">EURESYS S.A.</a> - Subject to change without notice.</small>
+    </address>
+</div>
+</body>
+</html>

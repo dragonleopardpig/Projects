@@ -1,0 +1,3 @@
+savedcmd_coaxlink.o := ld -m elf_x86_64 -z noexecstack --no-warn-rwx-segments -r /home/thinky/Downloads/egrabber-linux-x86_64-26.01.0.2/drivers/linux/../precompiled/x86_64/mc_coaxlink_h.o  -r -o coaxlink.o @coaxlink.mod  ; /nix/store/jm1r8xwcalll7b85h9gippv50w7ixwzb-linux-6.19.2-dev/lib/modules/6.19.2/build/tools/objtool/objtool --hacks=jump_label --hacks=noinstr --hacks=skylake --ibt --orc --retpoline --rethunk --sls --static-call --uaccess --prefix=16  --link  --module coaxlink.o
+
+coaxlink.o: $(wildcard /nix/store/jm1r8xwcalll7b85h9gippv50w7ixwzb-linux-6.19.2-dev/lib/modules/6.19.2/build/tools/objtool/objtool)

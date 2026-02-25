@@ -23,7 +23,7 @@
 (fringe-mode -1)
 
 ;; * Set Faces, etc...
-(set-face-attribute 'default nil :height 110)
+(set-face-attribute 'default nil :height 105)
 (setq leuven-scale-outline-headlines 1.1)
 (setq text-scale-mode-step 1.05)
 (setq org-indent-indentation-per-level 0)

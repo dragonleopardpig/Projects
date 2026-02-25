@@ -34,6 +34,25 @@
 (with-eval-after-load 'envrc
   (global-lsp-bridge-mode))
 (setq lsp-bridge-enable-completion-in-string nil)
+
+;; lsp-bridge keybindings
+(define-key lsp-bridge-mode-map (kbd "M-.") #'lsp-bridge-find-def)
+(define-key lsp-bridge-mode-map (kbd "M-,") #'lsp-bridge-find-def-return)
+(define-key lsp-bridge-mode-map (kbd "M-?") #'lsp-bridge-find-references)
+(define-key lsp-bridge-mode-map (kbd "C-c d") #'lsp-bridge-popup-documentation)   ;; popup docs under cursor
+(define-key lsp-bridge-mode-map (kbd "C-c p") #'lsp-bridge-peek)                  ;; peek definition inline
+(define-key lsp-bridge-mode-map (kbd "C-c t") #'lsp-bridge-find-type-def)         ;; jump to type definition
+(define-key lsp-bridge-mode-map (kbd "C-c i") #'lsp-bridge-incoming-call-hierarchy) ;; who calls this?
+(define-key lsp-bridge-mode-map (kbd "C-c o") #'lsp-bridge-outgoing-call-hierarchy) ;; what does this call?
+(define-key lsp-bridge-mode-map (kbd "C-c s") #'lsp-bridge-workspace-list-symbols) ;; search symbols across project
+
+;; * Symbol browser sidebar
+(use-package imenu-list
+  :ensure t
+  :bind ("C-c l" . imenu-list-smart-toggle)
+  :config
+  (setq imenu-list-focus-after-activation t)
+  (setq imenu-list-auto-resize t))
 (setq acm-enable-search-file-words nil)
 (setq lsp-bridge-enable-org-babel t)
 (setq acm-enable-yas nil)

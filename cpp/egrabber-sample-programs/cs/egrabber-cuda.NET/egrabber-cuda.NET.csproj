@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>AnyCPU</Platforms>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="invertKernel.cu">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ManagedCuda-12" Version="12.8.60" />
+    <PackageReference Include="ManagedCuda-NVRTC" Version="12.8.60" />
+  </ItemGroup>
+
+ <ItemGroup>
+    <Reference Include="EGrabber.NET">
+      <HintPath Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))'">C:\Program Files\Euresys\eGrabber\clr\anycpu\EGrabber.NET.dll</HintPath>
+      <HintPath Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))'">/usr/local/opt/euresys/egrabber/clr/anycpu/EGrabber.NET.dll</HintPath>
+      <HintPath Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))'">/opt/euresys/egrabber/clr/anycpu/EGrabber.NET.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

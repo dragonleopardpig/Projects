@@ -8,7 +8,7 @@ dioxus = { version = "0.6", features = ["desktop"] }
 dioxus-desktop = "0.6"
 image = "0.25"
 base64 = "0.22"
-tokio = { version = "1", features = ["rt", "process", "time"] }
+tokio = { version = "1", features = ["rt", "process", "time", "io-util"] }
 
 [profile.release]
 opt-level = 3

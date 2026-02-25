@@ -4,6 +4,7 @@
   imports = [
     ./hardware-configuration.nix
     ./nvidia.nix
+    ./egrabber.nix
   ];
 
   networking.hostName = "X299";

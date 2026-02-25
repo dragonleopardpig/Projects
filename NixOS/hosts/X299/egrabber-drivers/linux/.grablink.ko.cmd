@@ -1,0 +1,1 @@
+savedcmd_grablink.ko := ld -r -m elf_x86_64 -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T /nix/store/jm1r8xwcalll7b85h9gippv50w7ixwzb-linux-6.19.2-dev/lib/modules/6.19.2/build/scripts/module.lds -o grablink.ko grablink.o grablink.mod.o .module-common.o

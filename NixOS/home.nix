@@ -3,6 +3,15 @@
   home.username = "thinky";
   home.homeDirectory = "/home/thinky";
 
+  xdg.desktopEntries.euresys-studio = {
+    name = "eGrabber Studio";
+    exec = "euresys-fhs -c \"QT_QPA_PLATFORM=xcb /opt/euresys/egrabber/studio/studio\"";
+    icon = "/home/thinky/.local/share/icons/euresys-studio.png";
+    comment = "Euresys eGrabber Studio for CoaxLink/GrabLink frame grabbers";
+    categories = [ "Utility" "Engineering" ];
+    terminal = false;
+  };
+
   xdg.desktopEntries.sioyek-xcb = {
     name = "Sioyek";
     exec = "/home/thinky/.local/bin/sioyek-xcb %f";
@@ -147,21 +156,24 @@
       TODAY=$(date +%Y-%m-%d)
       mkdir -p "$WALLPAPER_DIR"
 
-      # --- Bing Wallpaper of the Day --- echo "Fetching Bing
-      wallpaper..."  BING_JSON=$(curl -s
-      "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
-      BING_DATE=$(echo "$BING_JSON" | jq -r '.images[0].startdate' |
-      sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') BING_PATH=$(echo
-      "$BING_JSON" | jq -r '.images[0].url')
-      BING_FILE="$WALLPAPER_DIR/bing-$BING_DATE.jpg" if [ ! -f
-      "$BING_FILE" ]; then if [ -n "$BING_PATH" ] && [ "$BING_PATH" !=
-      "null" ]; then
+      # --- Bing Wallpaper of the Day ---
+      echo "Fetching Bing wallpaper..."
+      BING_JSON=$(curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
+      BING_DATE=$(echo "$BING_JSON" | jq -r '.images[0].startdate' | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/')
+      BING_PATH=$(echo "$BING_JSON" | jq -r '.images[0].url')
+      BING_FILE="$WALLPAPER_DIR/bing-$BING_DATE.jpg"
+      if [ ! -f "$BING_FILE" ]; then
+        if [ -n "$BING_PATH" ] && [ "$BING_PATH" != "null" ]; then
           # Try UHD first, fall back to the default URL
           BING_UHD=$(echo "$BING_PATH" | sed 's/1920x1080/UHD/g')
-          if ! curl -sf "https://www.bing.com$BING_UHD" -o "$BING_FILE"; then
-            curl -sf "https://www.bing.com$BING_PATH" -o "$BING_FILE"
+          if curl -sf "https://www.bing.com$BING_UHD" -o "$BING_FILE"; then
+            echo "Saved: $BING_FILE"
+          elif curl -sf "https://www.bing.com$BING_PATH" -o "$BING_FILE"; then
+            echo "Saved: $BING_FILE"
+          else
+            echo "Warning: Failed to download Bing wallpaper"
+            rm -f "$BING_FILE"
           fi
-          echo "Saved: $BING_FILE"
         else
           echo "Warning: Could not parse Bing image URL"
         fi
@@ -182,8 +194,12 @@
           # Prefer hdurl, fall back to url
           NASA_URL=$(echo "$NASA_JSON" | jq -r '.hdurl // .url')
           if [ -n "$NASA_URL" ] && [ "$NASA_URL" != "null" ]; then
-            curl -sf "$NASA_URL" -o "$NASA_FILE"
-            echo "Saved: $NASA_FILE"
+            if curl -sf --retry 2 --retry-delay 5 "$NASA_URL" -o "$NASA_FILE"; then
+              echo "Saved: $NASA_FILE"
+            else
+              echo "Warning: Failed to download NASA APOD image from $NASA_URL"
+              rm -f "$NASA_FILE"
+            fi
           else
             echo "Warning: Could not parse NASA APOD image URL"
           fi
@@ -391,6 +407,18 @@
     };
   };
 
+  services.udiskie = {
+    enable = true;
+    automount = true;
+    notify = true;
+    tray = "auto";
+    settings = {
+      program_options = {
+        file_manager = "nemo";
+      };
+    };
+  };
+
   services.hypridle.enable = true;
   services.hypridle.settings = {
     general = {
@@ -425,6 +453,7 @@
     sioyek
     wf-recorder
     mpv
+    gnome-disk-utility
   ];
 
   # basic configuration of git, please change to your own

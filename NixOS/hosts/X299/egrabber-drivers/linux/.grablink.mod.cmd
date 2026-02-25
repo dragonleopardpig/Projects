@@ -1,0 +1,1 @@
+savedcmd_grablink.mod := printf '%s\n'   os_debug.o os_dma.o os_dpc.o os_entry_points.o os_interrupt.o os_io_memory.o os_math.o os_memory.o os_no_memento.o os_pci_configuration_space.o os_registration.o os_request_firmware.o os_string.o os_synchro.o os_thread.o os_time.o os_timer.o os_user_memory.o grablinkIds.o | awk '!x[$$0]++ { print("./"$$0) }' > grablink.mod

@@ -98,8 +98,8 @@
       webkitgtk_4_1.dev
     ]);
     
-    # Vulkan and graphics
-    LD_LIBRARY_PATH = lib.makeLibraryPath (with pkgs; [
+    # Vulkan and graphics + eGrabber vendor libs
+    LD_LIBRARY_PATH = "/run/current-system/sw/share/nix-ld/lib:/opt/euresys/egrabber/lib/x86_64:" + lib.makeLibraryPath (with pkgs; [
       wayland
       libxkbcommon
       libGL

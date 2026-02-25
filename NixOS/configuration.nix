@@ -86,6 +86,7 @@
 
   # GVFS for Nemo trash, network mounts, etc.
   services.gvfs.enable = true;
+  services.udisks2.enable = true;
 
   # Create ddcci backlight device for external monitor brightness control
   # Auto-detects all i2c adapters (works with any GPU: NVIDIA, Intel, AMD)
@@ -267,6 +268,7 @@
     p7zip                      # 7-Zip archive manager
     zstd                       # Zstandard fast compression
     gnutar                     # GNU tar archiver
+    peazip                     # Free archive manager utility
 
     # ── Core Utilities ──
     file                       # Determine file types
@@ -351,6 +353,8 @@
 
     # ── File Managers ──
     nemo-with-extensions       # Cinnamon file manager with plugins
+    nemo-fileroller
+    file-roller
     spacedrive                 # Cross-platform file manager
 
     # ── Image & Media Tools ──

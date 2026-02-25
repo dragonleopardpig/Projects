@@ -1,8 +1,10 @@
 use dioxus::prelude::*;
-use image::{DynamicImage, GrayImage, ImageBuffer, Luma};
+use image::{DynamicImage, GrayImage, ImageBuffer, Luma, Rgba, RgbImage};
 use std::fs;
 use std::process::Command;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use tokio::io::AsyncReadExt;
 
 #[derive(Clone, Debug)]
 struct FileEntry {
@@ -43,6 +45,15 @@ fn App() -> Element {
     let mut smart_scan = use_signal(|| true);
     let mut skipped_pixels = use_signal(|| 0usize);
     let mut variance_threshold = use_signal(|| 10u8);
+
+    // Camera signals
+    let mut is_live = use_signal(|| false);
+    let mut live_fps = use_signal(|| 0.0f64);
+    let mut live_child: Signal<Option<Arc<Mutex<Option<tokio::process::Child>>>>> = use_signal(|| None);
+    let mut camera_frame = use_signal(|| None::<String>);
+    let mut camera_overlay = use_signal(|| None::<String>);
+    let mut has_frozen_frame = use_signal(|| false);
+    let mut show_edge_overlay = use_signal(|| false);
 
     let mut load_directory = move || {
         let dir = current_directory.read().clone();
@@ -134,9 +145,15 @@ fn App() -> Element {
                         Ok(bytes) => {
                             match process_image_from_bytes(&bytes) {
                                 Ok((orig_base64, edge_base64)) => {
+                                    // Clear camera state so file-loaded view shows
+                                    camera_frame.set(None);
+                                    camera_overlay.set(None);
+                                    has_frozen_frame.set(false);
+                                    show_edge_overlay.set(false);
+
                                     original_image.set(Some(orig_base64));
                                     edge_image.set(Some(edge_base64));
-                                    
+
                                     if let Ok(img) = image::load_from_memory(&bytes) {
                                         let gray = img.to_luma8();
                                         let (width, height) = gray.dimensions();
@@ -349,7 +366,13 @@ fn App() -> Element {
                         Ok((orig_base64, edge_base64)) => {
                             processing_progress.set(90);
                             status.set("Finalizing...".to_string());
-                            
+
+                            // Clear camera state so file-loaded view shows
+                            camera_frame.set(None);
+                            camera_overlay.set(None);
+                            has_frozen_frame.set(false);
+                            show_edge_overlay.set(false);
+
                             original_image.set(Some(orig_base64));
                             edge_image.set(Some(edge_base64));
                             
@@ -459,6 +482,229 @@ fn App() -> Element {
         }
     };
 
+    // Camera: single capture
+    let mut is_capturing = use_signal(|| false);
+    let capture_frame = move |_evt: Event<MouseData>| {
+        if is_capturing() || is_live() {
+            return;
+        }
+        spawn(async move {
+            is_capturing.set(true);
+            status.set("Capturing frame...".to_string());
+
+            let capture_bin = find_egrab_capture();
+            if capture_bin.is_none() {
+                status.set("egrab-capture binary not found. Run: make -C egrab-capture".to_string());
+                is_capturing.set(false);
+                return;
+            }
+            let capture_bin = capture_bin.unwrap();
+            let raw_path = "/tmp/egrab-capture.raw";
+
+            let result = tokio::process::Command::new(&capture_bin)
+                .args(["--mode", "single", "--output", raw_path])
+                .output()
+                .await;
+
+            match result {
+                Ok(output) if output.status.success() => {
+                    match load_raw_frame(raw_path) {
+                        Ok((_img, rgb_base64)) => {
+                            camera_frame.set(Some(rgb_base64));
+                            has_frozen_frame.set(true);
+                            show_edge_overlay.set(false);
+                            camera_overlay.set(None);
+                            status.set("Frame captured — click Detect Edge to find edges".to_string());
+                        }
+                        Err(e) => {
+                            status.set(format!("Failed to load capture: {}", e));
+                        }
+                    }
+                }
+                Ok(output) => {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    status.set(format!("Capture failed: {}", stderr.trim()));
+                }
+                Err(e) => {
+                    status.set(format!("Failed to run egrab-capture: {}", e));
+                }
+            }
+            is_capturing.set(false);
+        });
+    };
+
+    // Camera: live stream toggle
+    let toggle_live = move |_evt: Event<MouseData>| {
+        if is_live() {
+            // Stop live — freeze the last frame
+            is_live.set(false);
+            if let Some(child_arc) = live_child() {
+                if let Ok(mut guard) = child_arc.lock() {
+                    if let Some(ref mut child) = *guard {
+                        let _ = child.start_kill();
+                    }
+                }
+            }
+            live_fps.set(0.0);
+            // Frame stays in camera_frame, mark as frozen
+            if camera_frame().is_some() {
+                has_frozen_frame.set(true);
+            }
+            status.set("Live stopped — frame frozen".to_string());
+            return;
+        }
+
+        let capture_bin = find_egrab_capture();
+        if capture_bin.is_none() {
+            status.set("egrab-capture binary not found. Run: make -C egrab-capture".to_string());
+            return;
+        }
+        let capture_bin = capture_bin.unwrap();
+
+        // Reset state for new live session
+        is_live.set(true);
+        has_frozen_frame.set(false);
+        show_edge_overlay.set(false);
+        camera_overlay.set(None);
+        status.set("Starting live capture...".to_string());
+
+        let child_arc = Arc::new(Mutex::new(None::<tokio::process::Child>));
+        live_child.set(Some(child_arc.clone()));
+
+        spawn(async move {
+            let child_result = tokio::process::Command::new(&capture_bin)
+                .args(["--mode", "stream"])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn();
+
+            let mut child = match child_result {
+                Ok(c) => c,
+                Err(e) => {
+                    status.set(format!("Failed to start stream: {}", e));
+                    is_live.set(false);
+                    return;
+                }
+            };
+
+            let mut stdout = child.stdout.take().unwrap();
+            {
+                let mut guard = child_arc.lock().unwrap();
+                *guard = Some(child);
+            }
+
+            let mut frame_count = 0u64;
+            let start_time = std::time::Instant::now();
+            let mut header_buf = [0u8; 12]; // width(4) + height(4) + len(4)
+            let mut bmp_buf: Vec<u8> = Vec::new();
+            let mut b64_buf = String::new();
+            let mut rgb_data: Vec<u8> = Vec::new();
+            let mut last_display = std::time::Instant::now();
+            let display_interval = std::time::Duration::from_micros(16_667); // ~60 FPS display cap
+
+            while is_live() {
+                // Read header
+                match stdout.read_exact(&mut header_buf).await {
+                    Ok(_) => {}
+                    Err(_) => break,
+                }
+
+                let width = u32::from_ne_bytes([header_buf[0], header_buf[1], header_buf[2], header_buf[3]]);
+                let height = u32::from_ne_bytes([header_buf[4], header_buf[5], header_buf[6], header_buf[7]]);
+                let data_len = u32::from_ne_bytes([header_buf[8], header_buf[9], header_buf[10], header_buf[11]]) as usize;
+
+                rgb_data.resize(data_len, 0);
+                match stdout.read_exact(&mut rgb_data).await {
+                    Ok(_) => {}
+                    Err(_) => break,
+                }
+
+                frame_count += 1;
+
+                // Only push to UI at display rate — drain pipe fast, display at ~60fps
+                let now = std::time::Instant::now();
+                if now.duration_since(last_display) >= display_interval {
+                    last_display = now;
+
+                    rgb_to_bmp_base64(width, height, &rgb_data, &mut bmp_buf, &mut b64_buf);
+                    camera_frame.set(Some(b64_buf.clone()));
+
+                    let elapsed = start_time.elapsed().as_secs_f64();
+                    if elapsed > 0.0 {
+                        live_fps.set(frame_count as f64 / elapsed);
+                    }
+
+                    // Yield to Dioxus runtime so the UI can actually render the frame
+                    tokio::task::yield_now().await;
+                }
+            }
+
+            // Clean up child process
+            if let Ok(mut guard) = child_arc.lock() {
+                if let Some(ref mut child) = *guard {
+                    let _ = child.kill().await;
+                }
+                *guard = None;
+            }
+
+            is_live.set(false);
+            live_child.set(None);
+            live_fps.set(0.0);
+            if frame_count > 0 {
+                status.set(format!("Live stopped after {} frames — frame frozen", frame_count));
+            }
+        });
+    };
+
+    // Camera: detect edges on frozen frame
+    let detect_edge = move |_evt: Event<MouseData>| {
+        if !has_frozen_frame() || show_edge_overlay() {
+            return;
+        }
+        let frame_b64 = match camera_frame() {
+            Some(b64) => b64,
+            None => return,
+        };
+        spawn(async move {
+            status.set("Running edge detection...".to_string());
+
+            let decoded = base64::Engine::decode(
+                &base64::engine::general_purpose::STANDARD,
+                &frame_b64,
+            );
+            let decoded = match decoded {
+                Ok(d) => d,
+                Err(e) => {
+                    status.set(format!("Decode error: {}", e));
+                    return;
+                }
+            };
+
+            let img = match image::load_from_memory(&decoded) {
+                Ok(i) => i,
+                Err(e) => {
+                    status.set(format!("Image load error: {}", e));
+                    return;
+                }
+            };
+
+            let gray = img.to_luma8();
+            let edges = sobel_edge_detection(&gray);
+            let overlay = create_edge_overlay(&edges);
+            match image_to_base64(&DynamicImage::ImageRgba8(overlay)) {
+                Ok(overlay_b64) => {
+                    camera_overlay.set(Some(overlay_b64));
+                    show_edge_overlay.set(true);
+                    status.set("Edge detection complete — green overlay applied".to_string());
+                }
+                Err(e) => {
+                    status.set(format!("Overlay encode error: {}", e));
+                }
+            }
+        });
+    };
+
     let quit_app = move |_evt: Event<MouseData>| -> () {
         std::process::exit(0);
     };
@@ -532,14 +778,35 @@ fn App() -> Element {
                     }
             
                     div { class: "controls",
-                        h2 { class: "subtitle", "Load Image" }
-                
-                        button { class: "file-button", onclick: open_file_dialog, "📁 Choose File" }
-                        
-                        button {
-                            class: if visualization_mode() { "viz-button active" } else { "viz-button" },
-                            onclick: toggle_visualization,
-                            if visualization_mode() { "📊 Exit Visualization" } else { "📊 Visualize Edge Detection" }
+                        div { class: "controls-row",
+                            button { class: "file-button", onclick: open_file_dialog, "📁 Choose File" }
+                            button {
+                                class: "capture-button",
+                                onclick: capture_frame,
+                                disabled: is_capturing() || is_live(),
+                                if is_capturing() { "📷 Capturing..." } else { "📷 Capture" }
+                            }
+                            button {
+                                class: if is_live() { "live-button active" } else { "live-button" },
+                                onclick: toggle_live,
+                                disabled: is_capturing(),
+                                if is_live() { "⏹ Stop" } else { "🎥 Live" }
+                            }
+                            if is_live() {
+                                span { class: "fps-counter", "{live_fps():.1} FPS" }
+                            }
+                            if has_frozen_frame() && !show_edge_overlay() {
+                                button {
+                                    class: "detect-edge-button",
+                                    onclick: detect_edge,
+                                    "🔍 Detect Edge"
+                                }
+                            }
+                            button {
+                                class: if visualization_mode() { "viz-button active" } else { "viz-button" },
+                                onclick: toggle_visualization,
+                                if visualization_mode() { "📊 Exit Viz" } else { "📊 Visualize" }
+                            }
                         }
                         
                         if is_processing() {
@@ -667,32 +934,55 @@ fn App() -> Element {
                         }
                     }
 
-                    div { class: "images",
-                        div { class: "image-box",
-                            h3 { "Original" }
-                            if let Some(img) = original_image() {
-                                img { 
-                                    class: "clickable-image",
-                                    src: "data:image/png;base64,{img}",
-                                    alt: "Original image",
-                                    onclick: move |_| open_lightbox(img.clone(), "Original Image".to_string()),
+                    // Camera viewport — shown when camera has a frame
+                    if let Some(frame) = camera_frame() {
+                        div { class: "camera-viewport",
+                            img {
+                                class: "camera-frame",
+                                src: "data:image/bmp;base64,{frame}",
+                                alt: "Camera frame",
+                            }
+                            if show_edge_overlay() {
+                                if let Some(overlay) = camera_overlay() {
+                                    img {
+                                        class: "edge-overlay",
+                                        src: "data:image/png;base64,{overlay}",
+                                        alt: "Edge overlay",
+                                    }
                                 }
-                            } else {
-                                div { class: "placeholder", "No image" }
                             }
                         }
+                    }
 
-                        div { class: "image-box",
-                            h3 { "Edge Detection" }
-                            if let Some(img) = edge_image() {
-                                img { 
-                                    class: "clickable-image",
-                                    src: "data:image/png;base64,{img}",
-                                    alt: "Edge detected image",
-                                    onclick: move |_| open_lightbox(img.clone(), "Edge Detection".to_string()),
+                    // Original/Edge side-by-side — only for file-loaded images (when no camera frame)
+                    if camera_frame().is_none() {
+                        div { class: "images",
+                            div { class: "image-box",
+                                h3 { "Original" }
+                                if let Some(img) = original_image() {
+                                    img {
+                                        class: "clickable-image",
+                                        src: "data:image/png;base64,{img}",
+                                        alt: "Original image",
+                                        onclick: move |_| open_lightbox(img.clone(), "Original Image".to_string()),
+                                    }
+                                } else {
+                                    div { class: "placeholder", "No image" }
                                 }
-                            } else {
-                                div { class: "placeholder", "No image" }
+                            }
+
+                            div { class: "image-box",
+                                h3 { "Edge Detection" }
+                                if let Some(img) = edge_image() {
+                                    img {
+                                        class: "clickable-image",
+                                        src: "data:image/png;base64,{img}",
+                                        alt: "Edge detected image",
+                                        onclick: move |_| open_lightbox(img.clone(), "Edge Detection".to_string()),
+                                    }
+                                } else {
+                                    div { class: "placeholder", "No image" }
+                                }
                             }
                         }
                     }
@@ -810,6 +1100,121 @@ fn render_matrix(matrix: &Vec<Vec<u8>>, scan_pos: (usize, usize), is_gray: bool,
     html.push_str(&format!("<div class='matrix-info'>Showing region: ({}-{}, {}-{}) of {}x{}</div>", 
         start_x, end_x-1, start_y, end_y-1, total_width, total_height));
     html
+}
+
+fn find_egrab_capture() -> Option<String> {
+    // Look relative to the cargo manifest dir, then in PATH
+    let candidates = [
+        "egrab-capture/egrab-capture",
+        "./egrab-capture/egrab-capture",
+    ];
+    for c in &candidates {
+        if Path::new(c).exists() {
+            return Some(c.to_string());
+        }
+    }
+    // Check PATH
+    if let Ok(output) = Command::new("which").arg("egrab-capture").output() {
+        if output.status.success() {
+            return Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        }
+    }
+    None
+}
+
+fn load_raw_frame(path: &str) -> Result<(DynamicImage, String), String> {
+    let data = fs::read(path).map_err(|e| format!("Read error: {}", e))?;
+    if data.len() < 12 {
+        return Err("Raw file too small".to_string());
+    }
+    let width = u32::from_ne_bytes([data[0], data[1], data[2], data[3]]);
+    let height = u32::from_ne_bytes([data[4], data[5], data[6], data[7]]);
+    let data_len = u32::from_ne_bytes([data[8], data[9], data[10], data[11]]) as usize;
+
+    if data.len() < 12 + data_len {
+        return Err(format!("Expected {} bytes of RGB data, got {}", data_len, data.len() - 12));
+    }
+
+    let rgb_data = data[12..12 + data_len].to_vec();
+    let rgb_img = RgbImage::from_raw(width, height, rgb_data.clone())
+        .ok_or_else(|| "Failed to create RGB image from raw data".to_string())?;
+    let dyn_img = DynamicImage::ImageRgb8(rgb_img);
+    let mut bmp_buf = Vec::new();
+    let mut b64_buf = String::new();
+    rgb_to_bmp_base64(width, height, &rgb_data, &mut bmp_buf, &mut b64_buf);
+    Ok((dyn_img, b64_buf))
+}
+
+/// Encode raw RGB pixels as an uncompressed BMP and base64-encode into the provided buffers.
+/// Reuses allocations across calls for zero-alloc streaming.
+fn rgb_to_bmp_base64(width: u32, height: u32, rgb: &[u8], bmp_buf: &mut Vec<u8>, b64_buf: &mut String) {
+    let row_stride = (width as usize) * 3;
+    let row_pad = (4 - (row_stride % 4)) % 4;
+    let pixel_data_size = (row_stride + row_pad) * (height as usize);
+    let file_size = 14 + 40 + pixel_data_size;
+
+    bmp_buf.clear();
+    bmp_buf.reserve(file_size);
+
+    // BMP file header (14 bytes)
+    bmp_buf.extend_from_slice(b"BM");
+    bmp_buf.extend_from_slice(&(file_size as u32).to_le_bytes());
+    bmp_buf.extend_from_slice(&0u16.to_le_bytes()); // reserved
+    bmp_buf.extend_from_slice(&0u16.to_le_bytes()); // reserved
+    bmp_buf.extend_from_slice(&54u32.to_le_bytes()); // pixel data offset
+
+    // DIB header (BITMAPINFOHEADER, 40 bytes)
+    bmp_buf.extend_from_slice(&40u32.to_le_bytes());
+    bmp_buf.extend_from_slice(&width.to_le_bytes());
+    bmp_buf.extend_from_slice(&height.to_le_bytes()); // positive = bottom-up
+    bmp_buf.extend_from_slice(&1u16.to_le_bytes()); // planes
+    bmp_buf.extend_from_slice(&24u16.to_le_bytes()); // bits per pixel
+    bmp_buf.extend_from_slice(&0u32.to_le_bytes()); // compression (none)
+    bmp_buf.extend_from_slice(&(pixel_data_size as u32).to_le_bytes());
+    bmp_buf.extend_from_slice(&2835u32.to_le_bytes()); // h resolution (72 DPI)
+    bmp_buf.extend_from_slice(&2835u32.to_le_bytes()); // v resolution
+    bmp_buf.extend_from_slice(&0u32.to_le_bytes()); // colors in palette
+    bmp_buf.extend_from_slice(&0u32.to_le_bytes()); // important colors
+
+    // Pixel data: BMP stores rows bottom-to-top, BGR order
+    let pad_bytes = [0u8; 3];
+    for y in (0..height as usize).rev() {
+        let row_start = y * row_stride;
+        let row_end = row_start + row_stride;
+        if row_end > rgb.len() {
+            break;
+        }
+        let row = &rgb[row_start..row_end];
+        // Convert RGB to BGR in-place per pixel
+        for px in 0..(width as usize) {
+            let i = px * 3;
+            bmp_buf.push(row[i + 2]); // B
+            bmp_buf.push(row[i + 1]); // G
+            bmp_buf.push(row[i]);     // R
+        }
+        if row_pad > 0 {
+            bmp_buf.extend_from_slice(&pad_bytes[..row_pad]);
+        }
+    }
+
+    b64_buf.clear();
+    base64::Engine::encode_string(&base64::engine::general_purpose::STANDARD, bmp_buf, b64_buf);
+}
+
+fn create_edge_overlay(edges: &GrayImage) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    let (width, height) = edges.dimensions();
+    let mut overlay = ImageBuffer::new(width, height);
+    for y in 0..height {
+        for x in 0..width {
+            let edge_val = edges.get_pixel(x, y)[0];
+            if edge_val > 30 {
+                overlay.put_pixel(x, y, Rgba([0, 255, 0, 200]));
+            } else {
+                overlay.put_pixel(x, y, Rgba([0, 0, 0, 0]));
+            }
+        }
+    }
+    overlay
 }
 
 fn format_file_size(bytes: u64) -> String {

@@ -1,0 +1,44 @@
+[
+{
+  "directory": "/home/thinky/cpp",
+  "command": "/usr/bin/cc  -I/opt/euresys/egrabber-linux-x86_64-25.09.1.22/include  -o CMakeFiles/my_app.dir/CMakeFiles/3.28.3/CompilerIdC/CMakeCCompilerId.c.o -c /home/thinky/cpp/CMakeFiles/3.28.3/CompilerIdC/CMakeCCompilerId.c",
+  "file": "/home/thinky/cpp/CMakeFiles/3.28.3/CompilerIdC/CMakeCCompilerId.c",
+  "output": "CMakeFiles/my_app.dir/CMakeFiles/3.28.3/CompilerIdC/CMakeCCompilerId.c.o"
+},
+{
+  "directory": "/home/thinky/cpp",
+  "command": "/usr/bin/c++  -I/opt/euresys/egrabber-linux-x86_64-25.09.1.22/include  -o CMakeFiles/my_app.dir/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp.o -c /home/thinky/cpp/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp",
+  "file": "/home/thinky/cpp/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp",
+  "output": "CMakeFiles/my_app.dir/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp.o"
+},
+{
+  "directory": "/home/thinky/cpp",
+  "command": "/usr/bin/c++  -I/opt/euresys/egrabber-linux-x86_64-25.09.1.22/include  -o CMakeFiles/my_app.dir/classes.cpp.o -c /home/thinky/cpp/classes.cpp",
+  "file": "/home/thinky/cpp/classes.cpp",
+  "output": "CMakeFiles/my_app.dir/classes.cpp.o"
+},
+{
+  "directory": "/home/thinky/cpp",
+  "command": "/usr/bin/c++  -I/opt/euresys/egrabber-linux-x86_64-25.09.1.22/include  -o CMakeFiles/my_app.dir/first.cpp.o -c /home/thinky/cpp/first.cpp",
+  "file": "/home/thinky/cpp/first.cpp",
+  "output": "CMakeFiles/my_app.dir/first.cpp.o"
+},
+{
+  "directory": "/home/thinky/cpp",
+  "command": "/usr/bin/c++  -I/opt/euresys/egrabber-linux-x86_64-25.09.1.22/include  -o CMakeFiles/my_app.dir/main.cpp.o -c /home/thinky/cpp/main.cpp",
+  "file": "/home/thinky/cpp/main.cpp",
+  "output": "CMakeFiles/my_app.dir/main.cpp.o"
+},
+{
+  "directory": "/home/thinky/cpp",
+  "command": "/usr/bin/c++  -I/opt/euresys/egrabber-linux-x86_64-25.09.1.22/include  -o CMakeFiles/my_app.dir/second.cpp.o -c /home/thinky/cpp/second.cpp",
+  "file": "/home/thinky/cpp/second.cpp",
+  "output": "CMakeFiles/my_app.dir/second.cpp.o"
+},
+{
+  "directory": "/home/thinky/cpp",
+  "command": "/usr/bin/c++  -I/opt/euresys/egrabber-linux-x86_64-25.09.1.22/include  -o CMakeFiles/my_app.dir/third.cpp.o -c /home/thinky/cpp/third.cpp",
+  "file": "/home/thinky/cpp/third.cpp",
+  "output": "CMakeFiles/my_app.dir/third.cpp.o"
+}
+]

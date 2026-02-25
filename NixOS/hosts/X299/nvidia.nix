@@ -5,6 +5,17 @@
     enable = true;
   };
 
+  # CUDA toolkit
+  environment.systemPackages = [ pkgs.cudaPackages.cudatoolkit ];
+
+  # Stable symlink to CUDA headers for clangd / IDE integration
+  system.activationScripts.cudaSymlink = ''
+    cuda_path=$(${pkgs.coreutils}/bin/realpath ${pkgs.cudaPackages.cudatoolkit} 2>/dev/null)
+    if [ -d "$cuda_path/include" ]; then
+      ln -sfn "$cuda_path" /home/thinky/.local/share/cuda
+    fi
+  '';
+
   # Load nvidia driver for Xorg and Wayland
   services.xserver.videoDrivers = ["nvidia"];
 

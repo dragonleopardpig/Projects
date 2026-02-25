@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/my_app.dir/CMakeFiles/3.28.3/CompilerIdC/CMakeCCompilerId.c.o CMakeFiles/my_app.dir/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp.o CMakeFiles/my_app.dir/classes.cpp.o CMakeFiles/my_app.dir/first.cpp.o CMakeFiles/my_app.dir/main.cpp.o CMakeFiles/my_app.dir/second.cpp.o CMakeFiles/my_app.dir/third.cpp.o -o my_app 

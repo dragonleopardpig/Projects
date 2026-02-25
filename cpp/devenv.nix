@@ -3,6 +3,7 @@
 {
   # https://devenv.sh/basics/
   env.GREET = "devenv";
+  env.LD_LIBRARY_PATH = "/run/current-system/sw/share/nix-ld/lib:/opt/euresys/egrabber/lib/x86_64";
 
   # https://devenv.sh/packages/
   packages =  with pkgs; [
