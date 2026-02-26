@@ -50,10 +50,28 @@ fn App() -> Element {
     let mut is_live = use_signal(|| false);
     let mut live_fps = use_signal(|| 0.0f64);
     let mut live_child: Signal<Option<Arc<Mutex<Option<tokio::process::Child>>>>> = use_signal(|| None);
+    // camera_frame holds a URL string for the img src
     let mut camera_frame = use_signal(|| None::<String>);
     let mut camera_overlay = use_signal(|| None::<String>);
     let mut has_frozen_frame = use_signal(|| false);
     let mut show_edge_overlay = use_signal(|| false);
+    // Keep raw RGB bytes of the frozen frame for edge detection (avoids re-decoding)
+    let mut camera_raw: Signal<Option<(u32, u32, Vec<u8>)>> = use_signal(|| None);
+
+    // Shared BMP buffer for zero-copy asset serving
+    let frame_buf: Arc<Mutex<Vec<u8>>> = use_hook(|| Arc::new(Mutex::new(Vec::new())));
+    let frame_buf_handler = frame_buf.clone();
+    dioxus_desktop::use_asset_handler("camera", move |_req, responder| {
+        let data = frame_buf_handler.lock().unwrap().clone();
+        responder.respond(
+            http::Response::builder()
+                .status(200)
+                .header("Content-Type", "image/bmp")
+                .header("Cache-Control", "no-cache, no-store")
+                .body(data)
+                .unwrap(),
+        );
+    });
 
     let mut load_directory = move || {
         let dir = current_directory.read().clone();
@@ -484,10 +502,12 @@ fn App() -> Element {
 
     // Camera: single capture
     let mut is_capturing = use_signal(|| false);
+    let frame_buf_capture = frame_buf.clone();
     let capture_frame = move |_evt: Event<MouseData>| {
         if is_capturing() || is_live() {
             return;
         }
+        let frame_buf_cap = frame_buf_capture.clone();
         spawn(async move {
             is_capturing.set(true);
             status.set("Capturing frame...".to_string());
@@ -508,9 +528,24 @@ fn App() -> Element {
 
             match result {
                 Ok(output) if output.status.success() => {
-                    match load_raw_frame(raw_path) {
-                        Ok((_img, rgb_base64)) => {
-                            camera_frame.set(Some(rgb_base64));
+                    match load_raw_rgb(raw_path) {
+                        Ok((width, height, rgb_data)) => {
+                            let mut bmp_buf = Vec::new();
+                            rgb_to_bmp(&rgb_data, width, height, &mut bmp_buf);
+                            {
+                                let mut buf = frame_buf_cap.lock().unwrap();
+                                buf.clear();
+                                buf.extend_from_slice(&bmp_buf);
+                            }
+                            let ts = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_nanos();
+                            camera_frame.set(Some(format!(
+                                "dioxus://localhost/camera/frame.bmp?t={}",
+                                ts
+                            )));
+                            camera_raw.set(Some((width, height, rgb_data)));
                             has_frozen_frame.set(true);
                             show_edge_overlay.set(false);
                             camera_overlay.set(None);
@@ -534,6 +569,7 @@ fn App() -> Element {
     };
 
     // Camera: live stream toggle
+    let frame_buf_live = frame_buf.clone();
     let toggle_live = move |_evt: Event<MouseData>| {
         if is_live() {
             // Stop live — freeze the last frame
@@ -571,6 +607,7 @@ fn App() -> Element {
         let child_arc = Arc::new(Mutex::new(None::<tokio::process::Child>));
         live_child.set(Some(child_arc.clone()));
 
+        let frame_buf_spawn = frame_buf_live.clone();
         spawn(async move {
             let child_result = tokio::process::Command::new(&capture_bin)
                 .args(["--mode", "stream"])
@@ -595,13 +632,20 @@ fn App() -> Element {
             }
 
             let mut frame_count = 0u64;
-            let start_time = std::time::Instant::now();
+            let mut display_count = 0u64;
             let mut header_buf = [0u8; 12]; // width(4) + height(4) + len(4)
             let mut bmp_buf: Vec<u8> = Vec::new();
-            let mut b64_buf = String::new();
             let mut rgb_data: Vec<u8> = Vec::new();
             let mut last_display = std::time::Instant::now();
             let display_interval = std::time::Duration::from_micros(16_667); // ~60 FPS display cap
+            let mut last_fps_update = std::time::Instant::now();
+            let mut last_width = 0u32;
+            let mut last_height = 0u32;
+            let frame_buf_loop = frame_buf_spawn.clone();
+
+            // Set initial URL so the img element appears in DOM
+            camera_frame.set(Some("dioxus://localhost/camera/frame.bmp?t=0".to_string()));
+            tokio::task::yield_now().await;
 
             while is_live() {
                 // Read header
@@ -621,23 +665,51 @@ fn App() -> Element {
                 }
 
                 frame_count += 1;
+                last_width = width;
+                last_height = height;
 
                 // Only push to UI at display rate — drain pipe fast, display at ~60fps
                 let now = std::time::Instant::now();
                 if now.duration_since(last_display) >= display_interval {
                     last_display = now;
+                    display_count += 1;
 
-                    rgb_to_bmp_base64(width, height, &rgb_data, &mut bmp_buf, &mut b64_buf);
-                    camera_frame.set(Some(b64_buf.clone()));
-
-                    let elapsed = start_time.elapsed().as_secs_f64();
-                    if elapsed > 0.0 {
-                        live_fps.set(frame_count as f64 / elapsed);
+                    // Build BMP and store in shared buffer (asset handler serves it)
+                    rgb_to_bmp(&rgb_data, width, height, &mut bmp_buf);
+                    {
+                        let mut buf = frame_buf_loop.lock().unwrap();
+                        buf.clear();
+                        buf.extend_from_slice(&bmp_buf);
                     }
 
-                    // Yield to Dioxus runtime so the UI can actually render the frame
+                    // Tiny URL change triggers webview to re-fetch from asset handler
+                    let js = format!(
+                        "document.getElementById('live-frame').src='dioxus://localhost/camera/frame.bmp?t={}';",
+                        display_count
+                    );
+                    dioxus::document::eval(&js);
+
+                    // Update FPS display only once per second to reduce signal churn
+                    let fps_elapsed = now.duration_since(last_fps_update).as_secs_f64();
+                    if fps_elapsed >= 1.0 {
+                        live_fps.set(display_count as f64 / fps_elapsed);
+                        display_count = 0;
+                        last_fps_update = now;
+                    }
+
+                    // Yield so the webview can fetch the asset and render
                     tokio::task::yield_now().await;
                 }
+            }
+
+            // Save last frame raw data for edge detection + frozen display
+            if !rgb_data.is_empty() {
+                camera_raw.set(Some((last_width, last_height, rgb_data)));
+                // The shared buffer already has the last BMP — just update the signal URL
+                camera_frame.set(Some(format!(
+                    "dioxus://localhost/camera/frame.bmp?t={}",
+                    frame_count
+                )));
             }
 
             // Clean up child process
@@ -662,44 +734,83 @@ fn App() -> Element {
         if !has_frozen_frame() || show_edge_overlay() {
             return;
         }
-        let frame_b64 = match camera_frame() {
-            Some(b64) => b64,
+        let raw = match camera_raw() {
+            Some(r) => r,
             None => return,
         };
         spawn(async move {
             status.set("Running edge detection...".to_string());
 
-            let decoded = base64::Engine::decode(
-                &base64::engine::general_purpose::STANDARD,
-                &frame_b64,
-            );
-            let decoded = match decoded {
-                Ok(d) => d,
-                Err(e) => {
-                    status.set(format!("Decode error: {}", e));
-                    return;
+            let (width, height, rgb_data) = raw;
+            if let Some(rgb_img) = RgbImage::from_raw(width, height, rgb_data) {
+                let dyn_img = DynamicImage::ImageRgb8(rgb_img);
+                let gray = dyn_img.to_luma8();
+                let edges = sobel_edge_detection(&gray);
+                let overlay = create_edge_overlay(&edges);
+                match image_to_base64(&DynamicImage::ImageRgba8(overlay)) {
+                    Ok(overlay_b64) => {
+                        camera_overlay.set(Some(format!("data:image/png;base64,{}", overlay_b64)));
+                        show_edge_overlay.set(true);
+                        status.set("Edge detection complete — green overlay applied".to_string());
+                    }
+                    Err(e) => {
+                        status.set(format!("Overlay encode error: {}", e));
+                    }
                 }
-            };
+            } else {
+                status.set("Failed to reconstruct image from raw data".to_string());
+            }
+        });
+    };
 
-            let img = match image::load_from_memory(&decoded) {
-                Ok(i) => i,
-                Err(e) => {
-                    status.set(format!("Image load error: {}", e));
-                    return;
-                }
-            };
+    // Camera: save frozen frame to file
+    let save_frame = move |_evt: Event<MouseData>| {
+        let raw = match camera_raw() {
+            Some(r) => r,
+            None => return,
+        };
+        spawn(async move {
+            status.set("Opening save dialog...".to_string());
+            let result = tokio::task::spawn_blocking(|| {
+                Command::new("zenity")
+                    .args(&[
+                        "--file-selection",
+                        "--save",
+                        "--confirm-overwrite",
+                        "--title=Save Captured Frame",
+                        "--file-filter=TIFF files | *.tiff *.tif",
+                        "--file-filter=PNG files | *.png",
+                        "--file-filter=BMP files | *.bmp",
+                        "--file-filter=JPEG files | *.jpg *.jpeg",
+                        "--filename=capture.tiff",
+                    ])
+                    .output()
+                    .ok()
+                    .and_then(|o| {
+                        if o.status.success() {
+                            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                        } else {
+                            None
+                        }
+                    })
+            }).await;
 
-            let gray = img.to_luma8();
-            let edges = sobel_edge_detection(&gray);
-            let overlay = create_edge_overlay(&edges);
-            match image_to_base64(&DynamicImage::ImageRgba8(overlay)) {
-                Ok(overlay_b64) => {
-                    camera_overlay.set(Some(overlay_b64));
-                    show_edge_overlay.set(true);
-                    status.set("Edge detection complete — green overlay applied".to_string());
+            match result {
+                Ok(Some(path)) if !path.is_empty() => {
+                    let (width, height, rgb_data) = raw;
+                    if let Some(rgb_img) = RgbImage::from_raw(width, height, rgb_data) {
+                        let dyn_img = DynamicImage::ImageRgb8(rgb_img);
+                        if let Err(e) = dyn_img.save(&path) {
+                            status.set(format!("Save failed: {}", e));
+                        } else {
+                            status.set(format!("Saved to {}", path));
+                        }
+                    } else {
+                        status.set("Failed to reconstruct image for saving".to_string());
+                    }
                 }
-                Err(e) => {
-                    status.set(format!("Overlay encode error: {}", e));
+                _ => {
+                    status.set("Save cancelled".to_string());
                 }
             }
         });
@@ -800,6 +911,13 @@ fn App() -> Element {
                                     class: "detect-edge-button",
                                     onclick: detect_edge,
                                     "🔍 Detect Edge"
+                                }
+                            }
+                            if has_frozen_frame() {
+                                button {
+                                    class: "save-button",
+                                    onclick: save_frame,
+                                    "💾 Save"
                                 }
                             }
                             button {
@@ -938,15 +1056,16 @@ fn App() -> Element {
                     if let Some(frame) = camera_frame() {
                         div { class: "camera-viewport",
                             img {
+                                id: "live-frame",
                                 class: "camera-frame",
-                                src: "data:image/bmp;base64,{frame}",
+                                src: "{frame}",
                                 alt: "Camera frame",
                             }
                             if show_edge_overlay() {
                                 if let Some(overlay) = camera_overlay() {
                                     img {
                                         class: "edge-overlay",
-                                        src: "data:image/png;base64,{overlay}",
+                                        src: "{overlay}",
                                         alt: "Edge overlay",
                                     }
                                 }
@@ -1122,32 +1241,9 @@ fn find_egrab_capture() -> Option<String> {
     None
 }
 
-fn load_raw_frame(path: &str) -> Result<(DynamicImage, String), String> {
-    let data = fs::read(path).map_err(|e| format!("Read error: {}", e))?;
-    if data.len() < 12 {
-        return Err("Raw file too small".to_string());
-    }
-    let width = u32::from_ne_bytes([data[0], data[1], data[2], data[3]]);
-    let height = u32::from_ne_bytes([data[4], data[5], data[6], data[7]]);
-    let data_len = u32::from_ne_bytes([data[8], data[9], data[10], data[11]]) as usize;
-
-    if data.len() < 12 + data_len {
-        return Err(format!("Expected {} bytes of RGB data, got {}", data_len, data.len() - 12));
-    }
-
-    let rgb_data = data[12..12 + data_len].to_vec();
-    let rgb_img = RgbImage::from_raw(width, height, rgb_data.clone())
-        .ok_or_else(|| "Failed to create RGB image from raw data".to_string())?;
-    let dyn_img = DynamicImage::ImageRgb8(rgb_img);
-    let mut bmp_buf = Vec::new();
-    let mut b64_buf = String::new();
-    rgb_to_bmp_base64(width, height, &rgb_data, &mut bmp_buf, &mut b64_buf);
-    Ok((dyn_img, b64_buf))
-}
-
-/// Encode raw RGB pixels as an uncompressed BMP and base64-encode into the provided buffers.
-/// Reuses allocations across calls for zero-alloc streaming.
-fn rgb_to_bmp_base64(width: u32, height: u32, rgb: &[u8], bmp_buf: &mut Vec<u8>, b64_buf: &mut String) {
+/// Build an uncompressed BMP from raw RGB pixels into the provided buffer.
+/// Reuses allocation across calls for zero-alloc streaming.
+fn rgb_to_bmp(rgb: &[u8], width: u32, height: u32, bmp_buf: &mut Vec<u8>) {
     let row_stride = (width as usize) * 3;
     let row_pad = (4 - (row_stride % 4)) % 4;
     let pixel_data_size = (row_stride + row_pad) * (height as usize);
@@ -1185,7 +1281,6 @@ fn rgb_to_bmp_base64(width: u32, height: u32, rgb: &[u8], bmp_buf: &mut Vec<u8>,
             break;
         }
         let row = &rgb[row_start..row_end];
-        // Convert RGB to BGR in-place per pixel
         for px in 0..(width as usize) {
             let i = px * 3;
             bmp_buf.push(row[i + 2]); // B
@@ -1196,9 +1291,21 @@ fn rgb_to_bmp_base64(width: u32, height: u32, rgb: &[u8], bmp_buf: &mut Vec<u8>,
             bmp_buf.extend_from_slice(&pad_bytes[..row_pad]);
         }
     }
+}
 
-    b64_buf.clear();
-    base64::Engine::encode_string(&base64::engine::general_purpose::STANDARD, bmp_buf, b64_buf);
+/// Load a raw egrab-capture frame file and return (width, height, rgb_bytes).
+fn load_raw_rgb(path: &str) -> Result<(u32, u32, Vec<u8>), String> {
+    let data = fs::read(path).map_err(|e| format!("Read error: {}", e))?;
+    if data.len() < 12 {
+        return Err("Raw file too small".to_string());
+    }
+    let width = u32::from_ne_bytes([data[0], data[1], data[2], data[3]]);
+    let height = u32::from_ne_bytes([data[4], data[5], data[6], data[7]]);
+    let data_len = u32::from_ne_bytes([data[8], data[9], data[10], data[11]]) as usize;
+    if data.len() < 12 + data_len {
+        return Err(format!("Expected {} bytes of RGB data, got {}", data_len, data.len() - 12));
+    }
+    Ok((width, height, data[12..12 + data_len].to_vec()))
 }
 
 fn create_edge_overlay(edges: &GrayImage) -> ImageBuffer<Rgba<u8>, Vec<u8>> {

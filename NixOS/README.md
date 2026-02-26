@@ -1,191 +1,171 @@
-# Unified NixOS Configuration for X299 and M90aPro
+# NixOS Configuration
 
-This is a minimal unified configuration for managing both X299 (desktop) and M90aPro (laptop) with:
-- **Identical** `configuration.nix` and `home.nix` for both hosts
-- Only essential host-specific differences (hostname, hardware, NVIDIA setup)
+Flake-based NixOS configuration managing two machines from a single codebase. Both hosts share identical `configuration.nix` and `home.nix` files, with only hardware-specific differences isolated per host.
+
+## Hosts
+
+| | X299 (Desktop) | M90aPro (Laptop) |
+|---|---|---|
+| GPU | NVIDIA RTX 4070 (single GPU) | Intel iGPU + NVIDIA (Prime Sync) |
+| GPU config | `hosts/X299/nvidia.nix` | `hosts/M90aPro/nvidia-prime.nix` |
+| CUDA | Enabled with IDE symlink | Not configured |
+| Extra hardware | Euresys CoaxLink frame grabber | - |
+
+See also: [Euresys eGrabber on NixOS setup guide](hosts/X299/EGRABBER-NIXOS-GUIDE.md) for the X299 frame grabber configuration.
 
 ## Structure
 
 ```
 NixOS/
-├── flake.nix                # Main flake defining both hosts
-├── configuration.nix         # SHARED system configuration (identical for both)
-├── home.nix                 # SHARED home-manager configuration (identical for both)
-└── hosts/
-    ├── X299/
-    │   ├── default.nix              # Sets hostname to "X299"
-    │   ├── hardware-configuration.nix # Hardware auto-generated config
-    │   └── nvidia.nix               # Standard NVIDIA config (single GPU)
-    └── M90aPro/
-        ├── default.nix              # Sets hostname to "M90aPro"
-        ├── hardware-configuration.nix # Hardware auto-generated config
-        └── nvidia-prime.nix         # NVIDIA Prime/Optimus (Intel + NVIDIA)
+|-- flake.nix              # Flake: defines both hosts, inputs
+|-- configuration.nix      # Shared system config (both hosts)
+|-- home.nix               # Shared home-manager config (both hosts)
+|-- rebuild.sh             # Helper script for rebuilding
+|-- assets/                # Plymouth logo, wallpaper, user face
+|-- hosts/
+|   |-- X299/
+|   |   |-- default.nix              # hostname + imports
+|   |   |-- hardware-configuration.nix
+|   |   |-- nvidia.nix               # Single GPU driver
+|   |   +-- egrabber.nix             # Euresys frame grabber
+|   +-- M90aPro/
+|       |-- default.nix              # hostname + imports
+|       |-- hardware-configuration.nix
+|       +-- nvidia-prime.nix         # Dual GPU (Intel + NVIDIA)
++-- .gitignore
 ```
 
-## Key Features
+## Flake Inputs
 
-- **Single shared configuration**: Both hosts use the exact same `configuration.nix` and `home.nix`
-- **Minimal host differences**: Only hostname, hardware detection, and NVIDIA setup differ
-- **NixOS 25.11**: Using latest NixOS version
-- **Hyprland + HyprPanel**: Wayland compositor with modern panel
-- **State version**: Both configuration.nix and home.nix use `25.11`
+| Input | Purpose |
+|---|---|
+| `nixpkgs` | nixos-unstable channel |
+| `home-manager` | User environment management (as NixOS module) |
+| `hyprland` | Wayland compositor |
+| `hyprpanel` | AGS-based panel for Hyprland |
+| `grub2-themes` | GRUB bootloader theming |
+| `disko` | Declarative disk partitioning |
+| `walker` | Application launcher |
 
-## Host-Specific Differences
+## What's Configured
 
-| Component | X299 | M90aPro |
-|-----------|------|---------|
-| Hostname | "X299" | "M90aPro" |
-| Hardware | Desktop hardware | Laptop hardware |
-| NVIDIA | Single GPU (nvidia.nix) | Optimus/Prime (nvidia-prime.nix) |
+### System (configuration.nix)
 
-## ⚠️ Important: Flake Directory vs /etc/nixos
+**Boot**: Latest kernel, GRUB with grub2-themes (stylish), Plymouth splash screen (rainbow Nix snowflake)
 
-**When using `--flake`, NixOS completely ignores `/etc/nixos/`!**
+**Desktop**: Hyprland compositor with UWSM session manager, SDDM login screen (sddm-astronaut-theme, pixel_sakura variant), Xwayland enabled
 
-- The flake build ONLY uses files from the flake directory (this unified folder)
-- `/etc/nixos/` is NOT required and NOT used when building with `--flake`
-- You can work directly from `~/Projects/NixOS/` without issues
-- If both directories exist but differ, only the flake directory matters
+**Audio**: PipeWire (ALSA + PulseAudio compatible)
+
+**Bluetooth**: Enabled with Blueman, experimental features, fast connectable
+
+**Input method**: Fcitx5 with RIME for Chinese input
+
+**Hardware support**:
+- DDC/CI brightness control via ddcci-driver kernel module (with systemd auto-setup service)
+- Logitech wireless devices via Solaar (with USB reset service for G502X scroll fix)
+- GVFS and UDisks2 for file manager trash/mount support
+- CUPS printing
+
+**Installed packages** (highlights):
+- **Dev**: Emacs (pgtk), Node.js 24, devenv, claude-code, LSP servers (nix, yaml, json, bash, markdown)
+- **Media**: GIMP, Inkscape, FFmpeg, ImageMagick
+- **Office**: TexLive (full), OnlyOffice, Hugo
+- **CAD**: LibreCAD, FreeCAD
+- **Networking**: ProtonVPN, Remmina, nmap, mtr
+- **Monitoring**: Mission Center, sysstat, lm_sensors, iotop
+- **Wayland tools**: swww, grim, slurp, satty, wl-clipboard
+- **Fonts**: Nerd Fonts (Ubuntu, Caskaydia Cove), Noto CJK
+
+### User Environment (home.nix)
+
+**Shell**: Bash with Starship prompt, custom aliases (`ls` = eza, `rebuild` = rebuild.sh, `gc` = git commit)
+
+**Terminal**: Kitty (JetBrainsMono Nerd Font, blur, 80% opacity)
+
+**File manager**: Nemo (default for directories), Yazi (terminal)
+
+**Theming**: Orchis-Dark GTK theme, Tela-circle icons, Adwaita cursor, KvArcDark Kvantum theme
+
+**Hyprland keybindings**:
+- `Super+Q` Kitty, `Super+F` Firefox, `Super+E` Emacs, `Super+N` Nemo
+- `Super+P` ProtonVPN (XWayland), `Super+W` Walker launcher
+- Volume/brightness on XF86 keys and F5/F6
+- Screenshots via `grim + slurp + swappy`
+
+**Hyprland autostart**: pyprland, ProtonVPN, swww wallpaper daemon, Solaar, HyprPolkitAgent
+
+**HyprPanel**: Dashboard with shortcuts, clock/weather (Singapore, metric), systray. Weather API key injected from `~/.config/secrets/weather-api-key` at activation time. GPU stats disabled (causes NVIDIA freeze).
+
+**Services**:
+- hypridle: Auto-lock at 15min, DPMS off at 20min
+- hyprlock: Lock screen
+- udiskie: Auto-mount removable drives
+- Wallpaper timer: Daily fetch from Bing and NASA APOD
+
+**Helper scripts** (installed to `~/.local/bin`):
+- `sioyek-xcb`: Forces Sioyek PDF viewer to use XWayland
+- `screenshot`: grim + slurp + swappy pipeline
+- `brightness-ctl`: Unified brightness (intel_backlight or ddcci fallback)
+- `wallpaper-of-the-day`: Fetches Bing daily + NASA APOD wallpapers
+
+**Desktop entries**: eGrabber Studio (Qt6 XWayland wrapper), Sioyek PDF viewer
 
 ## Usage
 
-### Using the Helper Script (Easiest)
+### Rebuild
 
 ```bash
-cd ~/Projects/NixOS
-
-# Auto-detect host and rebuild
+# Auto-detect hostname, switch to new config
 ./rebuild.sh
 
-# Specific operations
-./rebuild.sh switch X299      # Switch X299 to new config
-./rebuild.sh test M90aPro     # Test M90aPro config
-./rebuild.sh update           # Update flake and rebuild
-./rebuild.sh clean            # Clean old generations
+# Explicit host and operation
+./rebuild.sh switch X299
+./rebuild.sh test M90aPro
+./rebuild.sh boot X299
+
+# Update flake inputs then rebuild
+./rebuild.sh update
+
+# Garbage collect old generations
+./rebuild.sh clean
 ```
 
-### Initial Setup
+Or manually:
 
-1. **Work from your chosen directory**:
-   ```bash
-   cd ~/Projects/NixOS
-   # You can work directly from here, no need to copy to /etc/nixos
-   ```
-
-2. **Generate hardware configuration** (on each machine):
-   ```bash
-   # On X299:
-   sudo nixos-generate-config --show-hardware-config > hosts/X299/hardware-configuration.nix
-
-   # On M90aPro:
-   sudo nixos-generate-config --show-hardware-config > hosts/M90aPro/hardware-configuration.nix
-   ```
-
-3. **For M90aPro ONLY - Update NVIDIA Prime Bus IDs**:
-   ```bash
-   # Find your PCI bus IDs:
-   lspci | grep VGA
-
-   # Edit hosts/M90aPro/nvidia-prime.nix and update:
-   intelBusId = "PCI:X:X:X";  # Your Intel GPU
-   nvidiaBusId = "PCI:X:X:X"; # Your NVIDIA GPU
-   ```
-
-### Building Configuration
-
-**For X299 desktop**:
 ```bash
-cd ~/Projects/NixOS  # or wherever your unified directory is
 sudo nixos-rebuild switch --flake .#X299
-```
-
-**For M90aPro laptop**:
-```bash
-cd ~/Projects/NixOS  # or wherever your unified directory is
 sudo nixos-rebuild switch --flake .#M90aPro
 ```
 
-### Updating
+### Making Changes
 
-Update all flake inputs:
-```bash
-nix flake update
-sudo nixos-rebuild switch --flake .#X299    # or .#M90aPro
-```
+**Both hosts** (most common): Edit `configuration.nix` (system) or `home.nix` (user).
 
-## Making Changes
+**One host only**: Edit files in `hosts/X299/` or `hosts/M90aPro/`.
 
-### For BOTH hosts (most common):
-- Edit `configuration.nix` for system-wide changes
-- Edit `home.nix` for user environment changes
-- Both hosts will get the same changes
+### Initial Setup on a New Machine
 
-### For specific host only (rare):
-- X299: Edit files in `hosts/X299/`
-- M90aPro: Edit files in `hosts/M90aPro/`
+1. Generate hardware config:
+   ```bash
+   sudo nixos-generate-config --show-hardware-config > hosts/<HOSTNAME>/hardware-configuration.nix
+   ```
 
-## NVIDIA Configuration
+2. For dual-GPU laptops, find PCI bus IDs and update `nvidia-prime.nix`:
+   ```bash
+   lspci | grep VGA
+   ```
 
-### X299 (Desktop)
-- Standard single NVIDIA GPU configuration
-- Always uses NVIDIA for rendering
-- Located in `hosts/X299/nvidia.nix`
+## NVIDIA Notes
 
-### M90aPro (Laptop)
-- NVIDIA Optimus/Prime configuration (Intel + NVIDIA)
-- Default: **Sync mode** (best performance, both GPUs always on)
-- Located in `hosts/M90aPro/nvidia-prime.nix`
+**X299**: Single NVIDIA GPU with modesetting, power management, and CUDA. An activation script creates `~/.local/share/cuda` symlink for IDE integration.
 
-To switch M90aPro to **Offload mode** (better battery life):
-1. Edit `hosts/M90aPro/nvidia-prime.nix`
-2. Comment out `sync.enable = true;`
-3. Uncomment the offload configuration block
-4. Rebuild: `sudo nixos-rebuild switch --flake .#M90aPro`
-
-## Quick Commands
-
-Both hosts have the same aliases defined in `home.nix`:
-
-```bash
-rebuild     # Rebuilds NixOS configuration
-gc          # Git commit
-ls          # Enhanced ls with icons
-```
-
-## Troubleshooting
-
-### Check current hostname:
-```bash
-hostname
-```
-
-### Verify NVIDIA is working:
-```bash
-nvidia-smi
-```
-
-### For M90aPro Prime setup, verify bus IDs:
-```bash
-lspci | grep VGA
-```
-
-### Test offload mode (M90aPro only, if enabled):
-```bash
-nvidia-offload glxgears
-```
-
-## Benefits of This Setup
-
-1. **Minimal maintenance**: One set of configs for both machines
-2. **Easy updates**: Change once, applies to both
-3. **Clear separation**: Host-specific stuff is isolated and minimal
-4. **Version control friendly**: Can track changes easily
-5. **Predictable**: Both machines behave nearly identically
+**M90aPro**: NVIDIA Prime Sync mode (both GPUs always on). To switch to Offload mode for better battery life, edit `hosts/M90aPro/nvidia-prime.nix` -- comment out `sync.enable` and uncomment the offload block.
 
 ## Important Notes
 
-- The timezone is set to "Asia/Singapore" in configuration.nix
-- Git user is set to "dragonleopardpig" in home.nix
-- Auto-login is disabled (no autoLogin configuration)
-- Both use Hyprland with HyprPanel
-- Weather API key for HyprPanel should be in `~/.config/secrets/weather-api-key`
+- Flake builds ignore `/etc/nixos/` entirely -- this directory is the single source of truth
+- Timezone: Asia/Singapore
+- State version: 25.11
+- Unfree packages allowed, Nix flakes enabled, daily garbage collection (3 days retention)
+- Weather API key must be placed at `~/.config/secrets/weather-api-key`

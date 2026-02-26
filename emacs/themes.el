@@ -15,7 +15,6 @@
   (setq dashboard-set-heading-icons t)
   (setq dashboard-set-file-icons t)
   (setq dashboard-projects-backend 'projectile))
-;; (require 'scimax-dashboard)
 
 ;; * Disable some defaults
 (disable-theme 'smart-mode-line-light)
@@ -23,7 +22,8 @@
 (fringe-mode -1)
 
 ;; * Set Faces, etc...
-(set-face-attribute 'default nil :height 105)
+;; (set-face-attribute 'default nil :height 105)
+(set-frame-font (font-spec :size 10.5))
 (setq leuven-scale-outline-headlines 1.1)
 (setq text-scale-mode-step 1.05)
 (setq org-indent-indentation-per-level 0)

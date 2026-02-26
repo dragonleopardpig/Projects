@@ -1399,6 +1399,7 @@ dependencies = [
  "base64",
  "dioxus",
  "dioxus-desktop",
+ "http",
  "image",
  "tokio",
 ]
