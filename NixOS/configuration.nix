@@ -445,6 +445,9 @@
       '';
     })
 
+    # ── Cloud ──
+    filen-desktop
+    
     # ── Fun ──
     cowsay                     # Talking cow ASCII art
   ];

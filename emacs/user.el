@@ -139,32 +139,6 @@
       spice-waveform-viewer "ngplot")
 ;; ngplot is a new custom viewer defined in elisp which uses gnuplot
 
-;; ** Scale Latex Preview Size
-(defun my/text-scale-adjust-latex-previews ()
-  "Adjust the size of latex preview fragments when changing the
-buffer's text scale."
-  (pcase major-mode
-    ('latex-mode
-     (dolist (ov (overlays-in (point-min) (point-max)))
-       (if (eq (overlay-get ov 'category)
-               'preview-overlay)
-           (my/text-scale--resize-fragment ov))))
-    ('org-mode
-     (dolist (ov (overlays-in (point-min) (point-max)))
-       (if (eq (overlay-get ov 'org-overlay-type)
-               'org-latex-overlay)
-           (my/text-scale--resize-fragment ov))))))
-(defun my/text-scale--resize-fragment (ov)
-  (overlay-put ov 'display
-	       (cons 'image
-		     (plist-put
-		      (cdr (overlay-get ov 'display))
-		      :scale (+ 1.0 (* 0.15 text-scale-mode-amount))
-		      ))))
-(add-hook 'text-scale-mode-hook #'my/text-scale-adjust-latex-previews)
-(advice-add 'org-fragtog--post-cmd :after #'my/text-scale-adjust-latex-previews)
-
-
 (setq inferior-lisp-program "sbcl")
 (setq org-src-block-faces 'nil)
 (add-hook 'prog-mode-hook #'rainbow-delimiters-mode)
@@ -302,13 +276,11 @@ If only one window exists, split horizontally first."
 
 ;; * Latex and preview pane
 (with-eval-after-load 'org
-
   (setq org-preview-latex-default-process 'dvisvgm)
-
   (plist-put
    (cdr (assq 'dvisvgm org-preview-latex-process-alist))
    :image-size-adjust
-   '(1.5 . 1.5)))
+   '(1.2 . 1.2)))
 
 ;; Also set legacy variable for compatibility
 (setq org-format-latex-options
@@ -320,3 +292,28 @@ If only one window exists, split horizontally first."
 ;; * Org-fragtog
 ;; Auto preview Latex
 (add-hook 'org-mode-hook 'org-fragtog-mode)
+
+;; ** Scale Latex Preview Size
+(defun my/text-scale-adjust-latex-previews ()
+  "Adjust the size of latex preview fragments when changing the
+buffer's text scale."
+  (pcase major-mode
+    ('latex-mode
+     (dolist (ov (overlays-in (point-min) (point-max)))
+       (if (eq (overlay-get ov 'category)
+               'preview-overlay)
+           (my/text-scale--resize-fragment ov))))
+    ('org-mode
+     (dolist (ov (overlays-in (point-min) (point-max)))
+       (if (eq (overlay-get ov 'org-overlay-type)
+               'org-latex-overlay)
+           (my/text-scale--resize-fragment ov))))))
+(defun my/text-scale--resize-fragment (ov)
+  (overlay-put ov 'display
+	       (cons 'image
+		     (plist-put
+		      (cdr (overlay-get ov 'display))
+		      :scale (+ 1.0 (* 0.15 text-scale-mode-amount))
+		      ))))
+(add-hook 'text-scale-mode-hook #'my/text-scale-adjust-latex-previews)
+(advice-add 'org-fragtog--post-cmd :after #'my/text-scale-adjust-latex-previews)
