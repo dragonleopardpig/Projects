@@ -79,7 +79,6 @@
     
     # WebKit/Graphics rendering fixes
     WEBKIT_DISABLE_COMPOSITING_MODE = "1";
-    LIBGL_ALWAYS_SOFTWARE = "1";
     
     # PKG_CONFIG_PATH for finding libraries
     PKG_CONFIG_PATH = lib.makeSearchPath "lib/pkgconfig" (with pkgs; [
@@ -155,5 +154,23 @@
     echo "Cargo version: $(cargo --version)"
     echo ""
     echo "Run: cargo run"
+
+    # Generate .clangd for egrab-capture so clangd finds gcc system headers
+    # (Nix store paths change per host/generation, so we regenerate each time)
+    # Only extract gcc/g++ and glibc includes (filter out all the -dev wrapper paths)
+    _gcc_includes=$(g++ -xc++ -E -v /dev/null 2>&1 \
+      | sed -n '/#include <\.\.\.>/,/End of search list/p' \
+      | grep '^ ' \
+      | sed 's/^ *//' \
+      | grep -E '(gcc|glibc|c\+\+)')
+    _clangd_file="egrab-capture/.clangd"
+    {
+      echo "CompileFlags:"
+      echo "  Add:"
+      echo "    - -I/opt/euresys/egrabber/include"
+      for _inc in $_gcc_includes; do
+        echo "    - -isystem$_inc"
+      done
+    } > "$_clangd_file"
   '';
 }

@@ -10,3 +10,6 @@ devenv.local.yaml
 .pre-commit-config.yaml
 
 target/
+
+# Generated clangd config (Nix store paths are host-specific)
+egrab-capture/.clangd

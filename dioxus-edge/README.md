@@ -6,7 +6,8 @@ A desktop application for real-time camera capture and Sobel edge detection, bui
 
 - **Live camera streaming** at ~10 FPS display rate from a Euresys CoaxLink camera
 - **Single-frame capture** from the camera
-- **Sobel edge detection** with green overlay on frozen camera frames
+- **GPU-accelerated Sobel edge detection** (wgpu compute shader on RTX 4070) with CPU fallback
+- **Green edge overlay** on frozen camera frames
 - **File-based edge detection** with side-by-side Original/Edge view
 - **Educational visualization** mode showing the Sobel algorithm scanning pixel-by-pixel
 - **Image browser** sidebar with directory navigation
@@ -22,19 +23,19 @@ A desktop application for real-time camera capture and Sobel edge detection, bui
         v
 +---------------------+
 | egrab-capture       |    C++ helper binary
-| EGrabber SDK        |    Converts to RGB8
+| EGrabber SDK        |    Converts to Mono8
 | FormatConverter     |    8 frame buffers
 +---------------------+
         |
-        | stdout pipe: [u32 w][u32 h][u32 len][RGB bytes]
+        | stdout pipe: [u32 w][u32 h][u32 len][gray bytes]
         v
 +--------------------------------------------------+
 | Async Live Stream Loop                           |
 |                                                  |
 | 1. Read frame header (12 bytes: w, h, len)       |
-| 2. Read RGB pixel data                           |
+| 2. Read Mono8 pixel data (1 byte/pixel)          |
 | 3. If display interval elapsed (~60fps cap):     |
-|    a. Encode to BMP (uncompressed, <1ms)         |
+|    a. Encode to 8-bit grayscale BMP (<1ms)       |
 |    b. Write BMP into shared buffer               |
 |    c. eval() tiny URL change on img element      |
 |    d. yield_now() for webview to render          |
@@ -71,13 +72,13 @@ Signals (reactive state):
 
 The main performance challenge was displaying live video in Dioxus's webview-based UI. Several approaches were tried and abandoned:
 
-| Approach | Result | Bottleneck |
-|----------|--------|------------|
-| PNG base64 → Signal | ~1 FPS | PNG encoding (~50-100ms/frame) |
-| BMP base64 → Signal | ~1.4 FPS | 1.2MB base64 through VDOM diff |
-| BMP base64 → JS eval | ~3 FPS | 1.2MB JS string parsing |
-| file:// URL | Broken | WebView didn't load file:// properly |
-| **Asset handler** | **~10 FPS** | **Winner** |
+| Approach             | Result      | Bottleneck                           |
+|----------------------|-------------|--------------------------------------|
+| PNG base64 → Signal  | ~1 FPS      | PNG encoding (~50-100ms/frame)       |
+| BMP base64 → Signal  | ~1.4 FPS    | 1.2MB base64 through VDOM diff       |
+| BMP base64 → JS eval | ~3 FPS      | 1.2MB JS string parsing              |
+| file:// URL          | Broken      | WebView didn't load file:// properly |
+| **Asset handler**    | **~10 FPS** | **Winner**                           |
 
 The asset handler (`dioxus_desktop::use_asset_handler`) registers a custom protocol `dioxus://localhost/camera/...` that serves BMP bytes directly from an `Arc<Mutex<Vec<u8>>>` shared buffer. The live loop writes BMP data into this buffer, then uses `dioxus::document::eval()` to change only the tiny URL query string (`?t=N`) on the `<img>` element. This triggers the webview to re-fetch from the asset handler without any large data passing through signals, VDOM, or JavaScript.
 
@@ -87,6 +88,8 @@ The asset handler (`dioxus_desktop::use_asset_handler`) registers a custom proto
 dioxus-edge/
 ├── src/
 │   ├── main.rs          # Application code (UI, camera, edge detection)
+│   ├── gpu_sobel.rs     # wgpu compute shader wrapper for GPU Sobel
+│   ├── sobel.wgsl       # WGSL Sobel edge detection compute shader
 │   └── style.css        # CSS styles (embedded via include_str!)
 ├── egrab-capture/
 │   ├── capture.cpp      # C++ camera helper using Euresys eGrabber SDK
@@ -102,14 +105,17 @@ dioxus-edge/
 
 ### Rust Crates (Cargo.toml)
 
-| Crate | Version | Purpose |
-|-------|---------|---------|
-| `dioxus` | 0.6 | UI framework (desktop feature) |
-| `dioxus-desktop` | 0.6 | Desktop-specific APIs (asset handler) |
-| `image` | 0.25 | Image loading, Sobel processing, TIFF/PNG/BMP/JPEG save |
-| `base64` | 0.22 | Base64 encoding for edge overlay PNG data URIs |
-| `tokio` | 1 | Async runtime (process spawning, I/O, timers) |
-| `http` | 1.4 | HTTP Response builder for asset handler |
+| Crate            | Version | Purpose                                                 |
+|------------------|---------|---------------------------------------------------------|
+| `dioxus`         | 0.6     | UI framework (desktop feature)                          |
+| `dioxus-desktop` | 0.6     | Desktop-specific APIs (asset handler)                   |
+| `image`          | 0.25    | Image loading, Sobel processing, TIFF/PNG/BMP/JPEG save |
+| `base64`         | 0.22    | Base64 encoding for edge overlay PNG data URIs          |
+| `tokio`          | 1       | Async runtime (process spawning, I/O, timers)           |
+| `http`           | 1.4     | HTTP Response builder for asset handler                 |
+| `wgpu`           | 24      | GPU compute shader for Sobel edge detection             |
+| `pollster`       | 0.4     | Blocking executor for wgpu async initialization         |
+| `bytemuck`       | 1       | Safe byte casting for GPU uniform buffers               |
 
 ### System Dependencies (devenv.nix)
 
@@ -194,8 +200,8 @@ The `egrab-capture` binary communicates via a simple binary protocol on stdout:
 Per frame:
   [4 bytes] width   (u32, native endian)
   [4 bytes] height  (u32, native endian)
-  [4 bytes] length  (u32, native endian) = width * height * 3
-  [N bytes] RGB8 pixel data (row-major, top-to-bottom)
+  [4 bytes] length  (u32, native endian) = width * height
+  [N bytes] Mono8 pixel data (row-major, top-to-bottom, 1 byte/pixel)
 ```
 
 ### Single mode
@@ -212,28 +218,28 @@ Captures one frame and writes the binary format to the specified file.
 egrab-capture --mode stream
 ```
 
-Continuously writes frames to stdout. Reads stdin for 'q' to quit. Also handles SIGTERM/SIGPIPE for graceful shutdown. Uses 8 frame buffers and the Euresys `FormatConverter` to convert the camera's native pixel format to RGB8.
+Continuously writes frames to stdout. Reads stdin for 'q' to quit. Also handles SIGTERM/SIGPIPE for graceful shutdown. Uses 8 frame buffers and the Euresys `FormatConverter` to convert the camera's native pixel format to Mono8.
 
 ## Key Code Sections (main.rs)
 
-| Lines | Section | Description |
-|-------|---------|-------------|
-| 1-7 | Imports | Dioxus, image processing, std, tokio |
-| 23-74 | Signal setup | All reactive state + asset handler registration |
-| 62-74 | Asset handler | `dioxus://localhost/camera/` serves BMP from shared buffer |
-| 503-568 | Capture handler | Single-frame capture via egrab-capture |
-| 569-725 | Live stream | Async loop reading frames, BMP encoding, display throttling |
-| 727-759 | Detect Edge | Sobel edge detection on frozen frame with green overlay |
-| 761-812 | Save handler | zenity save dialog, exports via `image` crate `.save()` |
-| 1141-1167 | `sobel_edge_detection()` | Core Sobel algorithm (3x3 Gx/Gy kernels) |
-| 1239-1289 | `rgb_to_bmp()` | Custom uncompressed BMP encoder for zero-overhead streaming |
-| 1291-1304 | `load_raw_rgb()` | Reads egrab-capture's binary frame format |
-| 1306-1320 | `create_edge_overlay()` | RGBA overlay: green where edge > 30, transparent elsewhere |
+| File / Section           | Description                                                 |
+|--------------------------|-------------------------------------------------------------|
+| `src/main.rs`            | Application code: UI, camera, edge detection, BMP encoding  |
+| `src/gpu_sobel.rs`       | wgpu compute shader wrapper: init, buffer management, dispatch |
+| `src/sobel.wgsl`         | WGSL Sobel 3x3 kernel (16x16 workgroups, 1 u32/pixel)      |
+| `mono_to_bmp()`          | 8-bit grayscale BMP encoder (256-entry palette, zero-alloc) |
+| `load_raw_mono()`        | Reads egrab-capture's binary Mono8 frame format             |
+| `run_sobel()`            | GPU-first Sobel dispatch with CPU fallback                  |
+| `sobel_edge_detection()` | CPU Sobel algorithm (3x3 Gx/Gy kernels)                    |
+| `create_edge_overlay()`  | RGBA overlay: green where edge > 30, transparent elsewhere  |
 
 ## Performance Notes
 
+- **Mono8 pipeline**: The camera outputs grayscale (1 byte/pixel), reducing bandwidth by 3x vs the previous RGB8 path. Wire protocol payload is now `width * height` bytes instead of `width * height * 3`.
+- **8-bit grayscale BMP**: Uses a 256-entry palette, producing BMPs ~3x smaller than 24-bit RGB BMPs while requiring no per-pixel conversion (just memcpy rows).
+- **GPU-accelerated Sobel**: Uses a wgpu WGSL compute shader dispatched in 16x16 workgroups. On an RTX 4070, a 1920x1080 image completes in <1ms vs ~50-100ms on CPU. Falls back to CPU automatically if GPU initialization fails.
 - **BMP encoding** is used instead of PNG for live streaming because uncompressed BMP takes <1ms vs ~50-100ms for PNG compression.
 - The live loop **reads all frames** from the pipe to prevent backpressure, but only updates the display at ~60fps intervals (`display_interval = 16,667us`).
 - `tokio::task::yield_now()` is called after each display update to let the Dioxus single-threaded async runtime process the webview fetch.
 - The edge detection overlay uses PNG encoding (via `image_to_base64`) since it's a one-time operation on a frozen frame, not a streaming path.
-- Release builds with LTO (`opt-level = 3`, `lto = true`) significantly improve edge detection speed.
+- Release builds with LTO (`opt-level = 3`, `lto = true`) significantly improve CPU edge detection speed.

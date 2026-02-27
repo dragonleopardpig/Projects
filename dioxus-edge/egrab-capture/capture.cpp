@@ -1,10 +1,10 @@
 // egrab-capture: helper binary for Euresys CoaxLink camera capture
 // Usage:
 //   egrab-capture --mode single --output /tmp/capture.raw
-//     Grabs one frame, converts to RGB8, writes binary: [u32 width][u32 height][u32 len][RGB data]
+//     Grabs one frame, converts to Mono8, writes binary: [u32 width][u32 height][u32 len][gray data]
 //
 //   egrab-capture --mode stream
-//     Continuously grabs frames, writes [u32 width][u32 height][u32 len][RGB data] per frame to stdout
+//     Continuously grabs frames, writes [u32 width][u32 height][u32 len][gray data] per frame to stdout
 //     Reads stdin for 'q' to quit. Also handles SIGTERM/SIGPIPE.
 
 #include <EGrabber.h>
@@ -66,14 +66,14 @@ static int do_single(const std::string &output_path) {
         size_t bufHeight = buffer.getInfo<size_t>(gc::BUFFER_INFO_DELIVERED_IMAGEHEIGHT);
         uint64_t pixelFormat = buffer.getInfo<uint64_t>(gc::BUFFER_INFO_PIXELFORMAT);
 
-        // Convert to RGB8
-        FormatConverter::Auto rgb(converter, FormatConverter::OutputFormat("RGB8"),
+        // Convert to Mono8 (grayscale — 1 byte per pixel)
+        FormatConverter::Auto mono(converter, FormatConverter::OutputFormat("Mono8"),
             imagePointer, pixelFormat, bufWidth, bufHeight);
 
-        size_t rgbSize = bufWidth * bufHeight * 3;
-        const uint8_t *rgbData = reinterpret_cast<const uint8_t *>(rgb.getBuffer());
+        size_t monoSize = bufWidth * bufHeight * 1;
+        const uint8_t *monoData = reinterpret_cast<const uint8_t *>(mono.getBuffer());
 
-        // Write binary: [width u32][height u32][len u32][RGB data]
+        // Write binary: [width u32][height u32][len u32][gray data]
         std::ofstream out(output_path, std::ios::binary);
         if (!out) {
             std::cerr << "ERROR: Cannot open output file: " << output_path << std::endl;
@@ -82,11 +82,11 @@ static int do_single(const std::string &output_path) {
 
         uint32_t w32 = static_cast<uint32_t>(bufWidth);
         uint32_t h32 = static_cast<uint32_t>(bufHeight);
-        uint32_t len32 = static_cast<uint32_t>(rgbSize);
+        uint32_t len32 = static_cast<uint32_t>(monoSize);
         write_u32(out, w32);
         write_u32(out, h32);
         write_u32(out, len32);
-        out.write(reinterpret_cast<const char *>(rgbData), rgbSize);
+        out.write(reinterpret_cast<const char *>(monoData), monoSize);
         out.close();
 
         std::cerr << "Captured " << bufWidth << "x" << bufHeight << " -> " << output_path << std::endl;
@@ -107,7 +107,9 @@ static int do_stream() {
     fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
 
     try {
+        std::cerr << "Initializing GenTL..." << std::endl;
         EGenTL genTL;
+        std::cerr << "Discovering cameras..." << std::endl;
         EGrabberDiscovery disc(genTL);
         disc.discover();
 
@@ -116,6 +118,7 @@ static int do_stream() {
             return 1;
         }
 
+        std::cerr << "Connecting to grabber..." << std::endl;
         EGrabber<CallbackOnDemand> grabber(disc.egrabbers(0));
         FormatConverter converter(genTL);
 
@@ -125,10 +128,10 @@ static int do_stream() {
         int64_t width = grabber.getInteger<RemoteModule>("Width");
         int64_t height = grabber.getInteger<RemoteModule>("Height");
         std::cerr << "Resolution: " << width << "x" << height << std::endl;
-        std::cerr << "Streaming... send 'q' on stdin to stop" << std::endl;
 
         grabber.reallocBuffers(8);
         grabber.start();  // continuous
+        std::cerr << "Streaming" << std::endl;
 
         FILE *out = stdout;
         uint64_t frame_count = 0;
@@ -148,20 +151,20 @@ static int do_stream() {
                 size_t bufHeight = buffer.getInfo<size_t>(gc::BUFFER_INFO_DELIVERED_IMAGEHEIGHT);
                 uint64_t pixelFormat = buffer.getInfo<uint64_t>(gc::BUFFER_INFO_PIXELFORMAT);
 
-                FormatConverter::Auto rgb(converter, FormatConverter::OutputFormat("RGB8"),
+                FormatConverter::Auto mono(converter, FormatConverter::OutputFormat("Mono8"),
                     imagePointer, pixelFormat, bufWidth, bufHeight);
 
-                size_t rgbSize = bufWidth * bufHeight * 3;
-                const uint8_t *rgbData = reinterpret_cast<const uint8_t *>(rgb.getBuffer());
+                size_t monoSize = bufWidth * bufHeight * 1;
+                const uint8_t *monoData = reinterpret_cast<const uint8_t *>(mono.getBuffer());
 
                 uint32_t w32 = static_cast<uint32_t>(bufWidth);
                 uint32_t h32 = static_cast<uint32_t>(bufHeight);
-                uint32_t len32 = static_cast<uint32_t>(rgbSize);
+                uint32_t len32 = static_cast<uint32_t>(monoSize);
 
                 write_u32(out, w32);
                 write_u32(out, h32);
                 write_u32(out, len32);
-                if (fwrite(rgbData, 1, rgbSize, out) != rgbSize) {
+                if (fwrite(monoData, 1, monoSize, out) != monoSize) {
                     std::cerr << "Write error (pipe closed?)" << std::endl;
                     break;
                 }

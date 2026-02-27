@@ -24,10 +24,6 @@
 (require 'rg)
 (rg-enable-default-bindings)
 
-;; * Org-fragtog
-;; Auto preview Latex
-(add-hook 'org-mode-hook 'org-fragtog-mode)
-
 ;; * Projectile
 ;; Note: Projectile is already configured in scimax/packages.el
 ;; This provides additional project-specific settings
@@ -143,77 +139,31 @@
       spice-waveform-viewer "ngplot")
 ;; ngplot is a new custom viewer defined in elisp which uses gnuplot
 
-
-;; * Latex and preview pane
-;; (latex-preview-pane-enable)
-;; (setq org-preview-latex-default-process 'dvisvgm)
-;; ;; ** Use current theme colors for LaTeX previews
-;; (setq org-format-latex-options
-;;       (plist-put org-format-latex-options :foreground 'default))
-;; (setq org-format-latex-options
-;;       (plist-put org-format-latex-options :background 'default))
-;; ;; Auto-clear LaTeX previews on theme switch so they regenerate with new colors
-;; (add-hook 'enable-theme-functions
-;;           (lambda (_theme)
-;;             (dolist (buf (buffer-list))
-;;               (with-current-buffer buf
-;;                 (when (derived-mode-p 'org-mode)
-;;                   (org-clear-latex-preview))))))
-
-(setq org-preview-latex-default-process 'dvisvgm)
-
-(setq org-format-latex-options
-      (plist-put org-format-latex-options :foreground 'default))
-
-(setq org-format-latex-options
-      (plist-put org-format-latex-options :background 'default))
-
-(with-eval-after-load 'org
-  (set-face-attribute 'org-block nil :background 'unspecified)
-  (set-face-attribute 'org-latex-and-related nil :background 'unspecified))
-
-(defun my/org-latex-preview-no-bg (orig-fun &rest args)
-  (let ((org-format-latex-options
-         (plist-put org-format-latex-options :background nil)))
-    (apply orig-fun args)))
-
-(advice-add 'org-create-formula-image
-            :around
-            #'my/org-latex-preview-no-bg)
-
 ;; ** Scale Latex Preview Size
-;; (defun my/text-scale-adjust-latex-previews ()
-;;   "Adjust the size of latex preview fragments when changing the
-;; buffer's text scale."
-;;   (pcase major-mode
-;;     ('latex-mode
-;;      (dolist (ov (overlays-in (point-min) (point-max)))
-;;        (if (eq (overlay-get ov 'category)
-;;                'preview-overlay)
-;;            (my/text-scale--resize-fragment ov))))
-;;     ('org-mode
-;;      (dolist (ov (overlays-in (point-min) (point-max)))
-;;        (if (eq (overlay-get ov 'org-overlay-type)
-;;                'org-latex-overlay)
-;;            (my/text-scale--resize-fragment ov))))))
-;; (defun my/text-scale--resize-fragment (ov)
-;;   (overlay-put ov 'display
-;; 	       (cons 'image
-;; 		     (plist-put
-;; 		      (cdr (overlay-get ov 'display))
-;; 		      :scale (+ 1.0 (* 0.15 text-scale-mode-amount))
-;; 		      ;; :scale  (* +org-latex-preview-scale (expt text-scale-mode-step text-scale-mode-amount))
-;; 		      ))))
-;; (add-hook 'text-scale-mode-hook #'my/text-scale-adjust-latex-previews)
-;; (advice-add 'org-fragtog--post-cmd :after #'my/text-scale-adjust-latex-previews)
-;; ** Transparent Background
-;; (eval-after-load 'org
-;;   '(setf org-highlight-latex-and-related '(latex)))
+(defun my/text-scale-adjust-latex-previews ()
+  "Adjust the size of latex preview fragments when changing the
+buffer's text scale."
+  (pcase major-mode
+    ('latex-mode
+     (dolist (ov (overlays-in (point-min) (point-max)))
+       (if (eq (overlay-get ov 'category)
+               'preview-overlay)
+           (my/text-scale--resize-fragment ov))))
+    ('org-mode
+     (dolist (ov (overlays-in (point-min) (point-max)))
+       (if (eq (overlay-get ov 'org-overlay-type)
+               'org-latex-overlay)
+           (my/text-scale--resize-fragment ov))))))
+(defun my/text-scale--resize-fragment (ov)
+  (overlay-put ov 'display
+	       (cons 'image
+		     (plist-put
+		      (cdr (overlay-get ov 'display))
+		      :scale (+ 1.0 (* 0.15 text-scale-mode-amount))
+		      ))))
+(add-hook 'text-scale-mode-hook #'my/text-scale-adjust-latex-previews)
+(advice-add 'org-fragtog--post-cmd :after #'my/text-scale-adjust-latex-previews)
 
-;; * etc
-;; (setq nb-notebook-directory "~/mountdir/Projects")
-;; (org-babel-load-file "~/mountdir/emacs/scimax/scimax-notebook.org")
-;; (setq org-image-actual-width 100)
 
 (setq inferior-lisp-program "sbcl")
 (setq org-src-block-faces 'nil)
@@ -350,3 +300,23 @@ If only one window exists, split horizontally first."
             (my/add-file-path-overlays)
             (add-hook 'after-save-hook #'my/add-file-path-overlays nil t)))
 
+;; * Latex and preview pane
+(with-eval-after-load 'org
+
+  (setq org-preview-latex-default-process 'dvisvgm)
+
+  (plist-put
+   (cdr (assq 'dvisvgm org-preview-latex-process-alist))
+   :image-size-adjust
+   '(1.5 . 1.5)))
+
+;; Also set legacy variable for compatibility
+(setq org-format-latex-options
+      (plist-put org-format-latex-options :background "Transparent"))
+
+;; Ensure preview face has no background
+(set-face-attribute 'org-latex-and-related nil :background 'unspecified)
+
+;; * Org-fragtog
+;; Auto preview Latex
+(add-hook 'org-mode-hook 'org-fragtog-mode)

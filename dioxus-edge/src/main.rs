@@ -1,5 +1,7 @@
+mod gpu_sobel;
+
 use dioxus::prelude::*;
-use image::{DynamicImage, GrayImage, ImageBuffer, Luma, Rgba, RgbImage};
+use image::{DynamicImage, GrayImage, ImageBuffer, Luma, Rgba};
 use std::fs;
 use std::process::Command;
 use std::path::{Path, PathBuf};
@@ -55,8 +57,13 @@ fn App() -> Element {
     let mut camera_overlay = use_signal(|| None::<String>);
     let mut has_frozen_frame = use_signal(|| false);
     let mut show_edge_overlay = use_signal(|| false);
-    // Keep raw RGB bytes of the frozen frame for edge detection (avoids re-decoding)
+    // Keep raw grayscale bytes of the frozen frame for edge detection (avoids re-decoding)
     let mut camera_raw: Signal<Option<(u32, u32, Vec<u8>)>> = use_signal(|| None);
+
+    // GPU-accelerated Sobel (falls back to CPU if GPU unavailable)
+    let gpu_sobel: Signal<Arc<Option<gpu_sobel::GpuSobel>>> = use_signal(|| {
+        Arc::new(gpu_sobel::GpuSobel::new())
+    });
 
     // Shared BMP buffer for zero-copy asset serving
     let frame_buf: Arc<Mutex<Vec<u8>>> = use_hook(|| Arc::new(Mutex::new(Vec::new())));
@@ -116,6 +123,7 @@ fn App() -> Element {
     });
 
     let open_file_dialog = move |_evt: Event<MouseData>| {
+        let gpu = gpu_sobel.read().clone();
         spawn(async move {
             status.set("Opening file chooser...".to_string());
             
@@ -161,7 +169,7 @@ fn App() -> Element {
                     
                     match fs::read(&path) {
                         Ok(bytes) => {
-                            match process_image_from_bytes(&bytes) {
+                            match process_image_from_bytes(&bytes, &gpu) {
                                 Ok((orig_base64, edge_base64)) => {
                                     // Clear camera state so file-loaded view shows
                                     camera_frame.set(None);
@@ -365,7 +373,8 @@ fn App() -> Element {
         
         let path_str = entry.path.to_string_lossy().to_string();
         file_path.set(path_str.clone());
-        
+        let gpu = gpu_sobel.read().clone();
+
         spawn(async move {
             is_processing.set(true);
             processing_progress.set(10);
@@ -380,7 +389,7 @@ fn App() -> Element {
                     processing_progress.set(60);
                     status.set("Applying edge detection...".to_string());
                     
-                    match process_image_from_bytes(&bytes) {
+                    match process_image_from_bytes(&bytes, &gpu) {
                         Ok((orig_base64, edge_base64)) => {
                             processing_progress.set(90);
                             status.set("Finalizing...".to_string());
@@ -528,10 +537,10 @@ fn App() -> Element {
 
             match result {
                 Ok(output) if output.status.success() => {
-                    match load_raw_rgb(raw_path) {
-                        Ok((width, height, rgb_data)) => {
+                    match load_raw_mono(raw_path) {
+                        Ok((width, height, mono_data)) => {
                             let mut bmp_buf = Vec::new();
-                            rgb_to_bmp(&rgb_data, width, height, &mut bmp_buf);
+                            mono_to_bmp(&mono_data, width, height, &mut bmp_buf);
                             {
                                 let mut buf = frame_buf_cap.lock().unwrap();
                                 buf.clear();
@@ -545,7 +554,7 @@ fn App() -> Element {
                                 "dioxus://localhost/camera/frame.bmp?t={}",
                                 ts
                             )));
-                            camera_raw.set(Some((width, height, rgb_data)));
+                            camera_raw.set(Some((width, height, mono_data)));
                             has_frozen_frame.set(true);
                             show_edge_overlay.set(false);
                             camera_overlay.set(None);
@@ -626,16 +635,37 @@ fn App() -> Element {
             };
 
             let mut stdout = child.stdout.take().unwrap();
+            let stderr = child.stderr.take().unwrap();
             {
                 let mut guard = child_arc.lock().unwrap();
                 *guard = Some(child);
             }
 
+            // Read camera init logs (stderr) until "Streaming" appears,
+            // forwarding each line to the status bar so the user sees progress.
+            // After init, keep draining stderr in a background task so the pipe
+            // doesn't fill up and the child doesn't get SIGPIPE.
+            use tokio::io::AsyncBufReadExt;
+            let mut stderr_lines = tokio::io::BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = stderr_lines.next_line().await {
+                if !line.is_empty() {
+                    status.set(format!("Camera: {}", line));
+                    tokio::task::yield_now().await; // let UI render
+                }
+                if line.contains("Streaming") {
+                    break;
+                }
+            }
+            // Drain remaining stderr in background (frame count logs, errors)
+            spawn(async move {
+                while let Ok(Some(_)) = stderr_lines.next_line().await {}
+            });
+
             let mut frame_count = 0u64;
             let mut display_count = 0u64;
             let mut header_buf = [0u8; 12]; // width(4) + height(4) + len(4)
             let mut bmp_buf: Vec<u8> = Vec::new();
-            let mut rgb_data: Vec<u8> = Vec::new();
+            let mut mono_data: Vec<u8> = Vec::new();
             let mut last_display = std::time::Instant::now();
             let display_interval = std::time::Duration::from_micros(16_667); // ~60 FPS display cap
             let mut last_fps_update = std::time::Instant::now();
@@ -658,8 +688,8 @@ fn App() -> Element {
                 let height = u32::from_ne_bytes([header_buf[4], header_buf[5], header_buf[6], header_buf[7]]);
                 let data_len = u32::from_ne_bytes([header_buf[8], header_buf[9], header_buf[10], header_buf[11]]) as usize;
 
-                rgb_data.resize(data_len, 0);
-                match stdout.read_exact(&mut rgb_data).await {
+                mono_data.resize(data_len, 0);
+                match stdout.read_exact(&mut mono_data).await {
                     Ok(_) => {}
                     Err(_) => break,
                 }
@@ -675,7 +705,7 @@ fn App() -> Element {
                     display_count += 1;
 
                     // Build BMP and store in shared buffer (asset handler serves it)
-                    rgb_to_bmp(&rgb_data, width, height, &mut bmp_buf);
+                    mono_to_bmp(&mono_data, width, height, &mut bmp_buf);
                     {
                         let mut buf = frame_buf_loop.lock().unwrap();
                         buf.clear();
@@ -703,8 +733,8 @@ fn App() -> Element {
             }
 
             // Save last frame raw data for edge detection + frozen display
-            if !rgb_data.is_empty() {
-                camera_raw.set(Some((last_width, last_height, rgb_data)));
+            if !mono_data.is_empty() {
+                camera_raw.set(Some((last_width, last_height, mono_data)));
                 // The shared buffer already has the last BMP — just update the signal URL
                 camera_frame.set(Some(format!(
                     "dioxus://localhost/camera/frame.bmp?t={}",
@@ -738,27 +768,29 @@ fn App() -> Element {
             Some(r) => r,
             None => return,
         };
+        let gpu = gpu_sobel.read().clone();
         spawn(async move {
             status.set("Running edge detection...".to_string());
 
-            let (width, height, rgb_data) = raw;
-            if let Some(rgb_img) = RgbImage::from_raw(width, height, rgb_data) {
-                let dyn_img = DynamicImage::ImageRgb8(rgb_img);
-                let gray = dyn_img.to_luma8();
-                let edges = sobel_edge_detection(&gray);
-                let overlay = create_edge_overlay(&edges);
-                match image_to_base64(&DynamicImage::ImageRgba8(overlay)) {
-                    Ok(overlay_b64) => {
-                        camera_overlay.set(Some(format!("data:image/png;base64,{}", overlay_b64)));
-                        show_edge_overlay.set(true);
-                        status.set("Edge detection complete — green overlay applied".to_string());
-                    }
-                    Err(e) => {
-                        status.set(format!("Overlay encode error: {}", e));
-                    }
+            let (width, height, mono_data) = raw;
+            let gray_img = match GrayImage::from_raw(width, height, mono_data) {
+                Some(g) => g,
+                None => {
+                    status.set("Failed to reconstruct image from raw data".to_string());
+                    return;
                 }
-            } else {
-                status.set("Failed to reconstruct image from raw data".to_string());
+            };
+            let edges = run_sobel(&gray_img, &gpu);
+            let overlay = create_edge_overlay(&edges);
+            match image_to_base64(&DynamicImage::ImageRgba8(overlay)) {
+                Ok(overlay_b64) => {
+                    camera_overlay.set(Some(format!("data:image/png;base64,{}", overlay_b64)));
+                    show_edge_overlay.set(true);
+                    status.set("Edge detection complete — green overlay applied".to_string());
+                }
+                Err(e) => {
+                    status.set(format!("Overlay encode error: {}", e));
+                }
             }
         });
     };
@@ -797,9 +829,9 @@ fn App() -> Element {
 
             match result {
                 Ok(Some(path)) if !path.is_empty() => {
-                    let (width, height, rgb_data) = raw;
-                    if let Some(rgb_img) = RgbImage::from_raw(width, height, rgb_data) {
-                        let dyn_img = DynamicImage::ImageRgb8(rgb_img);
+                    let (width, height, mono_data) = raw;
+                    if let Some(gray_img) = GrayImage::from_raw(width, height, mono_data) {
+                        let dyn_img = DynamicImage::ImageLuma8(gray_img);
                         if let Err(e) = dyn_img.save(&path) {
                             status.set(format!("Save failed: {}", e));
                         } else {
@@ -1125,15 +1157,24 @@ fn App() -> Element {
     }
 }
 
-fn process_image_from_bytes(bytes: &[u8]) -> Result<(String, String), String> {
+fn process_image_from_bytes(bytes: &[u8], gpu: &Option<gpu_sobel::GpuSobel>) -> Result<(String, String), String> {
     let img = image::load_from_memory(bytes)
         .map_err(|e| format!("Failed to load image: {}", e))?;
     let original_base64 = image_to_base64(&img)?;
     let gray = img.to_luma8();
-    let edges = sobel_edge_detection(&gray);
+    let edges = run_sobel(&gray, gpu);
     let edge_img = DynamicImage::ImageLuma8(edges);
     let edge_base64 = image_to_base64(&edge_img)?;
     Ok((original_base64, edge_base64))
+}
+
+fn run_sobel(gray: &GrayImage, gpu: &Option<gpu_sobel::GpuSobel>) -> GrayImage {
+    let (width, height) = gray.dimensions();
+    if let Some(ref gpu) = gpu {
+        gpu.detect_edges(gray.as_raw(), width, height)
+    } else {
+        sobel_edge_detection(gray)
+    }
 }
 
 fn image_to_base64(img: &DynamicImage) -> Result<String, String> {
@@ -1241,9 +1282,10 @@ fn find_egrab_capture() -> Option<String> {
     None
 }
 
-/// Build an uncompressed BMP from raw RGB pixels into the provided buffer.
+/// Build an uncompressed 24-bit BMP from Mono8 pixels (expands gray→BGR for display).
+/// WebKitGTK doesn't reliably render 8-bit paletted BMPs, so we use 24-bit format.
 /// Reuses allocation across calls for zero-alloc streaming.
-fn rgb_to_bmp(rgb: &[u8], width: u32, height: u32, bmp_buf: &mut Vec<u8>) {
+fn mono_to_bmp(gray: &[u8], width: u32, height: u32, bmp_buf: &mut Vec<u8>) {
     let row_stride = (width as usize) * 3;
     let row_pad = (4 - (row_stride % 4)) % 4;
     let pixel_data_size = (row_stride + row_pad) * (height as usize);
@@ -1273,19 +1315,19 @@ fn rgb_to_bmp(rgb: &[u8], width: u32, height: u32, bmp_buf: &mut Vec<u8>) {
     bmp_buf.extend_from_slice(&0u32.to_le_bytes()); // important colors
 
     // Pixel data: BMP stores rows bottom-to-top, BGR order
+    // Expand each gray byte to (B=g, G=g, R=g)
+    let mono_stride = width as usize;
     let pad_bytes = [0u8; 3];
     for y in (0..height as usize).rev() {
-        let row_start = y * row_stride;
-        let row_end = row_start + row_stride;
-        if row_end > rgb.len() {
+        let row_start = y * mono_stride;
+        let row_end = row_start + mono_stride;
+        if row_end > gray.len() {
             break;
         }
-        let row = &rgb[row_start..row_end];
-        for px in 0..(width as usize) {
-            let i = px * 3;
-            bmp_buf.push(row[i + 2]); // B
-            bmp_buf.push(row[i + 1]); // G
-            bmp_buf.push(row[i]);     // R
+        for &g in &gray[row_start..row_end] {
+            bmp_buf.push(g); // B
+            bmp_buf.push(g); // G
+            bmp_buf.push(g); // R
         }
         if row_pad > 0 {
             bmp_buf.extend_from_slice(&pad_bytes[..row_pad]);
@@ -1293,8 +1335,8 @@ fn rgb_to_bmp(rgb: &[u8], width: u32, height: u32, bmp_buf: &mut Vec<u8>) {
     }
 }
 
-/// Load a raw egrab-capture frame file and return (width, height, rgb_bytes).
-fn load_raw_rgb(path: &str) -> Result<(u32, u32, Vec<u8>), String> {
+/// Load a raw egrab-capture frame file and return (width, height, mono_bytes).
+fn load_raw_mono(path: &str) -> Result<(u32, u32, Vec<u8>), String> {
     let data = fs::read(path).map_err(|e| format!("Read error: {}", e))?;
     if data.len() < 12 {
         return Err("Raw file too small".to_string());
@@ -1303,7 +1345,7 @@ fn load_raw_rgb(path: &str) -> Result<(u32, u32, Vec<u8>), String> {
     let height = u32::from_ne_bytes([data[4], data[5], data[6], data[7]]);
     let data_len = u32::from_ne_bytes([data[8], data[9], data[10], data[11]]) as usize;
     if data.len() < 12 + data_len {
-        return Err(format!("Expected {} bytes of RGB data, got {}", data_len, data.len() - 12));
+        return Err(format!("Expected {} bytes of pixel data, got {}", data_len, data.len() - 12));
     }
     Ok((width, height, data[12..12 + data_len].to_vec()))
 }

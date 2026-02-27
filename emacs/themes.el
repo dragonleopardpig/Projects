@@ -48,9 +48,33 @@
 (menu-bar-mode -1)
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
-(set-frame-parameter nil 'alpha-background 85) ; For current frame
-(add-to-list 'default-frame-alist '(alpha-background . 85)) ; For all new frames henceforth
+;; (set-frame-parameter nil 'alpha-background 85)
+;; (add-to-list 'default-frame-alist '(alpha-background . 85))
 
+;; * Toggle Frame Transparency F12
+(defvar my/frame-transparency-enabled t
+  "Whether frame transparency is enabled.")
+
+(defvar my/frame-transparency-value 85
+  "Transparency value when enabled (0–100).")
+
+(defun my/toggle-frame-transparency ()
+  "Toggle frame transparency."
+  (interactive)
+  (if my/frame-transparency-enabled
+      (progn
+        (set-frame-parameter nil 'alpha-background 100)
+        (setq my/frame-transparency-enabled nil)
+        (message "Transparency OFF"))
+    (set-frame-parameter nil 'alpha-background my/frame-transparency-value)
+    (setq my/frame-transparency-enabled t)
+    (message "Transparency ON")))
+
+;; Apply transparency on startup (current + future frames)
+(set-frame-parameter nil 'alpha-background my/frame-transparency-value)
+(add-to-list 'default-frame-alist `(alpha-background . ,my/frame-transparency-value))
+
+(global-set-key (kbd "<f12>") #'my/toggle-frame-transparency)
 
 ;; * Org Modern
 (setq org-modern-list

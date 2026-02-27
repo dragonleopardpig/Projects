@@ -1,0 +1,7 @@
+[
+  {
+    "directory": "/home/thinky/Projects/dioxus-edge/egrab-capture",
+    "command": "g++ -std=c++14 -O2 -Wall -I/opt/euresys/egrabber/include -c capture.cpp",
+    "file": "capture.cpp"
+  }
+]
