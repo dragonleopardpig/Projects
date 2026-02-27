@@ -11,5 +11,19 @@ devenv.local.yaml
 
 target/
 
-# Generated clangd config (Nix store paths are host-specific)
+# Generated clangd config and cache (Nix store paths are host-specific)
 egrab-capture/.clangd
+egrab-capture/.cache/
+
+# Compiled binary
+egrab-capture/egrab-capture
+
+# Generated compile database (host-specific)
+egrab-capture/compile_commands.json
+
+# Captured images
+*.tiff
+*.raw
+
+# Backup files
+*.backup

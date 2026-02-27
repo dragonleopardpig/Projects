@@ -1,3 +1,0 @@
-/home/thinky/cpp/CMakeFiles/my_app.dir
-/home/thinky/cpp/CMakeFiles/edit_cache.dir
-/home/thinky/cpp/CMakeFiles/rebuild_cache.dir
