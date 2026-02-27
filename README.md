@@ -15,7 +15,7 @@ Real-time camera capture and edge detection desktop app. Streams from an Euresys
 ### [NixOS](NixOS/)
 Flake-based NixOS configuration managing two machines:
 - **X299 Desktop** — NVIDIA RTX 4070, Euresys CoaxLink frame grabber, DDC/CI brightness
-- **M90aPro Laptop** — Intel + NVIDIA Prime Sync
+- **M90aPro All-In-One Desktop** — Intel + NVIDIA Prime Sync
 
 Hyprland (Wayland) with UWSM, HyprPanel, SDDM, and Home Manager.
 
