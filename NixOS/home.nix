@@ -140,7 +140,7 @@
       case "$1" in
         up)   brightnessctl -d "$DEV" set +10% ;;
         down) brightnessctl -d "$DEV" set 10%- ;;
-        *)    echo "Usage: brightness-ctl {up|down}" ;;
+        *)    echo "Usage: brightness-ctl {up|down}"; exit 0 ;;
       esac
     '';
   };

@@ -11,11 +11,10 @@
   boot = {
     kernelPackages = pkgs.linuxPackages_latest;
     # kernelPackages = pkgs.linuxPackages_6_12;
-    kernelModules = ["i2c-dev" "ddcci_backlight"];
+    kernelModules = ["i2c-dev"];
     initrd.kernelModules = ["nvidia"];
     extraModulePackages = [
       config.boot.kernelPackages.nvidia_x11
-      config.boot.kernelPackages.ddcci-driver
     ];
     kernelParams = [
       "quiet"
@@ -88,24 +87,6 @@
   services.gvfs.enable = true;
   services.udisks2.enable = true;
 
-  # Create ddcci backlight device for external monitor brightness control
-  # Auto-detects all i2c adapters (works with any GPU: NVIDIA, Intel, AMD)
-  systemd.services.ddcci-setup = {
-    description = "Setup ddcci backlight devices for external monitors";
-    wantedBy = [ "multi-user.target" ];
-    after = [ "systemd-modules-load.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
-      ExecStart = pkgs.writeShellScript "ddcci-setup" ''
-        for bus in /sys/bus/i2c/devices/i2c-*/; do
-          # Try creating ddcci device on every i2c bus; kernel ignores buses without DDC/CI
-          echo "ddcci 0x37" > "$bus/new_device" 2>/dev/null || true
-        done
-      '';
-    };
-  };
 
   # USB reset for Logitech G502X (triggered by udev when device appears)
   systemd.services.logitech-g502x-reset = {
