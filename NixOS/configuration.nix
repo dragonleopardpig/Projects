@@ -354,6 +354,8 @@
     onlyoffice-desktopeditors  # Office suite (Word, Excel, PowerPoint compatible)
     hugo                       # Static site generator
     glow                       # Terminal markdown previewer
+    minder                     # Mind map
+    teams-for-linux            # Unofficial Microsoft Teams
 
     # ── CAD & Engineering ──
     librecad                   # 2D CAD application
