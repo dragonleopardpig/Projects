@@ -182,7 +182,18 @@
 
   # Enable CUPS to print documents.
   services.printing.enable = true;
+  services.printing.drivers = [ pkgs.brlaser ];
 
+  hardware.sane = {
+    enable = true;
+    brscan4.enable = true;
+  };
+
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true;
+  };
+  
   # Enable sound with pipewire.
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
@@ -217,7 +228,7 @@
   users.users.thinky = {
     isNormalUser = true;
     description = "thinky";
-    extraGroups = [ "networkmanager" "wheel" "i2c"];
+    extraGroups = [ "networkmanager" "wheel" "i2c" "scanner" "lp"];
     subGidRanges = [
       {
         count = 65536;
@@ -233,6 +244,7 @@
     packages = with pkgs; [
       #  thunderbird
     ];
+    
   };
 
   # Allow unfree packages
@@ -298,6 +310,9 @@
     brightnessctl              # Screen brightness control
     ddcutil                    # External monitor brightness via DDC/CI
     power-profiles-daemon      # Power profile management (balanced, performance, saver)
+    simple-scan
+    xsane
+    sane-airscan
 
     # ── Disk & Partitioning ──
     gparted                    # GUI partition editor
