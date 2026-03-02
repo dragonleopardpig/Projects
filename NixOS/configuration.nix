@@ -383,6 +383,7 @@
         direnv                 # Direnv integration for Emacs
         lsp-pyright            # Python LSP client (Pyright)
         zmq                    # ZeroMQ bindings for Jupyter
+        codex-cli
       ]
     ))
     enchant                  # Spell checking meta-library (used by jinx)
@@ -411,6 +412,7 @@
     # ── AI Assistants ──
     claude-code                # Anthropic Claude CLI coding assistant
     claude-monitor             # Claude usage monitoring tool
+    codex
 
     # ── Containers & Compatibility ──
     distrobox                  # Run other Linux distros in containers

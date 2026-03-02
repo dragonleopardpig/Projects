@@ -268,7 +268,7 @@
           "$mod, F, exec, firefox"
           "$mod, Q, exec, kitty"
           "$mod, E, exec, emacs"
-          "$mod, P, exec, env GDK_BACKEND=x11 protonvpn-app"
+          "$mod, P, exec, ~/.local/bin/protonvpn-tray"
           "$mod, W, exec, walker"
           "$mod, N, exec, nemo"
           "$mod, S, exec, ~/.local/bin/sioyek-xcb"
@@ -336,7 +336,7 @@
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
-                    "env GDK_BACKEND=x11 protonvpn-app"
+                    "~/.local/bin/protonvpn-tray"
                     "swww-daemon && waypaper --random"
                     "while true; do sleep 60; waypaper --random; done"
                     "systemctl --user start hyprpolkitagent"
