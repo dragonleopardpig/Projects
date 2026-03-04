@@ -52,6 +52,13 @@
 (add-hook 'org-mode-hook 'follow-mode)
 (setq org-babel-min-lines-for-block-output 1000)
 
+;; * Org Pandoc Import
+(use-package org-pandoc-import
+  :vc (:url "https://github.com/tecosaur/org-pandoc-import"
+       :rev :newest
+       :files ("*.el" "filters" "preprocessors"))
+  :after org)
+
 ;; * Org Crypt
 (require 'org-crypt)
 (org-crypt-use-before-save-magic)

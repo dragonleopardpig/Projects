@@ -21,6 +21,55 @@
     categories = [ "Office" "Viewer" ];
   };
 
+  xdg.desktopEntries.mayo-xcb = {
+    name = "Mayo";
+    exec = "/home/thinky/.local/bin/mayo-xcb %f";
+    icon = "mayo";
+    comment = "Mayo STEP/IGES viewer (XWayland software GL)";
+    mimeType = [ "model/step" "model/iges" "application/step" ];
+    categories = [ "Graphics" "Engineering" "Science" ];
+    terminal = false;
+  };
+
+  xdg.desktopEntries.gmsh-xcb = {
+    name = "Gmsh";
+    exec = "/home/thinky/.local/bin/gmsh-xcb %f";
+    icon = "gmsh";
+    comment = "Gmsh mesh/CAD viewer (XWayland software GL)";
+    mimeType = [ "model/step" "model/iges" "application/step" ];
+    categories = [ "Graphics" "Engineering" "Science" ];
+    terminal = false;
+  };
+
+  xdg.desktopEntries.f3d-xcb = {
+    name = "F3D";
+    exec = "/home/thinky/.local/bin/f3d-xcb %f";
+    icon = "f3d";
+    comment = "F3D viewer (XWayland software GL)";
+    mimeType = [ "model/step" "model/iges" "application/step" "model/stl" "model/obj" ];
+    categories = [ "Graphics" "Engineering" "Science" ];
+    terminal = false;
+  };
+
+  xdg.desktopEntries.paraview-xcb = {
+    name = "ParaView";
+    exec = "/home/thinky/.local/bin/paraview-xcb %f";
+    icon = "paraview";
+    comment = "ParaView (XWayland software GL)";
+    mimeType = [ "model/step" "model/iges" "application/step" ];
+    categories = [ "Graphics" "Engineering" "Science" ];
+    terminal = false;
+  };
+
+  xdg.desktopEntries.freecad = {
+    name = "FreeCAD";
+    exec = "/home/thinky/.local/bin/freecad-opaque %f";
+    icon = "freecad";
+    comment = "FreeCAD (opaque Qt style)";
+    categories = [ "Graphics" "Engineering" "Science" ];
+    terminal = false;
+  };
+
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
@@ -38,6 +87,10 @@
   };
   
   xdg.configFile."uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
+  xdg.configFile."distrobox/distrobox.conf".force = true;
+  xdg.configFile."distrobox/distrobox.conf".text = ''
+    container_additional_volumes="/nix/store:/nix/store:ro /etc/profiles/per-user:/etc/profiles/per-user:ro /etc/static/profiles/per-user:/etc/static/profiles/per-user:ro"
+  '';
   xdg.configFile."Kvantum/kvantum.kvconfig".text = ''
     [General]
     theme=KvArcDark
@@ -77,7 +130,7 @@
     save_filename_format=screenshot-%Y%m%d-%H%M%S.png
   '';
 
-  # Waypaper configuration (wallpaper manager using swww backend)
+  # Waypaper configuration (wallpaper manager using mpvpaper backend)
   xdg.configFile."waypaper/config.ini".force = true;
   xdg.configFile."waypaper/config.ini".text = ''
     [Settings]
@@ -86,7 +139,7 @@
     monitors = All
     wallpaper = ~/Pictures/Wallpapers/Sollee.png
     show_path_in_tooltip = True
-    backend = swww
+    backend = mpvpaper
     fill = fill
     sort = name
     color = #ffffff
@@ -102,7 +155,7 @@
     swww_transition_duration = 2
     swww_transition_fps = 60
     mpvpaper_sound = False
-    mpvpaper_options =
+    mpvpaper_options = --loop --no-audio
     use_xdg_state = False
     zen_mode = False
   '';
@@ -115,6 +168,132 @@
     text = ''
       #!/bin/sh
       exec env QT_QPA_PLATFORM=xcb sioyek "$@"
+    '';
+  };
+
+  # Mayo wrapper: force XWayland + software GL to avoid QRhiGles2 context failures
+  home.file.".local/bin/mayo-xcb" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      export QT_QPA_PLATFORM=xcb
+      export XDG_SESSION_TYPE=x11
+      export QT_XCB_GL_INTEGRATION=none
+      export LIBGL_DRI3_DISABLE=1
+      export LIBGL_ALWAYS_SOFTWARE=1
+      export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+      export QT_OPENGL=software
+      export QT_QUICK_BACKEND=software
+      exec mayo "$@"
+    '';
+  };
+
+  # Lark .deb runner: extract to ~/.local/opt and run inside FHS env
+  home.file.".local/bin/lark-deb" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      set -eu
+
+      DEB_PATH="$HOME/Downloads/Lark-linux_x64-7.59.12.deb"
+      APP_DIR="$HOME/.local/opt/lark"
+
+      if [ ! -f "$DEB_PATH" ]; then
+        echo "Lark .deb not found at: $DEB_PATH"
+        exit 1
+      fi
+
+      mkdir -p "$APP_DIR"
+      ${pkgs.dpkg}/bin/dpkg -x "$DEB_PATH" "$APP_DIR"
+
+      if [ ! -x "$APP_DIR/opt/Lark/lark" ]; then
+        echo "Lark binary not found at: $APP_DIR/opt/Lark/lark"
+        exit 1
+      fi
+
+      exec fhs -c "$APP_DIR/opt/Lark/lark" -- "$@"
+    '';
+  };
+
+  xdg.desktopEntries.lark-deb = {
+    name = "Lark (deb)";
+    exec = "/home/thinky/.local/bin/lark-deb";
+    icon = "lark";
+    comment = "Lark .deb via FHS environment";
+    categories = [ "Network" "Chat" "Office" ];
+    terminal = false;
+  };
+
+
+  # Gmsh wrapper: force XWayland + software GL
+  home.file.".local/bin/gmsh-xcb" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      export QT_QPA_PLATFORM=xcb
+      export XDG_SESSION_TYPE=x11
+      export QT_XCB_GL_INTEGRATION=none
+      export LIBGL_DRI3_DISABLE=1
+      export LIBGL_ALWAYS_SOFTWARE=1
+      export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+      exec gmsh "$@"
+    '';
+  };
+
+  # F3D wrapper: force XWayland + software GL
+  home.file.".local/bin/f3d-xcb" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      export QT_QPA_PLATFORM=xcb
+      export XDG_SESSION_TYPE=x11
+      export QT_XCB_GL_INTEGRATION=none
+      export LIBGL_DRI3_DISABLE=1
+      export LIBGL_ALWAYS_SOFTWARE=1
+      export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+      exec f3d "$@"
+    '';
+  };
+
+  # ParaView wrapper: force XWayland + software GL
+  home.file.".local/bin/paraview-xcb" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      export QT_QPA_PLATFORM=xcb
+      export XDG_SESSION_TYPE=x11
+      export QT_XCB_GL_INTEGRATION=none
+      export LIBGL_DRI3_DISABLE=1
+      export LIBGL_ALWAYS_SOFTWARE=1
+      export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+      exec paraview "$@"
+    '';
+  };
+
+  # FreeCAD wrapper: force opaque Qt style (avoid transparent background)
+  home.file.".local/bin/freecad-opaque" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      # Force XWayland + opaque Qt style to avoid transparency under Wayland/Kvantum
+      export QT_QPA_PLATFORM=xcb
+      export XDG_SESSION_TYPE=x11
+      export XDG_CURRENT_DESKTOP=X-Generic
+      export QT_QPA_PLATFORMTHEME=
+      export QT_STYLE_OVERRIDE=Fusion
+      # Avoid GLX/DRI3 compositor transparency issues on NVIDIA + XWayland
+      export QT_XCB_GL_INTEGRATION=none
+      export LIBGL_DRI3_DISABLE=1
+      export QT_OPENGL=desktop
+      export QT_QUICK_BACKEND=software
+      # Force Qt to avoid alpha/transparent surfaces
+      export QT_X11_NO_MITSHM=1
+      export QT_AUTO_SCREEN_SCALE_FACTOR=0
+      export QML_DISABLE_DISK_CACHE=1
+      export QSG_RHI_BACKEND=software
+      export GDK_BACKEND=x11
+      export NO_AT_BRIDGE=1
+      exec FreeCAD "$@"
     '';
   };
 
@@ -158,56 +337,93 @@
 
       # --- Bing Wallpaper of the Day ---
       echo "Fetching Bing wallpaper..."
-      BING_JSON=$(curl -s "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US")
-      BING_DATE=$(echo "$BING_JSON" | jq -r '.images[0].startdate' | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/')
-      BING_PATH=$(echo "$BING_JSON" | jq -r '.images[0].url')
-      BING_FILE="$WALLPAPER_DIR/bing-$BING_DATE.jpg"
-      if [ ! -f "$BING_FILE" ]; then
-        if [ -n "$BING_PATH" ] && [ "$BING_PATH" != "null" ]; then
-          # Try UHD first, fall back to the default URL
-          BING_UHD=$(echo "$BING_PATH" | sed 's/1920x1080/UHD/g')
-          if curl -sf "https://www.bing.com$BING_UHD" -o "$BING_FILE"; then
-            echo "Saved: $BING_FILE"
-          elif curl -sf "https://www.bing.com$BING_PATH" -o "$BING_FILE"; then
-            echo "Saved: $BING_FILE"
+      if ! BING_JSON=$(curl -sf "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US"); then
+        echo "Warning: Failed to fetch Bing metadata (network/DNS?)"
+      else
+        BING_DATE=$(echo "$BING_JSON" | jq -r '.images[0].startdate' | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/')
+        BING_PATH=$(echo "$BING_JSON" | jq -r '.images[0].url')
+        BING_FILE="$WALLPAPER_DIR/bing-$BING_DATE.jpg"
+        if [ ! -f "$BING_FILE" ]; then
+          if [ -n "$BING_PATH" ] && [ "$BING_PATH" != "null" ]; then
+            # Try UHD first, fall back to the default URL
+            BING_UHD=$(echo "$BING_PATH" | sed 's/1920x1080/UHD/g')
+            if curl -sf "https://www.bing.com$BING_UHD" -o "$BING_FILE"; then
+              echo "Saved: $BING_FILE"
+            elif curl -sf "https://www.bing.com$BING_PATH" -o "$BING_FILE"; then
+              echo "Saved: $BING_FILE"
+            else
+              echo "Warning: Failed to download Bing wallpaper"
+              rm -f "$BING_FILE"
+            fi
           else
-            echo "Warning: Failed to download Bing wallpaper"
-            rm -f "$BING_FILE"
+            echo "Warning: Could not parse Bing image URL"
           fi
         else
-          echo "Warning: Could not parse Bing image URL"
+          echo "Bing wallpaper already exists: $BING_FILE"
         fi
-      else
-        echo "Bing wallpaper already exists: $BING_FILE"
       fi
 
       # --- NASA Astronomy Picture of the Day ---
       echo "Fetching NASA APOD..."
       # Use DEMO_KEY by default; set NASA_API_KEY env var for your own key
       NASA_KEY="''${NASA_API_KEY:-DEMO_KEY}"
-      NASA_JSON=$(curl -s "https://api.nasa.gov/planetary/apod?api_key=$NASA_KEY")
-      NASA_DATE=$(echo "$NASA_JSON" | jq -r '.date')
-      MEDIA_TYPE=$(echo "$NASA_JSON" | jq -r '.media_type')
-      NASA_FILE="$WALLPAPER_DIR/nasa-apod-$NASA_DATE.jpg"
-      if [ ! -f "$NASA_FILE" ]; then
-        if [ "$MEDIA_TYPE" = "image" ]; then
-          # Prefer hdurl, fall back to url
-          NASA_URL=$(echo "$NASA_JSON" | jq -r '.hdurl // .url')
-          if [ -n "$NASA_URL" ] && [ "$NASA_URL" != "null" ]; then
-            if curl -sf --retry 2 --retry-delay 5 "$NASA_URL" -o "$NASA_FILE"; then
-              echo "Saved: $NASA_FILE"
+      if ! NASA_JSON=$(curl -sf "https://api.nasa.gov/planetary/apod?api_key=$NASA_KEY&thumbs=true"); then
+        echo "Warning: Failed to fetch NASA APOD metadata (network/DNS or API limit?)"
+      else
+        NASA_DATE=$(echo "$NASA_JSON" | jq -r '.date')
+        MEDIA_TYPE=$(echo "$NASA_JSON" | jq -r '.media_type')
+        NASA_FILE="$WALLPAPER_DIR/nasa-apod-$NASA_DATE.jpg"
+        if [ ! -f "$NASA_FILE" ]; then
+          if [ "$MEDIA_TYPE" = "image" ]; then
+            # Prefer hdurl, fall back to url
+            NASA_URL=$(echo "$NASA_JSON" | jq -r '.hdurl // .url')
+            if [ -n "$NASA_URL" ] && [ "$NASA_URL" != "null" ]; then
+              if curl -sf --retry 2 --retry-delay 5 "$NASA_URL" -o "$NASA_FILE"; then
+                echo "Saved: $NASA_FILE"
+              else
+                echo "Warning: Failed to download NASA APOD image from $NASA_URL"
+                rm -f "$NASA_FILE"
+              fi
             else
-              echo "Warning: Failed to download NASA APOD image from $NASA_URL"
-              rm -f "$NASA_FILE"
+              echo "Warning: Could not parse NASA APOD image URL"
             fi
           else
-            echo "Warning: Could not parse NASA APOD image URL"
+            echo "NASA APOD is a video today; attempting to download"
+            NASA_URL=$(echo "$NASA_JSON" | jq -r '.url // empty')
+            NASA_THUMB=$(echo "$NASA_JSON" | jq -r '.thumbnail_url // empty')
+            NASA_VIDEO_FILE="$WALLPAPER_DIR/nasa-apod-$NASA_DATE.mp4"
+            if command -v yt-dlp >/dev/null 2>&1 && [ -n "$NASA_URL" ]; then
+              if [ ! -f "$NASA_VIDEO_FILE" ]; then
+                if yt-dlp -o "$NASA_VIDEO_FILE" "$NASA_URL"; then
+                  echo "Saved: $NASA_VIDEO_FILE"
+                else
+                  echo "Warning: Failed to download NASA APOD video from $NASA_URL"
+                  rm -f "$NASA_VIDEO_FILE"
+                  NASA_URL=""
+                fi
+              else
+                echo "NASA APOD video already exists: $NASA_VIDEO_FILE"
+              fi
+            fi
+            if [ -n "$NASA_THUMB" ] && [ -z "$NASA_URL" ]; then
+              NASA_FILE="$WALLPAPER_DIR/nasa-apod-$NASA_DATE.jpg"
+              if [ ! -f "$NASA_FILE" ]; then
+                if curl -sf --retry 2 --retry-delay 5 "$NASA_THUMB" -o "$NASA_FILE"; then
+                  echo "Saved thumbnail: $NASA_FILE"
+                else
+                  echo "Warning: Failed to download NASA APOD thumbnail"
+                  rm -f "$NASA_FILE"
+                fi
+              else
+                echo "NASA APOD thumbnail already exists: $NASA_FILE"
+              fi
+            elif [ -z "$NASA_URL" ]; then
+              echo "Warning: No video URL or thumbnail available for NASA APOD"
+            fi
           fi
         else
-          echo "NASA APOD is not an image today (media_type=$MEDIA_TYPE), skipping"
+          echo "NASA APOD already exists: $NASA_FILE"
         fi
-      else
-        echo "NASA APOD already exists: $NASA_FILE"
       fi
     '';
   };
@@ -337,7 +553,7 @@
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
                     "~/.local/bin/protonvpn-tray"
-                    "swww-daemon && waypaper --random"
+                    "waypaper --random"
                     "while true; do sleep 60; waypaper --random; done"
                     "systemctl --user start hyprpolkitagent"
                     "solaar --window=hide"
@@ -453,6 +669,7 @@
     sioyek
     wf-recorder
     mpv
+    mpvpaper
     gnome-disk-utility
   ];
 
@@ -727,6 +944,7 @@
 
   imports = [
     inputs.walker.homeManagerModules.default
+    ./modules/easyconnect.nix
   ];
 
   programs.walker = {
@@ -755,6 +973,15 @@
       ${pkgs.procps}/bin/pkill -f hyprpanel || true
       sleep 1
       ${pkgs.coreutils}/bin/nohup uwsm app -- hyprpanel >/dev/null 2>&1 &
+    fi
+  '';
+
+  home.activation.refreshWalkerIcons = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    if [ -d "$HOME/.local/share/icons/hicolor" ]; then
+      ${pkgs.gtk3}/bin/gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" || true
+    fi
+    if ${pkgs.systemd}/bin/systemctl --user is-active walker >/dev/null 2>&1; then
+      ${pkgs.systemd}/bin/systemctl --user restart walker || true
     fi
   '';
   home.stateVersion = "25.11";

@@ -90,8 +90,10 @@
 	magik-mode
 	treemacs
 	airdermacs
+        ;; org-pandoc-import
 	))
 (package-install-selected-packages)
+;; (ensure-package 'org-pandoc-import)
 
 ;; * Pyvenv
 (require 'pyvenv)

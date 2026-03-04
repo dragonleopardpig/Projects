@@ -10,7 +10,6 @@
 
   boot = {
     kernelPackages = pkgs.linuxPackages_latest;
-    # kernelPackages = pkgs.linuxPackages_6_12;
     kernelModules = ["i2c-dev"];
     initrd.kernelModules = ["nvidia"];
     extraModulePackages = [
@@ -232,13 +231,13 @@
     subGidRanges = [
       {
         count = 65536;
-        startGid = 1000;
+        startGid = 100000;
       }
     ];
     subUidRanges = [
       {
         count = 65536;
-        startUid = 1000;
+        startUid = 100000;
       }
     ];
     packages = with pkgs; [
@@ -266,12 +265,15 @@
     # ── Core Utilities ──
     file                       # Determine file types
     which                      # Locate commands in PATH
+    dpkg                       # Debian package extractor (for .deb)
     tree                       # Directory listing as tree
     gnused                     # GNU stream editor
     gawk                       # GNU pattern processing language
     gnupg                      # GnuPG encryption and signing
     wget                       # Download files from the web
     yq-go                      # YAML/JSON/XML processor (CLI)
+    yt-dlp                    # Download video (NASA APOD video days)
+    pandoc                    # Document converter (org-pandoc-import)
 
     # ── Networking & Diagnostics ──
     networkmanager             # Network connection manager
@@ -305,6 +307,7 @@
     upower                     # Battery and power device info
     mission-center             # GUI system monitor (CPU, RAM, disk, network)
     resources                  # Lightweight GUI resource monitor
+    zenity                     # GTK dialogs (needed by tinyfiledialogs)
 
     # ── Hardware & Power ──
     brightnessctl              # Screen brightness control
@@ -363,6 +366,7 @@
     tiv                        # Terminal image viewer (ASCII art)
     chafa                      # Terminal image viewer (Unicode/sixel)
     viu                        # Terminal image viewer (Unicode)
+    freecad
 
     # ── Office & Documents ──
     texliveFull                # Full TeX/LaTeX distribution
@@ -371,11 +375,15 @@
     glow                       # Terminal markdown previewer
     minder                     # Mind map
     teams-for-linux            # Unofficial Microsoft Teams
+    feishu                    # Lark (Feishu) native package
+    freeoffice
+    wpsoffice
 
     # ── CAD & Engineering ──
     librecad                   # 2D CAD application
     freecad                    # 3D parametric CAD modeler
-
+    openscad
+    mayo
     # ── Emacs & Editor Ecosystem ──
     ((emacsPackagesFor emacs-pgtk).emacsWithPackages (
       epkgs: with epkgs; [
@@ -397,6 +405,7 @@
     bash-language-server       # Bash/shell script language server
     nixd                       # Nix language server
     marksman                   # Markdown language server
+    vale-ls                    # Vale language server (prose/Markdown)
 
     # ── Development Tools ──
     pkg-config                 # Compiler/linker flags helper
@@ -425,6 +434,38 @@
          (base.targetPkgs pkgs) ++ (with pkgs; [
            pkg-config
            ncurses
+           gtk2
+           gnome-themes-extra
+           gtk-engine-murrine
+           gtk3
+           glib
+           cairo
+           pango
+           gdk-pixbuf
+           atk
+           at-spi2-atk
+           nss
+           nspr
+           alsa-lib
+           cups
+           dbus
+           libnotify
+           libX11
+           libXcomposite
+           libXcursor
+           libXdamage
+           libXext
+           libXfixes
+           libXi
+           libXrandr
+           libXrender
+           libXtst
+           libXScrnSaver
+           libxcb
+           libxkbcommon
+           libdrm
+           libgbm
+           wget
          ]);
        profile = "export FHS=1";
        runScript = "bash";
@@ -447,10 +488,15 @@
 
     # ── Cloud ──
     filen-desktop
+
+    # ── Utilities ──
+    wget
     
     # ── Fun ──
     cowsay                     # Talking cow ASCII art
-  ];
+  ] ++ (lib.optionals (pkgs ? gmsh) [ pkgs.gmsh ])
+    ++ (lib.optionals (pkgs ? f3d) [ pkgs.f3d ])
+    ++ (lib.optionals (pkgs ? paraview) [ pkgs.paraview ]);
 
   services.blueman.enable = true;
   hardware.bluetooth = {
@@ -464,6 +510,29 @@
       Policy = {
         AutoEnable = true;
       };
+    };
+  };
+
+  # Container runtime for distrobox
+  virtualisation.podman.enable = true;
+
+  # Provide /usr/bin/wget for apps that hardcode it
+  systemd.tmpfiles.rules = [
+    "L+ /usr/bin/wget - - - - /run/current-system/sw/bin/wget"
+    "L+ /usr/share/sangfor - - - - /opt/easyconnect/usr/share/sangfor"
+  ];
+
+  # EasyConnect EasyMonitor service (user install path)
+  systemd.services.EasyMonitor = {
+    description = "Sangfor EasyMonitor Service (EasyConnect)";
+    after = [ "network.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "forking";
+      ExecStart = "/usr/share/sangfor/EasyConnect/resources/bin/EasyMonitor";
+      ExecReload = "/bin/kill -USR1 $MAINPID";
+      ExecStop = "/bin/kill -QUIT $MAINPID";
+      Restart = "on-failure";
     };
   };
 

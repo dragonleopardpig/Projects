@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<title>README.html</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+
+</head>
+
+<body>
+
+<h1 id="projects">Projects</h1>
+<p>NixOS-based development environment for machine vision, scientific
+computing, and Emacs tooling. All dev environments use <a
+href="https://devenv.sh/">devenv.sh</a> for reproducible Nix shells.</p>
+<h2 id="repositories">Repositories</h2>
+<h3 id="dioxus-edge"><a href="dioxus-edge/">dioxus-edge</a></h3>
+<p>Real-time camera capture and edge detection desktop app. Streams from
+an Euresys CoaxLink frame grabber at ~10 FPS with GPU-accelerated Sobel
+edge detection via wgpu compute shaders (RTX 4070). Built with Dioxus
+0.6 (Rust) and a C++ capture helper using the eGrabber SDK.</p>
+<ul>
+<li>Mono8 pipeline for minimal bandwidth</li>
+<li>Green edge overlay on live/frozen frames</li>
+<li>Educational step-by-step Sobel visualization</li>
+<li>File-based image browser with side-by-side comparison</li>
+</ul>
+<h3 id="nixos"><a href="NixOS/">NixOS</a></h3>
+<p>Flake-based NixOS configuration managing two machines: - <strong>X299
+Desktop</strong> — NVIDIA RTX 4070, Euresys CoaxLink frame grabber,
+DDC/CI brightness - <strong>M90aPro All-In-One Desktop</strong> — Intel
++ NVIDIA Prime Sync</p>
+<p>Hyprland (Wayland) with UWSM, HyprPanel, SDDM, and Home Manager.</p>
+<h3 id="scimax-fork"><a href="scimax/">scimax</a> (fork)</h3>
+<p>Fork of <a href="https://github.com/jkitchin/scimax">John Kitchin’s
+scimax</a> — an Emacs starterkit for scientists and engineers. Org-mode
+based electronic lab notebooks with Jupyter integration.</p>
+<h3 id="lsp-bridge-fork"><a href="lsp-bridge/">lsp-bridge</a>
+(fork)</h3>
+<p>Fork of <a
+href="https://github.com/manateelazycat/lsp-bridge">manateelazycat/lsp-bridge</a>
+— a fast multi-threaded LSP client for Emacs using external Python
+processes.</p>
+<h3 id="flymake-bridge"><a
+href="flymake-bridge/">flymake-bridge</a></h3>
+<p>Emacs package that surfaces lsp-bridge diagnostics through the
+built-in Flymake interface.</p>
+<h3 id="emacs"><a href="emacs/">emacs</a></h3>
+<p>Personal Emacs configuration. Loads scimax as base, then layers
+custom themes (heaven-and-hell light/dark toggle), language settings,
+and keybindings.</p>
+<h3 id="rust"><a href="rust/">rust</a></h3>
+<p>Rust workspace with tutorial projects. Uses devenv.nix with
+wasm-bindgen and Dioxus CLI.</p>
+<h3 id="cpp"><a href="cpp/">cpp</a></h3>
+<p>C++ development sandbox with CMake and auto-generated clangd
+configuration for NixOS.</p>
+<h3 id="python"><a href="python/">python</a></h3>
+<p>Python 3.12 environment with PyTorch, pandas, scikit-learn,
+JupyterLab, and LSP tooling (pyright, ruff).</p>
+<h3 id="org"><a href="org/">org</a></h3>
+<p>Org-mode files — notes, tutorials, contacts, and computational
+physics notebooks.</p>
+<h2 id="stack">Stack</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Tools</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OS</td>
+<td>NixOS, Nix flakes, Home Manager</td>
+</tr>
+<tr>
+<td>Desktop</td>
+<td>Hyprland, HyprPanel, Kitty</td>
+</tr>
+<tr>
+<td>Editor</td>
+<td>Emacs (pgtk) + scimax + lsp-bridge</td>
+</tr>
+<tr>
+<td>Dev Shells</td>
+<td>devenv.sh, direnv</td>
+</tr>
+<tr>
+<td>Languages</td>
+<td>Rust, C++, Python, Emacs Lisp, Nix</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>wgpu (Vulkan), NVIDIA RTX 4070</td>
+</tr>
+<tr>
+<td>Camera</td>
+<td>Euresys eGrabber SDK, CoaxPress</td>
+</tr>
+</tbody>
+</table>
+
+</body>
+</html>
