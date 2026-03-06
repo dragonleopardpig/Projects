@@ -99,18 +99,18 @@
 (sp-pair "$" "$")  ; Pair dollar signs for LaTeX math
 (global-set-key (kbd "C-.") 'sp-rewrap-sexp)
 
-;; * Electric Pair Mode - for non-org buffers
-;; Use electric-pair-mode in programming modes where smartparens isn't active
-(add-hook 'prog-mode-hook
-          (lambda ()
-            (unless smartparens-mode
-              (electric-pair-local-mode t))))
-;; Disable "<" pairing in org-mode to avoid conflicts with org syntax
-(add-hook 'org-mode-hook
-          (lambda ()
-            (setq-local electric-pair-inhibit-predicate
-                        `(lambda (c)
-                           (if (char-equal c ?<) t (,electric-pair-inhibit-predicate c))))))
+;; ;; * Electric Pair Mode - for non-org buffers
+;; ;; Use electric-pair-mode in programming modes where smartparens isn't active
+;; (add-hook 'prog-mode-hook
+;;           (lambda ()
+;;             (unless smartparens-mode
+;;               (electric-pair-local-mode t))))
+;; ;; Disable "<" pairing in org-mode to avoid conflicts with org syntax
+;; (add-hook 'org-mode-hook
+;;           (lambda ()
+;;             (setq-local electric-pair-inhibit-predicate
+;;                         `(lambda (c)
+;;                            (if (char-equal c ?<) t (,electric-pair-inhibit-predicate c))))))
 
 
 ;; * Org Agenda

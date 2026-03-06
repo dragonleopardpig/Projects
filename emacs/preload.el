@@ -32,13 +32,6 @@
 (setq custom-safe-themes t) 
 (setq scimax-theme nil)
 
-;;* Load MELPA
-;; Note: scimax/init.el already sets up package archives and initializes package.el
-;; This section is kept for reference but is redundant
-;; (require 'package)
-;; (setq package-archives ...)
-;; (package-initialize)
-
 (defun ensure-package (pkg)
   "Install PKG unless already installed."
   (unless (package-installed-p pkg)
@@ -93,7 +86,6 @@
         ;; org-pandoc-import
 	))
 (package-install-selected-packages)
-;; (ensure-package 'org-pandoc-import)
 
 ;; * Pyvenv
 (require 'pyvenv)

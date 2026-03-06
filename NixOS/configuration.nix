@@ -391,7 +391,52 @@
         direnv                 # Direnv integration for Emacs
         lsp-pyright            # Python LSP client (Pyright)
         zmq                    # ZeroMQ bindings for Jupyter
+        pyvenv
         codex-cli
+        material-theme
+	      gruvbox-theme
+	      doom-themes
+	      ef-themes
+	      pdf-tools
+	      async
+        neotree
+        all-the-icons
+        rainbow-delimiters
+        yaml-mode
+        dockerfile-mode
+        toml-mode
+        json-mode
+	      prettier-js
+	      js2-refactor
+	      rjsx-mode
+	      tide
+	      web-mode
+	      emmet-mode
+	      rustic
+	      ox-rst
+	      alert
+	      org-fragtog
+	      ob-nix
+	      latex-preview-pane
+	      org-modern
+	      slime
+	      nix-mode
+	      geiser-mit
+	      pyvenv
+	      nov
+	      markdown-mode
+	      mixed-pitch
+	      smartparens
+	      spice-mode
+	      ob-spice
+	      saveplace-pdf-view
+	      rg
+	      ob-rust
+	      lua-mode
+	      direnv
+	      magik-mode
+	      treemacs
+	      # airdermacs
       ]
     ))
     enchant                  # Spell checking meta-library (used by jinx)
