@@ -359,6 +359,8 @@
     # ── Image & Media Tools ──
     imagemagick                # Image conversion and manipulation (CLI)
     ffmpeg                     # Audio/video converter and streamer
+    guvcview                   # GUI webcam viewer/recorder
+    v4l-utils                  # V4L2 utilities (includes qv4l2)
     gimp                       # GNU image editor (Photoshop alternative)
     inkscape                   # Vector graphics editor (Illustrator alternative)
     pinta                      # Simple raster image editor (Paint.NET alternative)
