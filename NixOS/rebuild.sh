@@ -52,6 +52,7 @@ OPTIONS:
 
 HOST:
     X299      Build for X299 desktop
+    X299-SSD  Build for X299 external SSD clone
     M90aPro   Build for M90aPro laptop
     auto      Auto-detect based on hostname (default)
 
@@ -74,22 +75,22 @@ HOST=${2:-auto}
 # Auto-detect host if needed
 if [ "$HOST" = "auto" ]; then
     case "$CURRENT_HOST" in
-        X299|M90aPro)
+        X299|X299-SSD|M90aPro)
             HOST=$CURRENT_HOST
             print_info "Auto-detected host: $HOST"
             ;;
         *)
             print_error "Unknown hostname: $CURRENT_HOST"
-            print_error "Please specify either 'X299' or 'M90aPro'"
+            print_error "Please specify 'X299', 'X299-SSD', or 'M90aPro'"
             exit 1
             ;;
     esac
 fi
 
 # Validate host
-if [ "$HOST" != "X299" ] && [ "$HOST" != "M90aPro" ]; then
+if [ "$HOST" != "X299" ] && [ "$HOST" != "X299-SSD" ] && [ "$HOST" != "M90aPro" ]; then
     print_error "Invalid host: $HOST"
-    print_error "Must be either 'X299' or 'M90aPro'"
+    print_error "Must be 'X299', 'X299-SSD', or 'M90aPro'"
     exit 1
 fi
 

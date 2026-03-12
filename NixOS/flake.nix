@@ -50,6 +50,29 @@
         ];
       };
 
+      # X299 Desktop (external SSD clone)
+      nixosConfigurations.X299-SSD = nixpkgs.lib.nixosSystem {
+        specialArgs = { inherit inputs; };
+        modules = [
+          ./configuration.nix
+          ./hosts/X299-SSD  # Host-specific: hardware-configuration for external SSD
+          disko.nixosModules.disko
+          grub2-themes.nixosModules.default
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+
+            home-manager.users.thinky = {
+              imports = [
+                ./home.nix
+              ];
+            };
+            home-manager.extraSpecialArgs = { inherit inputs; };
+          }
+        ];
+      };
+
       # M90aPro Laptop Configuration
       nixosConfigurations.M90aPro = nixpkgs.lib.nixosSystem {
         specialArgs = { inherit inputs; };
