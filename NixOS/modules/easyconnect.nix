@@ -1,6 +1,47 @@
 { config, lib, pkgs, ... }:
 
 {
+  home.packages = with pkgs; [
+    gtk2
+    pango
+    cairo
+    gdk-pixbuf
+    atk
+    at-spi2-atk
+    at-spi2-core
+    glib
+    dbus
+    dbus-glib
+    nss
+    nspr
+    cups
+    alsa-lib
+    libxkbcommon
+    libxcb
+    libxkbfile
+    fontconfig
+    freetype
+    libdrm
+    mesa
+    libxshmfence
+    xorg.libX11
+    xorg.libXext
+    xorg.libXrender
+    xorg.libXcomposite
+    xorg.libXcursor
+    xorg.libXi
+    xorg.libXtst
+    xorg.libXrandr
+    xorg.libXScrnSaver
+    xorg.libXdamage
+    xorg.libXfixes
+    expat
+    noto-fonts
+    noto-fonts-cjk-sans
+    noto-fonts-cjk-serif
+    noto-fonts-color-emoji
+  ];
+
   # EasyConnect .deb runner: extract to ~/.local/opt and run inside FHS env
   home.file.".local/bin/easyconnect-deb" = {
     executable = true;
@@ -71,13 +112,25 @@
       fi
 
       if [ -z "''${DISPLAY:-}" ]; then
-        export DISPLAY=:0
+        for sock in /tmp/.X11-unix/X*; do
+          [ -S "$sock" ] || continue
+          export DISPLAY=":''${sock##*X}"
+          break
+        done
+      fi
+      if [ -z "''${XAUTHORITY:-}" ] && [ -f "$HOME/.Xauthority" ]; then
+        export XAUTHORITY="$HOME/.Xauthority"
       fi
 
       LOG="$HOME/.local/state/easyconnect.log"
       mkdir -p "$HOME/.local/state"
       : > "$LOG"
       echo "Starting EasyConnect at $(date)" >>"$LOG"
+      EC_FONTS_DIR="$HOME/.local/share/easyconnect-fonts"
+      if [ -f "$EC_FONTS_DIR/fonts.conf" ]; then
+        export FONTCONFIG_FILE="$EC_FONTS_DIR/fonts.conf"
+        export FONTCONFIG_PATH="$EC_FONTS_DIR"
+      fi
       export QT_QPA_PLATFORM=xcb
       export XDG_SESSION_TYPE=x11
       export GDK_BACKEND=x11
@@ -85,6 +138,7 @@
       export GTK2_RC_FILES=/dev/null
       export GTK_THEME=Raleigh
       export QTWEBENGINE_DISABLE_SANDBOX=1
+      export ELECTRON_DISABLE_SANDBOX=1
 
       EC_PANGO_LIB="$EC_DIR/pango/usr/local/lib"
       if [ -d "$EC_PANGO_LIB" ]; then
@@ -114,11 +168,70 @@
         APP_PATH="$EC_DIR/resources/default_app.asar"
       fi
 
+      EC_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-gpu-sandbox --disable-namespace-sandbox --disable-seccomp-filter-sandbox --disable-seccomp-sandbox --no-zygote --enable-logging=stderr --v=1 --enable-transparent-visuals --disable-gpu --disable-dev-shm-usage --ozone-platform=x11 --disable-features=UseOzonePlatform"
+      export PATH="/run/wrappers/bin:$PATH"
+
       if [ -n "$APP_PATH" ]; then
-        exec fhs -c "cd \"$EC_DIR\"; \"$EC_BIN\" \"$APP_PATH\" --enable-logging=stderr --v=1 --enable-transparent-visuals --disable-gpu --disable-dev-shm-usage --ozone-platform=x11 --disable-features=UseOzonePlatform" -- "$@" >>"$LOG" 2>&1
+        if fhs -c "cd \"$EC_DIR\"; \"$EC_BIN\" \"$APP_PATH\" $EC_FLAGS" -- "$@" >>"$LOG" 2>&1; then
+          exit 0
+        fi
       else
-        exec fhs -c "cd \"$EC_DIR\"; \"$EC_BIN\" --enable-logging=stderr --v=1 --enable-transparent-visuals --disable-gpu --disable-dev-shm-usage --ozone-platform=x11 --disable-features=UseOzonePlatform" -- "$@" >>"$LOG" 2>&1
+        if fhs -c "cd \"$EC_DIR\"; \"$EC_BIN\" $EC_FLAGS" -- "$@" >>"$LOG" 2>&1; then
+          exit 0
+        fi
       fi
+
+      # Fallback when user namespaces are disabled (bwrap fails).
+      export NIX_LD=${pkgs.glibc}/lib/ld-linux-x86-64.so.2
+      EC_LIBS="${pkgs.gtk2}/lib:${pkgs.gdk-pixbuf}/lib:${pkgs.atk}/lib:${pkgs.at-spi2-atk}/lib:${pkgs.at-spi2-core}/lib:${pkgs.glib.out}/lib:${pkgs.pango.out}/lib:${pkgs.cairo}/lib:${pkgs.fontconfig.lib}/lib:${pkgs.freetype}/lib:${pkgs.dbus.lib}/lib:${pkgs.dbus-glib}/lib:${pkgs.nss}/lib:${pkgs.nspr}/lib:${pkgs.cups.lib}/lib:${pkgs.alsa-lib}/lib:${pkgs.libxkbcommon}/lib:${pkgs.libxcb}/lib:${pkgs.libxkbfile}/lib:${pkgs.libdrm}/lib:${pkgs.mesa}/lib:${pkgs.libxshmfence}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXScrnSaver}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.expat}/lib:${pkgs.stdenv.cc.cc.lib}/lib"
+      export NIX_LD_LIBRARY_PATH="$EC_LIBS:/run/current-system/sw/lib:/run/current-system/sw/lib64:/etc/profiles/per-user/$USER/lib:$HOME/.nix-profile/lib:''${NIX_LD_LIBRARY_PATH:-}"
+      export LD_LIBRARY_PATH="$EC_LIBS:/run/current-system/sw/lib:/run/current-system/sw/lib64:/etc/profiles/per-user/$USER/lib:$HOME/.nix-profile/lib:''${LD_LIBRARY_PATH:-}"
+
+      if [ -n "$APP_PATH" ]; then
+        exec "$EC_BIN" "$APP_PATH" $EC_FLAGS >>"$LOG" 2>&1
+      else
+        exec "$EC_BIN" $EC_FLAGS >>"$LOG" 2>&1
+      fi
+    '';
+  };
+
+  home.file.".local/share/easyconnect-fonts/fonts.conf" = {
+    text = ''
+      <?xml version="1.0"?>
+      <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+      <fontconfig>
+        <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+        <dir>~/.local/share/fonts</dir>
+        <dir>/etc/profiles/per-user/thinky/share/fonts</dir>
+        <dir>/run/current-system/sw/share/fonts</dir>
+        <dir>/run/current-system/sw/share/X11/fonts</dir>
+        <dir>/usr/share/fonts</dir>
+
+        <alias>
+          <family>Microsoft YaHei</family>
+          <prefer>
+            <family>WenQuanYi Micro Hei</family>
+            <family>Noto Sans CJK SC</family>
+          </prefer>
+        </alias>
+        <alias>
+          <family>SimHei</family>
+          <prefer>
+            <family>WenQuanYi Micro Hei</family>
+            <family>Noto Sans CJK SC</family>
+          </prefer>
+        </alias>
+        <alias>
+          <family>sans-serif</family>
+          <prefer>
+            <family>Noto Sans CJK SC</family>
+            <family>WenQuanYi Micro Hei</family>
+            <family>Noto Sans CJK TC</family>
+            <family>Noto Sans CJK JP</family>
+            <family>DejaVu Sans</family>
+          </prefer>
+        </alias>
+      </fontconfig>
     '';
   };
 
@@ -190,6 +303,7 @@
       export GI_GIR_PATH="$GLIB_GIR:''${GI_GIR_PATH:-}"
 
       nix shell \
+        nixpkgs#gcc \
         nixpkgs#meson \
         nixpkgs#ninja \
         nixpkgs#pkg-config \
@@ -249,4 +363,5 @@
       sudo systemctl enable --now EasyMonitor
     '';
   };
+
 }

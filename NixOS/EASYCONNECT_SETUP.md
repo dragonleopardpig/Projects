@@ -22,6 +22,8 @@ Expected local path:
 - Uses a **FHS env** to run the binary with the needed GTK/X11 libs on NixOS.
 - Builds **Pango 1.43** and injects it into EasyConnect’s private runtime.
 - Starts **EasyMonitor** (required background service).
+- Fixes **GUI font rendering** by applying a **per-app fontconfig** (Noto CJK + WenQuanYi),
+  without changing the system locale or desktop fonts.
 - Fixes Electron hardcoded file paths by:
   - Adding `~/.../sangfor/Web` symlink to `resources/Web`.
   - Extracting `src/` from `app.asar` into `EasyConnect/src` so preload/IPC modules resolve.
@@ -54,6 +56,38 @@ ls -la ~/Downloads/EasyConnect_x64_7_6_7_3.deb
 ~/.local/bin/easyconnect-deb
 ```
 
+## Fonts (GUI boxes / missing Chinese text)
+
+EasyConnect is forced to use a **private fontconfig** so the GUI renders Chinese text correctly
+without changing the system locale or overall desktop fonts.
+
+Where it lives:
+
+```text
+~/.local/share/easyconnect-fonts/fonts.conf
+```
+
+The launcher (`~/.local/bin/easyconnect-deb`) exports:
+
+```text
+FONTCONFIG_FILE=~/.local/share/easyconnect-fonts/fonts.conf
+FONTCONFIG_PATH=~/.local/share/easyconnect-fonts
+```
+
+Font sources prioritized for EasyConnect:
+
+- `Noto Sans CJK SC`
+- `WenQuanYi Micro Hei`
+- `Noto Sans CJK TC/JP`
+- `DejaVu Sans`
+
+If you ever see boxes again:
+
+```sh
+fc-cache -f
+~/.local/bin/easyconnect-deb
+```
+
 ## Notes
 
 - After the first successful run, the `.deb` file is **no longer required**. You can safely delete it.
@@ -78,4 +112,18 @@ systemctl status EasyMonitor --no-pager
 
 ```sh
 sudo systemctl enable --now EasyMonitor
+```
+
+## One-shot installer script
+
+To automate everything (rebuild + Pango + first run):
+
+```sh
+/home/thinky/Projects/NixOS/easyconnect-install.sh
+```
+
+Optional: specify a host explicitly:
+
+```sh
+/home/thinky/Projects/NixOS/easyconnect-install.sh X299-SSD
 ```
