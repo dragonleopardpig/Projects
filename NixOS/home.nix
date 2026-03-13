@@ -948,7 +948,6 @@
 
   imports = [
     inputs.walker.homeManagerModules.default
-    ./modules/easyconnect.nix
   ];
 
   programs.walker = {

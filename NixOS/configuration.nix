@@ -566,22 +566,7 @@
   # Provide /usr/bin/wget for apps that hardcode it
   systemd.tmpfiles.rules = [
     "L+ /usr/bin/wget - - - - /run/current-system/sw/bin/wget"
-    "L+ /usr/share/sangfor - - - - /opt/easyconnect/usr/share/sangfor"
   ];
-
-  # EasyConnect EasyMonitor service (user install path)
-  systemd.services.EasyMonitor = {
-    description = "Sangfor EasyMonitor Service (EasyConnect)";
-    after = [ "network.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "forking";
-      ExecStart = "/usr/share/sangfor/EasyConnect/resources/bin/EasyMonitor";
-      ExecReload = "/bin/kill -USR1 $MAINPID";
-      ExecStop = "/bin/kill -QUIT $MAINPID";
-      Restart = "on-failure";
-    };
-  };
 
   # Set the default editor to vim
   environment.variables.EDITOR = "xed";
