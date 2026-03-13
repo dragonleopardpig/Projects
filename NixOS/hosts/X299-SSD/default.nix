@@ -4,10 +4,10 @@
   imports = [
     ./hardware-configuration.nix
     ../X299/nvidia.nix
-    ../X299/egrabber.nix
+    ../../modules/egrabber/egrabber.nix
   ];
 
-  networking.hostName = "X299";
+  networking.hostName = "X299-SSD";
 
   # DDC/CI backlight for external monitors (X299 has no built-in panel)
   boot.kernelModules = [ "ddcci_backlight" ];

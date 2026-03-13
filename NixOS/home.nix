@@ -2,6 +2,10 @@
 {
   home.username = "thinky";
   home.homeDirectory = "/home/thinky";
+  xdg.userDirs = {
+    enable = true;
+    createDirectories = true;
+  };
 
   xdg.desktopEntries.euresys-studio = {
     name = "eGrabber Studio";

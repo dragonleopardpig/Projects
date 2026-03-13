@@ -11,7 +11,7 @@ Flake-based NixOS configuration managing two machines from a single codebase. Bo
 | CUDA | Enabled with IDE symlink | Not configured |
 | Extra hardware | Euresys CoaxLink frame grabber | - |
 
-See also: [Euresys eGrabber on NixOS setup guide](hosts/X299/EGRABBER-NIXOS-GUIDE.md) for the X299 frame grabber configuration.
+See also: [Euresys eGrabber on NixOS setup guide](modules/egrabber/EGRABBER-NIXOS-GUIDE.md) for the X299 frame grabber configuration.
 
 ## Structure
 
@@ -26,12 +26,15 @@ NixOS/
 |   |-- X299/
 |   |   |-- default.nix              # hostname + imports
 |   |   |-- hardware-configuration.nix
-|   |   |-- nvidia.nix               # Single GPU driver
-|   |   +-- egrabber.nix             # Euresys frame grabber
+|   |   +-- nvidia.nix               # Single GPU driver
 |   +-- M90aPro/
 |       |-- default.nix              # hostname + imports
 |       |-- hardware-configuration.nix
 |       +-- nvidia-prime.nix         # Dual GPU (Intel + NVIDIA)
+|-- modules/
+|   +-- egrabber/
+|       |-- egrabber.nix             # Euresys frame grabber
+|       +-- EGRABBER-NIXOS-GUIDE.md
 +-- .gitignore
 ```
 
