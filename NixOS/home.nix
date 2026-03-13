@@ -10,10 +10,14 @@
   xdg.desktopEntries.euresys-studio = {
     name = "eGrabber Studio";
     exec = "euresys-fhs -c \"QT_QPA_PLATFORM=xcb /opt/euresys/egrabber/studio/studio\"";
-    icon = "/home/thinky/.local/share/icons/euresys-studio.png";
+    icon = "euresys-studio";
     comment = "Euresys eGrabber Studio for CoaxLink/GrabLink frame grabbers";
     categories = [ "Utility" "Engineering" ];
     terminal = false;
+  };
+
+  home.file.".local/share/icons/hicolor/256x256/apps/euresys-studio.png" = {
+    source = ./assets/euresys-studio.png;
   };
 
   xdg.desktopEntries.sioyek-xcb = {
@@ -945,6 +949,8 @@
   programs.feh.enable = true;
   programs.nnn.enable = true;
   programs.htop.enable = true;
+
+
 
   imports = [
     inputs.walker.homeManagerModules.default

@@ -115,7 +115,11 @@
 
   # Select internationalisation properties.
   i18n.defaultLocale = "en_SG.UTF-8";
-
+  i18n.supportedLocales = [
+    "en_SG.UTF-8/UTF-8"
+    "en_US.UTF-8/UTF-8"
+    "zh_CN.UTF-8/UTF-8"
+  ];
   i18n.extraLocaleSettings = {
     LC_ADDRESS = "en_SG.UTF-8";
     LC_IDENTIFICATION = "en_SG.UTF-8";
@@ -196,6 +200,15 @@
   # Enable sound with pipewire.
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
+  # Required for bubblewrap-based FHS env (EasyConnect launcher).
+  security.unprivilegedUsernsClone = true;
+  boot.kernel.sysctl."user.max_user_namespaces" = 15000;
+  security.wrappers.bwrap = {
+    source = "${pkgs.bubblewrap}/bin/bwrap";
+    owner = "root";
+    group = "root";
+    setuid = true;
+  };
   services.pipewire = {
     enable = true;
     alsa.enable = true;
@@ -568,6 +581,23 @@
     "L+ /usr/bin/wget - - - - /run/current-system/sw/bin/wget"
   ];
 
+  # EasyConnect EasyMonitor service (user install path)
+  systemd.services.EasyMonitor = {
+    description = "Sangfor EasyMonitor Service (EasyConnect)";
+    after = [ "network.target" ];
+    wantedBy = [ "multi-user.target" ];
+    unitConfig = {
+      ConditionPathExists = "/usr/share/sangfor/EasyConnect/resources/bin/EasyMonitor";
+    };
+    serviceConfig = {
+      Type = "forking";
+      ExecStart = "/usr/share/sangfor/EasyConnect/resources/bin/EasyMonitor";
+      ExecReload = "/bin/kill -USR1 $MAINPID";
+      ExecStop = "/bin/kill -QUIT $MAINPID";
+      Restart = "on-failure";
+    };
+  };
+
   # Set the default editor to vim
   environment.variables.EDITOR = "xed";
   environment.variables.GTK_IM_MODULE = lib.mkForce "";
@@ -597,12 +627,17 @@
   };
 
   fonts.packages = with pkgs; [
+    corefonts
     nerd-fonts.ubuntu
     nerd-fonts.ubuntu-sans
     nerd-fonts.ubuntu-mono
     nerd-fonts.caskaydia-cove
     noto-fonts
     noto-fonts-cjk-sans
+    noto-fonts-cjk-serif
+    noto-fonts-color-emoji
+    wqy_microhei
+    wqy_zenhei
   ];
 
   system.stateVersion = "25.11";
