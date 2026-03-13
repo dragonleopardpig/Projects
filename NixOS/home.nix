@@ -78,10 +78,29 @@
     terminal = false;
   };
 
+  home.file.".local/bin/nemo-x11" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      export GDK_BACKEND=x11
+      export QT_QPA_PLATFORM=xcb
+      exec nemo "$@"
+    '';
+  };
+
+  xdg.desktopEntries.nemo-x11 = {
+    name = "Nemo";
+    exec = "/home/thinky/.local/bin/nemo-x11 %U";
+    icon = "nemo";
+    comment = "Nemo file manager (XWayland)";
+    categories = [ "Utility" "FileManager" ];
+    terminal = false;
+  };
+
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
-      "inode/directory" = [ "nemo.desktop" ];
+      "inode/directory" = [ "nemo-x11.desktop" ];
       "application/pdf" = [ "sioyek-xcb.desktop" ];
       "image/png" = [ "imv-dir.desktop" ];
       "image/jpeg" = [ "imv-dir.desktop" ];
@@ -494,7 +513,7 @@
           "$mod, E, exec, emacs"
           "$mod, P, exec, ~/.local/bin/protonvpn-tray"
           "$mod, W, exec, walker"
-          "$mod, N, exec, nemo"
+          "$mod, N, exec, /home/thinky/.local/bin/nemo-x11"
           "$mod, S, exec, ~/.local/bin/sioyek-xcb"
           "$mod, Y, exec, kitty -e yazi"
           "$mod, Escape, exit,"
@@ -638,7 +657,7 @@
     tray = "auto";
     settings = {
       program_options = {
-        file_manager = "nemo";
+        file_manager = "/home/thinky/.local/bin/nemo-x11";
       };
     };
   };
