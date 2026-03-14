@@ -37,6 +37,7 @@
           grub2-themes.nixosModules.default
           home-manager.nixosModules.home-manager
           {
+            home-manager.backupFileExtension = "bak";
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
 
@@ -60,6 +61,7 @@
           grub2-themes.nixosModules.default
           home-manager.nixosModules.home-manager
           {
+            home-manager.backupFileExtension = "bak";
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
 
@@ -83,6 +85,7 @@
           grub2-themes.nixosModules.default
           home-manager.nixosModules.home-manager
           {
+            home-manager.backupFileExtension = "bak";
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
 
