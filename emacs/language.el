@@ -23,11 +23,18 @@
 ;; (clangd, rust-analyzer, basedpyright, etc.)
 (dolist (dir '("~/Projects/cpp/.devenv/profile/bin"
               "~/Projects/rust/.devenv/profile/bin"
-              "~/Projects/python/.devenv/profile/bin"))
+              "~/Projects/python/.devenv/profile/bin"
+              "~/Projects/python/.devenv/state/venv/bin"))
   (let ((expanded (expand-file-name dir)))
     (when (file-directory-p expanded)
       (add-to-list 'exec-path expanded)
       (setenv "PATH" (concat expanded ":" (getenv "PATH"))))))
+
+;; Keep emacs-jupyter on the project-local venv so the python3 kernelspec
+;; resolves `python` to the interpreter that actually has ipykernel installed.
+(let ((jupyter-bin (expand-file-name "~/Projects/python/.devenv/state/venv/bin/jupyter")))
+  (when (file-exists-p jupyter-bin)
+    (setq jupyter-executable jupyter-bin)))
 
 (setq lsp-bridge-user-langserver-dir "~/.config/lsp-bridge/langserver")
 (require 'lsp-bridge)

@@ -4,9 +4,9 @@
   (interactive)
   (insert "/"))
 
-(with-eval-after-load 'ivy
+(with-eval-after-load 'counsel
   (define-key counsel-find-file-map (kbd "M-j")
-	      #'my/ivy-insert-slash-literal))
+              #'my/ivy-insert-slash-literal))
 
 (setq counsel-find-file-ignore-regexp nil
       counsel-find-file-at-point nil)
