@@ -124,7 +124,7 @@
   '';
   
   # Pyprland configuration
-  xdg.configFile."hypr/pyprland.toml".text = ''
+  xdg.configFile."pypr/config.toml".text = ''
     [pyprland]
     plugins = [
       "scratchpads",
