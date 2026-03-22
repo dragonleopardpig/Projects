@@ -26,13 +26,23 @@
   };
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
-    {
-      # X299 Desktop Configuration
-      nixosConfigurations.X299 = nixpkgs.lib.nixosSystem {
+    let
+      protonvpnOverlay = final: prev: {
+        protonvpn-gui = prev.protonvpn-gui.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ./patches/protonvpn-systray.patch
+          ];
+        });
+      };
+
+      mkSystem = hostModule: nixpkgs.lib.nixosSystem {
         specialArgs = { inherit inputs; };
         modules = [
+          {
+            nixpkgs.overlays = [ protonvpnOverlay ];
+          }
           ./configuration.nix
-          ./hosts/X299  # Host-specific: hostname, hardware-configuration, nvidia
+          hostModule
           disko.nixosModules.disko
           grub2-themes.nixosModules.default
           home-manager.nixosModules.home-manager
@@ -50,54 +60,15 @@
           }
         ];
       };
+    in {
+      # X299 Desktop Configuration
+      nixosConfigurations.X299 = mkSystem ./hosts/X299;
 
       # X299 Desktop (external SSD clone)
-      nixosConfigurations.X299-SSD = nixpkgs.lib.nixosSystem {
-        specialArgs = { inherit inputs; };
-        modules = [
-          ./configuration.nix
-          ./hosts/X299-SSD  # Host-specific: hardware-configuration for external SSD
-          disko.nixosModules.disko
-          grub2-themes.nixosModules.default
-          home-manager.nixosModules.home-manager
-          {
-            home-manager.backupFileExtension = "bak";
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-
-            home-manager.users.thinky = {
-              imports = [
-                ./home.nix
-              ];
-            };
-            home-manager.extraSpecialArgs = { inherit inputs; };
-          }
-        ];
-      };
+      nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
 
       # M90aPro Laptop Configuration
-      nixosConfigurations.M90aPro = nixpkgs.lib.nixosSystem {
-        specialArgs = { inherit inputs; };
-        modules = [
-          ./configuration.nix
-          ./hosts/M90aPro  # Host-specific: hostname, hardware-configuration, nvidia-prime
-          disko.nixosModules.disko
-          grub2-themes.nixosModules.default
-          home-manager.nixosModules.home-manager
-          {
-            home-manager.backupFileExtension = "bak";
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-
-            home-manager.users.thinky = {
-              imports = [
-                ./home.nix
-              ];
-            };
-            home-manager.extraSpecialArgs = { inherit inputs; };
-          }
-        ];
-      };
+      nixosConfigurations.M90aPro = mkSystem ./hosts/M90aPro;
 
       # Standalone home-manager configurations (optional)
       homeConfigurations."thinky@X299" = home-manager.lib.homeManagerConfiguration {

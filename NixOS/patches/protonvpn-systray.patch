@@ -1,0 +1,356 @@
+diff --git a/proton/vpn/app/gtk/widgets/main/tray_icon.py b/proton/vpn/app/gtk/widgets/main/tray_icon.py
+index db905e2..d131ce4 100644
+--- a/proton/vpn/app/gtk/widgets/main/tray_icon.py
++++ b/proton/vpn/app/gtk/widgets/main/tray_icon.py
+@@ -104,12 +104,18 @@ class MenuObject:
+ 
+     def to_dbus(self) -> dbus.Dictionary:
+         """Converts and returns the object to dbus friendly format."""
+-        return dbus.Dictionary({
++        data = {
+             "type": dbus.String(self.type.value),
+-            "label": dbus.String(self.label),
+-            "enabled": dbus.Boolean(self.enabled),
+-            "visible": dbus.Boolean(self.visible)
+-        }, signature="sv")
++            "visible": dbus.Boolean(self.visible),
++        }
++
++        if self.type == MenuType.ITEM:
++            data.update({
++                "label": dbus.String(self.label),
++                "enabled": dbus.Boolean(self.enabled),
++            })
++
++        return dbus.Dictionary(data, signature="sv")
+ 
+ 
+ class _DBusMenuService(dbus.service.Object):
+@@ -138,11 +144,20 @@ class _DBusMenuService(dbus.service.Object):
+ 
+         return structure
+ 
+-    def _build_layout(
+-        self, parent_id, properties, menu: list[dict[int, dbus.Dictionary]] = None
+-    ):
+-        """Build layout for GetLayout."""
++    def _empty_layout_children(self) -> dbus.Array:
++        return dbus.Array([], signature="v")
+ 
++    def _layout_item_properties(self, item) -> dbus.Dictionary:
++        if not item:
++            return dbus.Dictionary({}, signature="sv")
++
++        return dbus.Dictionary(
++            {key: value for key, value in item.items() if key != "children"},
++            signature="sv"
++        )
++
++    def _build_layout(self, parent_id, properties, menu=None):  # pylint: disable=unused-argument
++        """Build a correctly-typed DBusMenu layout tree for GetLayout."""
+         if menu is None:
+             menu = self._build_menu_structure()
+ 
+@@ -150,28 +165,21 @@ class _DBusMenuService(dbus.service.Object):
+             return (
+                 dbus.Int32(parent_id),
+                 dbus.Dictionary({}, signature="sv"),
+-                dbus.Array([], signature="(ia{sv}av)")
++                self._empty_layout_children(),
+             )
+ 
+-        item: dbus.Dictionary = menu[parent_id]
+-
+-        children = dbus.Array([], signature="(ia{sv}av)")
+-        if "children" in item:
+-            for child_id in item["children"]:
+-                child_layout = self._build_layout(child_id, properties, menu)
+-                child_id_dbus = child_layout[0]
+-                child_props = child_layout[1] \
+-                    if child_layout[1] else dbus.Dictionary({}, signature="sv")
+-                child_children = child_layout[2] \
+-                    if child_layout[2] else dbus.Array([], signature="(ia{sv}av)")
+-                children.append(
+-                    dbus.Struct(
+-                        (child_id_dbus, child_props, child_children),
+-                        signature="(ia{sv}av)"
+-                    )
+-                )
+-
+-        return (dbus.Int32(parent_id), item, children)
++        item = menu[parent_id]
++        children = self._empty_layout_children()
++
++        for child_id in item.get("children", []):
++            child_layout = self._build_layout(child_id, properties, menu)
++            children.append(dbus.Struct(child_layout))
++
++        return (
++            dbus.Int32(parent_id),
++            self._layout_item_properties(item),
++            children,
++        )
+ 
+     @dbus.service.method(
+         dbus_interface=DBUSMENU_INTERFACE,
+@@ -214,7 +222,7 @@ class _DBusMenuService(dbus.service.Object):
+         item = [
+             item for item in self.menu_items
+             if item.id == item_id
+-            and item.type != MenuType.SEPARATOR.value
++            and item.type != MenuType.SEPARATOR
+             and item.callback
+         ]
+ 
+@@ -278,7 +286,24 @@ class _StatusNotifierItem(dbus.service.Object):
+             # dbus library can encode a valid value (None cannot be encoded).
+             return dbus.String("")
+ 
+-        available_options = {
++        available_options = self._get_sni_properties()
++
++        # Unknown property: return a valid D-Bus string variant instead of None.
++        return available_options.get(prop, dbus.String(""))
++
++    def _get_sni_properties(self):
++        """Return all standard SNI properties with correctly-typed D-Bus values."""
++        empty_pixmap = dbus.Array([], signature="(iiay)")
++        empty_tooltip = dbus.Struct(
++            (
++                dbus.String(""),
++                dbus.Array([], signature="(iiay)"),
++                dbus.String(""),
++                dbus.String(""),
++            )
++        )
++
++        return {
+             StatusNotifierItemProperty.STATUS.value: dbus.String(self.tray.status),
+             StatusNotifierItemProperty.CATEGORY.value: dbus.String("ApplicationStatus"),
+             StatusNotifierItemProperty.ID.value: dbus.String(self.tray.app_id),
+@@ -289,12 +314,16 @@ class _StatusNotifierItem(dbus.service.Object):
+             StatusNotifierItemProperty.ICON_ACCESSIBLE_DESCRIPTION.value: dbus.String(
+                 self.tray.icon_desc
+             ),
++            "IconPixmap": empty_pixmap,
++            "OverlayIconName": dbus.String(""),
++            "OverlayIconPixmap": empty_pixmap,
++            "AttentionIconName": dbus.String(""),
++            "AttentionIconPixmap": empty_pixmap,
++            "AttentionMovieName": dbus.String(""),
++            "ToolTip": empty_tooltip,
++            "WindowId": dbus.UInt32(0),
+         }
+ 
+-        # Unknown property: return empty DBus string variant to avoid
+-        # "Don't know which D-Bus type to use to encode type NoneType" errors.
+-        return available_options.get(prop, "")
+-
+     @dbus.service.method(
+         dbus_interface="org.freedesktop.DBus.Properties",
+         in_signature="s",
+@@ -305,18 +334,7 @@ class _StatusNotifierItem(dbus.service.Object):
+         if interface != SNI_INTERFACE:
+             return {}
+ 
+-        return {
+-            StatusNotifierItemProperty.STATUS.value: dbus.String(self.tray.status),
+-            StatusNotifierItemProperty.CATEGORY.value: dbus.String("ApplicationStatus"),
+-            StatusNotifierItemProperty.ID.value: dbus.String(self.tray.app_id),
+-            StatusNotifierItemProperty.TITLE.value: dbus.String(self.tray.title),
+-            StatusNotifierItemProperty.ICON_NAME.value: dbus.String(self.tray.icon_name),
+-            StatusNotifierItemProperty.MENU.value: dbus.ObjectPath(DBUSMENU_PATH),
+-            StatusNotifierItemProperty.ITEM_IS_MENU.value: dbus.Boolean(True),
+-            StatusNotifierItemProperty.ICON_ACCESSIBLE_DESCRIPTION.value: dbus.String(
+-                self.tray.icon_desc
+-            )
+-        }
++        return self._get_sni_properties()
+ 
+     @dbus.service.method(dbus_interface=SNI_INTERFACE, in_signature="ii", out_signature="")
+     def Activate(self, _x_pos, _y_pos):  # pylint: disable=unused-argument, invalid-name, line-too-long # noqa: E501
+diff --git a/proton/vpn/app/gtk/widgets/main/tray_indicator.py b/proton/vpn/app/gtk/widgets/main/tray_indicator.py
+index 3e78693..9a5d26b 100644
+--- a/proton/vpn/app/gtk/widgets/main/tray_indicator.py
++++ b/proton/vpn/app/gtk/widgets/main/tray_indicator.py
+@@ -28,7 +28,7 @@ from proton.vpn.connection import states
+ from proton.vpn.app.gtk.assets.icons import ICONS_PATH
+ from proton.vpn.app.gtk.controller import Controller
+ from proton.vpn.app.gtk.widgets.main.main_window import MainWindow
+-from proton.vpn.app.gtk.widgets.main.tray_icon import TrayIcon
++from proton.vpn.app.gtk.widgets.main.tray_icon import MenuType, TrayIcon, SNW_BUS_NAME
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -159,7 +159,12 @@ class TrayIndicator:
+ 
+         if self._tray is None:
+             self._tray = TrayIcon()
+-            self._tray.setup()
++            try:
++                self._tray.setup()
++            except Exception as exc:
++                raise TrayIndicatorNotSupported(
++                    f"Failed to set up system tray: {exc}"
++                ) from exc
+ 
+         self.status_update(self._controller.current_connection_status)
+         self._controller.register_connection_status_subscriber(self)
+@@ -169,17 +174,78 @@ class TrayIndicator:
+         # If gnome shell is not running then it's another DE and
+         # we assume tray works by default.
+         if self._gnome_tray_detection.is_gnome_shell_running():
+-            self._app_indicator_available |= self._gnome_tray_detection.is_extension_active()
++            gnome_extensions = self._gnome_tray_detection._gnome_shell_list_extensions()
++            if gnome_extensions is None:
++                self._app_indicator_available = self._is_status_notifier_watcher_available()
++            else:
++                ubuntu_extension = gnome_extensions.get(UBUNTU_INDICATOR_EXTENSION)
++                default_extension = gnome_extensions.get(DEFAULT_INDICATOR_EXTENSION)
++
++                enable_for_ubuntu = (
++                    ubuntu_extension and ubuntu_extension.get("state") == ACTIVE_STATE
++                )
++                enable_for_default = (
++                    default_extension
++                    and not self._disabled_user_extension()
++                    and default_extension.get("state") == ACTIVE_STATE
++                )
++
++                if enable_for_ubuntu or enable_for_default:
++                    self._app_indicator_available = True
+         else:
+             self._app_indicator_available = True
+             logger.warning("Tray icon enabled on an unsupported desktop environment")
+ 
+         return self._app_indicator_available
+ 
++    def _is_status_notifier_watcher_available(self, timeout_ms: int = 300) -> bool:
++        """Return True if the StatusNotifierWatcher D-Bus service is running."""
++        try:
++            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
++            dbus_proxy = Gio.DBusProxy.new_sync(
++                bus,
++                Gio.DBusProxyFlags.DO_NOT_LOAD_PROPERTIES,
++                None,
++                "org.freedesktop.DBus",
++                "/org/freedesktop/DBus",
++                "org.freedesktop.DBus",
++                None,
++            )
++            (has_owner,) = dbus_proxy.call_sync(
++                "NameHasOwner",
++                GLib.Variant("(s)", (SNW_BUS_NAME,)),
++                Gio.DBusCallFlags.NONE,
++                timeout_ms,
++                None,
++            ).unpack()
++            return bool(has_owner)
++        except GLib.Error:
++            logger.exception("Unable to check for StatusNotifierWatcher")
++            return False
++
++    def _disabled_user_extension(self) -> Optional[bool]:
++        source = Gio.SettingsSchemaSource.get_default()
++        if not source:
++            return None
++
++        schema = source.lookup("org.gnome.shell", True)
++        if not schema:
++            return None
++
++        settings = Gio.Settings.new_full(schema, None, None)
++        disabled_extensions = settings.get_strv("disabled-extensions")
++        return DEFAULT_INDICATOR_EXTENSION in disabled_extensions
++
+     def _set_main_window(self, main_window: MainWindow):
+         """Sets the main window for the tray indicator."""
+         self._main_window = main_window
+         self._build_menu()
++        self._main_window.connect("show", self._on_main_window_visibility_changed)
++        self._main_window.connect("hide", self._on_main_window_visibility_changed)
++        self._main_window.connect(
++            "notify::visible",
++            self._on_main_window_visibility_changed,
++        )
+ 
+         self._main_window.main_widget.login_widget.connect(
+             "user-logged-in", self._on_user_logged_in
+@@ -209,18 +275,34 @@ class TrayIndicator:
+         self._tray.menu_items.clear()
+ 
+         self._setup_connection_handler_entries()
+-        self._tray.add_menu_separator()
++        self._append_separator_if_needed()
+ 
+         if self._controller.user_logged_in:
+             self.display_pinned_servers = True
+             self._setup_pinned_server_entries()
+ 
++        self._append_separator_if_needed()
+         self._setup_main_window_visibility_toggle_entry()
+-        self._tray.add_menu_separator()
++        self._append_separator_if_needed()
+         self._setup_quit_entry()
+ 
+         self._tray.update_menu()
+ 
++    def _append_separator_if_needed(self):
++        if not self._tray.menu_items:
++            return
++
++        if self._tray.menu_items[-1].type == MenuType.SEPARATOR:
++            return
++
++        if not any(
++            item.type == MenuType.ITEM and item.visible
++            for item in self._tray.menu_items
++        ):
++            return
++
++        self._tray.add_menu_separator()
++
+     def _setup_pinned_server_entries(self):
+         tray_pinned_servers = self._controller.get_app_configuration().tray_pinned_servers
+         if not tray_pinned_servers or not self.display_pinned_servers:
+@@ -232,17 +314,20 @@ class TrayIndicator:
+                 label=f"{servername}",
+                 callback=lambda server=servername: self._on_connect_to_pinned_entry_clicked(server))
+ 
+-        self._tray.add_menu_separator()
+-
+     def _setup_connection_handler_entries(self):
+-        self._tray.add_menu_item("Quick Connect",
+-                                 self._on_connect_entry_clicked,
+-                                 self.enable_connect_entry,
+-                                 self.display_connect_entry)
+-        self._tray.add_menu_item("Disconnect",
+-                                 self._on_disconnect_entry_clicked,
+-                                 self.enable_disconnect_entry,
+-                                 self.display_disconnect_entry)
++        if self.display_connect_entry:
++            self._tray.add_menu_item(
++                "Quick Connect",
++                self._on_connect_entry_clicked,
++                self.enable_connect_entry,
++            )
++
++        if self.display_disconnect_entry:
++            self._tray.add_menu_item(
++                "Disconnect",
++                self._on_disconnect_entry_clicked,
++                self.enable_disconnect_entry,
++            )
+ 
+     def _setup_main_window_visibility_toggle_entry(self):
+         toggle_label = "Show" if not self._main_window.get_visible() else "Hide"
+@@ -268,6 +353,9 @@ class TrayIndicator:
+             self._main_window.present()
+         self._update()
+ 
++    def _on_main_window_visibility_changed(self, *_):
++        self._update()
++
+     def _on_exit_app_menu_entry_clicked(self, *_):
+         self._main_window.header_bar.menu.quit_button_click()
+ 
