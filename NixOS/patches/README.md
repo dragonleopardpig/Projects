@@ -72,3 +72,20 @@ When that happens:
 
 If upstream eventually merges equivalent fixes, this patch can be removed and
 the overlay in `../flake.nix` can be dropped.
+
+## When this patch can be removed
+
+An upstream merge is not enough by itself. This NixOS config builds
+`protonvpn-gui` from nixpkgs, so the patch is only removable when nixpkgs is
+packaging a ProtonVPN source version that already includes equivalent fixes.
+
+Practical checklist:
+
+1. confirm ProtonVPN merged the relevant upstream fixes
+2. confirm your nixpkgs `protonvpn-gui` package has updated to a version that
+   includes them
+3. remove the overlay and local patch temporarily
+4. rebuild
+5. verify the tray still works correctly without the local patch
+
+Only after that should this patch and the overlay in `../flake.nix` be deleted.
