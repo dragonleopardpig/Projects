@@ -12,6 +12,16 @@
     rust-script
     gcc                        # Linker for Rust builds
     pkg-config
+    openssl
+    wayland
+    glib
+    atk
+    cairo
+    pango
+    gdk-pixbuf
+    gtk3
+    libsoup_3
+    webkitgtk_4_1
     enchant
     enchant2
   ];

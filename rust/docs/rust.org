@@ -297,6 +297,7 @@ println!("{}", result);
 #+BEGIN_SRC rust  
 fn main() {
     let day = 4;
+    let month = 1;
 
     match day {
 	1 => println!("Monday"),
@@ -308,6 +309,7 @@ fn main() {
 	7 => println!("Sunday"),
 	_ => println!("Invalid day."),
     }
+    
 }
 #+END_SRC
 
@@ -347,6 +349,7 @@ fn main() {
   };
 
   println!("{}", result);
+  
 } 
 #+END_SRC
 
@@ -933,6 +936,7 @@ for fruit in &fruits {
 * Tuples
 #+BEGIN_SRC rust  
 let person = ("John", 30, true);
+
 println!("Name: {}", person.0);
 println!("Age: {}", person.1);
 println!("Is active: {}", person.2);
@@ -1234,3 +1238,14 @@ fn main() {
    - Edit the tangled ~.rs~ file directly for complex code with LSP support
    - Keep the org file for documentation and simple examples
    - Run code with ~C-c C-v e~ in org blocks or ~cargo run -p org_examples~ in terminal
+
+#+BEGIN_SRC rust
+fn main() {
+
+}
+#+END_SRC
+
+#+BEGIN_SRC rust
+fn main(){
+}
+#+END_SRC

@@ -126,8 +126,93 @@
 ;; * Python
 (setq python-indent-guess-indent-offset nil)
 
+;; * Rust / Org src indentation
+(defun my/prog-ret-indents ()
+  "Make RET insert a newline and indent in the current buffer."
+  (local-set-key (kbd "RET") #'newline-and-indent))
+
+(defun my/org-src-return-dwim ()
+  "Use language-mode RET inside Org src blocks, else use normal Org return."
+  (interactive)
+  (if (org-in-src-block-p)
+      (let* ((lang (org-element-property :language (org-element-at-point)))
+             (indent-step (if (boundp 'rust-indent-offset) rust-indent-offset 4))
+             (base-indent (save-excursion
+                            (back-to-indentation)
+                            (current-column)))
+             (char-before-point (char-before))
+             (char-after-point (char-after))
+             (extra-indent
+              (if (and (string= lang "rust")
+                       (eq char-before-point ?{))
+                  indent-step
+                0)))
+        (cond
+         ((and (string= lang "rust")
+               (eq char-before-point ?{)
+               (eq char-after-point ?}))
+          (newline)
+          (indent-to (+ base-indent indent-step))
+          (save-excursion
+            (newline)
+            (indent-to base-indent)))
+         (t
+          (newline)
+          (indent-to (+ base-indent extra-indent)))))
+    (org-return nil)))
+
+(defun my/org-tab-dwim ()
+  "Accept ACM completion when visible, else defer to Org TAB."
+  (interactive)
+  (if (and (boundp 'acm-menu-frame)
+           (fboundp 'acm-frame-visible-p)
+           (acm-frame-visible-p acm-menu-frame))
+      (acm-complete)
+    (call-interactively
+     (or (lookup-key org-mode-map (kbd "<tab>"))
+         (lookup-key org-mode-map (kbd "TAB"))
+         #'org-cycle))))
+
+(defun my/acm-menu-visible-p ()
+  "Return non-nil when the lsp-bridge ACM popup is visible."
+  (and (boundp 'acm-menu-frame)
+       (fboundp 'acm-frame-visible-p)
+       (acm-frame-visible-p acm-menu-frame)))
+
+(defun my/yas-maybe-expand-with-acm (orig-fun &rest args)
+  "Prefer ACM completion over YAS expansion when the popup is visible."
+  (if (my/acm-menu-visible-p)
+      (acm-complete)
+    (apply orig-fun args)))
+
+(with-eval-after-load 'yasnippet
+  (advice-add 'yas-maybe-expand :around #'my/yas-maybe-expand-with-acm)
+  (advice-add 'yas-expand :around #'my/yas-maybe-expand-with-acm))
+
+(defvar my/org-src-return-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") #'my/org-src-return-dwim)
+    (define-key map (kbd "<return>") #'my/org-src-return-dwim)
+    (define-key map (kbd "C-m") #'my/org-src-return-dwim)
+    (define-key map [return] #'my/org-src-return-dwim)
+    (define-key map (kbd "TAB") #'my/org-tab-dwim)
+    (define-key map (kbd "<tab>") #'my/org-tab-dwim)
+    (define-key map (kbd "C-i") #'my/org-tab-dwim)
+    map))
+
+(define-minor-mode my/org-src-return-mode
+  "Force RET handling for Org src blocks."
+  :lighter ""
+  :keymap my/org-src-return-mode-map)
+
+(add-hook 'rust-mode-hook #'my/prog-ret-indents)
+(add-hook 'rust-ts-mode-hook #'my/prog-ret-indents)
+(add-hook 'org-src-mode-hook #'my/prog-ret-indents)
+(add-hook 'org-mode-hook #'my/org-src-return-mode)
+
 ;; * active Babel languages
 ;; (setq haskell-process-type 'ghci)
+(add-to-list 'org-src-lang-modes '("rust" . rust))
 (org-babel-do-load-languages
  'org-babel-load-languages
  '(
