@@ -1,9 +1,4 @@
 { lib, config, inputs, pkgs, ... }:
-let
-  protonvpnPkg = pkgs.protonvpn-gui;
-  protonvpnSitePackages = "${protonvpnPkg}/${pkgs.python3.sitePackages}";
-  protonvpnIcons = "${protonvpnSitePackages}/proton/vpn/app/gtk/assets/icons";
-in
 {
   home.username = "thinky";
   home.homeDirectory = "/home/thinky";
@@ -24,15 +19,6 @@ in
   home.file.".local/share/icons/hicolor/256x256/apps/euresys-studio.png" = {
     source = ./assets/euresys-studio.png;
   };
-
-  home.file.".local/share/icons/hicolor/scalable/apps/proton-vpn-connected.svg".source =
-    "${protonvpnIcons}/state-connected.svg";
-  home.file.".local/share/icons/hicolor/scalable/apps/proton-vpn-disconnected.svg".source =
-    "${protonvpnIcons}/state-disconnected.svg";
-  home.file.".local/share/icons/hicolor/scalable/apps/proton-vpn-error.svg".source =
-    "${protonvpnIcons}/state-error.svg";
-  home.file.".local/share/icons/hicolor/scalable/apps/proton-vpn-sign.svg".source =
-    "${protonvpnPkg}/share/pixmaps/proton-vpn-logo.svg";
 
   xdg.desktopEntries.sioyek-xcb = {
     name = "Sioyek";
@@ -365,75 +351,6 @@ in
     '';
   };
 
-  home.file.".local/lib/protonvpn-patch/sitecustomize.py".text = ''
-    import dbus
-
-    from proton.vpn.app.gtk.widgets.main import tray_icon, tray_indicator
-
-    tray_indicator.TrayIndicator.CONNECTED_ICON = "proton-vpn-connected"
-    tray_indicator.TrayIndicator.DISCONNECTED_ICON = "proton-vpn-disconnected"
-    tray_indicator.TrayIndicator.ERROR_ICON = "proton-vpn-error"
-
-    def _patched_register_to_watcher(self):
-        try:
-            watcher = self.bus.get_object(tray_icon.SNW_BUS_NAME, tray_icon.SNW_OBJECT_PATH)
-            watcher.RegisterStatusNotifierItem(
-                tray_icon.SNI_PATH,
-                dbus_interface=tray_icon.SNW_INTERFACE,
-            )
-        except dbus.exceptions.DBusException:
-            pass
-
-    def _patched_get(self, interface, prop):
-        if interface != tray_icon.SNI_INTERFACE:
-            return dbus.String("")
-
-        values = {
-            tray_icon.StatusNotifierItemProperty.STATUS.value: dbus.String(self.tray.status),
-            tray_icon.StatusNotifierItemProperty.CATEGORY.value: dbus.String("ApplicationStatus"),
-            tray_icon.StatusNotifierItemProperty.ID.value: dbus.String(self.tray.app_id),
-            tray_icon.StatusNotifierItemProperty.TITLE.value: dbus.String(self.tray.title),
-            tray_icon.StatusNotifierItemProperty.ICON_NAME.value: dbus.String(self.tray.icon_name),
-            tray_icon.StatusNotifierItemProperty.MENU.value: dbus.ObjectPath("/"),
-            tray_icon.StatusNotifierItemProperty.ITEM_IS_MENU.value: dbus.Boolean(False),
-            tray_icon.StatusNotifierItemProperty.ICON_ACCESSIBLE_DESCRIPTION.value: dbus.String(
-                self.tray.icon_desc
-            ),
-        }
-        return values.get(prop, dbus.String(""))
-
-    def _patched_get_all(self, interface):
-        if interface != tray_icon.SNI_INTERFACE:
-            return {}
-
-        return {
-            tray_icon.StatusNotifierItemProperty.STATUS.value: dbus.String(self.tray.status),
-            tray_icon.StatusNotifierItemProperty.CATEGORY.value: dbus.String("ApplicationStatus"),
-            tray_icon.StatusNotifierItemProperty.ID.value: dbus.String(self.tray.app_id),
-            tray_icon.StatusNotifierItemProperty.TITLE.value: dbus.String(self.tray.title),
-            tray_icon.StatusNotifierItemProperty.ICON_NAME.value: dbus.String(self.tray.icon_name),
-            tray_icon.StatusNotifierItemProperty.MENU.value: dbus.ObjectPath("/"),
-            tray_icon.StatusNotifierItemProperty.ITEM_IS_MENU.value: dbus.Boolean(False),
-            tray_icon.StatusNotifierItemProperty.ICON_ACCESSIBLE_DESCRIPTION.value: dbus.String(
-                self.tray.icon_desc
-            ),
-        }
-
-    tray_icon._StatusNotifierItem._register_to_watcher = _patched_register_to_watcher
-    tray_icon._StatusNotifierItem.Get = _patched_get
-    tray_icon._StatusNotifierItem.GetAll = _patched_get_all
-  '';
-
-  home.file.".local/bin/protonvpn-tray" = {
-    executable = true;
-    text = ''
-      #!/bin/sh
-      export GDK_BACKEND=x11
-      export PYTHONPATH="$HOME/.local/lib/protonvpn-patch:${protonvpnSitePackages}:''${PYTHONPATH:-}"
-      exec ${protonvpnPkg}/bin/protonvpn-app "$@"
-    '';
-  };
-
   home.file.".local/bin/random-wallpaper" = {
     executable = true;
     text = ''
@@ -595,9 +512,6 @@ in
     env = GTK_IM_MODULE,
     env = QT_IM_MODULE,
     windowrule = tile = true, match:class = sioyek
-    windowrule = float = true, match:class = ^(\\.protonvpn-app-wrapped|protonvpn-app)$
-    windowrule = size = 70% 80%, match:class = ^(\\.protonvpn-app-wrapped|protonvpn-app)$
-    windowrule = center = true, match:class = ^(\\.protonvpn-app-wrapped|protonvpn-app)$
   '';
     settings = {
       general = {
@@ -627,7 +541,7 @@ in
           "$mod, F, exec, firefox"
           "$mod, Q, exec, kitty"
           "$mod, E, exec, emacs"
-          "$mod, P, exec, ~/.local/bin/protonvpn-tray"
+          "$mod, P, exec, protonvpn-app"
           "$mod, W, exec, walker"
           "$mod, N, exec, /home/thinky/.local/bin/nemo-x11"
           "$mod, S, exec, ~/.local/bin/sioyek-xcb"
@@ -695,7 +609,7 @@ in
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
-                    "~/.local/bin/protonvpn-tray"
+                    "protonvpn-app"
                     "~/.local/bin/random-wallpaper"
                     "while true; do sleep 60; ~/.local/bin/random-wallpaper; done"
                     "systemctl --user start hyprpolkitagent"
