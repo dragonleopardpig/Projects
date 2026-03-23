@@ -2,6 +2,7 @@
 { config, lib, pkgs, ... }:
 
 let
+  cfg = config.hardware.euresys;
   kernelPackages = config.boot.kernelPackages;
   kdir = "${kernelPackages.kernel.dev}/lib/modules/${kernelPackages.kernel.modDirVersion}/build";
   modDir = kernelPackages.kernel.modDirVersion;
@@ -15,7 +16,7 @@ let
   mementoKmod = pkgs.stdenv.mkDerivation {
     pname = "memento-kmod";
     version = "26.02.0.8";
-    src = ./memento-drivers;
+    src = cfg.mementoDriversSrc;
     nativeBuildInputs = kernelPackages.kernel.moduleBuildDependencies;
     dontConfigure = true;
     patchPhase = patchDriverSource;
@@ -41,7 +42,7 @@ let
   egrabberKmod = pkgs.stdenv.mkDerivation {
     pname = "egrabber-kmod";
     version = "26.02.1.18";
-    src = ./egrabber-drivers;
+    src = cfg.egrabberDriversSrc;
     nativeBuildInputs = kernelPackages.kernel.moduleBuildDependencies;
     dontConfigure = true;
     patchPhase = patchDriverSource;
@@ -132,6 +133,42 @@ let
   };
 in
 {
+  options.hardware.euresys = {
+    enable = lib.mkEnableOption "Euresys eGrabber/Memento support";
+
+    egrabberDriversSrc = lib.mkOption {
+      type = with lib.types; nullOr path;
+      default = null;
+      example = /var/lib/euresys/egrabber/drivers;
+      description = ''
+        Path to the vendor-provided eGrabber driver source tree
+        (the contents of the upstream `drivers/` directory).
+      '';
+    };
+
+    mementoDriversSrc = lib.mkOption {
+      type = with lib.types; nullOr path;
+      default = null;
+      example = /var/lib/euresys/memento/drivers;
+      description = ''
+        Path to the vendor-provided Memento driver source tree
+        (the contents of the upstream `drivers/` directory).
+      '';
+    };
+  };
+
+  config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = cfg.egrabberDriversSrc != null;
+        message = "hardware.euresys.egrabberDriversSrc must point to the vendor eGrabber drivers/ directory.";
+      }
+      {
+        assertion = cfg.mementoDriversSrc != null;
+        message = "hardware.euresys.mementoDriversSrc must point to the vendor Memento drivers/ directory.";
+      }
+    ];
+
   # Load kernel modules on boot: memento first, then eGrabber drivers
   boot.extraModulePackages = [ mementoKmod egrabberKmod ];
   boot.kernelModules = [ "memento" "coaxlink" "grablink" ];
@@ -180,4 +217,5 @@ in
       fi
     done
   '';
+  };
 }

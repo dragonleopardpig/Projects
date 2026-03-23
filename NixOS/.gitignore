@@ -2,3 +2,6 @@
 /org/data/
 .aider*
 result
+modules/egrabber/sources.nix
+modules/egrabber/egrabber-drivers/
+modules/egrabber/memento-drivers/

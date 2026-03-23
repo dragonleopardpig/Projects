@@ -5,9 +5,11 @@
     ./hardware-configuration.nix
     ./nvidia.nix
     ../../modules/egrabber/egrabber.nix
-  ];
+  ] ++ builtins.optional (builtins.pathExists ../../modules/egrabber/sources.nix)
+    ../../modules/egrabber/sources.nix;
 
   networking.hostName = "X299";
+  hardware.euresys.enable = true;
 
   # DDC/CI backlight for external monitors (X299 has no built-in panel)
   boot.kernelModules = [ "ddcci_backlight" ];

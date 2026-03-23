@@ -23,24 +23,30 @@ This guide documents all the steps required and the problems solved along the wa
   - `egrabber-linux-x86_64-<version>` (eGrabber drivers + Studio)
   - `memento-linux-x86_64-<version>` (Memento tracing — optional but recommended)
 
-## Step 1: Copy Driver Source into Your NixOS Config
+## Step 1: Keep Vendor Driver Sources Out of Git
 
-Nix flakes can only see files within the flake tree, so the vendor source must be
-copied into your NixOS configuration directory.
+Do not commit the vendor driver sources into this repository. They are proprietary
+vendor materials. Keep them outside the flake tree, for example under
+`~/Downloads/` or `/var/lib/euresys/`, and point NixOS at those paths via a local
+`sources.nix` file that is ignored by git.
+
+Create `modules/egrabber/sources.nix` from the example file:
 
 ```bash
-# From the eGrabber package — copy drivers/ contents (headers + linux/ + precompiled/)
-mkdir -p /path/to/nixos/modules/egrabber/egrabber-drivers
-cp -r ~/Downloads/egrabber-linux-x86_64-26.02.1.18/drivers/* \
-      /path/to/nixos/modules/egrabber/egrabber-drivers/
-
-# From the Memento package — same structure
-mkdir -p /path/to/nixos/modules/egrabber/memento-drivers
-cp -r ~/Downloads/memento-linux-x86_64-26.02.0.8/drivers/* \
-      /path/to/nixos/modules/egrabber/memento-drivers/
+cp /path/to/nixos/modules/egrabber/sources.example.nix \
+   /path/to/nixos/modules/egrabber/sources.nix
 ```
 
-**Important:** You must copy the entire `drivers/` directory, not just `drivers/linux/`.
+Then update it to point at the vendor `drivers/` directories:
+
+```bash
+{
+  hardware.euresys.egrabberDriversSrc = /absolute/path/to/egrabber-linux-x86_64-26.02.1.18/drivers;
+  hardware.euresys.mementoDriversSrc = /absolute/path/to/memento-linux-x86_64-26.02.0.8/drivers;
+}
+```
+
+**Important:** You must point at the entire `drivers/` directory, not just `drivers/linux/`.
 The C source files in `linux/` include headers via `#include "../os_debug.h"` — those
 headers live in the parent `drivers/` directory.
 
@@ -61,16 +67,7 @@ find /path/to/nixos/modules/egrabber/memento-drivers -type f \
 
 The NixOS module also patches CRLF during `patchPhase` as a safety net.
 
-## Step 3: Git-Track the Files
-
-Nix flakes only see git-tracked files:
-
-```bash
-cd /path/to/nixos
-git add modules/egrabber/egrabber-drivers/ modules/egrabber/memento-drivers/
-```
-
-## Step 4: Create the NixOS Module
+## Step 3: Create the NixOS Module
 
 Create `modules/egrabber/egrabber.nix`. The full file is included at the end of this
 guide. It handles five things:
@@ -153,7 +150,7 @@ This is created automatically by an activation script that runs on every
 The module creates `/opt/euresys` and `/lib/firmware/euresys` via tmpfiles rules
 so the vendor installer has somewhere to write.
 
-## Step 5: Import the Module
+## Step 4: Import the Module
 
 In your host's `default.nix`:
 
@@ -168,7 +165,10 @@ In your host's `default.nix`:
 }
 ```
 
-## Step 6: Build and Switch
+The host can also optionally import `../../modules/egrabber/sources.nix` when the
+file exists, so your local source paths stay out of GitHub.
+
+## Step 5: Build and Switch
 
 ```bash
 sudo nixos-rebuild switch --flake .#X299
@@ -190,7 +190,7 @@ sudo dmesg | grep coaxlink
 # Expected: "1 device detected"
 ```
 
-## Step 7: Run the Vendor Installer (Inside FHS)
+## Step 6: Run the Vendor Installer (Inside FHS)
 
 The vendor's `install.sh` must run inside the FHS environment:
 
@@ -204,7 +204,7 @@ euresys-fhs -c "sudo bash install.sh"
 
 The installers will copy runtime files, libraries, and tools to `/opt/euresys/`.
 
-## Step 8: Rebuild Again (for qt.conf)
+## Step 7: Rebuild Again (for qt.conf)
 
 After running the vendor installer, rebuild to trigger the activation script that
 creates `qt.conf`:
@@ -213,7 +213,7 @@ creates `qt.conf`:
 sudo nixos-rebuild switch --flake .#X299
 ```
 
-## Step 9: Launch the GUI Tools
+## Step 8: Launch the GUI Tools
 
 ```bash
 # eGrabber Studio
