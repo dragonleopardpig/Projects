@@ -161,11 +161,17 @@ in
     assertions = [
       {
         assertion = cfg.egrabberDriversSrc != null;
-        message = "hardware.euresys.egrabberDriversSrc must point to the vendor eGrabber drivers/ directory.";
+        message = ''
+          hardware.euresys.egrabberDriversSrc must point to the vendor eGrabber drivers/ directory.
+          If you use a local modules/egrabber/sources.nix file, rebuild with --impure so Nix can read it.
+        '';
       }
       {
         assertion = cfg.mementoDriversSrc != null;
-        message = "hardware.euresys.mementoDriversSrc must point to the vendor Memento drivers/ directory.";
+        message = ''
+          hardware.euresys.mementoDriversSrc must point to the vendor Memento drivers/ directory.
+          If you use a local modules/egrabber/sources.nix file, rebuild with --impure so Nix can read it.
+        '';
       }
     ];
 

@@ -276,13 +276,9 @@
         "claude-monitor"
         "codex"
         "corefonts"
-        "feishu"
-        "freeoffice"
         "nvidia-settings"
         "nvidia-x11"
         "protonvpn-gui"
-        "teams-for-linux"
-        "wpsoffice"
       ]
       || lib.hasPrefix "brscan4" name
       || hasCudaEula;
@@ -410,14 +406,9 @@
 
     # ── Office & Documents ──
     texliveFull                # Full TeX/LaTeX distribution
-    onlyoffice-desktopeditors  # Office suite (Word, Excel, PowerPoint compatible)
     hugo                       # Static site generator
     glow                       # Terminal markdown previewer
     minder                     # Mind map
-    teams-for-linux            # Unofficial Microsoft Teams
-    feishu                    # Lark (Feishu) native package
-    freeoffice
-    wpsoffice
 
     # ── CAD & Engineering ──
     librecad                   # 2D CAD application

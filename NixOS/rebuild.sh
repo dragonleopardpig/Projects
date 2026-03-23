@@ -98,11 +98,17 @@ fi
 cd "$SCRIPT_DIR"
 print_info "Working directory: $SCRIPT_DIR"
 
+IMPURE_FLAG=""
+if [ "$HOST" = "X299" ] || [ "$HOST" = "X299-SSD" ]; then
+    IMPURE_FLAG="--impure"
+    print_info "Using --impure for $HOST so local Euresys driver sources can be imported"
+fi
+
 # Execute based on command
 case "$COMMAND" in
     switch|test|boot|build)
-        print_info "Running: sudo nixos-rebuild $COMMAND --flake .#$HOST"
-        sudo nixos-rebuild "$COMMAND" --flake ".#$HOST"
+        print_info "Running: sudo nixos-rebuild $COMMAND $IMPURE_FLAG --flake .#$HOST"
+        sudo nixos-rebuild "$COMMAND" $IMPURE_FLAG --flake ".#$HOST"
         print_success "NixOS rebuild $COMMAND completed for $HOST"
         ;;
 
@@ -112,7 +118,7 @@ case "$COMMAND" in
         print_success "Flake inputs updated"
 
         print_info "Rebuilding with updated inputs..."
-        sudo nixos-rebuild switch --flake ".#$HOST"
+        sudo nixos-rebuild switch $IMPURE_FLAG --flake ".#$HOST"
         print_success "NixOS rebuild completed with updated inputs for $HOST"
         ;;
 
