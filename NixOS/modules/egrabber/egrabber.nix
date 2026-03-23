@@ -123,7 +123,7 @@ let
       # XCB / xkbcommon (needed by bundled Qt5 xcb plugin)
       libxcb
       libxkbcommon
-      xorg.libxkbfile
+      libxkbfile
       # Qt (for eGrabber Studio / GenTL tools)
       qt5.qtbase
       qt6.qtbase

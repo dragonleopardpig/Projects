@@ -1,12 +1,15 @@
 # X299 Desktop - Host-specific configuration
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
+let
+  localEuresysSources = /home/thinky/Projects/NixOS/modules/egrabber/sources.nix;
+in
 {
   imports = [
     ./hardware-configuration.nix
     ./nvidia.nix
     ../../modules/egrabber/egrabber.nix
-  ] ++ builtins.optional (builtins.pathExists ../../modules/egrabber/sources.nix)
-    ../../modules/egrabber/sources.nix;
+  ] ++ lib.optional (builtins.pathExists localEuresysSources)
+    localEuresysSources;
 
   networking.hostName = "X299";
   hardware.euresys.enable = true;

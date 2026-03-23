@@ -259,8 +259,33 @@
     
   };
 
-  # Allow unfree packages
-  nixpkgs.config.allowUnfree = true;
+  # Allow only the specific unfree packages we intentionally use.
+  nixpkgs.config.allowUnfreePredicate = pkg:
+    let
+      name = lib.getName pkg;
+      licenses = lib.toList (pkg.meta.license or []);
+      hasCudaEula = lib.any (license:
+        (license.fullName or "") == "CUDA EULA"
+        || (license.shortName or "") == "CUDA EULA"
+      ) licenses;
+    in
+      builtins.elem name [
+        "brother-udev-rule-type1"
+        "brscan4"
+        "claude-code"
+        "claude-monitor"
+        "codex"
+        "corefonts"
+        "feishu"
+        "freeoffice"
+        "nvidia-settings"
+        "nvidia-x11"
+        "protonvpn-gui"
+        "teams-for-linux"
+        "wpsoffice"
+      ]
+      || lib.hasPrefix "brscan4" name
+      || hasCudaEula;
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget

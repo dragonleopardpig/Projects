@@ -512,7 +512,7 @@ let
       libx11 libxext libxrender libxi libxrandr libxcursor libxfixes libxft
       libxtst libxcomposite libxdamage libxinerama
       freetype fontconfig dbus
-      libxcb libxkbcommon xorg.libxkbfile
+      libxcb libxkbcommon libxkbfile
       qt5.qtbase qt6.qtbase qt6.qtwayland
     ];
     runScript = "bash";
