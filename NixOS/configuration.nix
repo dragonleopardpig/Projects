@@ -70,11 +70,11 @@
   nix.gc = {
     automatic = true;
     dates = "daily";
-    options = "--delete-older-than 3d";
+    options = "--delete-older-than 30d";
   };
 
   # Limit boot entries to prevent /boot from filling up
-  boot.loader.grub.configurationLimit = 5;
+  boot.loader.grub.configurationLimit = 50;
 
   hardware.i2c.enable = true;
 
