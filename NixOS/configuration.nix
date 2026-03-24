@@ -342,6 +342,12 @@
     mission-center             # GUI system monitor (CPU, RAM, disk, network)
     resources                  # Lightweight GUI resource monitor
     zenity                     # GTK dialogs (needed by tinyfiledialogs)
+    btop
+    btop-cuda
+    btop-rocm
+    mesa-demos
+    vulkan-tools
+    glmark2
 
     # ── Hardware & Power ──
     brightnessctl              # Screen brightness control

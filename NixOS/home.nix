@@ -854,6 +854,7 @@
       ls = "eza --icons=always --group-directories-first --sort=extension";
       gc = "git commit -m";
       rebuild = "~/Projects/NixOS/rebuild.sh";
+      btop = "env LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib:$LD_LIBRARY_PATH btop";
     };
     initExtra = ''
       fastfetch
@@ -937,6 +938,9 @@
     enable = true;
     settings = {
       theme_background = false;
+      shown_boxes = "cpu mem net proc gpu0";
+      shown_gpus = "nvidia intel";
+      show_gpu_info = "On";
     };
   };
 
