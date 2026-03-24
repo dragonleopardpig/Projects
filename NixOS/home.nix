@@ -968,10 +968,8 @@
     enable = true;
     settings = {
       logo = {
-        source = "~/Projects/NixOS/assets/face.png";
-        type = "kitty-direct";
-        height = 18;
-        width = 36;
+        source = "~/Projects/NixOS/assets/face-ascii.txt";
+        type = "file-raw";
         padding.top = 1;
       };
       display.separator = " 󰑃  ";
