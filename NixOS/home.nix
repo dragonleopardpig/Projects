@@ -150,11 +150,14 @@
     lazy = true
   '';
 
-  # Swappy screenshot editor config
-  xdg.configFile."swappy/config".text = ''
-    [Default]
-    save_dir=$HOME/Pictures/Screenshots
-    save_filename_format=screenshot-%Y%m%d-%H%M%S.png
+  xdg.configFile."satty/config.toml".text = ''
+    [general]
+    early_exit = false
+    corner_roundness = 12
+    initial_tool = "pointer"
+    output_filename = "~/Pictures/Screenshots/screenshot-%Y%m%d-%H%M%S.png"
+    actions_on_enter = ["save-to-file", "exit"]
+    actions_on_escape = ["exit"]
   '';
 
   # Waypaper configuration for random image rotation via swww
@@ -327,7 +330,8 @@
   home.file.".local/bin/screenshot" = {
     executable = true;
     text = ''
-      #!/bin/sh
+      #!/usr/bin/env bash
+      set -eu
       grim -g "$(slurp)" - | swappy -f -
     '';
   };
@@ -555,7 +559,7 @@
           "$mod, up, movefocus, u"
           "$mod, down, movefocus, d"
           "$mod SHIFT, F, fullscreen, 1"
-          '', Print, exec, grim -g "$(slurp)" - | swappy -f -''
+          '', Print, exec, ~/.local/bin/screenshot''
           ", XF86AudioRaiseVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
           ", XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
           ", XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
@@ -565,6 +569,8 @@
           ", XF86AudioPlay, exec, playerctl play-pause"
           ", XF86AudioPrev, exec, playerctl previous"
           ", F1, exec, sleep 0.1 && hyprctl dispatch dpms off && hyprlock"
+          ", F7, exec, ddcutil setvcp 60 0x11"
+          ", F8, exec, ddcutil setvcp 60 0x0f"
           ", F6, exec, ~/.local/bin/brightness-ctl up"
           ", F5, exec, ~/.local/bin/brightness-ctl down"
           ",XF86MonBrightnessUp, exec, ~/.local/bin/brightness-ctl up"
@@ -598,6 +604,10 @@
         "$mod, mouse:272, movewindow"
         "$mod, mouse:273, resizewindow"
         "$mod ALT, mouse:272, resizewindow"
+      ];
+      bindl = [
+        ", F7, exec, ddcutil setvcp 60 0x11"
+        ", F8, exec, ddcutil setvcp 60 0x0f"
       ];
       bindc =[
         "$mod, mouse:274, togglefloating"
@@ -967,16 +977,16 @@
       display.separator = " 󰑃  ";
       modules = [
         "break"
-        { type = "os"; key = " DISTRO"; keyColor = "yellow"; }
-        { type = "kernel"; key = "│ ├"; keyColor = "yellow"; }
+        { type = "os"; key = "󰣇 DISTRO"; keyColor = "yellow"; }
+        { type = "kernel"; key = "│ ├󰒋"; keyColor = "yellow"; }
         { type = "packages"; key = "│ ├󰏖"; keyColor = "yellow"; }
-        { type = "shell"; key = "│ └"; keyColor = "yellow"; }
-        { type = "wm"; key = " DE/WM"; keyColor = "blue"; }
+        { type = "shell"; key = "│ └󰆍"; keyColor = "yellow"; }
+        { type = "wm"; key = "󱂬 DE/WM"; keyColor = "blue"; }
         { type = "wmtheme"; key = "│ ├󰉼"; keyColor = "blue"; }
         { type = "icons"; key = "│ ├󰀻"; keyColor = "blue"; }
-        { type = "cursor"; key = "│ ├"; keyColor = "blue"; }
-        { type = "terminalfont"; key = "│ ├"; keyColor = "blue"; }
-        { type = "terminal"; key = "│ └"; keyColor = "blue"; }
+        { type = "cursor"; key = "│ ├󰇀"; keyColor = "blue"; }
+        { type = "terminalfont"; key = "│ ├󰛖"; keyColor = "blue"; }
+        { type = "terminal"; key = "│ └"; keyColor = "blue"; }
         { type = "host"; key = "󰌢 SYSTEM"; keyColor = "green"; }
         { type = "cpu"; key = "│ ├󰻠"; keyColor = "green"; }
         { type = "gpu"; key = "│ ├󰻑"; format = "{2}"; keyColor = "green"; }
