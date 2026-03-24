@@ -968,9 +968,19 @@
     enable = true;
     settings = {
       logo = {
-        source = "~/Projects/NixOS/assets/face-ascii.txt";
-        type = "file-raw";
+        source = "nixos";
         padding.top = 1;
+        color = {
+          "1" = "#ff8bd1";
+          "2" = "#8ed8ff";
+          "3" = "#f06ccf";
+          "4" = "#77c7ff";
+          "5" = "#d95fe6";
+          "6" = "#a990ff";
+          "7" = "#b57cff";
+          "8" = "#c68cff";
+          "9" = "#d59bff";
+        };
       };
       display.separator = " 󰑃  ";
       modules = [
