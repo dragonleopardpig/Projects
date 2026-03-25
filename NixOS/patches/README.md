@@ -39,6 +39,9 @@ The patch modifies ProtonVPN's Python source in these areas:
   - avoids emitting hidden connect/disconnect entries
   - reduces bogus separators
   - keeps tray `Show` / `Hide` menu state aligned with window visibility
+- `tray_icon.py`
+  - re-registers the tray item when the tray host disappears and comes back
+  - fixes ProtonVPN tray recovery after HyprPanel restarts
 
 ## Files involved
 

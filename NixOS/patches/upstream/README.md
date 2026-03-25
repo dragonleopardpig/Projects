@@ -8,6 +8,7 @@ Files:
 - `0001-fix-sni-and-dbusmenu-typing.patch`
 - `0002-improve-tray-host-detection.patch`
 - `0003-clean-up-tray-menu-state.patch`
+- `0004-reregister-tray-item-when-host-restarts.patch`
 
 The first two are the strongest upstream candidates. The third is useful, but
 it is more behavioral/UI-oriented and may need discussion with maintainers.
@@ -61,6 +62,22 @@ Scope:
 Suggested title:
 
 `fix: keep tray menu state aligned with window visibility`
+
+### PR 4: tray host restart recovery
+
+Use:
+
+- `0004-reregister-tray-item-when-host-restarts.patch`
+
+Scope:
+
+- watch `org.kde.StatusNotifierWatcher` owner changes
+- re-register the tray item when the tray host comes back
+- recover the ProtonVPN tray icon after panel restarts
+
+Suggested title:
+
+`fix: re-register tray item when the tray host restarts`
 
 ## Practical workflow
 
@@ -165,6 +182,7 @@ Open PRs in this order:
 1. `0001`
 2. `0002`
 3. `0003`
+4. `0004`
 
 That order gives maintainers the protocol fixes first, then the environment
 detection fix, and only then the UI/menu cleanup.

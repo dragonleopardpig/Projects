@@ -547,6 +547,7 @@
           "$mod, E, exec, emacs"
           "$mod, P, exec, protonvpn-app"
           "$mod, W, exec, walker"
+          "$mod, B, exec, kitty -e env LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib:$LD_LIBRARY_PATH btop"
           "$mod, N, exec, /home/thinky/.local/bin/nemo-x11"
           "$mod, S, exec, ~/.local/bin/sioyek-xcb"
           "$mod, Y, exec, kitty -e yazi"
