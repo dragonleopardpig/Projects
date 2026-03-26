@@ -150,16 +150,6 @@
     lazy = true
   '';
 
-  xdg.configFile."satty/config.toml".text = ''
-    [general]
-    early_exit = false
-    corner_roundness = 12
-    initial_tool = "pointer"
-    output_filename = "~/Pictures/Screenshots/screenshot-%Y%m%d-%H%M%S.png"
-    actions_on_enter = ["save-to-file", "exit"]
-    actions_on_escape = ["exit"]
-  '';
-
   # Waypaper configuration for random image rotation via swww
   xdg.configFile."waypaper/config.ini".force = true;
   xdg.configFile."waypaper/config.ini".text = ''

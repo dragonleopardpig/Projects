@@ -307,7 +307,6 @@
     wget                       # Download files from the web
     yq-go                      # YAML/JSON/XML processor (CLI)
     yt-dlp                    # Download video (NASA APOD video days)
-    pandoc                    # Document converter (org-pandoc-import)
 
     # ── Networking & Diagnostics ──
     networkmanager             # Network connection manager
@@ -363,10 +362,8 @@
     hyprsysteminfo             # Hyprland system info utility
     hyprpolkitagent            # Polkit authentication agent for Hyprland
     waypaper                   # GUI wallpaper setter for Wayland
-    walker                     # Modern app launcher for Wayland
     slurp                      # Wayland region selector (for screenshots)
     grim                       # Wayland screenshot utility
-    satty                      # Screenshot annotation tool
     wl-clipboard               # Wayland clipboard utilities (wl-copy, wl-paste)
     libnotify                  # Desktop notification sending (notify-send)
     xdg-desktop-portal         # Desktop integration portal (file picker, etc.)
@@ -405,7 +402,6 @@
     tiv                        # Terminal image viewer (ASCII art)
     chafa                      # Terminal image viewer (Unicode/sixel)
     viu                        # Terminal image viewer (Unicode)
-    freecad
 
     # ── Office & Documents ──
     texliveFull                # Full TeX/LaTeX distribution
