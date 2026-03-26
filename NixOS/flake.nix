@@ -35,21 +35,17 @@
         });
       };
 
-      btopOverlay = final: prev: {
-        btop = prev.btop.overrideAttrs (old: {
-          src = final.lib.cleanSourceWith {
-            src = /home/thinky/btop;
-            filter = path: type:
-              let
-                base = builtins.baseNameOf path;
-              in
-              !(
-                base == ".git"
-                || base == "build"
-              );
-          };
-        });
-      };
+      btopOverlay = final: prev:
+        let
+          patchBtop = pkg: pkg.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [
+              ./patches/btop-proc-full-left.patch
+            ];
+          });
+        in
+        {
+          btop = patchBtop prev.btop;
+        };
 
       mkSystem = hostModule: nixpkgs.lib.nixosSystem {
         specialArgs = { inherit inputs; };

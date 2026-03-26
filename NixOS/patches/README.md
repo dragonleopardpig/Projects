@@ -1,7 +1,22 @@
-# ProtonVPN systray patch
+# Local package patches
 
-This directory contains the local patch that makes `protonvpn-gui` work
-reliably in the Hyprland + HyprPanel setup used by this NixOS config.
+This directory contains local nixpkgs package patches used by this NixOS
+config.
+
+## Included patches
+
+- `protonvpn-systray.patch`
+  - fixes ProtonVPN tray behavior on Hyprland + HyprPanel
+- `btop-proc-full-left.patch`
+  - adds `proc_full_left`, a fork-only layout option that keeps the process
+    list in a full-height left column and stacks the other boxes in the right
+    column
+
+## How patches are applied
+
+`../flake.nix` overrides the affected packages and applies these patch files
+during the normal package build. The system does not depend on mutable local
+source trees such as `~/btop`.
 
 ## Problem
 
@@ -17,7 +32,7 @@ The issue was not just missing tray libraries. The main breakage came from
 ProtonVPN's StatusNotifierItem / DBusMenu implementation interacting badly
 with HyprPanel's tray backend.
 
-## How this config fixes it
+## ProtonVPN details
 
 `../flake.nix` overrides `pkgs.protonvpn-gui` and applies
 `protonvpn-systray.patch` during the normal package build.
@@ -43,9 +58,15 @@ The patch modifies ProtonVPN's Python source in these areas:
   - re-registers the tray item when the tray host disappears and comes back
   - fixes ProtonVPN tray recovery after HyprPanel restarts
 
-## Files involved
+## Files involved for ProtonVPN
 
 - `protonvpn-systray.patch`
+- `../flake.nix`
+- `../home.nix`
+
+## Files involved for btop
+
+- `btop-proc-full-left.patch`
 - `../flake.nix`
 - `../home.nix`
 

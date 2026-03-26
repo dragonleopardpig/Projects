@@ -1,0 +1,149 @@
+diff --git a/src/btop_config.cpp b/src/btop_config.cpp
+index eaaa577..7ef92a3 100644
+--- a/src/btop_config.cpp
++++ b/src/btop_config.cpp
+@@ -116,6 +116,8 @@ namespace Config {
+ 
+ 		{"proc_left",			"#* Show proc box on left side of screen instead of right."},
+ 
++		{"proc_full_left",		"#* Experimental fork option: make proc box occupy the full left column and stack the other boxes in the right column."},
++
+ 		{"proc_filter_kernel",  "#* (Linux) Filter processes tied to the Linux kernel(similar behavior to htop)."},
+ 
+ 		{"proc_aggregate",		"#* In tree-view, always accumulate child process resources in the parent process."},
+@@ -292,6 +294,7 @@ namespace Config {
+ 		{"proc_cpu_graphs", true},
+ 		{"proc_info_smaps", false},
+ 		{"proc_left", false},
++		{"proc_full_left", false},
+ 		{"proc_filter_kernel", false},
+ 		{"cpu_invert_lower", true},
+ 		{"cpu_single_graph", false},
+diff --git a/src/btop_draw.cpp b/src/btop_draw.cpp
+index 54a51d9..b1be963 100644
+--- a/src/btop_draw.cpp
++++ b/src/btop_draw.cpp
+@@ -2110,6 +2110,18 @@ namespace Draw {
+ 		Mem::shown = boxes.contains("mem");
+ 		Net::shown = boxes.contains("net");
+ 		Proc::shown = boxes.contains("proc");
++		const bool proc_full_left = Config::getB("proc_full_left")
++			and Proc::shown
++			and (Cpu::shown or Mem::shown or Net::shown
++	#ifdef GPU_SUPPORT
++				or Gpu::shown != 0
++	#endif
++			);
++		const int split_right_width = proc_full_left
++			? max(20, (int)round((double)Term::width * (100 - Proc::width_p) / 100))
++			: 0;
++		const int split_left_width = proc_full_left ? static_cast<int>(Term::width) - split_right_width : 0;
++		const int split_right_x = proc_full_left ? split_left_width + 1 : 1;
+ 
+ 		//* Calculate and draw cpu box outlines
+ 		if (Cpu::shown) {
+@@ -2122,7 +2134,7 @@ namespace Draw {
+ 				: 0;
+ 		#endif
+             const bool show_temp = (Config::getB("check_temp") and got_sensors);
+-			width = round((double)Term::width * width_p / 100);
++			width = proc_full_left ? split_right_width : round((double)Term::width * width_p / 100);
+ 		#ifdef GPU_SUPPORT
+ 			if (Gpu::shown != 0 and not (Mem::shown or Net::shown or Proc::shown)) {
+ 				height = Term::height - Gpu::total_height - gpus_extra_height;
+@@ -2133,7 +2145,7 @@ namespace Draw {
+ 		#else
+ 			height = max(8, (int)ceil((double)Term::height * (trim(boxes) == "cpu" ? 100 : height_p) / 100));
+ 		#endif
+-			x = 1;
++			x = proc_full_left ? split_right_x : 1;
+ 			y = cpu_bottom ? Term::height - height + 1 : 1;
+ 
+ 		#ifdef GPU_SUPPORT
+@@ -2203,7 +2215,7 @@ namespace Draw {
+ 			for (auto i = 0; i < shown; ++i) {
+ 				redraw[i] = true;
+ 				int height = 0;
+-				width = Term::width;
++				width = proc_full_left ? split_right_width : static_cast<int>(Term::width);
+ 				if (Cpu::shown)
+ 					if (not (Mem::shown or Net::shown or Proc::shown))
+ 						height = min_height;
+@@ -2217,7 +2229,8 @@ namespace Draw {
+ 				b_height_vec[i] = gpu_b_height_offsets[shown_panels[i]] + 2;
+ 				height += (height+Cpu::height == Term::height-1);
+ 				height = max(height, b_height_vec[i] + 2);
+-				x_vec[i] = 1; y_vec[i] = 1 + total_height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
++				x_vec[i] = proc_full_left ? split_right_x : 1;
++				y_vec[i] = 1 + total_height + (not Config::getB("cpu_bottom"))*Cpu::shown*Cpu::height;
+ 				box[i] = createBox(x_vec[i], y_vec[i], width, height, Theme::c("cpu_box"), true, std::string("gpu") + (char)(shown_panels[i]+'0'), "", (shown_panels[i]+5)%10); // TODO gpu_box
+ 				b_width = clamp(width/2, min_width, 65);
+ 				total_height += height;
+@@ -2242,13 +2255,13 @@ namespace Draw {
+ 			auto swap_disk = Config::getB("swap_disk");
+ 			auto mem_graphs = Config::getB("mem_graphs");
+ 
+-			width = round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
++			width = proc_full_left ? split_right_width : round((double)Term::width * (Proc::shown ? width_p : 100) / 100);
+ 		#ifdef GPU_SUPPORT
+ 			height = ceil((double)Term::height * (100 - Net::height_p * Net::shown*4 / ((Gpu::shown != 0 and Cpu::shown) + 4)) / 100) - Cpu::height - Gpu::total_height;
+ 		#else
+ 			height = ceil((double)Term::height * (100 - Cpu::height_p * Cpu::shown - Net::height_p * Net::shown) / 100) + 1;
+ 		#endif
+-			x = (proc_left and Proc::shown) ? Term::width - width + 1: 1;
++			x = proc_full_left ? split_right_x : (proc_left and Proc::shown) ? Term::width - width + 1: 1;
+ 			if (mem_below_net and Net::shown)
+ 		#ifdef GPU_SUPPORT
+ 				y = Term::height - height + 1 - (cpu_bottom ? Cpu::height : 0);
+@@ -2312,7 +2325,7 @@ namespace Draw {
+ 		#else
+ 			height = Term::height - Cpu::height - Mem::height;
+ 		#endif
+-			x = (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
++			x = proc_full_left ? split_right_x : (proc_left and Proc::shown) ? Term::width - width + 1 : 1;
+ 			if (mem_below_net and Mem::shown)
+ 			#ifdef GPU_SUPPORT
+ 				y = (cpu_bottom ? 1 : Cpu::height + 1) + Gpu::total_height;
+@@ -2336,17 +2349,17 @@ namespace Draw {
+ 		//* Calculate and draw proc box outlines
+ 		if (Proc::shown) {
+ 			using namespace Proc;
+-			width = Term::width - (Mem::shown ? Mem::width : (Net::shown ? Net::width : 0));
++			width = proc_full_left ? split_left_width : static_cast<int>(Term::width) - (Mem::shown ? Mem::width : (Net::shown ? Net::width : 0));
+ 		#ifdef GPU_SUPPORT
+-			height = Term::height - Cpu::height - Gpu::total_height;
++			height = proc_full_left ? static_cast<int>(Term::height) : static_cast<int>(Term::height) - Cpu::height - Gpu::total_height;
+ 		#else
+-			height = Term::height - Cpu::height;
++			height = proc_full_left ? static_cast<int>(Term::height) : static_cast<int>(Term::height) - Cpu::height;
+ 		#endif
+-			x = proc_left ? 1 : Term::width - width + 1;
++			x = proc_full_left ? 1 : proc_left ? 1 : Term::width - width + 1;
+ 		#ifdef GPU_SUPPORT
+-			y = ((cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1) + Gpu::total_height;
++			y = proc_full_left ? 1 : ((cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1) + Gpu::total_height;
+ 		#else
+-			y = (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1;
++			y = proc_full_left ? 1 : (cpu_bottom and Cpu::shown) ? 1 : Cpu::height + 1;
+ 		#endif
+ 			select_max = height - 3;
+ 			box = createBox(x, y, width, height, Theme::c("proc_box"), true, "proc", "", 4);
+diff --git a/src/btop_menu.cpp b/src/btop_menu.cpp
+index 75ec31c..34bc1e9 100644
+--- a/src/btop_menu.cpp
++++ b/src/btop_menu.cpp
+@@ -783,6 +783,14 @@ namespace Menu {
+ 				"",
+ 				"Show proc box on left side of screen",
+ 				"instead of right."},
++			{"proc_full_left",
++				"Proc full-height left column.",
++				"",
++				"Experimental fork option.",
++				"",
++				"Keep the proc box as a full-height left",
++				"column and stack the other visible boxes",
++				"in the right column."},
+ 			{"graph_symbol_proc",
+ 				"Graph symbol to use for graphs in proc box.",
+ 				"",
