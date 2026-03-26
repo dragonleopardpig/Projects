@@ -1,4 +1,9 @@
 { lib, config, inputs, pkgs, ... }:
+let
+  hyprpanelTheme =
+    builtins.fromJSON
+      (builtins.readFile ./assets/hyprpanel-cyberpunk.json);
+in
 {
   home.username = "thinky";
   home.homeDirectory = "/home/thinky";
@@ -509,23 +514,50 @@
   '';
     settings = {
       general = {
-        gaps_in = 0; # Inner gaps
-        gaps_out = 0; # Outer gaps
-        border_size = 3;
+        gaps_in = 6;
+        gaps_out = 14;
+        border_size = 2;
         layout = "dwindle";
-        "col.active_border" = "rgb(00FFFF)";
-        "col.inactive_border" = "rgb(202020)";
+        "col.active_border" = "rgba(ff4fd8ee) rgba(6be8ffee) 45deg";
+        "col.inactive_border" = "rgba(182033aa)";
         resize_on_border = true;
         extend_border_grab_area = 20;
       };
       decoration = {
-        inactive_opacity = 0.9;
+        rounding = 18;
+        active_opacity = 0.96;
+        inactive_opacity = 0.82;
+        fullscreen_opacity = 1.0;
         dim_inactive = true;
-        dim_strength = 0.1;
+        dim_strength = 0.16;
+        blur = {
+          enabled = true;
+          size = 8;
+          passes = 3;
+          vibrancy = 0.22;
+        };
+        shadow = {
+          enabled = true;
+          range = 28;
+          render_power = 4;
+          color = "rgba(030611bb)";
+        };
       };
       animations = {
+        enabled = true;
         workspace_wraparound = true;
       };
+      bezier = [
+        "holo, 0.22, 1, 0.36, 1"
+        "reveal, 0.16, 1, 0.3, 1"
+      ];
+      animation = [
+        "windows, 1, 7, holo, slide"
+        "windowsOut, 1, 5, reveal, slide"
+        "border, 1, 9, default"
+        "fade, 1, 6, default"
+        "workspaces, 1, 7, holo, slidefade 15%"
+      ];
       input = {
         follow_mouse = 1;
       };
@@ -625,7 +657,7 @@
   programs.hyprpanel = {
     package = inputs.hyprpanel.packages.${pkgs.stdenv.hostPlatform.system}.default;
     enable = true;
-    settings = {
+    settings = hyprpanelTheme // {
       bar.layouts = {
         "*" = {
           left = [ "dashboard" "workspaces" "media"];
@@ -669,11 +701,17 @@
       };
       #menus.dashboard.stats.enable_gpu = true;  # Causes system freeze on NVIDIA
       theme = {
-        bar.transparent = true;
-        bar.outer_spacing = "0em";
+        bar.transparent = false;
+        bar.outer_spacing = "0.9em";
+        bar.scaling = 92;
         bar.buttons.enableBorders = true;
+        bar.buttons.monochrome = false;
+        bar.buttons.style = "default";
+        bar.buttons.workspaces.pill.radius = "0.9em";
+        bar.buttons.workspaces.pill.active_width = "3.2em";
+        bar.buttons.workspaces.fontSize = "1.05em";
         font = {
-          name = "Inter";
+          name = "CaskaydiaCove Nerd Font";
           size = "13px";
         };
       };
@@ -808,23 +846,59 @@
   programs.kitty = {
     enable = true;
     font = {
-      size = 9; # Replace with your desired size
-      name = "JetBrainsMono Nerd Font";
+      size = 10.5;
+      name = "CaskaydiaCove Nerd Font Mono";
     };
     settings = {
       confirm_os_window_close = 0;
       dynamic_background_opacity = true;
       enable_audio_bell = false;
       mouse_hide_wait = "-1.0";
-      window_padding_width = 10;
-      background_opacity = "0.8";
-      background_blur = 5;
+      window_padding_width = 16;
+      background_opacity = "0.72";
+      background_blur = 10;
+      foreground = "#d9f6ff";
+      background = "#07111b";
+      selection_foreground = "#07111b";
+      selection_background = "#7df9ff";
+      cursor = "#ff63d8";
+      cursor_text_color = "#07111b";
+      active_border_color = "#7df9ff";
+      inactive_border_color = "#152334";
+      active_tab_background = "#7df9ff";
+      active_tab_foreground = "#07111b";
+      inactive_tab_background = "#0d1724";
+      inactive_tab_foreground = "#7aa6c2";
+      active_tab_font_style = "bold";
+      color0 = "#07111b";
+      color1 = "#ff5ea8";
+      color2 = "#4ef2c2";
+      color3 = "#ffd166";
+      color4 = "#6bc5ff";
+      color5 = "#c27dff";
+      color6 = "#7df9ff";
+      color7 = "#d9f6ff";
+      color8 = "#122233";
+      color9 = "#ff88bf";
+      color10 = "#89ffd7";
+      color11 = "#ffe08a";
+      color12 = "#8ed3ff";
+      color13 = "#d0a6ff";
+      color14 = "#a8ffff";
+      color15 = "#f2fbff";
     };
     extraConfig = ''
     map ctrl+shift+equal change_font_size all +0.5                          
     map ctrl+shift+minus change_font_size all -0.5
     map alt+w copy_to_clipboard
     map ctrl+y paste_from_clipboard
+    tab_bar_style powerline
+    tab_powerline_style slanted
+    tab_title_template " {index}: {title} "
+    shell_integration enabled
+    cursor_trail 2
+    repaint_delay 5
+    input_delay 1
 
     # Optional: Copy on select
     copy_on_select yes
