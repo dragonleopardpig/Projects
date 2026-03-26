@@ -547,7 +547,7 @@
           "$mod, E, exec, emacs"
           "$mod, P, exec, protonvpn-app"
           "$mod, W, exec, walker"
-          "$mod, B, exec, kitty -e env LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib:$LD_LIBRARY_PATH btop"
+          "$mod, B, exec, kitty -e btop"
           "$mod, N, exec, /home/thinky/.local/bin/nemo-x11"
           "$mod, S, exec, ~/.local/bin/sioyek-xcb"
           "$mod, Y, exec, kitty -e yazi"
@@ -855,7 +855,7 @@
       ls = "eza --icons=always --group-directories-first --sort=extension";
       gc = "git commit -m";
       rebuild = "~/Projects/NixOS/rebuild.sh";
-      btop = "env LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib:$LD_LIBRARY_PATH btop";
+      btop = "btop";
     };
     initExtra = ''
       fastfetch
@@ -937,11 +937,17 @@
 
   programs.btop = {
     enable = true;
+    package = pkgs.btop-cuda;
     settings = {
       theme_background = false;
-      shown_boxes = "cpu mem net proc gpu0";
+      shown_boxes = "cpu gpu0 mem net proc";
       shown_gpus = "nvidia intel";
       show_gpu_info = "On";
+      proc_left = true;
+      proc_full_left = true;
+      cpu_bottom = false;
+      show_disks = true;
+      save_config_on_exit = false;
     };
   };
 

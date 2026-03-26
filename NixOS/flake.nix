@@ -35,11 +35,27 @@
         });
       };
 
+      btopOverlay = final: prev: {
+        btop = prev.btop.overrideAttrs (old: {
+          src = final.lib.cleanSourceWith {
+            src = /home/thinky/btop;
+            filter = path: type:
+              let
+                base = builtins.baseNameOf path;
+              in
+              !(
+                base == ".git"
+                || base == "build"
+              );
+          };
+        });
+      };
+
       mkSystem = hostModule: nixpkgs.lib.nixosSystem {
         specialArgs = { inherit inputs; };
         modules = [
           {
-            nixpkgs.overlays = [ protonvpnOverlay ];
+            nixpkgs.overlays = [ protonvpnOverlay btopOverlay ];
           }
           ./configuration.nix
           hostModule
