@@ -102,7 +102,7 @@
 (use-package heaven-and-hell
   :ensure t
   :config
-  (setq heaven-and-hell-theme-type 'dark)
+  (setq heaven-and-hell-theme-type 'light)
   ;; (setq heaven-and-hell-themes
   ;;       '((light . (ef-spring doom-acario-light dichromacy doom-plain doom-fairy-floss))
   ;; 	  (dark . (ef-bio doom-fairy-floss))))

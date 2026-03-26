@@ -32,9 +32,86 @@
 
 ;; Keep emacs-jupyter on the project-local venv so the python3 kernelspec
 ;; resolves `python` to the interpreter that actually has ipykernel installed.
-(let ((jupyter-bin (expand-file-name "~/Projects/python/.devenv/state/venv/bin/jupyter")))
-  (when (file-exists-p jupyter-bin)
-    (setq jupyter-executable jupyter-bin)))
+(defun my/jupyter-project-executable ()
+  "Return the preferred Jupyter executable for the current project."
+  (let* ((dir default-directory)
+         (kraken-root (expand-file-name "~/Projects/Kraken-Optical-Simulator/"))
+         (kraken-jupyter (expand-file-name ".devenv/state/venv/bin/jupyter" kraken-root))
+         (default-jupyter (expand-file-name "~/Projects/python/.devenv/state/venv/bin/jupyter")))
+    (cond
+     ((and dir
+           (string-prefix-p kraken-root (expand-file-name dir))
+           (file-exists-p kraken-jupyter))
+      kraken-jupyter)
+     ((file-exists-p default-jupyter)
+      default-jupyter)
+     (t nil))))
+
+(defun my/jupyter-project-kernel ()
+  "Return the preferred Jupyter kernel name for the current project."
+  (let ((dir default-directory)
+        (kraken-root (expand-file-name "~/Projects/Kraken-Optical-Simulator/")))
+    (if (and dir (string-prefix-p kraken-root (expand-file-name dir)))
+        "kraken-python"
+      "python")))
+
+(defun my/jupyter-setup-project-executable ()
+  "Set Jupyter executable and default kernel for the current buffer."
+  (when-let ((jupyter-bin (my/jupyter-project-executable)))
+    (setq-local jupyter-executable jupyter-bin))
+  (setq-local org-babel-default-header-args:jupyter-python
+              `((:kernel . ,(my/jupyter-project-kernel))
+                (:async . "yes")
+                (:session . "py")))
+  (setq-local org-babel-default-header-args:jupyter-julia
+              '((:async . "yes") (:session . "julia"))))
+
+(add-hook 'org-mode-hook #'my/jupyter-setup-project-executable)
+
+(with-eval-after-load 'jupyter-repl
+  (defun my/jupyter-valid-count (count)
+    "Return COUNT when valid, otherwise a safe default."
+    (if (wholenump count) count 1))
+
+  (defun my/jupyter-repl-cell-count (orig-fn)
+    "Return a safe REPL cell count."
+    (my/jupyter-valid-count (funcall orig-fn)))
+
+  (defun my/jupyter-repl-insert-prompt (orig-fn &optional type count)
+    "Insert a REPL prompt with a safe execution count."
+    (funcall orig-fn type (my/jupyter-valid-count count)))
+
+  (defun my/jupyter-repl-update-cell-count (orig-fn n)
+    "Ignore invalid Jupyter execution counts instead of throwing."
+    (when (wholenump n)
+      (funcall orig-fn n)))
+
+  (defun my/jupyter-repl-sync-execution-state ()
+    "Refresh Jupyter REPL execution state without the broken monadic path."
+    (when (bound-and-true-p jupyter-current-client)
+      (jupyter-run-with-client
+       jupyter-current-client
+       (jupyter-idle
+        (jupyter-execute-request
+         :code ""
+         :silent t
+         :handlers nil)
+        jupyter-long-timeout))
+      (unless (equal (jupyter-execution-state jupyter-current-client) "busy")
+        (jupyter-with-repl-buffer jupyter-current-client
+          (save-excursion
+            (goto-char (point-max))
+            (let ((count (oref jupyter-current-client execution-count)))
+              (when (wholenump count)
+                (jupyter-repl-update-cell-count count))))))))
+  (advice-add 'jupyter-repl-cell-count :around
+              #'my/jupyter-repl-cell-count)
+  (advice-add 'jupyter-repl-insert-prompt :around
+              #'my/jupyter-repl-insert-prompt)
+  (advice-add 'jupyter-repl-update-cell-count :around
+              #'my/jupyter-repl-update-cell-count)
+  (advice-add 'jupyter-repl-sync-execution-state :override
+              #'my/jupyter-repl-sync-execution-state))
 
 (setq lsp-bridge-user-langserver-dir "~/.config/lsp-bridge/langserver")
 (require 'lsp-bridge)

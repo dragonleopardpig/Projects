@@ -48,7 +48,34 @@
 
 ;; * Org Mode Startup
 (setq org-startup-folded t)
-(add-hook 'org-mode-hook 'mixed-pitch-mode)
+(with-eval-after-load 'mixed-pitch
+  ;; Keep Org block delimiters on a monospaced face. Mixed-pitch also forces
+  ;; fixed-pitch faces back to the default weight, so reapply bold afterwards.
+  (dolist (face '(org-block-begin-line
+                  org-block-end-line
+                  org-modern-block-name))
+    (add-to-list 'mixed-pitch-fixed-pitch-faces face)))
+
+(defvar-local my/org-block-face-cookies nil)
+
+(defun my/org-remap-block-delimiter-faces ()
+  "Force Org block delimiter faces to stay bold after mixed-pitch remapping."
+  (mapc #'face-remap-remove-relative my/org-block-face-cookies)
+  (setq my/org-block-face-cookies nil)
+  (dolist (face '(org-block-begin-line
+                  org-block-end-line
+                  org-modern-block-name))
+    (push (face-remap-add-relative face :weight 'bold :slant 'italic)
+          my/org-block-face-cookies)))
+
+(defun my/org-enable-mixed-pitch ()
+  "Enable mixed-pitch in Org and restore block delimiter emphasis."
+  (mixed-pitch-mode 1)
+  (when (fboundp 'my/heaven-and-hell-apply-org-block-faces)
+    (my/heaven-and-hell-apply-org-block-faces))
+  (my/org-remap-block-delimiter-faces))
+
+(add-hook 'org-mode-hook #'my/org-enable-mixed-pitch)
 (add-hook 'org-mode-hook 'follow-mode)
 (setq org-babel-min-lines-for-block-output 1000)
 
@@ -116,6 +143,31 @@
 ;; * Org Agenda
 (setq org-agenda-include-diary t)
 
+(defun my/org-tempo-tab ()
+  "Expand Org tempo templates before other TAB handlers."
+  (interactive)
+  (if (and (derived-mode-p 'org-mode)
+           (save-excursion
+             (skip-chars-backward "A-Za-z")
+             (eq (char-before) ?<))
+           (org-tempo-complete-tag))
+      t
+    (org-cycle)))
+
+(defun my/org-template-keybindings ()
+  "Prefer Org tempo expansion for TAB in Org buffers."
+  (local-set-key (kbd "TAB") #'my/org-tempo-tab)
+  (local-set-key (kbd "<tab>") #'my/org-tempo-tab)
+  (local-set-key (kbd "C-i") #'my/org-tempo-tab))
+
+(with-eval-after-load 'org
+  (require 'org-tempo)
+  (add-to-list 'org-structure-template-alist '("r" . "src rust"))
+  (add-to-list 'org-structure-template-alist '("jp" . "src jupyter-python")))
+
+(add-hook 'org-mode-hook #'my/org-template-keybindings)
+
+
 ;; * Treemacs
 ;; adjust the size in increments with 'shift-<' and 'shift->'
 ;; '?' to see all shortcuts. 'M-H' move UP rootdir, 'M-L' move DOWN rootdir
@@ -125,6 +177,48 @@
 
 ;; * Python
 (setq python-indent-guess-indent-offset nil)
+
+(defun my/python-project-root ()
+  "Return the current Python project root."
+  (or (when-let ((project (project-current nil)))
+        (project-root project))
+      (locate-dominating-file default-directory ".envrc")
+      (locate-dominating-file default-directory "devenv.nix")
+      default-directory))
+
+(defun my/run-current-python-file ()
+  "Run the current Python file from the project root via `compile'."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Current buffer is not visiting a file"))
+  (unless (derived-mode-p 'python-mode 'python-ts-mode)
+    (user-error "Current buffer is not a Python buffer"))
+  (save-buffer)
+  (let* ((project-root (expand-file-name (my/python-project-root)))
+         (file (file-relative-name buffer-file-name project-root))
+         (default-directory project-root)
+         (venv-python (expand-file-name ".devenv/state/venv/bin/python" project-root))
+         (command
+          (cond
+           ((file-executable-p venv-python)
+            (format "%s %s"
+                    (shell-quote-argument venv-python)
+                    (shell-quote-argument file)))
+           ((executable-find "direnv")
+            (format "direnv exec %s python %s"
+                    (shell-quote-argument project-root)
+                    (shell-quote-argument file)))
+           (t
+            (format "python %s" (shell-quote-argument file))))))
+    (compile command)))
+
+(defun my/python-run-keybindings ()
+  "Bind project-local Python run commands in the current buffer."
+  (local-set-key (kbd "C-c C-r") #'my/run-current-python-file)
+  (local-set-key (kbd "C-c C-k") #'my/run-current-python-file))
+
+(add-hook 'python-mode-hook #'my/python-run-keybindings)
+(add-hook 'python-ts-mode-hook #'my/python-run-keybindings)
 
 ;; * Rust / Org src indentation
 (defun my/prog-ret-indents ()
@@ -161,43 +255,12 @@
           (indent-to (+ base-indent extra-indent)))))
     (org-return nil)))
 
-(defun my/org-tab-dwim ()
-  "Accept ACM completion when visible, else defer to Org TAB."
-  (interactive)
-  (if (and (boundp 'acm-menu-frame)
-           (fboundp 'acm-frame-visible-p)
-           (acm-frame-visible-p acm-menu-frame))
-      (acm-complete)
-    (call-interactively
-     (or (lookup-key org-mode-map (kbd "<tab>"))
-         (lookup-key org-mode-map (kbd "TAB"))
-         #'org-cycle))))
-
-(defun my/acm-menu-visible-p ()
-  "Return non-nil when the lsp-bridge ACM popup is visible."
-  (and (boundp 'acm-menu-frame)
-       (fboundp 'acm-frame-visible-p)
-       (acm-frame-visible-p acm-menu-frame)))
-
-(defun my/yas-maybe-expand-with-acm (orig-fun &rest args)
-  "Prefer ACM completion over YAS expansion when the popup is visible."
-  (if (my/acm-menu-visible-p)
-      (acm-complete)
-    (apply orig-fun args)))
-
-(with-eval-after-load 'yasnippet
-  (advice-add 'yas-maybe-expand :around #'my/yas-maybe-expand-with-acm)
-  (advice-add 'yas-expand :around #'my/yas-maybe-expand-with-acm))
-
 (defvar my/org-src-return-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") #'my/org-src-return-dwim)
     (define-key map (kbd "<return>") #'my/org-src-return-dwim)
     (define-key map (kbd "C-m") #'my/org-src-return-dwim)
     (define-key map [return] #'my/org-src-return-dwim)
-    (define-key map (kbd "TAB") #'my/org-tab-dwim)
-    (define-key map (kbd "<tab>") #'my/org-tab-dwim)
-    (define-key map (kbd "C-i") #'my/org-tab-dwim)
     map))
 
 (define-minor-mode my/org-src-return-mode

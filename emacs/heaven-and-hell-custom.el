@@ -1,6 +1,49 @@
 ;;; heaven-and-hell-custom.el --- Custom org-mode styling for theme switching -*- lexical-binding: t; -*-
 
 ;; Custom function to apply org-mode faces based on theme type
+(defun my/heaven-and-hell-apply-org-block-faces ()
+  "Reapply Org block delimiter faces after theme and mode face remapping."
+  (if (eq heaven-and-hell-theme-type 'dark)
+      (progn
+        (set-face-attribute 'org-block-begin-line nil
+                            :inherit '(fixed-pitch)
+                            :underline t
+                            :overline nil
+                            :foreground "pink"
+                            :background nil
+                            :extend t)
+        (set-face-attribute 'org-block-end-line nil
+                            :inherit '(fixed-pitch)
+                            :underline nil
+                            :overline t
+                            :foreground "pink"
+                            :background nil
+                            :extend t)
+        (when (facep 'org-modern-block-name)
+          (set-face-attribute 'org-modern-block-name nil
+                              :inherit '(fixed-pitch)
+                              :foreground "pink"
+                              :background nil)))
+    (set-face-attribute 'org-block-begin-line nil
+                        :inherit '(fixed-pitch)
+                        :underline t
+                        :overline nil
+                        :foreground "orange red"
+                        :background "white"
+                        :extend t)
+    (set-face-attribute 'org-block-end-line nil
+                        :inherit '(fixed-pitch)
+                        :underline nil
+                        :overline t
+                        :foreground "orange red"
+                        :background "white"
+                        :extend t)
+    (when (facep 'org-modern-block-name)
+      (set-face-attribute 'org-modern-block-name nil
+                          :inherit '(fixed-pitch)
+                          :foreground "orange red"
+                          :background "white"))))
+
 (defun my/heaven-and-hell-apply-org-faces ()
   "Apply custom org-mode faces when switching between light and dark themes."
   (if (eq heaven-and-hell-theme-type 'dark)
@@ -17,22 +60,6 @@
                 ("nix" (:background "maroon" :extend t))
                 ("lisp" (:background "#232627" :extend t))))
         (custom-set-faces
-         '(org-block-begin-line
-           ((t (:underline t
-                :overline nil
-                :foreground "pink"
-                :background nil
-                :italic t
-                :bold t
-                :extend t))))
-         '(org-block-end-line
-           ((t (:underline nil
-                :overline t
-                :foreground "pink"
-                :background nil
-                :italic t
-                :bold t
-                :extend t))))
          '(org-level-1 ((t (:foreground "salmon" :italic t :bold t)))))
         (set-background-color "#232627"))
 
@@ -49,22 +76,6 @@
               ("nix" (:background "light yellow" :extend t))
               ("lisp" (:background "honeydew" :extend t))))
       (custom-set-faces
-       '(org-block-begin-line
-         ((t (:underline t
-              :overline nil
-              :foreground "orange red"
-              :background "white"
-              :italic t
-              :bold t
-              :extend t))))
-       '(org-block-end-line
-         ((t (:underline nil
-              :overline t
-              :foreground "orange red"
-              :background "white"
-              :italic t
-              :bold t
-              :extend t))))
        '(org-level-1
          ((t (:foreground "red3"
               :italic t))))
@@ -72,6 +83,8 @@
          ((t (:foreground "#008080"
               :bold t)))))
       (set-background-color "white")))
+
+  (my/heaven-and-hell-apply-org-block-faces)
 
   ;; Refresh org-mode buffers if any are open
   (dolist (buf (buffer-list))
@@ -86,6 +99,8 @@
 (advice-add 'heaven-and-hell-clean-load-themes :after
             (lambda (&rest _args)
               (my/heaven-and-hell-apply-org-faces)))
+
+(add-hook 'org-mode-hook #'my/heaven-and-hell-apply-org-block-faces)
 
 (provide 'heaven-and-hell-custom)
 ;;; heaven-and-hell-custom.el ends here
