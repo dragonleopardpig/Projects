@@ -131,6 +131,30 @@ in
     terminal = false;
   };
 
+  home.file.".local/bin/filen-desktop" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      export XDG_CURRENT_DESKTOP=Hyprland
+      exec ${pkgs.filen-desktop}/bin/filen-desktop "$@"
+    '';
+  };
+
+  xdg.desktopEntries.filen-desktop = {
+    name = "Filen Desktop";
+    exec = "/home/thinky/.local/bin/filen-desktop";
+    icon = "filen-desktop";
+    comment = "Encrypted Cloud Storage";
+    categories = [ "Network" "FileTransfer" "Utility" ];
+    settings = {
+      Keywords = "cloud;storage;encrypted;";
+      StartupWMClass = "filen-desktop";
+    };
+    terminal = false;
+  };
+
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
@@ -148,6 +172,8 @@ in
   };
   
   xdg.configFile."uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
+  xdg.dataFile."xdg-desktop-portal/portals/gtk.portal".source =
+    "${pkgs.xdg-desktop-portal-gtk}/share/xdg-desktop-portal/portals/gtk.portal";
   xdg.configFile."distrobox/distrobox.conf".force = true;
   xdg.configFile."distrobox/distrobox.conf".text = ''
     container_additional_volumes="/nix/store:/nix/store:ro /etc/profiles/per-user:/etc/profiles/per-user:ro /etc/static/profiles/per-user:/etc/static/profiles/per-user:ro"
@@ -794,6 +820,7 @@ in
     mpv
     mpvpaper
     gnome-disk-utility
+    xdg-desktop-portal-gtk
   ];
 
   # basic configuration of git, please change to your own
@@ -1129,6 +1156,23 @@ in
     enable = true;
     runAsService = true;
   };
+
+  home.activation.syncHyprpanelWeatherKey = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    secrets_dir="$HOME/.config/secrets"
+    raw_key_file="$secrets_dir/weather-api-key"
+    json_key_file="$secrets_dir/weather-api-key.json"
+
+    mkdir -p "$secrets_dir"
+
+    if [ -f "$raw_key_file" ]; then
+      api_key="$(${pkgs.coreutils}/bin/tr -d '\n\r' < "$raw_key_file")"
+      ${pkgs.jq}/bin/jq -n --arg weather_api_key "$api_key" \
+        '{ weather_api_key: $weather_api_key }' > "$json_key_file"
+      chmod 600 "$json_key_file"
+    else
+      rm -f "$json_key_file"
+    fi
+  '';
 
   home.activation.createProjectsDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     mkdir -p "$HOME/Projects"

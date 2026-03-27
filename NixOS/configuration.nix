@@ -181,6 +181,56 @@
 
   };
 
+  xdg.portal = {
+    enable = true;
+    xdgOpenUsePortal = true;
+    extraPortals = with pkgs; [
+      xdg-desktop-portal-gtk
+    ];
+    config = {
+      common = {
+        default = [ "hyprland" "gtk" ];
+        "org.freedesktop.impl.portal.FileChooser" = [ "gtk" ];
+        "org.freedesktop.impl.portal.AppChooser" = [ "gtk" ];
+        "org.freedesktop.impl.portal.Print" = [ "gtk" ];
+      };
+      hyprland = {
+        default = [ "hyprland" "gtk" ];
+        "org.freedesktop.impl.portal.FileChooser" = [ "gtk" ];
+        "org.freedesktop.impl.portal.AppChooser" = [ "gtk" ];
+        "org.freedesktop.impl.portal.Print" = [ "gtk" ];
+      };
+    };
+  };
+
+  systemd.user.services.xdg-desktop-portal-gtk = {
+    partOf = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" ];
+    wantedBy = [ "graphical-session.target" ];
+    serviceConfig = {
+      Environment = [
+        "GDK_BACKEND=wayland"
+        "DISPLAY="
+        "WAYLAND_DISPLAY=wayland-1"
+        "XDG_CURRENT_DESKTOP=Hyprland"
+        "XDG_SESSION_TYPE=wayland"
+        "XDG_DATA_DIRS=%h/.nix-profile/share:/nix/profile/share:%h/.local/state/nix/profile/share:/etc/profiles/per-user/%u/share:/nix/var/nix/profiles/default/share:/run/current-system/sw/share"
+      ];
+    };
+  };
+
+  systemd.user.services.xdg-desktop-portal = {
+    after = [ "xdg-desktop-portal-gtk.service" ];
+    wants = [ "xdg-desktop-portal-gtk.service" ];
+    serviceConfig = {
+      Environment = [
+        "XDG_CURRENT_DESKTOP=Hyprland"
+        "XDG_SESSION_TYPE=wayland"
+        "XDG_DATA_DIRS=%h/.nix-profile/share:/nix/profile/share:%h/.local/state/nix/profile/share:/etc/profiles/per-user/%u/share:/nix/var/nix/profiles/default/share:/run/current-system/sw/share"
+      ];
+    };
+  };
+
   programs.dconf.enable = true;
 
   # Enable CUPS to print documents.
@@ -367,10 +417,6 @@
     grim                       # Wayland screenshot utility
     wl-clipboard               # Wayland clipboard utilities (wl-copy, wl-paste)
     libnotify                  # Desktop notification sending (notify-send)
-    xdg-desktop-portal         # Desktop integration portal (file picker, etc.)
-    xdg-desktop-portal-hyprland # Hyprland-specific portal backend
-    xdg-desktop-portal-gtk     # GTK portal backend (file dialogs)
-
     # ── Themes & Appearance ──
     orchis-theme               # GTK theme (Orchis)
     tela-icon-theme            # Tela icon theme
