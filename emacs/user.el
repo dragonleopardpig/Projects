@@ -57,6 +57,7 @@
     (add-to-list 'mixed-pitch-fixed-pitch-faces face)))
 
 (defvar-local my/org-block-face-cookies nil)
+(defvar-local my/org-src-keyword-face-cookies nil)
 
 (defun my/org-remap-block-delimiter-faces ()
   "Force Org block delimiter faces to stay bold after mixed-pitch remapping."
@@ -68,12 +69,21 @@
     (push (face-remap-add-relative face :weight 'bold :slant 'italic)
           my/org-block-face-cookies)))
 
+(defun my/org-remap-src-keyword-faces ()
+  "Make source-block keyword faces bold italic in Org buffers."
+  (mapc #'face-remap-remove-relative my/org-src-keyword-face-cookies)
+  (setq my/org-src-keyword-face-cookies nil)
+  (dolist (face '(font-lock-keyword-face))
+    (push (face-remap-add-relative face :weight 'bold :slant 'italic)
+          my/org-src-keyword-face-cookies)))
+
 (defun my/org-enable-mixed-pitch ()
   "Enable mixed-pitch in Org and restore block delimiter emphasis."
   (mixed-pitch-mode 1)
   (when (fboundp 'my/heaven-and-hell-apply-org-block-faces)
     (my/heaven-and-hell-apply-org-block-faces))
-  (my/org-remap-block-delimiter-faces))
+  (my/org-remap-block-delimiter-faces)
+  (my/org-remap-src-keyword-faces))
 
 (add-hook 'org-mode-hook #'my/org-enable-mixed-pitch)
 (add-hook 'org-mode-hook 'follow-mode)

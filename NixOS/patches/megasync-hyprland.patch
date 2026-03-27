@@ -1,0 +1,486 @@
+diff --git a/cmake/modules/desktopapp_options.cmake b/cmake/modules/desktopapp_options.cmake
+index 7d48db002..b506443d7 100644
+--- a/cmake/modules/desktopapp_options.cmake
++++ b/cmake/modules/desktopapp_options.cmake
+@@ -32,12 +32,21 @@ endif()
+ # MEGAsdk options
+ # Configure MEGAsdk specific options for MEGAchat and then load the rest of MEGAsdk configuration
+ if (ENABLE_DESKTOP_APP)
+-    set(USE_LIBUV ON) # Used by the Qt Desktop App: Includes the library and turns on internal web and ftp server functionality in the SDK.
+-    set(ENABLE_LOG_PERFORMANCE ON)
+-    set(ENABLE_QT_BINDINGS ON)
+-    set(ENABLE_ISOLATED_GFX ON)
+-    set(ENABLE_MEDIA_FILE_METADATA ON)
++    if (NOT DEFINED USE_LIBUV)
++        set(USE_LIBUV ON) # Used by the Qt Desktop App: Includes the library and turns on internal web and ftp server functionality in the SDK.
++    endif()
++    if (NOT DEFINED ENABLE_LOG_PERFORMANCE)
++        set(ENABLE_LOG_PERFORMANCE ON)
++    endif()
++    if (NOT DEFINED ENABLE_QT_BINDINGS)
++        set(ENABLE_QT_BINDINGS ON)
++    endif()
++    if (NOT DEFINED ENABLE_ISOLATED_GFX)
++        set(ENABLE_ISOLATED_GFX ON)
++    endif()
++    if (NOT DEFINED ENABLE_MEDIA_FILE_METADATA)
++        set(ENABLE_MEDIA_FILE_METADATA ON)
++    endif()
+ endif()
+ 
+ include(sdklib_options)
+-
+diff --git a/src/MEGASync/gui/backups/BackupsQmlDialog.cpp b/src/MEGASync/gui/backups/BackupsQmlDialog.cpp
+index bfdae924d..721eda2c2 100644
+--- a/src/MEGASync/gui/backups/BackupsQmlDialog.cpp
++++ b/src/MEGASync/gui/backups/BackupsQmlDialog.cpp
+@@ -7,11 +7,12 @@
+ 
+ bool BackupsQmlDialog::event(QEvent* event)
+ {
+-    if (event->type() == QEvent::Close || event->type() == QEvent::Show)
++    if (event->type() == QEvent::Close || event->type() == QEvent::Show ||
++        event->type() == QEvent::Hide)
+     {
+         if (auto dialog = DialogOpener::findDialog<SettingsDialog>())
+         {
+-            dialog->getDialog()->setSyncAddButtonEnabled(event->type() == QEvent::Close,
++            dialog->getDialog()->setSyncAddButtonEnabled(event->type() != QEvent::Show,
+                                                          SettingsDialog::Tabs::BACKUP_TAB);
+         }
+     }
+diff --git a/src/MEGASync/gui/onboarding/GuestContent.cpp b/src/MEGASync/gui/onboarding/GuestContent.cpp
+index 464d6b452..9e6a1a453 100644
+--- a/src/MEGASync/gui/onboarding/GuestContent.cpp
++++ b/src/MEGASync/gui/onboarding/GuestContent.cpp
+@@ -2,9 +2,14 @@
+ 
+ #include "GuestQmlDialog.h"
+ #include "MegaApplication.h"
++#include "DialogOpener.h"
++#include "Onboarding.h"
+ #include "QmlDialogManager.h"
++#include "QmlDialogWrapper.h"
+ 
++#include <QApplication>
+ #include <QQmlEngine>
++#include <QTimer>
+ 
+ GuestContent::GuestContent(QObject *parent)
+     : QMLComponent(parent)
+@@ -16,7 +21,26 @@ GuestContent::GuestContent(QObject *parent)
+ void GuestContent::onInitialPageButtonClicked()
+ {
+ #ifndef WIN32
+-    QmlDialogManager::instance()->openOnboardingDialog();
++    mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_INFO, "Guest initial button clicked");
++
++    DialogOpener::removeDialogByClass<QmlDialogWrapper<GuestContent>>();
++    qApp->processEvents();
++
++    // After logout the previous onboarding wrapper can remain around in a hidden state.
++    // Remove it completely before creating a fresh one, otherwise the close lifecycle can
++    // race the new dialog and make it disappear immediately.
++    DialogOpener::removeDialogByClass<QmlDialogWrapper<Onboarding>>();
++    qApp->processEvents();
++
++    QTimer::singleShot(
++        150,
++        []()
++        {
++            mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_INFO,
++                               "Opening onboarding dialog from guest flow");
++            QmlDialogManager::instance()->openOnboardingDialog(true);
++            QmlDialogManager::instance()->raiseOnboardingDialog();
++        });
+ #endif
+ }
+ 
+diff --git a/src/MEGASync/gui/onboarding/OnboardingQmlDialog.cpp b/src/MEGASync/gui/onboarding/OnboardingQmlDialog.cpp
+index 07111f256..4d2cb414c 100644
+--- a/src/MEGASync/gui/onboarding/OnboardingQmlDialog.cpp
++++ b/src/MEGASync/gui/onboarding/OnboardingQmlDialog.cpp
+@@ -55,6 +55,11 @@ void OnboardingQmlDialog::forceClose()
+ 
+ void OnboardingQmlDialog::raise()
+ {
++    if (Platform::getInstance()->isTilingWindowManager())
++    {
++        setFlags(flags() | Qt::WindowStaysOnTopHint);
++    }
++
+     // The following four lines are required by Ubuntu to bring the window to the front and
+     // move it to the center of the current screen, if the screen is a part of a virtual desktop or multiple screen
+     // we will need add the current screen offset(topleft) to the calculated central position.
+@@ -73,8 +78,24 @@ void OnboardingQmlDialog::raise()
+ 
+ bool OnboardingQmlDialog::event(QEvent* event)
+ {
++    if (event->type() == QEvent::Show)
++    {
++        mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_INFO, "Onboarding dialog shown");
++    }
++    else if (event->type() == QEvent::Hide)
++    {
++        mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_INFO, "Onboarding dialog hidden");
++    }
++
+     if (event->type() == QEvent::Close)
+     {
++        mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_INFO,
++                           QString::fromUtf8("Onboarding dialog close event loggingIn=%1 creatingAccount=%2 forceClose=%3")
++                               .arg(mLoggingIn)
++                               .arg(mCreatingAccount)
++                               .arg(mForceClose)
++                               .toUtf8()
++                               .constData());
+         requestPinOnTaskbar();
+     }
+ 
+diff --git a/src/MEGASync/gui/qml/QmlDialog.cpp b/src/MEGASync/gui/qml/QmlDialog.cpp
+index 911a2e1f9..8940bd1b6 100644
+--- a/src/MEGASync/gui/qml/QmlDialog.cpp
++++ b/src/MEGASync/gui/qml/QmlDialog.cpp
+@@ -1,8 +1,23 @@
+ #include "QmlDialog.h"
+ 
+ #include <QEvent>
++#include <QGuiApplication>
+ #include <QScreen>
+ 
++namespace
++{
++bool isHyprlandSession()
++{
++    if (qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE"))
++    {
++        return true;
++    }
++
++    const auto desktop = qEnvironmentVariable("XDG_CURRENT_DESKTOP");
++    return desktop.contains(QString::fromUtf8("Hyprland"), Qt::CaseInsensitive);
++}
++}
++
+ namespace
+ {
+ const QLatin1String DEFAULT_RES_MEGA_ICON(":/images/app_ico.ico");
+@@ -64,9 +79,23 @@ void QmlDialog::centerAndRaise()
+     int yPos(geometry.y() +
+              static_cast<int>(geometry.height() * CENTERING_FACTOR - height() * CENTERING_FACTOR));
+ 
+-    hide();
+-    QmlDialog::setPosition(xPos, yPos);
+-    show();
++    if (isHyprlandSession())
++    {
++        if (width() <= 1 || height() <= 1)
++        {
++            resize(minimumWidth(), minimumHeight());
++        }
++
++        QmlDialog::showNormal();
++        QmlDialog::setPosition(xPos, yPos);
++        QmlDialog::setVisible(true);
++    }
++    else
++    {
++        hide();
++        QmlDialog::setPosition(xPos, yPos);
++        show();
++    }
+ 
+     // The following two lines are required by Windows (activate) and macOS (raise)
+     QmlDialog::requestActivate();
+diff --git a/src/MEGASync/gui/qml/QmlDialogManager.cpp b/src/MEGASync/gui/qml/QmlDialogManager.cpp
+index c2e984ad2..d507e61a7 100644
+--- a/src/MEGASync/gui/qml/QmlDialogManager.cpp
++++ b/src/MEGASync/gui/qml/QmlDialogManager.cpp
+@@ -61,6 +61,26 @@ bool QmlDialogManager::openOnboardingDialog(bool force)
+             onboardingInfo->setIgnoreCloseAllAction(true);
+         }
+     }
++
++    if (auto dialog = DialogOpener::findDialog<QmlDialogWrapper<Onboarding>>())
++    {
++        dialog->show();
++        dialog->getDialog()->activateWindow();
++        dialog->raise();
++
++        if (auto onboardingWindow =
++                dynamic_cast<OnboardingQmlDialog*>(dialog->getDialog()->windowHandle()))
++        {
++            if (onboardingWindow->width() <= 1 || onboardingWindow->height() <= 1)
++            {
++                onboardingWindow->resize(onboardingWindow->minimumWidth(),
++                                         onboardingWindow->minimumHeight());
++            }
++            onboardingWindow->showNormal();
++            onboardingWindow->centerAndRaise();
++        }
++    }
++
+     emit openOnboardingDialogSignal();
+     return true;
+ }
+@@ -68,6 +88,14 @@ bool QmlDialogManager::openOnboardingDialog(bool force)
+ bool QmlDialogManager::raiseGuestDialog()
+ {
+     bool raisedGuestDialog = false;
++
++    if (Preferences::instance()->getSession().isEmpty())
++    {
++        openOnboardingDialog(true);
++        raiseOnboardingDialog();
++        return true;
++    }
++
+     if (MegaSyncApp->getAccountStatusController()->isAccountBlocked() ||
+         (MegaSyncApp->getLoginController() &&
+          MegaSyncApp->getLoginController()->getState() != LoginController::FETCH_NODES_FINISHED) ||
+diff --git a/src/MEGASync/gui/qml/components/buttons/Button.qml b/src/MEGASync/gui/qml/components/buttons/Button.qml
+index cf73068e4..adb754245 100644
+--- a/src/MEGASync/gui/qml/components/buttons/Button.qml
++++ b/src/MEGASync/gui/qml/components/buttons/Button.qml
+@@ -1,8 +1,6 @@
+ import QtQuick 2.15
+ import QtQuick.Controls 2.15 as Qml
+ import QtQuick.Layouts 1.15
+-import QtGraphicalEffects 1.15
+-
+ import common 1.0
+ 
+ import components.texts 1.0 as Texts
+@@ -173,26 +171,9 @@ Qml.RoundButton {
+             }
+             radius: sizes.radius
+             color: getBackgroundColor()
+-            layer {
+-                enabled: true
+-                effect: OpacityMask {
+-                    id: mask
+-
+-                    maskSource: Item {
+-                        width: backgroundRect.width
+-                        height: backgroundRect.height
+-
+-                        Rectangle {
+-                            id: maskRect
+-
+-                            anchors.centerIn: parent
+-                            width:  backgroundRect.width
+-                            height: backgroundRect.height
+-                            radius: sizes.radius
+-                        }
+-                    }
+-                }
+-            }
++            // GraphicalEffects-based masking renders unreliably with the Linux software
++            // backend. Plain clipping keeps the rounded button visible on Hyprland.
++            clip: true
+ 
+             Progress {
+                 id: backgroundProgress
+diff --git a/src/MEGASync/gui/qml/onboard/LoginPage.qml b/src/MEGASync/gui/qml/onboard/LoginPage.qml
+index 8bdfe9958..422a9e70b 100644
+--- a/src/MEGASync/gui/qml/onboard/LoginPage.qml
++++ b/src/MEGASync/gui/qml/onboard/LoginPage.qml
+@@ -223,7 +223,8 @@ LoginPageForm {
+ 
+         function onLogout() {
+             password.text = "";
+-            window.forceClose();
++            // After logout we want the login window to remain usable if it is opened from the
++            // guest tray flow. Force-closing it here races that flow and makes the dialog flash.
+         }
+     }
+ 
+diff --git a/src/MEGASync/gui/syncs/SyncsQmlDialog.cpp b/src/MEGASync/gui/syncs/SyncsQmlDialog.cpp
+index d4f015f12..b7e793264 100644
+--- a/src/MEGASync/gui/syncs/SyncsQmlDialog.cpp
++++ b/src/MEGASync/gui/syncs/SyncsQmlDialog.cpp
+@@ -8,12 +8,13 @@
+ 
+ bool SyncsQmlDialog::event(QEvent* event)
+ {
+-    if (event->type() == QEvent::Close || event->type() == QEvent::Show)
++    if (event->type() == QEvent::Close || event->type() == QEvent::Show ||
++        event->type() == QEvent::Hide)
+     {
+         if (auto dialog = DialogOpener::findDialog<SettingsDialog>())
+         {
+             dialog->getDialog()->setSyncAddButtonEnabled(
+-                event->type() == QEvent::Close,
++                event->type() != QEvent::Show,
+                 isBackup() ? SettingsDialog::Tabs::BACKUP_TAB : SettingsDialog::Tabs::SYNCS_TAB);
+         }
+ 
+diff --git a/src/MEGASync/platform/linux/ExtServer.cpp b/src/MEGASync/platform/linux/ExtServer.cpp
+index 020ea06e5..dfba696cb 100644
+--- a/src/MEGASync/platform/linux/ExtServer.cpp
++++ b/src/MEGASync/platform/linux/ExtServer.cpp
+@@ -201,7 +201,8 @@ const char *ExtServer::GetAnswerToRequest(const char *buf)
+             {
+                 actionString = CommonMessages::createShellExtensionActionLabel(actionString, numFiles, numFolders);
+             }
+-            strncpy(out, actionString.toUtf8().constData(), BUFSIZE);
++            const QByteArray actionUtf8 = actionString.toUtf8();
++            snprintf(out, BUFSIZE, "%s", actionUtf8.constData());
+             break;
+         }
+         case 'F':
+diff --git a/src/MEGASync/platform/linux/PlatformImplementation.cpp b/src/MEGASync/platform/linux/PlatformImplementation.cpp
+index 9b32dace7..f1ab3f314 100644
+--- a/src/MEGASync/platform/linux/PlatformImplementation.cpp
++++ b/src/MEGASync/platform/linux/PlatformImplementation.cpp
+@@ -943,6 +943,31 @@ void PlatformImplementation::setRenderingBackend() const
+         qputenv("LIBGL_ALWAYS_SOFTWARE", "1");
+     }
+ 
++    const QByteArray sessionType = qgetenv("XDG_SESSION_TYPE");
++    const QByteArray currentDesktop = qgetenv("XDG_CURRENT_DESKTOP").toLower();
++    const QByteArray waylandDisplay = qgetenv("WAYLAND_DISPLAY");
++    const bool likelyWaylandSession =
++        sessionType == "wayland" || !waylandDisplay.isEmpty() ||
++        currentDesktop.contains("hyprland");
++
++    if (!qEnvironmentVariableIsSet("MEGA_USE_SOFTWARE_OPENGL"))
++    {
++        if (likelyWaylandSession)
++        {
++            MegaApi::log(MegaApi::LOG_LEVEL_INFO,
++                         "Enabling software OpenGL fallback on Linux");
++            QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
++            qputenv("QT_QUICK_BACKEND", "software");
++        }
++    }
++    else if (qEnvironmentVariable("MEGA_USE_SOFTWARE_OPENGL") == QLatin1String("1"))
++    {
++        MegaApi::log(MegaApi::LOG_LEVEL_INFO,
++                     "Enabling software OpenGL fallback on Linux due to env override");
++        QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
++        qputenv("QT_QUICK_BACKEND", "software");
++    }
++
+     // Improve QtQuickWidget compatibility
+     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+ }
+@@ -1273,5 +1298,18 @@ Preferences::ThemeAppeareance PlatformImplementation::getPanelTheme() const
+         return Preferences::ThemeAppeareance::DARK;
+     }
+ 
+-    return effectiveTheme();
++    const auto theme = effectiveTheme();
++    if (theme != Preferences::ThemeAppeareance::UNINITIALIZED)
++    {
++        return theme;
++    }
++
++    // Hyprland commonly exposes no theme metadata. Default to a light tray icon so it
++    // remains visible on the typical dark / translucent bar setup.
++    if (desktop.contains(QLatin1String("HYPRLAND")))
++    {
++        return Preferences::ThemeAppeareance::DARK;
++    }
++
++    return Preferences::ThemeAppeareance::LIGHT;
+ }
+diff --git a/src/MEGASync/syncs/control/CreateRemoveBackupsManager.cpp b/src/MEGASync/syncs/control/CreateRemoveBackupsManager.cpp
+index 243dd6144..869156484 100644
+--- a/src/MEGASync/syncs/control/CreateRemoveBackupsManager.cpp
++++ b/src/MEGASync/syncs/control/CreateRemoveBackupsManager.cpp
+@@ -3,8 +3,37 @@
+ #include "BackupCandidatesComponent.h"
+ #include "DialogOpener.h"
+ #include "QmlDialogWrapper.h"
++#include "QmlDialog.h"
+ #include "SyncSettings.h"
+ 
++#include <QPointer>
++
++namespace
++{
++void surfaceBackupsDialog(QPointer<QmlDialogWrapper<BackupCandidatesComponent>> dialog)
++{
++    if (!dialog)
++    {
++        return;
++    }
++
++    dialog->show();
++    dialog->activateWindow();
++    dialog->raise();
++
++    if (auto backupsWindow = dynamic_cast<QmlDialog*>(dialog->windowHandle()))
++    {
++        if (backupsWindow->width() <= 1 || backupsWindow->height() <= 1)
++        {
++            backupsWindow->resize(backupsWindow->minimumWidth(), backupsWindow->minimumHeight());
++        }
++
++        backupsWindow->showNormal();
++        backupsWindow->centerAndRaise();
++    }
++}
++}
++
+ void CreateRemoveBackupsManager::addBackup(SyncInfo::SyncOrigin origin,
+                                            const QStringList& localFolders)
+ {
+@@ -61,4 +90,5 @@ void CreateRemoveBackupsManager::showBackupDialog(SyncInfo::SyncOrigin origin,
+     }
+ 
+     DialogOpener::showDialog(backupsDialog);
++    surfaceBackupsDialog(backupsDialog);
+ }
+diff --git a/src/MEGASync/syncs/control/CreateRemoveSyncsManager.cpp b/src/MEGASync/syncs/control/CreateRemoveSyncsManager.cpp
+index a7ec1d3df..53ead7bfe 100644
+--- a/src/MEGASync/syncs/control/CreateRemoveSyncsManager.cpp
++++ b/src/MEGASync/syncs/control/CreateRemoveSyncsManager.cpp
+@@ -2,11 +2,40 @@
+ 
+ #include "DialogOpener.h"
+ #include "QmlDialogWrapper.h"
++#include "QmlDialog.h"
+ #include "RemoveSyncConfirmationDialog.h"
+ #include "SyncController.h"
+ #include "SyncsComponent.h"
+ #include "SyncSettings.h"
+ 
++#include <QPointer>
++
++namespace
++{
++void surfaceSyncsDialog(QPointer<QmlDialogWrapper<SyncsComponent>> dialog)
++{
++    if (!dialog)
++    {
++        return;
++    }
++
++    dialog->show();
++    dialog->activateWindow();
++    dialog->raise();
++
++    if (auto syncsWindow = dynamic_cast<QmlDialog*>(dialog->windowHandle()))
++    {
++        if (syncsWindow->width() <= 1 || syncsWindow->height() <= 1)
++        {
++            syncsWindow->resize(syncsWindow->minimumWidth(), syncsWindow->minimumHeight());
++        }
++
++        syncsWindow->showNormal();
++        syncsWindow->centerAndRaise();
++    }
++}
++}
++
+ void CreateRemoveSyncsManager::addSync(SyncInfo::SyncOrigin origin,
+                                        mega::MegaHandle handle,
+                                        const QString& localPath)
+@@ -105,4 +134,5 @@ void CreateRemoveSyncsManager::showSyncDialog(SyncInfo::SyncOrigin origin,
+     }
+ 
+     DialogOpener::showDialog(syncsDialog);
++    surfaceSyncsDialog(syncsDialog);
+ }

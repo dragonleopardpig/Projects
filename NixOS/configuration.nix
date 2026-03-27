@@ -276,6 +276,7 @@
         "claude-monitor"
         "codex"
         "corefonts"
+        "megasync"
         "nvidia-settings"
         "nvidia-x11"
         "protonvpn-gui"

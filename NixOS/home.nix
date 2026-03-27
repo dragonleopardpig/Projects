@@ -3,6 +3,10 @@ let
   hyprpanelTheme =
     builtins.fromJSON
       (builtins.readFile ./assets/hyprpanel-cyberpunk.json);
+  nemoMegaLibraryPath = lib.makeLibraryPath [
+    pkgs.nemo
+    pkgs.glib
+  ];
 in
 {
   home.username = "thinky";
@@ -86,7 +90,32 @@ in
   home.file.".local/bin/nemo-x11" = {
     executable = true;
     text = ''
-      #!/bin/sh
+      #!/usr/bin/env bash
+      set -eu
+
+      DEB_PATH="$HOME/Downloads/nemo-megasync-xUbuntu_24.04_amd64.deb"
+      APP_DIR="$HOME/.local/opt/nemo-megasync-deb"
+      EXT_DIR="$APP_DIR/usr/lib/x86_64-linux-gnu/nemo/extensions-3.0"
+      STAMP="$APP_DIR/.deb-source"
+
+      if [ -f "$DEB_PATH" ]; then
+        DEB_ID="$(${pkgs.coreutils}/bin/stat -c '%Y:%s' "$DEB_PATH")"
+        mkdir -p "$APP_DIR"
+        if [ ! -f "$EXT_DIR/libMEGAShellExtNemo.so" ] || [ ! -f "$STAMP" ] || [ "$(${pkgs.coreutils}/bin/cat "$STAMP" 2>/dev/null || true)" != "$DEB_ID" ]; then
+          TMP_DIR="$(${pkgs.coreutils}/bin/mktemp -d "$HOME/.local/opt/nemo-megasync-deb.tmp.XXXXXX")"
+          trap '${pkgs.coreutils}/bin/rm -rf "$TMP_DIR"' EXIT
+          ${pkgs.dpkg}/bin/dpkg -x "$DEB_PATH" "$TMP_DIR"
+          printf '%s\n' "$DEB_ID" > "$TMP_DIR/.deb-source"
+          ${pkgs.coreutils}/bin/rm -rf "$APP_DIR"
+          ${pkgs.coreutils}/bin/mv "$TMP_DIR" "$APP_DIR"
+          trap - EXIT
+        fi
+        export LD_LIBRARY_PATH="$EXT_DIR:${nemoMegaLibraryPath}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        export NEMO_EXTENSION_DIR="$EXT_DIR"
+        export NEMO_EXTENSION_DIRS="$EXT_DIR"
+        export XDG_DATA_DIRS="$APP_DIR/usr/share''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+      fi
+
       export GDK_BACKEND=x11
       export QT_QPA_PLATFORM=xcb
       exec nemo "$@"
@@ -514,8 +543,8 @@ in
   '';
     settings = {
       general = {
-        gaps_in = 6;
-        gaps_out = 14;
+        gaps_in = 0;
+        gaps_out = 0;
         border_size = 2;
         layout = "dwindle";
         "col.active_border" = "rgba(ff4fd8ee) rgba(6be8ffee) 45deg";
@@ -670,9 +699,7 @@ in
       bar.workspaces.show_icons = true;
       menus.clock.weather.unit = "metric";
       menus.clock.weather.location = "Singapore";
-      # Weather API key is stored in ~/.config/secrets/weather-api-key
-      # The activation script below will read it and update config.json at runtime
-      menus.clock.weather.key = "PLACEHOLDER_WILL_BE_REPLACED";
+      menus.clock.weather.key = "/home/thinky/.config/secrets/weather-api-key.json";
       menus.dashboard.directories.enabled = true;
       menus.dashboard.shortcuts.left.shortcut1 = {
         icon = "󰈹";
@@ -701,7 +728,7 @@ in
       };
       #menus.dashboard.stats.enable_gpu = true;  # Causes system freeze on NVIDIA
       theme = {
-        bar.transparent = false;
+        bar.transparent = true;
         bar.outer_spacing = "0.9em";
         bar.scaling = 92;
         bar.buttons.enableBorders = true;
@@ -757,6 +784,7 @@ in
 
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
+    megasync
     swappy
     pyprland
     pavucontrol
@@ -846,7 +874,7 @@ in
   programs.kitty = {
     enable = true;
     font = {
-      size = 10.5;
+      size = 9.5;
       name = "CaskaydiaCove Nerd Font Mono";
     };
     settings = {
@@ -1105,25 +1133,6 @@ in
   home.activation.createProjectsDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     mkdir -p "$HOME/Projects"
     ${pkgs.glib}/bin/gio set "$HOME/Projects" metadata::custom-icon-name folder-development || true
-  '';
-
-  home.activation.makeHyprpanelConfigWritable = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-    if [ -L "$HOME/.config/hyprpanel/config.json" ]; then
-      cp --remove-destination "$(readlink "$HOME/.config/hyprpanel/config.json")" "$HOME/.config/hyprpanel/config.json"
-      chmod u+w "$HOME/.config/hyprpanel/config.json"
-    fi
-    # Inject the weather API key from secrets file
-    if [ -f "$HOME/.config/secrets/weather-api-key" ] && [ -f "$HOME/.config/hyprpanel/config.json" ]; then
-      API_KEY=$(cat "$HOME/.config/secrets/weather-api-key" | tr -d '\n')
-      ${pkgs.jq}/bin/jq --arg key "$API_KEY" '.menus.clock.weather.key = $key' "$HOME/.config/hyprpanel/config.json" > "$HOME/.config/hyprpanel/config.json.tmp"
-      mv "$HOME/.config/hyprpanel/config.json.tmp" "$HOME/.config/hyprpanel/config.json"
-    fi
-    # Restart HyprPanel so it picks up the injected key (file monitor may miss it due to race)
-    if ${pkgs.procps}/bin/pgrep -f hyprpanel >/dev/null 2>&1; then
-      ${pkgs.procps}/bin/pkill -f hyprpanel || true
-      sleep 1
-      ${pkgs.coreutils}/bin/nohup uwsm app -- hyprpanel >/dev/null 2>&1 &
-    fi
   '';
 
   home.activation.refreshWalkerIcons = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
