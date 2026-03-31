@@ -73,6 +73,18 @@
             ipc_text = ipc_text.replace(old_ipc_minimize, new_ipc_minimize)
             ipc_text = ipc_text.replace(old_ipc_close, new_ipc_close)
             ipc_path.write_text(ipc_text)
+
+            status_path = Path("${placeholder "out"}/lib/node_modules/@filen/desktop/dist/lib/status.js")
+            status_text = status_path.read_text()
+
+            old_open = """                {\n                    label: \"Open\",\n                    type: \"normal\",\n                    click: () => {\n                        this.desktop.showOrOpenDriveWindow();\n                    }\n                },\n                {\n                    label: \"Separator\",\n                    type: \"separator\"\n                },"""
+            new_open = """                {\n                    label: \"Open\",\n                    type: \"normal\",\n                    click: () => {\n                        this.desktop.showOrOpenDriveWindow();\n                    }\n                },\n                {\n                    label: \"Hide\",\n                    type: \"normal\",\n                    click: () => {\n                        var _a;\n                        (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.hide();\n                    }\n                },\n                {\n                    label: \"Separator\",\n                    type: \"separator\"\n                },"""
+
+            if old_open not in status_text:
+                raise SystemExit("filen-desktop status patch anchor not found")
+
+            status_text = status_text.replace(old_open, new_open)
+            status_path.write_text(status_text)
             PY
           '';
         });
