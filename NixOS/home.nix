@@ -91,12 +91,27 @@ in
     terminal = false;
   };
 
-  xdg.desktopEntries.onlyoffice = {
+  xdg.desktopEntries.onlyoffice-desktopeditors = {
     name = "ONLYOFFICE";
     exec = "/home/thinky/.local/bin/onlyoffice-desktopeditors %U";
     icon = "onlyoffice-desktopeditors";
     comment = "ONLYOFFICE Desktop Editors (XWayland)";
-    categories = [ "Office" ];
+    genericName = "Document Editor";
+    categories = [ "Office" "WordProcessor" "Spreadsheet" "Presentation" ];
+    mimeType = [
+      "application/msword"
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      "application/vnd.oasis.opendocument.text"
+      "application/vnd.oasis.opendocument.spreadsheet"
+      "application/vnd.oasis.opendocument.presentation"
+      "application/pdf"
+      "text/plain"
+    ];
+    settings = {
+      StartupWMClass = "ONLYOFFICE";
+    };
     terminal = false;
   };
 
@@ -434,19 +449,11 @@ in
     text = ''
       #!/bin/sh
       export QT_QPA_PLATFORM=xcb
-      export XDG_SESSION_TYPE=x11
-      export XDG_CURRENT_DESKTOP=X-Generic
-      export GDK_BACKEND=x11
+      export XLIB_SKIP_ARGB_VISUALS=1
       export NO_AT_BRIDGE=1
       unset QT_QPA_PLATFORMTHEME
       export QT_STYLE_OVERRIDE=Fusion
       export QT_X11_NO_MITSHM=1
-      export QT_XCB_GL_INTEGRATION=none
-      export LIBGL_DRI3_DISABLE=1
-      export LIBGL_ALWAYS_SOFTWARE=1
-      export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
-      export QT_OPENGL=software
-      export QT_QUICK_BACKEND=software
       exec ${pkgs.onlyoffice-desktopeditors}/bin/onlyoffice-desktopeditors "$@"
     '';
   };
@@ -886,6 +893,18 @@ in
       menus.clock.weather.location = "Singapore";
       menus.clock.weather.key = "/home/thinky/.config/secrets/weather-api-key.json";
       menus.dashboard.directories.enabled = true;
+      menus.dashboard.directories.left.directory1.command =
+        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Downloads";
+      menus.dashboard.directories.left.directory2.command =
+        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Videos";
+      menus.dashboard.directories.left.directory3.command =
+        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Projects";
+      menus.dashboard.directories.right.directory1.command =
+        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Documents";
+      menus.dashboard.directories.right.directory2.command =
+        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Pictures";
+      menus.dashboard.directories.right.directory3.command =
+        "/home/thinky/.local/bin/nemo-x11 /home/thinky";
       menus.dashboard.shortcuts.left.shortcut1 = {
         icon = "󰈹";
         tooltip = "Firefox";
