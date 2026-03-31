@@ -1,0 +1,210 @@
+diff --git a/src/MEGASync/gui/InfoDialog.cpp b/src/MEGASync/gui/InfoDialog.cpp
+index 6de57c05b..ab662e5d2 100644
+--- a/src/MEGASync/gui/InfoDialog.cpp
++++ b/src/MEGASync/gui/InfoDialog.cpp
+@@ -29,6 +29,7 @@
+ #include <QDesktopWidget>
+ #include <QEvent>
+ #include <QFileInfo>
++#include <QGuiApplication>
+ #include <QHelpEvent>
+ #include <QRect>
+ #include <QScrollBar>
+@@ -50,6 +51,15 @@ static constexpr int FONT_SIZE_NO_BUSINESS_PX{12};
+ 
+ static const char* TRANSPARENT_HEADER = "transparent_header";
+ 
++namespace
++{
++bool isNativeWaylandSession()
++{
++    return QGuiApplication::platformName().contains(QString::fromUtf8("wayland"),
++                                                    Qt::CaseInsensitive);
++}
++}
++
+ void InfoDialog::pauseResumeClicked()
+ {
+     app->pauseTransfers();
+@@ -155,7 +165,14 @@ InfoDialog::InfoDialog(MegaApplication* app, QWidget* parent, InfoDialog* olddia
+ #ifdef Q_OS_LINUX
+     doNotActAsPopup = Platform::getInstance()->getValue("USE_MEGASYNC_AS_REGULAR_WINDOW", false);
+ 
+-    if (!doNotActAsPopup && QSystemTrayIcon::isSystemTrayAvailable())
++    if (isNativeWaylandSession())
++    {
++        // Native Wayland focus transitions from tray hosts are not stable enough
++        // for the emulated-popup path. Treat the status window as a regular window.
++        setWindowFlags(Qt::Window);
++        doNotActAsPopup = true;
++    }
++    else if (!doNotActAsPopup && QSystemTrayIcon::isSystemTrayAvailable())
+     {
+         // To avoid issues with text input we implement a popup ourselves
+         // instead of using Qt::Popup by listening to the WindowDeactivate
+diff --git a/src/MEGASync/gui/TrayIconManager.cpp b/src/MEGASync/gui/TrayIconManager.cpp
+index 79f1914f4..6361d4ca4 100644
+--- a/src/MEGASync/gui/TrayIconManager.cpp
++++ b/src/MEGASync/gui/TrayIconManager.cpp
+@@ -21,6 +21,17 @@ static constexpr IconEntry ICON_TABLE[] = {
+     {"someissues", "tray_icon_blocked.svg"},
+ };
+ 
++bool isHyprlandSession()
++{
++    if (qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE"))
++    {
++        return true;
++    }
++
++    return qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains(
++        QStringLiteral("Hyprland"), Qt::CaseInsensitive);
++}
++
+ } // namespace
+ 
+ const TrayIconManager::AnimationDef TrayIconManager::ANIMATION_DEFS[] = {
+@@ -75,6 +86,11 @@ QString TrayIconManager::themePrefix() const
+ 
+ QIcon TrayIconManager::loadIcon(const QString& filename) const
+ {
++    if (isHyprlandSession())
++    {
++        return QIcon(QStringLiteral(":/images/app_ico.ico"));
++    }
++
+     QIcon icon(themePrefix() + filename);
+ 
+ #ifdef __APPLE__
+diff --git a/src/MEGASync/gui/onboarding/GuestQmlDialog.cpp b/src/MEGASync/gui/onboarding/GuestQmlDialog.cpp
+index 860822997..0cdd7ccb5 100644
+--- a/src/MEGASync/gui/onboarding/GuestQmlDialog.cpp
++++ b/src/MEGASync/gui/onboarding/GuestQmlDialog.cpp
+@@ -2,12 +2,30 @@
+ 
+ #include "Platform.h"
+ 
++#include <QGuiApplication>
++
++namespace
++{
++bool isNativeWaylandSession()
++{
++    return QGuiApplication::platformName().contains(QString::fromUtf8("wayland"),
++                                                    Qt::CaseInsensitive);
++}
++}
++
+ GuestQmlDialog::GuestQmlDialog(QWindow *parent)
+     : QmlDialog(parent)
+ {
+     setFlags(flags() | Qt::FramelessWindowHint);
+ 
+     QObject::connect(this, &GuestQmlDialog::activeChanged, [=]() {
++        // Native Wayland focus transitions from tray hosts are unreliable here;
++        // treating every inactive transition as a dismissal makes the popup unusable.
++        if (isNativeWaylandSession() && !this->isActive())
++        {
++            return;
++        }
++
+         emit guestActiveChanged(this->isActive());
+     });
+ }
+diff --git a/src/MEGASync/gui/qml/guest/GuestDialog.qml b/src/MEGASync/gui/qml/guest/GuestDialog.qml
+index 7931cba2a..9554ee840 100644
+--- a/src/MEGASync/gui/qml/guest/GuestDialog.qml
++++ b/src/MEGASync/gui/qml/guest/GuestDialog.qml
+@@ -19,7 +19,7 @@ GuestQmlDialog {
+     }
+ 
+     onGuestActiveChanged: (active) => {
+-        if (!active) {
++        if (!active && Qt.platform.pluginName.indexOf("wayland") === -1) {
+             fadeOut.start();
+         }
+     }
+diff --git a/src/MEGASync/main.cpp b/src/MEGASync/main.cpp
+index 28d1c0007..56f2a3522 100644
+--- a/src/MEGASync/main.cpp
++++ b/src/MEGASync/main.cpp
+@@ -432,7 +432,13 @@ int main(int argc, char *argv[])
+     if (!qEnvironmentVariableIsSet("DO_NOT_UNSET_XDG_SESSION_TYPE"))
+     {
+         QString sessionType = qEnvironmentVariable("XDG_SESSION_TYPE");
+-        if (!sessionType.isEmpty() && sessionType == QString::fromUtf8("wayland"))
++        const QString currentDesktop = qEnvironmentVariable("XDG_CURRENT_DESKTOP");
++        const bool hyprlandSession =
++            currentDesktop.contains(QString::fromUtf8("Hyprland"), Qt::CaseInsensitive) ||
++            qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE");
++
++        if (!hyprlandSession && !sessionType.isEmpty() &&
++            sessionType == QString::fromUtf8("wayland"))
+         {
+             std::cerr << "Avoiding wayland" << std::endl;
+             qunsetenv("XDG_SESSION_TYPE");
+diff --git a/src/MEGASync/platform/linux/PlatformImplementation.cpp b/src/MEGASync/platform/linux/PlatformImplementation.cpp
+index 9b32dace7..357d7f3a8 100644
+--- a/src/MEGASync/platform/linux/PlatformImplementation.cpp
++++ b/src/MEGASync/platform/linux/PlatformImplementation.cpp
+@@ -943,6 +943,31 @@ void PlatformImplementation::setRenderingBackend() const
+         qputenv("LIBGL_ALWAYS_SOFTWARE", "1");
+     }
+ 
++    const QByteArray sessionType = qgetenv("XDG_SESSION_TYPE");
++    const QByteArray currentDesktop = qgetenv("XDG_CURRENT_DESKTOP").toLower();
++    const QByteArray waylandDisplay = qgetenv("WAYLAND_DISPLAY");
++    const bool likelyWaylandSession =
++        sessionType == "wayland" || !waylandDisplay.isEmpty() ||
++        currentDesktop.contains("hyprland");
++
++    if (!qEnvironmentVariableIsSet("MEGA_USE_SOFTWARE_OPENGL"))
++    {
++        if (likelyWaylandSession)
++        {
++            MegaApi::log(MegaApi::LOG_LEVEL_INFO,
++                         "Enabling software OpenGL fallback on Linux");
++            QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
++            qputenv("QT_QUICK_BACKEND", "software");
++        }
++    }
++    else if (qEnvironmentVariable("MEGA_USE_SOFTWARE_OPENGL") == QLatin1String("1"))
++    {
++        MegaApi::log(MegaApi::LOG_LEVEL_INFO,
++                     "Enabling software OpenGL fallback on Linux due to env override");
++        QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
++        qputenv("QT_QUICK_BACKEND", "software");
++    }
++
+     // Improve QtQuickWidget compatibility
+     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+ }
+@@ -1181,7 +1206,7 @@ void PlatformImplementation::maybeEmitTheme()
+     {
+         mLastEmittedTheme = appTheme;
+         mLastEmittedPanelTheme = panelTheme;
+-        emit themeChanged({appTheme, appTheme});
++        emit themeChanged({panelTheme, appTheme});
+     }
+ }
+ 
+@@ -1273,5 +1298,18 @@ Preferences::ThemeAppeareance PlatformImplementation::getPanelTheme() const
+         return Preferences::ThemeAppeareance::DARK;
+     }
+ 
+-    return effectiveTheme();
++    const auto theme = effectiveTheme();
++    if (theme != Preferences::ThemeAppeareance::UNINITIALIZED)
++    {
++        return theme;
++    }
++
++    // Hyprland commonly exposes no theme metadata. Default to a light tray icon so it
++    // remains visible on the typical dark / translucent bar setup.
++    if (desktop.contains(QLatin1String("HYPRLAND")))
++    {
++        return Preferences::ThemeAppeareance::DARK;
++    }
++
++    return Preferences::ThemeAppeareance::LIGHT;
+ }

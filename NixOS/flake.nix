@@ -34,6 +34,49 @@
           ];
         });
 
+        filen-desktop = prev.filen-desktop.overrideAttrs (old: {
+          postFixup = (old.postFixup or "") + ''
+            ${prev.python3}/bin/python <<PY
+            from pathlib import Path
+
+            index_path = Path("${placeholder "out"}/lib/node_modules/@filen/desktop/dist/index.js")
+            text = index_path.read_text()
+
+            old_minimize = """        (_c = this.driveWindow) === null || _c === void 0 ? void 0 : _c.on(\"minimize\", () => {\n            var _a;\n            if (process.platform === \"darwin\" && this.minimizeToTray) {\n                (_a = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _a === void 0 ? void 0 : _a.hide();\n            }\n        });"""
+            new_minimize = """        (_c = this.driveWindow) === null || _c === void 0 ? void 0 : _c.on(\"minimize\", e => {\n            var _a, _b;\n            if (this.minimizeToTray) {\n                if (process.platform === \"darwin\") {\n                    (_a = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _a === void 0 ? void 0 : _a.hide();\n                }\n                else {\n                    e.preventDefault();\n                    (_b = this.driveWindow) === null || _b === void 0 ? void 0 : _b.hide();\n                    return;\n                }\n            }\n        });"""
+
+            old_close = """        (_e = this.driveWindow) === null || _e === void 0 ? void 0 : _e.on(\"close\", e => {\n            var _a, _b, _c;\n            if ((process.platform === \"darwin\" || this.minimizeToTray) && !((_a = this.driveWindow) === null || _a === void 0 ? void 0 : _a.isMinimized()) && !this.shouldExitOnQuit) {\n                e.preventDefault();\n                (_b = this.driveWindow) === null || _b === void 0 ? void 0 : _b.minimize();\n                if (process.platform === \"darwin\" && this.minimizeToTray) {\n                    (_c = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _c === void 0 ? void 0 : _c.hide();\n                }\n            }\n        });"""
+            new_close = """        (_e = this.driveWindow) === null || _e === void 0 ? void 0 : _e.on(\"close\", e => {\n            var _a, _b, _c;\n            if ((process.platform === \"darwin\" || this.minimizeToTray) && !((_a = this.driveWindow) === null || _a === void 0 ? void 0 : _a.isMinimized()) && !this.shouldExitOnQuit) {\n                e.preventDefault();\n                if (process.platform === \"darwin\") {\n                    (_b = this.driveWindow) === null || _b === void 0 ? void 0 : _b.minimize();\n                    if (this.minimizeToTray) {\n                        (_c = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _c === void 0 ? void 0 : _c.hide();\n                    }\n                }\n                else {\n                    this.driveWindow.hide();\n                }\n            }\n        });"""
+            old_init = """            const options = await this.options.get();\n            await electron_1.app.whenReady();"""
+            new_init = """            const options = await this.options.get();\n            this.minimizeToTray = options.minimizeToTray ?? false;\n            await electron_1.app.whenReady();"""
+
+            if old_minimize not in text or old_close not in text or old_init not in text:
+                raise SystemExit("filen-desktop patch anchors not found")
+
+            text = text.replace(old_init, new_init)
+            text = text.replace(old_minimize, new_minimize)
+            text = text.replace(old_close, new_close)
+            index_path.write_text(text)
+
+            ipc_path = Path("${placeholder "out"}/lib/node_modules/@filen/desktop/dist/ipc/index.js")
+            ipc_text = ipc_path.read_text()
+
+            old_ipc_minimize = """        electron_1.ipcMain.handle(\"minimizeWindow\", async () => {\n            var _a;\n            (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.minimize();\n        });"""
+            new_ipc_minimize = """        electron_1.ipcMain.handle(\"minimizeWindow\", async () => {\n            var _a, _b;\n            if (this.desktop.minimizeToTray) {\n                (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.hide();\n                return;\n            }\n            (_b = this.desktop.driveWindow) === null || _b === void 0 ? void 0 : _b.minimize();\n        });"""
+
+            old_ipc_close = """        electron_1.ipcMain.handle(\"closeWindow\", async () => {\n            var _a;\n            (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.close();\n        });"""
+            new_ipc_close = """        electron_1.ipcMain.handle(\"closeWindow\", async () => {\n            var _a, _b;\n            if (this.desktop.minimizeToTray) {\n                (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.hide();\n                return;\n            }\n            (_b = this.desktop.driveWindow) === null || _b === void 0 ? void 0 : _b.close();\n        });"""
+
+            if old_ipc_minimize not in ipc_text or old_ipc_close not in ipc_text:
+                raise SystemExit("filen-desktop ipc patch anchors not found")
+
+            ipc_text = ipc_text.replace(old_ipc_minimize, new_ipc_minimize)
+            ipc_text = ipc_text.replace(old_ipc_close, new_ipc_close)
+            ipc_path.write_text(ipc_text)
+            PY
+          '';
+        });
+
         megasync = prev.megasync.overrideAttrs (old:
           let
             appSrc = prev.fetchFromGitHub {

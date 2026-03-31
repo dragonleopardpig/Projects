@@ -7,6 +7,10 @@ let
     pkgs.nemo
     pkgs.glib
   ];
+  megasyncWalkerIcon = pkgs.runCommand "megasync-walker-icon.png"
+    { nativeBuildInputs = [ pkgs.imagemagick ]; } ''
+    magick "${pkgs.megasync.src}/src/MEGAUpdater/app_ico.ico[0]" -resize 256x256 "PNG32:$out"
+  '';
 in
 {
   home.username = "thinky";
@@ -86,6 +90,53 @@ in
     categories = [ "Graphics" "Engineering" "Science" ];
     terminal = false;
   };
+
+  xdg.desktopEntries.onlyoffice = {
+    name = "ONLYOFFICE";
+    exec = "/home/thinky/.local/bin/onlyoffice-desktopeditors %U";
+    icon = "onlyoffice-desktopeditors";
+    comment = "ONLYOFFICE Desktop Editors (XWayland)";
+    categories = [ "Office" ];
+    terminal = false;
+  };
+
+  home.file.".local/bin/megasync" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      export QT_QPA_PLATFORM=wayland
+      export DO_NOT_UNSET_XDG_SESSION_TYPE=1
+      exec ${pkgs.megasync}/bin/megasync "$@"
+    '';
+  };
+
+  xdg.desktopEntries.megasync = {
+    name = "MEGAsync";
+    exec = "/home/thinky/.local/bin/megasync";
+    icon = "megasync";
+    comment = "MEGA Desktop App (Wayland)";
+    categories = [ "Network" "FileTransfer" "Utility" ];
+    terminal = false;
+    settings = {
+      StartupWMClass = "nz.co.mega.megasync";
+    };
+  };
+
+  home.file.".local/share/applications/megasync.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Version=1.5
+    Name=MEGAsync
+    Comment=MEGA Desktop App (Wayland)
+    Exec=/home/thinky/.local/bin/megasync
+    Icon=megasync
+    Terminal=false
+    Categories=Network;FileTransfer;Utility;
+    StartupWMClass=nz.co.mega.megasync
+  '';
+
+  home.file.".local/share/icons/hicolor/256x256/apps/megasync.png".source = megasyncWalkerIcon;
+  home.file.".local/share/icons/hicolor/256x256/apps/MEGAsync.png".source = megasyncWalkerIcon;
 
   home.file.".local/bin/nemo-x11" = {
     executable = true;
@@ -377,6 +428,29 @@ in
     '';
   };
 
+  # ONLYOFFICE wrapper: avoid Kvantum/XWayland GL issues under Hyprland
+  home.file.".local/bin/onlyoffice-desktopeditors" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      export QT_QPA_PLATFORM=xcb
+      export XDG_SESSION_TYPE=x11
+      export XDG_CURRENT_DESKTOP=X-Generic
+      export GDK_BACKEND=x11
+      export NO_AT_BRIDGE=1
+      unset QT_QPA_PLATFORMTHEME
+      export QT_STYLE_OVERRIDE=Fusion
+      export QT_X11_NO_MITSHM=1
+      export QT_XCB_GL_INTEGRATION=none
+      export LIBGL_DRI3_DISABLE=1
+      export LIBGL_ALWAYS_SOFTWARE=1
+      export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+      export QT_OPENGL=software
+      export QT_QUICK_BACKEND=software
+      exec ${pkgs.onlyoffice-desktopeditors}/bin/onlyoffice-desktopeditors "$@"
+    '';
+  };
+
   home.file.".local/bin/screenshot" = {
     executable = true;
     text = ''
@@ -565,7 +639,92 @@ in
     env = XDG_SESSION_DESKTOP,Hyprland
     env = GTK_IM_MODULE,
     env = QT_IM_MODULE,
-    windowrule = tile = true, match:class = sioyek
+
+    windowrule {
+      name = tile-sioyek
+      match:class = ^sioyek$
+      tile = yes
+    }
+
+    windowrule {
+      name = onlyoffice-float
+      match:class = ^(DesktopEditors|ONLYOFFICE|onlyoffice-desktopeditors)$
+      float = yes
+      center = yes
+      size = 1600 960
+    }
+
+    windowrule {
+      name = filen-desktop-float
+      match:class = ^(filen-desktop|Filen Desktop)$
+      float = yes
+      center = yes
+      size = 1440 900
+    }
+
+    windowrule {
+      name = megasync-add-dialogs-float
+      match:class = ^MEGAsync$
+      match:title = ^(Add sync|Add backup)$
+      float = yes
+      center = yes
+    }
+
+    windowrule {
+      name = megasync-settings-float-by-title
+      match:title = ^Settings$
+      float = yes
+      center = yes
+      size = 705 765
+    }
+
+    windowrule {
+      name = megasync-status-popup-float
+      match:class = ^nz\.co\.mega\.megasync$
+      match:title = ^MEGAsync$
+      float = yes
+      center = yes
+    }
+
+    windowrule {
+      name = megasync-status-popup-float-by-title
+      match:title = ^MEGAsync$
+      float = yes
+      center = yes
+    }
+
+    windowrule {
+      name = megasync-add-dialogs-float-by-title
+      match:title = ^(Add sync|Add backup)$
+      float = yes
+      center = yes
+    }
+
+    windowrule {
+      name = megasync-add-backup-size-by-title
+      match:title = ^Add backup$
+      size = 640 403
+    }
+
+    windowrule {
+      name = megasync-add-sync-size-by-title
+      match:title = ^Add sync$
+      size = 640 402
+    }
+
+    windowrule {
+      name = megasync-add-backup-size
+      match:class = ^MEGAsync$
+      match:title = ^Add backup$
+      size = 640 403
+    }
+
+    windowrule {
+      name = megasync-add-sync-size
+      match:class = ^MEGAsync$
+      match:title = ^Add sync$
+      size = 640 402
+    }
   '';
     settings = {
       general = {
@@ -965,7 +1124,7 @@ in
     enableCompletion = true;
     # TODO add your custom bashrc here
     bashrcExtra = ''
-      export PATH="$PATH:$HOME/bin:$HOME/.local/bin:$HOME/go/bin"
+      export PATH="$HOME/.local/bin:$HOME/bin:$HOME/go/bin:$PATH"
     '';
 
     # set some aliases, feel free to add more or remove some

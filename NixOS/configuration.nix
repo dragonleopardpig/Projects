@@ -375,6 +375,7 @@
     filezilla                  # GUI FTP/SFTP client
     remmina                    # Remote desktop client (RDP, VNC, SSH)
     protonvpn-gui              # ProtonVPN graphical client
+    onlyoffice-desktopeditors  # ONLYOFFICE desktop editors
 
     # ── System Monitoring & Debugging ──
     sysstat                    # System performance tools (iostat, mpstat, sar)

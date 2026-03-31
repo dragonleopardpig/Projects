@@ -48,6 +48,9 @@
 
 ;; * Org Mode Startup
 (setq org-startup-folded t)
+(setq org-src-fontify-natively t
+      org-src-tab-acts-natively t
+      mouse-1-click-follows-link t)
 (with-eval-after-load 'mixed-pitch
   ;; Keep Org block delimiters on a monospaced face. Mixed-pitch also forces
   ;; fixed-pitch faces back to the default weight, so reapply bold afterwards.
@@ -57,7 +60,7 @@
     (add-to-list 'mixed-pitch-fixed-pitch-faces face)))
 
 (defvar-local my/org-block-face-cookies nil)
-(defvar-local my/org-src-keyword-face-cookies nil)
+(defvar-local my/org-src-code-face-cookies nil)
 
 (defun my/org-remap-block-delimiter-faces ()
   "Force Org block delimiter faces to stay bold after mixed-pitch remapping."
@@ -66,16 +69,33 @@
   (dolist (face '(org-block-begin-line
                   org-block-end-line
                   org-modern-block-name))
-    (push (face-remap-add-relative face :weight 'bold :slant 'italic)
+    (push (face-remap-add-relative face
+                                   :weight 'bold
+                                   :slant 'italic
+                                   :background 'unspecified)
           my/org-block-face-cookies)))
 
-(defun my/org-remap-src-keyword-faces ()
-  "Make source-block keyword faces bold italic in Org buffers."
-  (mapc #'face-remap-remove-relative my/org-src-keyword-face-cookies)
-  (setq my/org-src-keyword-face-cookies nil)
-  (dolist (face '(font-lock-keyword-face))
-    (push (face-remap-add-relative face :weight 'bold :slant 'italic)
-          my/org-src-keyword-face-cookies)))
+(defun my/org-remap-src-code-faces ()
+  "Apply the same code-face overrides inside Org source blocks."
+  (mapc #'face-remap-remove-relative my/org-src-code-face-cookies)
+  (setq my/org-src-code-face-cookies nil)
+  (dolist (spec '((font-lock-keyword-face :weight bold :slant italic)
+                  (font-lock-builtin-face :weight normal :slant italic)
+                  (font-lock-type-face :weight bold :slant italic)
+                  (font-lock-constant-face :weight bold :slant normal)
+                  (font-lock-variable-name-face :weight bold :slant normal)
+                  (font-lock-function-name-face :weight normal :slant italic)
+                  (font-lock-function-call-face :weight normal :slant italic)
+                  (treesit-font-lock-keyword-face :weight bold :slant italic)
+                  (treesit-font-lock-type-face :weight bold :slant italic)
+                  (treesit-font-lock-function-face :weight normal :slant italic)
+                  (treesit-font-lock-function-call-face :weight normal :slant italic)
+                  (treesit-font-lock-variable-face :weight bold :slant normal)
+                  (treesit-font-lock-property-face :weight bold :slant normal)
+                  (treesit-font-lock-constant-face :weight bold :slant normal)))
+    (when (facep (car spec))
+      (push (apply #'face-remap-add-relative spec)
+            my/org-src-code-face-cookies))))
 
 (defun my/org-enable-mixed-pitch ()
   "Enable mixed-pitch in Org and restore block delimiter emphasis."
@@ -83,7 +103,7 @@
   (when (fboundp 'my/heaven-and-hell-apply-org-block-faces)
     (my/heaven-and-hell-apply-org-block-faces))
   (my/org-remap-block-delimiter-faces)
-  (my/org-remap-src-keyword-faces))
+  (my/org-remap-src-code-faces))
 
 (add-hook 'org-mode-hook #'my/org-enable-mixed-pitch)
 (add-hook 'org-mode-hook 'follow-mode)
@@ -261,9 +281,15 @@
             (newline)
             (indent-to base-indent)))
          (t
-          (newline)
+         (newline)
           (indent-to (+ base-indent extra-indent)))))
-    (org-return nil)))
+    (cond
+     ((button-at (point))
+      (push-button (point)))
+     ((org-in-regexp org-link-any-re 1)
+      (org-open-at-point))
+     (t
+      (org-return nil)))))
 
 (defvar my/org-src-return-mode-map
   (let ((map (make-sparse-keymap)))
@@ -388,6 +414,68 @@
 				       org-mode))
 
 (set-fontset-font t 'unicode (font-spec :family "CaskaydiaCove Nerd Font") nil 'append)
+
+;; * Theme-independent code faces
+(defun my/apply-code-font-lock-faces ()
+  "Apply code face overrides independent of the active theme."
+  (set-face-attribute 'font-lock-keyword-face nil
+                      :weight 'bold :slant 'italic)
+  (set-face-attribute 'font-lock-builtin-face nil
+                      :weight 'normal :slant 'italic)
+  (set-face-attribute 'font-lock-type-face nil
+                      :weight 'bold :slant 'italic)
+  (set-face-attribute 'font-lock-constant-face nil
+                      :weight 'bold :slant 'normal)
+  (set-face-attribute 'font-lock-variable-name-face nil
+                      :weight 'bold :slant 'normal)
+  (set-face-attribute 'font-lock-function-name-face nil
+                      :weight 'normal :slant 'italic)
+  (when (facep 'font-lock-function-call-face)
+    (set-face-attribute 'font-lock-function-call-face nil
+                        :weight 'normal :slant 'italic))
+  (when (facep 'treesit-font-lock-keyword-face)
+    (set-face-attribute 'treesit-font-lock-keyword-face nil
+                        :weight 'bold :slant 'italic))
+  (when (facep 'treesit-font-lock-type-face)
+    (set-face-attribute 'treesit-font-lock-type-face nil
+                        :weight 'bold :slant 'italic))
+  (when (facep 'treesit-font-lock-function-face)
+    (set-face-attribute 'treesit-font-lock-function-face nil
+                        :weight 'normal :slant 'italic))
+  (when (facep 'treesit-font-lock-function-call-face)
+    (set-face-attribute 'treesit-font-lock-function-call-face nil
+                        :weight 'normal :slant 'italic))
+  (when (facep 'treesit-font-lock-variable-face)
+    (set-face-attribute 'treesit-font-lock-variable-face nil
+                        :weight 'bold :slant 'normal))
+  (when (facep 'treesit-font-lock-property-face)
+    (set-face-attribute 'treesit-font-lock-property-face nil
+                        :weight 'bold :slant 'normal))
+  (when (facep 'treesit-font-lock-constant-face)
+    (set-face-attribute 'treesit-font-lock-constant-face nil
+                        :weight 'bold :slant 'normal)))
+
+(defun my/reapply-code-font-lock-faces (&rest _)
+  "Reapply code face overrides after a theme change."
+  (my/apply-code-font-lock-faces))
+
+(defun my/apply-org-block-faces (&rest _)
+  "Keep Org source block body highlighted but not its delimiter lines."
+  (when (facep 'org-block-begin-line)
+    (set-face-attribute 'org-block-begin-line nil :background 'unspecified))
+  (when (facep 'org-block-end-line)
+    (set-face-attribute 'org-block-end-line nil :background 'unspecified))
+  (when (facep 'org-modern-block-name)
+    (set-face-attribute 'org-modern-block-name nil :background 'unspecified)))
+
+(advice-add 'load-theme :after #'my/reapply-code-font-lock-faces)
+(advice-add 'enable-theme :after #'my/reapply-code-font-lock-faces)
+(advice-add 'load-theme :after #'my/apply-org-block-faces)
+(advice-add 'enable-theme :after #'my/apply-org-block-faces)
+(add-hook 'after-init-hook #'my/apply-code-font-lock-faces)
+(add-hook 'after-init-hook #'my/apply-org-block-faces)
+(my/apply-code-font-lock-faces)
+(my/apply-org-block-faces)
 
 ;; * Clickable file paths in emacs-lisp-mode
 (defun my/file-path-open-at-click (event)

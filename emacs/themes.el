@@ -111,7 +111,7 @@
 	  (dark . (ef-bio))))
   (setq heaven-and-hell-load-theme-no-confirm t)
   ;; Load custom org-mode styling for theme switching
-  (load "~/Projects/emacs/heaven-and-hell-custom.el")
+  ;; (load "~/Projects/emacs/heaven-and-hell-custom.el")
   :hook (after-init . heaven-and-hell-init-hook)
   :bind (("C-c <f4>" . heaven-and-hell-load-default-theme)
          ("<f4>" . heaven-and-hell-toggle-theme)))
