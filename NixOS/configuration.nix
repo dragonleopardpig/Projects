@@ -514,7 +514,7 @@
 	      direnv
 	      magik-mode
 	      treemacs
-	      # airdermacs
+	      transpose-frame
       ]
     ))
     enchant                  # Spell checking meta-library (used by jinx)

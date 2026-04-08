@@ -188,6 +188,17 @@ in
     '';
   };
 
+  home.file.".local/bin/nomacs-x11" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      export QT_QPA_PLATFORM=xcb
+      exec ${pkgs.nomacs}/bin/nomacs "$@"
+    '';
+  };
+
   xdg.desktopEntries.nemo-x11 = {
     name = "Nemo";
     exec = "/home/thinky/.local/bin/nemo-x11 %U";
@@ -195,6 +206,24 @@ in
     comment = "Nemo file manager (XWayland)";
     categories = [ "Utility" "FileManager" ];
     terminal = false;
+  };
+
+  xdg.desktopEntries.nomacs-x11 = {
+    name = "Nomacs";
+    exec = "/home/thinky/.local/bin/nomacs-x11 %U";
+    icon = "nomacs";
+    comment = "Image viewer/editor (XWayland)";
+    categories = [ "Graphics" "Viewer" ];
+    terminal = false;
+    mimeType = [
+      "image/png"
+      "image/jpeg"
+      "image/gif"
+      "image/webp"
+      "image/bmp"
+      "image/svg+xml"
+      "image/tiff"
+    ];
   };
 
   home.file.".local/bin/filen-desktop" = {
@@ -226,18 +255,23 @@ in
     defaultApplications = {
       "inode/directory" = [ "nemo-x11.desktop" ];
       "application/pdf" = [ "sioyek-xcb.desktop" ];
-      "image/png" = [ "imv-dir.desktop" ];
-      "image/jpeg" = [ "imv-dir.desktop" ];
-      "image/gif" = [ "imv-dir.desktop" ];
-      "image/webp" = [ "imv-dir.desktop" ];
-      "image/bmp" = [ "imv-dir.desktop" ];
-      "image/svg+xml" = [ "imv-dir.desktop" ];
+      "image/png" = [ "nomacs-x11.desktop" ];
+      "image/jpeg" = [ "nomacs-x11.desktop" ];
+      "image/gif" = [ "nomacs-x11.desktop" ];
+      "image/webp" = [ "nomacs-x11.desktop" ];
+      "image/bmp" = [ "nomacs-x11.desktop" ];
+      "image/svg+xml" = [ "nomacs-x11.desktop" ];
       "text/plain" = [ "xed.desktop" ];
       "text/markdown" = [ "xed.desktop" ];
     };
   };
   
   xdg.configFile."uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
+  xdg.configFile."swappy/config".text = ''
+    [Default]
+    save_dir=$HOME/Pictures/Screenshots
+    save_filename_format=swappy-%Y%m%d-%H%M%S.png
+  '';
   xdg.dataFile."xdg-desktop-portal/portals/gtk.portal".source =
     "${pkgs.xdg-desktop-portal-gtk}/share/xdg-desktop-portal/portals/gtk.portal";
   xdg.configFile."distrobox/distrobox.conf".force = true;
@@ -990,6 +1024,8 @@ in
   home.packages = with pkgs; [
     megasync
     swappy
+    nomacs
+    gthumb
     pyprland
     pavucontrol
     xed-editor
@@ -1355,6 +1391,10 @@ in
   home.activation.createProjectsDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     mkdir -p "$HOME/Projects"
     ${pkgs.glib}/bin/gio set "$HOME/Projects" metadata::custom-icon-name folder-development || true
+  '';
+
+  home.activation.ensureScreenshotDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    mkdir -p "$HOME/Pictures/Screenshots"
   '';
 
   home.activation.refreshWalkerIcons = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
