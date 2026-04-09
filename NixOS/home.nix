@@ -905,6 +905,7 @@ in
       misc = {
         mouse_move_enables_dpms = true;
         key_press_enables_dpms = true;
+        initial_workspace_tracking = 2;
       };
     };
   };
@@ -1030,6 +1031,7 @@ in
     pavucontrol
     xed-editor
     sioyek
+    poppler-utils
     wf-recorder
     mpv
     mpvpaper
