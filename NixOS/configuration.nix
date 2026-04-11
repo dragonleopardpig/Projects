@@ -462,6 +462,11 @@
     freecad                    # 3D parametric CAD modeler
     openscad
     mayo
+    (python3.withPackages (ps: with ps; [
+      pythonocc-core           # OpenCASCADE Python bindings for scripted CAD cleanup
+      trimesh                  # Mesh analysis / cleanup helpers
+      meshio                   # Mesh format conversion helpers
+    ]))
     # ── Emacs & Editor Ecosystem ──
     ((emacsPackagesFor emacs-pgtk).emacsWithPackages (
       epkgs: with epkgs; [
