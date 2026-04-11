@@ -3,6 +3,11 @@
 /lsp-bridge/
 /flymake-bridge/
 /Kraken-Optical-Simulator/
+/optiland/
+/pagmo2/
+/pyvista/
+/pyvtk/
+/vtk/
 
 # Generated/cache files
 .aider*
