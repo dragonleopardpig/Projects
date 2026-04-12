@@ -8,6 +8,7 @@
 /pyvista/
 /pyvtk/
 /vtk/
+/DeepLens/
 
 # Generated/cache files
 .aider*
