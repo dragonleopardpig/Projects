@@ -200,6 +200,9 @@
       # M90aPro Laptop Configuration
       nixosConfigurations.M90aPro = mkSystem ./hosts/M90aPro;
 
+      # Portable SSD — boots on any x86_64 UEFI machine
+      nixosConfigurations.PortableSSD = mkSystem ./hosts/PortableSSD;
+
       # Standalone home-manager configurations (optional)
       homeConfigurations."thinky@X299" = home-manager.lib.homeManagerConfiguration {
         # you need this line
