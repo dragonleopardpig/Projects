@@ -15,6 +15,9 @@ in
 {
   home.username = "thinky";
   home.homeDirectory = "/home/thinky";
+  home.sessionVariables = {
+    BROWSER = "firefox";
+  };
   xdg.userDirs = {
     enable = true;
     createDirectories = true;
@@ -261,6 +264,11 @@ in
       "image/webp" = [ "nomacs-x11.desktop" ];
       "image/bmp" = [ "nomacs-x11.desktop" ];
       "image/svg+xml" = [ "nomacs-x11.desktop" ];
+      "text/html" = [ "firefox.desktop" ];
+      "x-scheme-handler/http" = [ "firefox.desktop" ];
+      "x-scheme-handler/https" = [ "firefox.desktop" ];
+      "x-scheme-handler/about" = [ "firefox.desktop" ];
+      "x-scheme-handler/unknown" = [ "firefox.desktop" ];
       "text/plain" = [ "xed.desktop" ];
       "text/markdown" = [ "xed.desktop" ];
     };
@@ -1122,6 +1130,8 @@ in
     };
     settings = {
       confirm_os_window_close = 0;
+      open_url_with = "firefox";
+      detect_urls = "yes";
       dynamic_background_opacity = true;
       enable_audio_bell = false;
       mouse_hide_wait = "-1.0";
