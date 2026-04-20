@@ -9,6 +9,7 @@
 /pyvtk/
 /vtk/
 /DeepLens/
+/zmxtools/
 
 # Generated/cache files
 .aider*

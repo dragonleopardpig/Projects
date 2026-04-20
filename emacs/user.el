@@ -533,7 +533,7 @@ If only one window exists, split horizontally first."
   (plist-put
    (cdr (assq 'dvisvgm org-preview-latex-process-alist))
    :image-size-adjust
-   '(1.2 . 1.2)))
+   '(1.0 . 1.0)))
 
 ;; Also set legacy variable for compatibility
 (setq org-format-latex-options
