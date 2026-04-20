@@ -1417,5 +1417,14 @@ in
       ${pkgs.systemd}/bin/systemctl --user restart walker || true
     fi
   '';
+  # ── Nemo "Open Terminal Here" ──
+  # Nemo reads the Cinnamon dconf key to decide which terminal to launch.
+  # The gsettings schema ID is org.cinnamon.desktop.default-applications.terminal
+  # but the actual dconf path is /org/cinnamon/desktop/applications/terminal/.
+  dconf.settings."org/cinnamon/desktop/applications/terminal" = {
+    exec = "kitty";
+    exec-arg = "";
+  };
+
   home.stateVersion = "25.11";
 }

@@ -435,6 +435,7 @@
     # ── File Managers ──
     nemo-with-extensions       # Cinnamon file manager with plugins
     nemo-fileroller
+    cinnamon-desktop           # gsettings schemas for Nemo (terminal, etc.)
     file-roller
     spacedrive                 # Cross-platform file manager
 
@@ -550,6 +551,7 @@
     claude-code                # Anthropic Claude CLI coding assistant
     claude-monitor             # Claude usage monitoring tool
     codex
+    gemini-cli
 
     # ── Containers & Compatibility ──
     distrobox                  # Run other Linux distros in containers

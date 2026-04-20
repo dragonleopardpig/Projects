@@ -10,6 +10,12 @@
 /vtk/
 /DeepLens/
 /zmxtools/
+/SeaRay/
+/beamshapy/
+/lightpipes/
+/pyLaserPulse/
+/rezonator2/
+/simcav/
 
 # Generated/cache files
 .aider*
