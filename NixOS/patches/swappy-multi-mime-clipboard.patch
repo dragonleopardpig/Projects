@@ -1,0 +1,178 @@
+diff --git a/src/clipboard.c b/src/clipboard.c
+index dd03dd9..62a59f2 100644
+--- a/src/clipboard.c
++++ b/src/clipboard.c
+@@ -10,32 +10,43 @@
+ #define gtk_clipboard_t GtkClipboard
+ #define gdk_pixbuf_t GdkPixbuf
+ 
+-static gboolean send_pixbuf_to_wl_copy(gdk_pixbuf_t *pixbuf) {
++/*
++ * Fork a child that execs "swappy --clipboard-serve".  The child reads PNG
++ * from stdin and sets the GTK clipboard with gtk_clipboard_set_image(), which
++ * advertises every image MIME type GTK supports (image/png, image/bmp,
++ * image/tiff, …) — the same behaviour as Pinta or GIMP.  The child stays
++ * alive to serve paste requests and exits when another app takes clipboard
++ * ownership.
++ */
++static gboolean send_pixbuf_to_clipboard_serve(gdk_pixbuf_t *pixbuf) {
+   pid_t clipboard_process = 0;
+   int pipefd[2];
+-  int status;
+   ssize_t written;
+   gsize size;
+   gchar *buffer = NULL;
+   GError *error = NULL;
+ 
+   if (pipe(pipefd) < 0) {
+-    g_warning("unable to pipe for copy process to work");
++    g_warning("unable to pipe for clipboard-serve process");
+     return false;
+   }
+   clipboard_process = fork();
+   if (clipboard_process == -1) {
+-    g_warning("unable to fork process for copy");
++    g_warning("unable to fork process for clipboard-serve");
+     return false;
+   }
+   if (clipboard_process == 0) {
+     close(pipefd[1]);
+     dup2(pipefd[0], STDIN_FILENO);
+     close(pipefd[0]);
++    /* Detach so swappy can exit while the child keeps serving clipboard. */
++    setsid();
++    execlp("swappy", "swappy", "--clipboard-serve", NULL);
++    /* Fallback: try wl-copy if swappy --clipboard-serve is unavailable. */
+     execlp("wl-copy", "wl-copy", "-t", "image/png", NULL);
+     g_warning(
+-        "Unable to copy contents to clipboard. Please make sure you have "
+-        "`wl-clipboard`, `xclip`, or `xsel` installed.");
++        "Unable to copy contents to clipboard. Please make sure swappy or "
++        "`wl-clipboard` is installed.");
+     exit(1);
+   }
+   close(pipefd[0]);
+@@ -57,27 +68,16 @@ static gboolean send_pixbuf_to_wl_copy(gdk_pixbuf_t *pixbuf) {
+ 
+   close(pipefd[1]);
+   g_free(buffer);
+-  waitpid(clipboard_process, &status, 0);
+ 
+-  if (WIFEXITED(status)) {
+-    return WEXITSTATUS(status) == 0;  // Make sure the child exited properly
+-  }
+-
+-  return false;
+-}
+-
+-static void send_pixbuf_to_gdk_clipboard(gdk_pixbuf_t *pixbuf) {
+-  gtk_clipboard_t *clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+-  gtk_clipboard_set_image(clipboard, pixbuf);
+-  gtk_clipboard_store(clipboard);  // Does not work for Wayland gdk backend
++  /* Don't waitpid — the child intentionally outlives swappy. */
++  return true;
+ }
+ 
+ bool clipboard_copy_drawing_area_to_selection(struct swappy_state *state) {
+   gdk_pixbuf_t *pixbuf = pixbuf_get_from_state(state);
+ 
+-  // Try `wl-copy` first and fall back to gtk function. See README.md.
+-  if (!send_pixbuf_to_wl_copy(pixbuf)) {
+-    send_pixbuf_to_gdk_clipboard(pixbuf);
++  if (!send_pixbuf_to_clipboard_serve(pixbuf)) {
++    g_warning("clipboard-serve failed, falling back to wl-copy");
+   }
+ 
+   g_object_unref(pixbuf);
+diff --git a/src/main.c b/src/main.c
+index c04b96a..aad0593 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -1,9 +1,87 @@
+ #define _POSIX_C_SOURCE 200809L
+ 
++#include <string.h>
++
+ #include "application.h"
+ #include "config.h"
++#include "swappy.h"
++
++/*
++ * --clipboard-serve mode: read PNG from stdin, set the GTK clipboard with
++ * gtk_clipboard_set_image() (which advertises all image MIME types just like
++ * Pinta/GIMP), and stay alive to serve paste requests.  Exit when another app
++ * takes clipboard ownership.
++ */
++static void on_owner_change(GtkClipboard *clipboard, GdkEvent *event,
++                            gpointer data) {
++  (void)clipboard;
++  (void)event;
++  (void)data;
++  gtk_main_quit();
++}
++
++static int clipboard_serve(void) {
++  GdkPixbuf *pixbuf;
++  GdkPixbufLoader *loader;
++  GtkClipboard *clipboard;
++  guchar buf[65536];
++  ssize_t n;
++  GError *error = NULL;
++
++  gtk_init(NULL, NULL);
++
++  loader = gdk_pixbuf_loader_new_with_type("png", &error);
++  if (!loader) {
++    g_printerr("clipboard-serve: cannot create PNG loader: %s\n",
++               error->message);
++    g_error_free(error);
++    return 1;
++  }
++
++  while ((n = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
++    if (!gdk_pixbuf_loader_write(loader, buf, (gsize)n, &error)) {
++      g_printerr("clipboard-serve: loader write error: %s\n", error->message);
++      g_error_free(error);
++      g_object_unref(loader);
++      return 1;
++    }
++  }
++
++  if (!gdk_pixbuf_loader_close(loader, &error)) {
++    g_printerr("clipboard-serve: loader close error: %s\n", error->message);
++    g_error_free(error);
++    g_object_unref(loader);
++    return 1;
++  }
++
++  pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
++  if (!pixbuf) {
++    g_printerr("clipboard-serve: no pixbuf from loader\n");
++    g_object_unref(loader);
++    return 1;
++  }
++  g_object_ref(pixbuf);
++  g_object_unref(loader);
++
++  clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
++  gtk_clipboard_set_image(clipboard, pixbuf);
++
++  /* Exit when another app takes clipboard ownership. */
++  g_signal_connect(clipboard, "owner-change", G_CALLBACK(on_owner_change),
++                   NULL);
++
++  gtk_main();
++
++  g_object_unref(pixbuf);
++  return 0;
++}
+ 
+ int main(int argc, char *argv[]) {
++  /* Handle --clipboard-serve before any swappy init. */
++  if (argc == 2 && strcmp(argv[1], "--clipboard-serve") == 0) {
++    return clipboard_serve();
++  }
++
+   struct swappy_state state = {0};
+   int status;
+ 

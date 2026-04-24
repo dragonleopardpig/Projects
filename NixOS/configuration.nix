@@ -373,7 +373,12 @@
     inetutils                  # Basic networking tools (ftp, telnet, etc.)
     ethtool                    # Ethernet device configuration
     filezilla                  # GUI FTP/SFTP client
-    remmina                    # Remote desktop client (RDP, VNC, SSH)
+    remmina                    # Remote desktop client
+    freerdp                    # RDP implementation (needed for Remmina RDP plugins)
+    python3
+    python3Packages.pygobject3
+    gtk3
+    spice-protocol             # Needed for some clipboard sync features
     protonvpn-gui              # ProtonVPN graphical client
     onlyoffice-desktopeditors  # ONLYOFFICE desktop editors
 
@@ -417,6 +422,8 @@
     slurp                      # Wayland region selector (for screenshots)
     grim                       # Wayland screenshot utility
     wl-clipboard               # Wayland clipboard utilities (wl-copy, wl-paste)
+    xclip                      # X11 clipboard utility (for XWayland apps like Remmina)
+    copyq                      # Powerful clipboard manager (Wayland + X11 sync)
     libnotify                  # Desktop notification sending (notify-send)
     # ── Themes & Appearance ──
     orchis-theme               # GTK theme (Orchis)

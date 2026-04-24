@@ -94,6 +94,15 @@ in
     terminal = false;
   };
 
+  xdg.desktopEntries.remmina-xcb = {
+    name = "Remmina (X11)";
+    exec = "/home/thinky/.local/bin/remmina-xcb %U";
+    icon = "remmina";
+    comment = "Remmina Remote Desktop (forced X11 for clipboard sync)";
+    categories = [ "Network" "RemoteAccess" ];
+    terminal = false;
+  };
+
   xdg.desktopEntries.onlyoffice-desktopeditors = {
     name = "ONLYOFFICE";
     exec = "/home/thinky/.local/bin/onlyoffice-desktopeditors %U";
@@ -280,6 +289,11 @@ in
     save_dir=$HOME/Pictures/Screenshots
     save_filename_format=swappy-%Y%m%d-%H%M%S.png
   '';
+
+  services.cliphist = {
+    enable = true;
+    allowImages = true;
+  };
   xdg.dataFile."xdg-desktop-portal/portals/gtk.portal".source =
     "${pkgs.xdg-desktop-portal-gtk}/share/xdg-desktop-portal/portals/gtk.portal";
   xdg.configFile."distrobox/distrobox.conf".force = true;
@@ -482,6 +496,28 @@ in
       export GDK_BACKEND=x11
       export NO_AT_BRIDGE=1
       exec FreeCAD "$@"
+    '';
+  };
+
+  # Remmina wrapper: force X11/XWayland for reliable clipboard sync with remote
+  home.file.".local/bin/remmina-xcb" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      # Force XWayland to ensure clipboard sync bridge works reliably
+      export GDK_BACKEND=x11
+      export QT_QPA_PLATFORM=xcb
+      export XDG_SESSION_TYPE=x11
+      # Compatibility flags for X11 clipboard sync
+      export QT_X11_NO_MITSHM=1
+      export GDK_SCALE=1
+      # Ensure clipboard bridge is active by nudging xclip
+      if command -v xclip >/dev/null 2>&1; then
+        # Sometimes RDP needs the image to be in both CLIPBOARD and PRIMARY
+        # We don't change current content here, just ensuring the environment is right
+        echo "Starting Remmina in XWayland mode for clipboard compatibility..."
+      fi
+      exec remmina "$@"
     '';
   };
 
@@ -904,6 +940,7 @@ in
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
+                    "env GDK_BACKEND=x11 copyq --daemon"
                     "protonvpn-app"
                     "~/.local/bin/random-wallpaper"
                     "while true; do sleep 60; ~/.local/bin/random-wallpaper; done"
@@ -1031,13 +1068,22 @@ in
 
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
+    (python3.withPackages (ps: with ps; [ pygobject3 ]))
+    gtk3
+    gobject-introspection
+    libnotify
     megasync
+
     swappy
+    cliphist
+    copyq
     nomacs
     gthumb
     pyprland
     pavucontrol
     xed-editor
+    gtk3
+    gobject-introspection
     sioyek
     poppler-utils
     wf-recorder

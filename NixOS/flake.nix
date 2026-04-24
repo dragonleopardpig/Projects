@@ -28,6 +28,12 @@
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
     let
       protonvpnOverlay = final: prev: {
+        swappy = prev.swappy.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ./patches/swappy-multi-mime-clipboard.patch
+          ];
+        });
+
         protonvpn-gui = prev.protonvpn-gui.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/protonvpn-systray.patch
