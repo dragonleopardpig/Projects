@@ -5,9 +5,6 @@
 {
   imports = [];
 
-  # Disable swap
-  swapDevices = lib.mkForce [ ];
-
   boot = {
     kernelPackages = pkgs.linuxPackages_latest;
     kernelModules = ["i2c-dev"];
@@ -22,7 +19,6 @@
       "boot.shell_on_fail"
       "udev.log_priority=3"
       "rd.systemd.show_status=auto"
-      "systemd.swap=0"
     ];
     # silence first boot output
     consoleLogLevel = 3;
@@ -555,10 +551,10 @@
     repomix                    # Repository content mixer for LLM context
 
     # ── AI Assistants ──
-    claude-code                # Anthropic Claude CLI coding assistant
-    claude-monitor             # Claude usage monitoring tool
-    codex
-    gemini-cli
+    # claude-code                # Anthropic Claude CLI coding assistant
+    # claude-monitor             # Claude usage monitoring tool
+    # codex
+    # gemini-cli
 
     # ── Containers & Compatibility ──
     distrobox                  # Run other Linux distros in containers
