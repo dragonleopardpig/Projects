@@ -19,6 +19,7 @@
 
 # Generated/cache files
 .aider*
+.codex/
 /org/ltximg/
 /org/data/
 **/.devenv.flake.nix
@@ -34,3 +35,19 @@
 
 # Journal (private)
 /journal/
+
+# Tool runtime data / state (do not commit)
+/auth.json
+/installation_id
+/.personality_migration
+/version.json
+/history.jsonl
+/config.toml
+/models_cache.json
+/logs_*.sqlite*
+/state_*.sqlite*
+/laser/
+
+# Lock files (top-level scratch devenv — intentionally untracked)
+/devenv.lock
+/flake.lock
