@@ -16,10 +16,13 @@
 /pyLaserPulse/
 /rezonator2/
 /simcav/
+/RayTracing/
+/LensAI/
 
 # Generated/cache files
 .aider*
 .codex/
+sessions/
 /org/ltximg/
 /org/data/
 **/.devenv.flake.nix

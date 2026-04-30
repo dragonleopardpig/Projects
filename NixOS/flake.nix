@@ -34,11 +34,11 @@
           ];
         });
 
-        protonvpn-gui = prev.protonvpn-gui.overrideAttrs (old: {
-          patches = (old.patches or [ ]) ++ [
-            ./patches/protonvpn-systray.patch
-          ];
-        });
+        # proton-vpn = prev.proton-vpn.overrideAttrs (old: {
+        #   patches = (old.patches or [ ]) ++ [
+        #     ./patches/protonvpn-systray.patch
+        #   ];
+        # });
 
         filen-desktop = prev.filen-desktop.overrideAttrs (old: {
           postFixup = (old.postFixup or "") + ''

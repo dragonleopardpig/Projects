@@ -411,7 +411,7 @@
     usbimager                  # Write disk images to USB drives
 
     # ── Hyprland & Wayland Desktop ──
-    swww                       # Animated wallpaper daemon for Wayland
+    awww                       # Animated wallpaper daemon for Wayland
     hyprsysteminfo             # Hyprland system info utility
     hyprpolkitagent            # Polkit authentication agent for Hyprland
     waypaper                   # GUI wallpaper setter for Wayland
