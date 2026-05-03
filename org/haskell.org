@@ -1,0 +1,247 @@
+* Chapter 01
+  :PROPERTIES:
+  :CUSTOM_ID: Calculating-with-Haskell
+  :END:
+** Numeric Functions
+#+BEGIN_SRC haskell
+sqrt (2 * 2 / 0.4)
+#+END_SRC
+
+#+RESULTS:
+: 3.1622776601683795
+
+#+BEGIN_SRC haskell
+cos(pi/2)
+#+END_SRC
+
+#+RESULTS:
+: 6.123233995736766e-17
+
+** Operators
+#+BEGIN_SRC haskell
+pi > 3
+#+END_SRC
+
+#+RESULTS:
+: True
+
+*** Precedence and Associativity
+#+BEGIN_SRC haskell
+8 - 3 - 2
+#+END_SRC
+
+#+RESULTS:
+: 3
+
+#+BEGIN_SRC haskell  
+8 / 7 / 4 ** 2 ** 3 > sin pi/4
+#+END_SRC
+
+#+RESULTS:
+: True
+
+
+#+BEGIN_SRC haskell  
+8 / 7 / 4 ** (2 ** 3) > (sin pi)/4
+#+END_SRC
+
+#+RESULTS:
+: True
+
+
+#+BEGIN_SRC haskell  
+8 / 7 / (4 ** (2 ** 3)) > (sin pi)/4
+#+END_SRC
+
+#+RESULTS:
+: True
+
+
+#+BEGIN_SRC haskell  
+(8 / 7) / (4 ** (2 ** 3)) > ((sin pi)/4)
+#+END_SRC
+
+#+RESULTS:
+: True
+
+
+#+BEGIN_SRC haskell  
+((8 / 7) / (4 ** (2 ** 3))) > ((sin pi)/4)
+#+END_SRC
+
+#+RESULTS:
+: True
+
+
+#+BEGIN_SRC haskell  
+((8 / 7) / (4 ** (2 ** 3))) > ((sin pi)/4)
+#+END_SRC
+
+#+RESULTS:
+: True
+
+*** The Application Operator
+#+BEGIN_SRC haskell  
+cos $ pi / 2
+#+END_SRC
+
+#+RESULTS:
+: 6.123233995736766e-17
+
+** Functions with Two Arguments
+#+BEGIN_SRC haskell
+logBase 10 100
+#+END_SRC
+
+#+RESULTS:
+: 2.0
+
+#+BEGIN_SRC haskell
+atan2 1 0
+#+END_SRC
+
+#+RESULTS:
+: 1.5707963267948966
+
+** Numbers in Haskell
+*** Negative Numbers in Haskell
+#+BEGIN_SRC haskell  
+5 * -1
+#+END_SRC
+
+#+RESULTS:
+: <interactive>:32:1-6: error:
+:     Precedence parsing error
+:         cannot mix ‘*’ [infixl 7] and prefix `-' [infixl 6] in the same infix expression
+
+
+#+BEGIN_SRC haskell  
+5 * (-1)
+#+END_SRC
+
+#+RESULTS:
+: -5
+
+*** Decimal Numbers in Haskell
+#+BEGIN_SRC haskell  
+
+#+END_SRC
+
+*** Exponential Notation
+#+BEGIN_SRC haskell
+
+#+END_SRC
+
+#+RESULTS:
+
+** Approximate Calculation
+#+BEGIN_SRC haskell  
+sqrt 5
+#+END_SRC
+
+#+RESULTS:
+: 2.23606797749979
+
+
+#+BEGIN_SRC haskell  
+sqrt 5^2
+#+END_SRC
+
+#+RESULTS:
+: 5.000000000000001
+
+
+#+BEGIN_SRC haskell  
+sqrt 5 ^ 2 == 5
+#+END_SRC
+
+#+RESULTS:
+: False
+
+** Errors
+#+BEGIN_SRC haskell  
+
+#+END_SRC
+
+* Chapter 02
+  :PROPERTIES:
+  :CUSTOM_ID: Writing-Basic-Functions
+  :END:
+
+** Constants, Functions, and Types
+#+BEGIN_SRC haskell
+-- First Haskell program
+
+-- Here we define a constant
+e :: Double
+e = exp 1
+#+END_SRC
+
+#+RESULTS:
+: 2.718281828459045
+
+#+BEGIN_SRC haskell  
+-- Here we define a function
+square :: Double -> Double
+square x = x**2
+square 7
+#+END_SRC
+
+#+RESULTS:
+: 49.0
+
+
+#+BEGIN_SRC haskell  
+square e
+#+END_SRC
+
+#+RESULTS:
+: 7.3890560989306495
+
+
+#+BEGIN_SRC haskell  
+:t square
+#+END_SRC
+
+#+RESULTS:
+: square :: Floating a => a -> a
+
+** Anonymous Functions
+#+BEGIN_SRC haskell  
+(\x -> x**2) 3
+#+END_SRC
+
+#+RESULTS:
+: 9.0
+
+** Composing Functions
+#+BEGIN_SRC haskell  
+cosSq :: Double -> Double
+cosSq x = square (cos x)
+
+cosSq' :: Double -> Double
+cosSq' x = square $ cos x
+
+cosSq'' :: Double -> Double
+cosSq'' x = (square . cos) x
+
+cosSq''' :: Double -> Double
+cosSq''' = square . cos
+#+END_SRC
+
+#+RESULTS:
+: <interactive>:326:1-28: error:
+:     • No instance for (Show (Double -> Double))
+:         arising from a use of ‘print’
+:         (maybe you haven't applied a function to enough arguments?)
+:     • In a stmt of an interactive GHCi command: print it
+
+* Chapter 03
+  :PROPERTIES:
+  :CUSTOM_ID: Types-and-Entities
+  :END:
+
+#+BEGIN_SRC haskell  
+
+#+END_SRC
+

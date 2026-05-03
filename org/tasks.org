@@ -1,0 +1,45 @@
+#+STARTUP: content
+* Shortcuts
+- M-x org-capture (C-c c)
+- M-x org-schedule (C-c C-s)
+- M-x org-agenda-file-to-front (C-c [)
+- 
+* Tasks
+** DONE Meeting with SIMTech :interRI:Laser:
+CLOSED: [2019-06-27 Thu 07:46] SCHEDULED: <2019-06-26 Wed>
+   - Zhongke willing to provide FYP student to assist laser texturing study.
+   - Xincai has metal surface laser texturing experience, but mentioned that hard to apply on actual industrial use.
+
+** DONE Meeting with GF Machining :Industry:Laser:
+CLOSED: [2019-07-01 Mon 14:06] SCHEDULED: <2019-07-01 Mon>
+   - Pro:
+     - Looks promising on laser texturing capability: matching laser type, 5-axis capable.
+     - Confident on Switzerland + Germany quality.
+     - Williing to do FOC trial.
+   - Con:
+     - Discourage full customization: not cost effective.
+     - Price on high side.
+
+** DONE DOE meeting
+CLOSED: [2019-07-09 Tue 11:37] SCHEDULED: <2019-07-05 Fri>
+    - To install Minitab
+    - To perform actual Laser experiment run using Minitab
+** DONE Meeting with NUS :LocalU:Laser:
+CLOSED: [2019-07-09 Tue 11:38]
+    - To texture hydrophobic surface using Nanosecond laser - 1 month duration
+    - To provide student's thesis
+** TODO Meeting with Coventry :OverseaU:Laser:
+** TODO Tender Purchase :Tender:
+** TODO Meeting with Voestalpine
+** TODO Meeting of Collabration
+** TODO Update Cal Target Cert
+SCHEDULED: <2023-09-19 Tue>
+  [2023-09-19 Tue]
+  [[file:~/mountdir/org/MIT_Meeting.org::*Vision BOM][Vision BOM]]
+* TODO remindern test
+  SCHEDULED: <2023-09-20 Sat 11:55>
+  :PROPERTIES:
+  :REMINDERN: 15
+  :END:
+* TODO Vision BOM Database
+* TODO COMM PROTOCOL

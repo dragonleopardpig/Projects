@@ -1,0 +1,353 @@
+** iPython
+#+BEGIN_SRC ipython :session :results raw drawer
+  def foo(x):
+      return x + 9
+
+  [foo(x) + 7 for x in range(7)]
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [2]: 
+# text/plain
+: [16, 17, 18, 19, 20, 21, 22]
+:end:
+
+#+BEGIN_SRC ipython :session :results raw drawer
+  %matplotlib inline
+  import matplotlib.pyplot as plt
+  import numpy as np
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [3]: 
+:end:
+
+#+BEGIN_SRC ipython :session :exports both :results raw drawer
+  plt.hist(np.random.randn(20000), bins=200)
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [4]: 
+# text/plain
+: (array([  1.,   0.,   0.,   1.,   0.,   0.,   1.,   0.,   0.,   0.,   0.,
+:           0.,   0.,   0.,   2.,   0.,   0.,   1.,   0.,   0.,   3.,   4.,
+:           3.,   3.,   3.,   3.,   1.,   0.,   4.,   8.,   8.,   7.,  11.,
+:           9.,   9.,   9.,  17.,  15.,  13.,  17.,  13.,  14.,  18.,  13.,
+:          22.,  27.,  27.,  32.,  39.,  44.,  39.,  50.,  48.,  39.,  47.,
+:          49.,  72.,  74.,  64.,  84.,  76.,  88.,  94., 105., 105., 103.,
+:         136., 114., 129., 141., 142., 141., 157., 157., 196., 181., 215.,
+:         188., 207., 192., 235., 226., 279., 257., 219., 287., 269., 287.,
+:         261., 306., 294., 279., 278., 315., 287., 287., 279., 314., 339.,
+:         339., 322., 320., 323., 331., 307., 296., 307., 331., 330., 274.,
+:         319., 286., 285., 269., 281., 309., 260., 242., 262., 244., 230.,
+:         233., 232., 227., 203., 196., 228., 211., 178., 158., 154., 160.,
+:         158., 149., 131., 124., 101., 114., 118., 106.,  80.,  85.,  82.,
+:          77.,  61.,  78.,  58.,  57.,  50.,  55.,  51.,  44.,  45.,  38.,
+:          31.,  35.,  27.,  20.,  27.,  23.,  24.,  13.,  14.,  17.,   9.,
+:          12.,   9.,   9.,   6.,  10.,   9.,   9.,   3.,   7.,   3.,   6.,
+:           1.,   8.,   6.,   3.,   2.,   2.,   3.,   3.,   1.,   0.,   0.,
+:           1.,   0.,   2.,   1.,   0.,   0.,   0.,   0.,   0.,   0.,   0.,
+:           1.,   1.]),
+:  array([-4.07546903, -4.0352326 , -3.99499618, -3.95475976, -3.91452333,
+:         -3.87428691, -3.83405049, -3.79381406, -3.75357764, -3.71334121,
+:         -3.67310479, -3.63286837, -3.59263194, -3.55239552, -3.5121591 ,
+:         -3.47192267, -3.43168625, -3.39144982, -3.3512134 , -3.31097698,
+:         -3.27074055, -3.23050413, -3.19026771, -3.15003128, -3.10979486,
+:         -3.06955844, -3.02932201, -2.98908559, -2.94884916, -2.90861274,
+:         -2.86837632, -2.82813989, -2.78790347, -2.74766705, -2.70743062,
+:         -2.6671942 , -2.62695777, -2.58672135, -2.54648493, -2.5062485 ,
+:         -2.46601208, -2.42577566, -2.38553923, -2.34530281, -2.30506638,
+:         -2.26482996, -2.22459354, -2.18435711, -2.14412069, -2.10388427,
+:         -2.06364784, -2.02341142, -1.98317499, -1.94293857, -1.90270215,
+:         -1.86246572, -1.8222293 , -1.78199288, -1.74175645, -1.70152003,
+:         -1.6612836 , -1.62104718, -1.58081076, -1.54057433, -1.50033791,
+:         -1.46010149, -1.41986506, -1.37962864, -1.33939221, -1.29915579,
+:         -1.25891937, -1.21868294, -1.17844652, -1.1382101 , -1.09797367,
+:         -1.05773725, -1.01750082, -0.9772644 , -0.93702798, -0.89679155,
+:         -0.85655513, -0.81631871, -0.77608228, -0.73584586, -0.69560943,
+:         -0.65537301, -0.61513659, -0.57490016, -0.53466374, -0.49442732,
+:         -0.45419089, -0.41395447, -0.37371804, -0.33348162, -0.2932452 ,
+:         -0.25300877, -0.21277235, -0.17253593, -0.1322995 , -0.09206308,
+:         -0.05182665, -0.01159023,  0.02864619,  0.06888262,  0.10911904,
+:          0.14935546,  0.18959189,  0.22982831,  0.27006473,  0.31030116,
+:          0.35053758,  0.39077401,  0.43101043,  0.47124685,  0.51148328,
+:          0.5517197 ,  0.59195612,  0.63219255,  0.67242897,  0.7126654 ,
+:          0.75290182,  0.79313824,  0.83337467,  0.87361109,  0.91384751,
+:          0.95408394,  0.99432036,  1.03455679,  1.07479321,  1.11502963,
+:          1.15526606,  1.19550248,  1.2357389 ,  1.27597533,  1.31621175,
+:          1.35644818,  1.3966846 ,  1.43692102,  1.47715745,  1.51739387,
+:          1.55763029,  1.59786672,  1.63810314,  1.67833957,  1.71857599,
+:          1.75881241,  1.79904884,  1.83928526,  1.87952168,  1.91975811,
+:          1.95999453,  2.00023096,  2.04046738,  2.0807038 ,  2.12094023,
+:          2.16117665,  2.20141307,  2.2416495 ,  2.28188592,  2.32212235,
+:          2.36235877,  2.40259519,  2.44283162,  2.48306804,  2.52330446,
+:          2.56354089,  2.60377731,  2.64401374,  2.68425016,  2.72448658,
+:          2.76472301,  2.80495943,  2.84519585,  2.88543228,  2.9256687 ,
+:          2.96590513,  3.00614155,  3.04637797,  3.0866144 ,  3.12685082,
+:          3.16708724,  3.20732367,  3.24756009,  3.28779651,  3.32803294,
+:          3.36826936,  3.40850579,  3.44874221,  3.48897863,  3.52921506,
+:          3.56945148,  3.6096879 ,  3.64992433,  3.69016075,  3.73039718,
+:          3.7706336 ,  3.81087002,  3.85110645,  3.89134287,  3.93157929,
+:          3.97181572]),
+:  <BarContainer object of 200 artists>)
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/59e2c746ea4eb1f21d7da6f882cd93785ab3297c/5ce55a26a3e277e21498a8e9ce5cf4663876f817.png]]
+:end:
+** 
+
+* Temp
+#+STARTUP: content latexpreview
+
+#+TEMPLATE:  - Elsevier
+#+group: manuscript
+#+key: elsarticle
+#+contributor: John Kitchin <jkitchin@andrew.cmu.edu>
+#+default-filename: manuscript.org
+
+#+LATEX_CLASS: elsarticle
+#+LATEX_CLASS_OPTIONS: [number, sort&compress, review, 10pt]
+#+OPTIONS: toc:2 ^:{} tags:nil
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+# here is where you include the relevant packages. These are pretty
+# common ones. You may add additional ones. Note that the orderauto composition of the
+# packages is significant. If you are not careful, your file will not
+# build into a pdf.
+#+LATEX_HEADER: \usepackage[top=1in, bottom=1.in, left=0.5in, right=0.5in]{geometry}
+#+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage[T1]{fontenc}
+#+LATEX_HEADER: \usepackage{mathptmx}
+#+LATEX_HEADER: \usepackage{fixltx2e}
+#+LATEX_HEADER: \usepackage{natbib}
+#+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage{minted}}  % for source code
+#+LATEX_HEADER: \usepackage{graphicx}
+#+LATEX_HEADER: \usepackage{textcomp}
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage{pdfpages}
+#+LATEX_HEADER: \usepackage[version=3]{mhchem}
+#+LATEX_HEADER: \usepackage{setspace}
+#+LATEX_HEADER: \usepackage[linktocpage, pdfstartview=FitH, colorlinks, linkcolor=blue, anchorcolor=blue, citecolor=blue,  filecolor=blue,  menucolor=blue,  urlcolor=blue]{hyperref}
+#+LATEX_HEADER: \usepackage{cancel}
+#+LATEX_HEADER: \usepackage{xcolor,colortbl}
+#+LaTeX_HEADER: \usepackage{CJK}
+#+LaTeX_HEADER: \begin{CJK}{UTF8}{gbsn}
+
+#+LATEX_HEADER: \modulolinenumbers[5]
+#+LATEX_HEADER: \journal{Journal of \LaTeX\ Templates}
+
+\doublespace
+
+#+AUTHOR:	Chu Pau Loong
+#+EMAIL:	chu_pau_loong@artc.a-star.edu.sg
+#+TITLE:	ARTC - FMCG - Laser Texturing
+#+DATE:       2019 July 07
+#+SUBTITLE:     Femtosecond Laser Texturing
+#+KEYWORDS:     hello
+#+DESCRIPTION:  Enhanced Surface Properties
+#+CREATOR:      CHU PAU LOONG
+#+LANGUAGE:     EN
+
+\maketitle
+
+#+BEGIN_abstract
+Materials sticking to the inner walls of filling machines (e.g. tanks, mixers, augers) is a common problem in the FMCG industry. The problem is further aggravated by processing conditions (temperature, heat, duration, batch size), product characteristics (hygroscopicity of powder) and environmental conditions (temperature, humidity). There is a challenge of cross contamination, especially for batch one (or low MOQ) production, where cleaning after every recipe change is not feasible. The scope includes development of anti-sticking surfaces by micro/nano texturisation of metal parts (stainless steel). Nano texturisation on plastics have been commercialized for optics and medtech applications, but this is not achieved on steel surfaces for tooling yet. Preliminary research by EU Shark Project1 had demonstrated feasibility of laser texturising metals to improve hydrophobicity.
+#+END_abstract
+
+\begin{frontmatter}
+
+\title{\tnoteref{mytitlenote}}
+\tnotetext[mytitlenote]{Fully documented templates are available in the elsarticle package on \href{ http://www.ctan.org/tex-archive/macros/latex/contrib/elsarticle}{CTAN}.}
+
+%% Group authors per affiliation:
+\author{Elsevier\fnref{myfootnote}}
+\address{Radarweg 29, Amsterdam}
+\fntext[myfootnote]{Since 1880.}
+
+# %% or include affiliations in footnotes:
+\author[mymainaddress,mysecondaryaddress]{Elsevier Inc}
+\ead[url]{www.elsevier.com}
+
+\author[mysecondaryaddress]{Global Customer Service\corref{mycorrespondingauthor}}
+\cortext[mycorrespondingauthor]{Corresponding author}
+\ead{support@elsevier.com}
+
+\address[mymainaddress]{1600 John F Kennedy Boulevard, Philadelphia}
+\address[mysecondaryaddress]{360 Park Avenue South, New York}
+
+\begin{keyword}
+laser \sep texturing \sep
+\end{keyword}
+
+\end{frontmatter}
+
+\linenumbers
+
+\thispagestyle{empty}
+\clearpage
+\setcounter{page}{1}
+
+* Quick Reference :RuleOfThumb:
+** Gaussian Beam
+   - Spot Size: \(2 \omega_0= \frac{4}{\pi} \lambda \frac{f}{D} M^2\)
+   - Depth Of Focus: \(DOF = \frac{8}{\pi} \lambda \frac{f}{D}\)
+** Bessel Beam
+** Repetition Rate vs Speed vs Pulse Overlap
+** Fluence
+** Melting
+** Resolidification
+
+     
+* Brainstorming :Ideas:
+** TODO Low Surface Energy Coating :Technology:
+
+** TODO Air Cushion thinking direction :Technology:
+
+** TODO Spring effect thinking direction :Technology:
+
+** TODO Laser Metal Surface Hot Embosing
+** TODO Non-removal bump formation through temperature gradient
+
+
+* Theory :BoringPart:
+
+** TODO Superhydrophilic vs Superhydrophobic structure :Theory:
+
+*** Geometry analysis (variaties, effect)
+      
+*** Electrostatic force analysis (static charge, surface tension)
+
+*** Interaction with moving particles (flow of liquid, powder)
+
+*** TODO Theoretical foundation meeting
+
+
+* Experiments :TryItOut:FunPart:
+
+** Experimental method 1
+*** Contributors (team members)
+*** Abstract, Hypothesis, Objective.
+*** Safety requirement (licence, POE, SOP, etc)
+*** Process Flow chart and Milestone (Duration for tasks)
+*** BOM list (Equipment, Material, Fixture, Chemical, Gas, etc)
+*** Pre-experiment setup and design (In-line Vision, motion control, etc)
+*** Algorithm (Techniques, DOE, etc)
+*** Physical Data Analysis (SEM, XRD, Contact Angle, etc)
+*** Statistical Data Analysis (Curve fitting, etc)
+*** Results and Discussion (Improvement method)
+
+** Experimental method 2
+*** Contributors (team members)
+*** Abstract, Hypothesis, Objective.
+*** Safety requirement (licence, POE, SOP, etc)
+*** Process Flow chart and Milestone (Duration for tasks)
+*** BOM list (Equipment, Material, Fixture, Chemical, Gas, etc)
+*** Pre-experiment setup and design (In-line Vision, motion control, etc)
+*** Algorithm (Techniques, DOE, etc)
+*** Physical Data Analysis (SEM, XRD, Contact Angle, etc)
+*** Statistical Data Analysis (Curve fitting, etc)
+*** Results and Discussion (Improvement method)
+
+
+* Simulation :TryItOut:OnPaper:
+
+
+
+* System Integration :SpendingSpree:
+
+
+* Questions to be answered
+   - correlation between surface morphology and wettability
+   - Fundamentals of ElectroMagnetism applied to the surface interaction
+     
+
+
+* Literatures Review :WhatWeHave:
+
+** Journal Review
+*** Recent advances in designing superhydrophobic surfaces
+    
+    #+ATTR_LATEX: :width 10cm 
+    [[file:ContactAngle.png]]
+
+    #+ATTR_LATEX: :width 10cm  
+    [[file:WenzelCassieBexter.png]]
+
+     - Young Equation of Contact Angle: \(cos\:\theta=\frac{T_{sg} - T_{sl}}{T_{lg}}\)
+     - \(\theta \mapsto \begin{cases}
+	< 90^\circ, & \text{Hydrophilic} \\
+	90^\circ < \theta < 150^\circ, & \text{Hydrophobic} \\
+	 > 150^\circ, & \text{SuperHydrophobic}
+	\end{cases}\)
+ 
+     - Hydrophobic surface Model:
+       - Wenzel State:
+	 If */r/* is the amplification factor of increased surface area, then:
+	 \(r=roughness \: factor=\frac{actual \: surface \: area}{planar \: area}\)
+	 therefore \(cos \: \theta\) is modified to become:
+	 \(cos \: \theta_{W} = r cos \: \theta\)
+
+       - Cassie-Bexter State:
+         \(cos \: \theta_{CB} = f_1 cos \: \theta_1 + f_2 cos \: \theta_2\) where
+
+         /f_1/ = Surface Fraction of Phase 1 and
+
+         /f_2/ = Surface Fraction of Phase 2
+
+       - If only one type of protrusion is present, given f the fraction of asperities, (1  f) is the air fraction. Water droplet has a 180 contact angle with air, so the equation becomes:
+
+         \(cos \: \theta_{CB} = f(1 + cos \: \theta_W) - 1\)
+
+       - Intermediate Wenzel-Cassie state:
+
+         \(cos \: \theta_{CW} = rf cos \: \theta + f - 1\)
+
+       - For many surfaces, a transition from Cassie-Baxter to Wenzel state was observed.
+
+       - Reason for Adhesion Hysteresis:
+
+	 - Surface Heterogeneity
+
+	 - Chemical Heterogeneity
+
+	 - Roughness
+
+	 - Interaction at the contact line
+
+       - chemical heterogeneity and roughness can engender a contact angle hysteresis (H) between the water front advancing across a surface and receding from the surface. Generally, advancing contact angle ($\theta_A$) exceeds receding contact angle ($\theta_R$).
+
+       - Young equation is valid for ideal, smooth, and homogeneous surfaces; water contact angle is measured at the equilibrium and it is unique.
+
+       - Methods to measure contact angle hysteresis:
+
+	 - Sessile Drop Method
+
+	 - Sliding Method
+         
+** Books Review: :Reading:
+   - Electromagnetic/Electrodynamics
+   - Optics [[file:optics.org]]
+   - Laser
+     
+** Patent Search :WhatWeHave:
+
+
+
+* build :noexport:
+
+[[elisp:(org-open-file (org-latex-export-to-pdf))]]
+
+
+
+* Note :noexport:
+
+  - Must add shell-escape to org-preview-latex-process-alist (M-x customize-variable org-preview-latex-process-alist)
+  - ("latex -shell-escape -interaction nonstopmode -output-directory %o %f")
+

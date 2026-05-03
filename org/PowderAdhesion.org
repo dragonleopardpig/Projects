@@ -1,0 +1,9 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	Powder Adhesion Theory
+
+* Powder Adhesion Theory
+** Articles
+*** Adhesion of Dust and Powder book
+*** Particle Adhesion Force Distributions on Rough Surfaces
+*** A surface characterization platform approach to study Flowability of food powders

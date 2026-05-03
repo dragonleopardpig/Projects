@@ -1,0 +1,75 @@
+* Laser Texturing Tasks
+:PROPERTIES:
+:OMM-COLOR: PaleGreen
+:END:
+** NUS
+:PROPERTIES:
+:OMM-COLOR: Wheat
+:END:
+*** NANO-second
+*** FEMTO-second
+*** UV-nanosecond
+** SIMTech
+:PROPERTIES:
+:OMM-COLOR: Wheat
+:END:
+*** PICO-second
+** Coventry
+:PROPERTIES:
+:OMM-COLOR: Wheat
+:END:
+*** PICO-second
+*** UV-nanosecond
+** ARTC
+:PROPERTIES:
+:OMM-COLOR: Wheat
+:END:
+*** NANO-second
+
+* Texture
+:PROPERTIES:
+:OMM-COLOR: Red
+:END:
+** Aspect Ratio
+** Size of Features
+** Shapes of Features
+** Orientation of Features/Directionality
+** Hierarchical Arrangement
+** Periodicity/Pitch/Distribution of Features
+
+#+begin_src plantuml :file PlantumlDotSupport.png
+@startdot
+@startmindmap
+* Debian
+** Ubuntu
+*** Linux Mint
+*** Kubuntu
+*** Lubuntu
+*** KDE Neon
+** LMDE
+** SolydXK
+** SteamOS
+** Raspbian with a very long name
+*** <s>Raspmbc</s> => OSMC
+*** <s>Raspyfi</s> => Volumio
+@endmindmap
+@enddot
+#+end_src
+
+#+RESULTS:
+[[file:PlantumlDotSupport.png]]
+
+@startmindmap
+* Debian
+** Ubuntu
+*** Linux Mint
+*** Kubuntu
+*** Lubuntu
+*** KDE Neon
+** LMDE
+** SolydXK
+** SteamOS
+** Raspbian with a very long name
+*** <s>Raspmbc</s> => OSMC
+*** <s>Raspyfi</s> => Volumio
+@endmindmap

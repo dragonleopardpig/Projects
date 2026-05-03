@@ -1,0 +1,3283 @@
+* Practical Common Lisp
+** Intro
+#+BEGIN_SRC lisp :results raw drawer
+(defun hello-world ()
+  (format t "hello, world"))
+#+END_SRC
+
+#+RESULTS:
+:results:
+HELLO-WORLD
+:end:
+
+#+BEGIN_SRC lisp
+(list 1 2 3)
+#+END_SRC
+
+#+RESULTS:
+| 1 | 2 | 3 |
+
+
+#+BEGIN_SRC lisp
+(list :a 1 :b 2 :c 3)
+#+END_SRC
+
+#+RESULTS:
+| :A | 1 | :B | 2 | :C | 3 |
+
+
+#+BEGIN_SRC lisp
+(getf (list :a 1 :b 2 :c 3) :a)
+#+END_SRC
+
+#+RESULTS:
+: 1
+
+
+#+BEGIN_SRC lisp
+(getf (list :a 1 :b 2 :c 3) :c)
+#+END_SRC
+
+#+RESULTS:
+: 3
+
+** Database
+:PROPERTIES:
+#+BEGIN_SRC lisp
+(defun make-cd (title artist rating ripped)
+  (list :title title :artist artist :rating rating :ripped ripped))
+#+END_SRC
+
+#+RESULTS:
+: MAKE-CD
+
+
+#+BEGIN_SRC lisp
+(make-cd "Roses" "Kathy Mattea" 7 t)
+#+END_SRC
+
+#+RESULTS:
+| :TITLE | Roses | :ARTIST | Kathy Mattea | :RATING | 7 | :RIPPED | T |
+
+
+#+BEGIN_SRC lisp
+(defvar *db* nil)
+#+END_SRC
+
+#+RESULTS:
+: *DB*
+
+
+#+BEGIN_SRC lisp
+(defun add-record (cd)
+  (push cd *db*))
+#+END_SRC
+
+#+RESULTS:
+: ADD-RECORD
+
+
+#+BEGIN_SRC lisp
+(add-record (make-cd "Roses" "Kathy Mattea" 7 t))
+(add-record (make-cd "Fly" "Dixie Chicks" 8 t))
+(add-record (make-cd "Home" "Dixie Chicks" 9 t))
+#+END_SRC
+
+#+RESULTS:
+| :TITLE | Home  | :ARTIST | Dixie Chicks | :RATING | 9 | :RIPPED | T |
+| :TITLE | Fly   | :ARTIST | Dixie Chicks | :RATING | 8 | :RIPPED | T |
+| :TITLE | Roses | :ARTIST | Kathy Mattea | :RATING | 7 | :RIPPED | T |
+
+
+#+BEGIN_SRC lisp
+*db*
+#+END_SRC
+
+#+RESULTS:
+| :TITLE | Home  | :ARTIST | Dixie Chicks | :RATING | 9 | :RIPPED | T |
+| :TITLE | Fly   | :ARTIST | Dixie Chicks | :RATING | 8 | :RIPPED | T |
+| :TITLE | Roses | :ARTIST | Kathy Mattea | :RATING | 7 | :RIPPED | T |
+
+
+#+BEGIN_SRC lisp
+*db*
+#+END_SRC
+
+#+RESULTS:
+| :TITLE | Home  | :ARTIST | Dixie Chicks | :RATING | 9 | :RIPPED | T |
+| :TITLE | Fly   | :ARTIST | Dixie Chicks | :RATING | 8 | :RIPPED | T |
+| :TITLE | Roses | :ARTIST | Kathy Mattea | :RATING | 7 | :RIPPED | T |
+
+
+#+BEGIN_SRC lisp
+
+#+END_SRC
+
+* Common Lisp - A Gentle Introduction to Symbolic Computation
+** THE EVAL FUNCTION
+#+BEGIN_SRC lisp
+(+ 2 3)
+#+END_SRC
+
+#+RESULTS:
+: 5
+
+#+BEGIN_SRC lisp
+(oddp (+ 1 6))
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(* 3 (+ 1 6))
+#+END_SRC
+
+#+RESULTS:
+: 21
+
+
+#+BEGIN_SRC lisp
+(/ (* 2 11) (+ 1 6))
+#+END_SRC
+
+#+RESULTS:
+: 22/7
+
+
+#+BEGIN_SRC lisp
+(equal (+ 7 5)(* 2 8))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+** DEFINING FUNCTIONS IN EVAL NOTATION
+#+BEGIN_SRC lisp
+(defun average (x y)
+  (/ (+ x y) 2.0))
+#+END_SRC
+
+#+RESULTS:
+: AVERAGE
+
+
+#+BEGIN_SRC lisp
+(average 6 8)
+#+END_SRC
+
+#+RESULTS:
+: 7.0
+
+
+#+BEGIN_SRC lisp
+(defun square (n)
+  (* n n))
+#+END_SRC
+
+#+RESULTS:
+: SQUARE
+
+
+#+BEGIN_SRC lisp
+(defun total-cost (quantity price handling-charge)
+  (+ (* quantity price) handling-charge))
+#+END_SRC
+
+#+RESULTS:
+: TOTAL-COST
+
+
+#+BEGIN_SRC lisp
+(square 3)
+#+END_SRC
+
+#+RESULTS:
+: 9
+
+
+#+BEGIN_SRC lisp
+(total-cost 12 3.15 0.55)
+#+END_SRC
+
+#+RESULTS:
+: 38.350002
+
+** VARIABLES and SYMBOLS
+#+BEGIN_SRC lisp
+pi
+#+END_SRC
+
+#+RESULTS:
+: 3.141592653589793d0
+
+#+BEGIN_SRC lisp
+(equal 'kirk 'spock)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(defun riddle (x y)
+  (list 'why 'is 'a x 'like 'a y))
+#+END_SRC
+
+#+RESULTS:
+: RIDDLE
+
+
+#+BEGIN_SRC lisp
+(riddle 'raven 'writing-desk)
+#+END_SRC
+
+#+RESULTS:
+| WHY | IS | A | RAVEN | LIKE | A | WRITING-DESK |
+
+
+#+BEGIN_SRC lisp
+(list 'james t 'kirk)
+#+END_SRC
+
+#+RESULTS:
+| JAMES | T | KIRK |
+
+
+#+BEGIN_SRC lisp
+(first '(we hold these truths))
+#+END_SRC
+
+#+RESULTS:
+: WE
+
+
+#+BEGIN_SRC lisp
+(third '(my aunt mary))
+#+END_SRC
+
+#+RESULTS:
+: MARY
+
+
+#+BEGIN_SRC lisp
+'(+ 1 2)
+#+END_SRC
+
+#+RESULTS:
+| + | 1 | 2 |
+
+
+#+BEGIN_SRC lisp
+(oddp (+ 1 2))
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(length (cons 'fish '(beef chicken)))
+#+END_SRC
+
+#+RESULTS:
+: 3
+
+
+#+BEGIN_SRC lisp
+(list 'buy '(* 27 34) 'bagels)
+#+END_SRC
+
+#+RESULTS:
+| BUY | (* 27 34) | BAGELS |
+
+#+BEGIN_SRC lisp
+(list 'buy (* 27 34) 'bagels)
+#+END_SRC
+
+#+RESULTS:
+| BUY | 918 | BAGELS |
+
+
+#+BEGIN_SRC lisp
+'(foo bar baz)
+#+END_SRC
+
+#+RESULTS:
+| FOO | BAR | BAZ |
+
+
+#+BEGIN_SRC lisp
+(list 'foo 'bar 'baz)
+#+END_SRC
+
+#+RESULTS:
+| FOO | BAR | BAZ |
+
+
+#+BEGIN_SRC lisp
+(cons 'foo '(bar baz))
+#+END_SRC
+
+#+RESULTS:
+| FOO | BAR | BAZ |
+
+** Define a Function
+*** Defun
+- defun :: (DEFUN function-name (argument-list) function-body)
+
+#+BEGIN_SRC lisp
+(defun intro (x y) (list x 'this 'is y))
+#+END_SRC
+
+#+RESULTS:
+: INTRO
+
+
+#+BEGIN_SRC lisp
+(intro 'stanley 'livingstone)
+#+END_SRC
+
+#+RESULTS:
+| STANLEY | THIS | IS | LIVINGSTONE |
+
+
+#+BEGIN_SRC lisp
+(defun square (n) (* n n))
+#+END_SRC
+
+#+RESULTS:
+: SQUARE
+
+#+BEGIN_SRC lisp
+(square 4)
+#+END_SRC
+
+#+RESULTS:
+: 16
+
+
+#+BEGIN_SRC lisp
+(square 123456789)
+#+END_SRC
+
+#+RESULTS:
+: 15241578750190521
+
+*** The QUOTE Special Function
+- QUOTE :: Its input does not get evaluated. The QUOTE special function simply returns its input.
+
+#+BEGIN_SRC lisp
+(cons 'up '(down sideways))
+#+END_SRC
+
+#+RESULTS:
+| UP | DOWN | SIDEWAYS |
+
+
+#+BEGIN_SRC lisp
+(cons (quote up) (quote (down sideways)))
+#+END_SRC
+
+#+RESULTS:
+| UP | DOWN | SIDEWAYS |
+
+** Lambda Notation
+- LAMBDA :: is not a function; it is a marker treated specially by EVAL.
+- $\lambda x . (3 + x)$
+#+BEGIN_SRC lisp
+(lambda (x) (+ 3 x))
+#+END_SRC
+
+#+RESULTS:
+: #<FUNCTION (LAMBDA (X)) {535793FB}>
+
+- $f(x, y) = 3x + y^2$
+#+BEGIN_SRC lisp
+(lambda (x y) (+ (* 3 x) (* y y)))
+#+END_SRC
+
+#+RESULTS:
+: #<FUNCTION (LAMBDA (X Y)) {5357955B}>
+
+*** APPLY
+#+BEGIN_SRC lisp
+(apply #'+ '(2 3))
+#+END_SRC
+
+#+RESULTS:
+: 5
+
+
+#+BEGIN_SRC lisp
+(apply #'equal '(12 17))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(apply #'cons '(as (you like it)))
+#+END_SRC
+
+#+RESULTS:
+| AS | YOU | LIKE | IT |
+
+** Conditionals
+*** IF
+#+BEGIN_SRC lisp
+(if (oddp 1) 'odd 'even)
+#+END_SRC
+
+#+RESULTS:
+: ODD
+
+
+#+BEGIN_SRC lisp
+(if (oddp 2) 'odd 'even)
+#+END_SRC
+
+#+RESULTS:
+: EVEN
+
+
+#+BEGIN_SRC lisp
+(if t 'test-was-true 'test-was-false)
+#+END_SRC
+
+#+RESULTS:
+: TEST-WAS-TRUE
+
+
+#+BEGIN_SRC lisp
+(If nil 'test-was-true 'test-was-false)
+#+END_SRC
+
+
+#+RESULTS:
+: TEST-WAS-FALSE
+
+
+#+BEGIN_SRC lisp
+(if (symbolp 'foo) (* 5 5) (+ 5 5))
+#+END_SRC
+
+#+RESULTS:
+: 25
+
+
+#+BEGIN_SRC lisp
+(if (symbolp 1) (* 5 5) (+ 5 5))
+#+END_SRC
+
+#+RESULTS:
+: 10
+
+
+#+BEGIN_SRC lisp
+(defun my-abs (x)
+  (if (< x 0) (- x) x)))
+#+END_SRC
+
+#+RESULTS:
+: MY-ABS
+
+
+#+BEGIN_SRC lisp
+(my-abs -5)
+#+END_SRC
+
+#+RESULTS:
+: 5
+
+
+#+BEGIN_SRC lisp
+(my-abs 5)
+#+END_SRC
+
+#+RESULTS:
+: 5
+
+
+#+BEGIN_SRC lisp
+(if t 'happy)
+#+END_SRC
+
+#+RESULTS:
+: HAPPY
+
+
+#+BEGIN_SRC lisp
+(if nil 'happy)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+*** COND
+#+BEGIN_SRC lisp
+(defun compare (x y)
+  (cond ((equal x y) 'numbers-are-the-same)
+	((< x y) 'first-is-smaller)
+	((> x y) 'first-is-bigger)))
+#+END_SRC
+
+#+RESULTS:
+: COMPARE
+
+
+#+BEGIN_SRC lisp
+(compare 3 5)
+#+END_SRC
+
+#+RESULTS:
+: FIRST-IS-SMALLER
+
+
+#+BEGIN_SRC lisp
+(compare 7 2)
+#+END_SRC
+
+#+RESULTS:
+: FIRST-IS-BIGGER
+
+
+#+BEGIN_SRC lisp
+(compare 4 4)
+#+END_SRC
+
+#+RESULTS:
+: NUMBERS-ARE-THE-SAME
+
+*** USING T AS A TEST
+#+BEGIN_SRC lisp
+(defun where-is (x)
+  (cond ((equal x 'paris) 'france)
+	((equal x 'london) 'england)
+	((equal x 'beijing) 'china)
+	(t 'unknown)))
+#+END_SRC
+
+#+RESULTS:
+: WHERE-IS
+
+
+#+BEGIN_SRC lisp
+(where-is 'london)
+#+END_SRC
+
+#+RESULTS:
+: ENGLAND
+
+
+#+BEGIN_SRC lisp
+(where-is 'beijing)
+#+END_SRC
+
+#+RESULTS:
+: CHINA
+
+
+#+BEGIN_SRC lisp
+(where-is 'hackensack)
+#+END_SRC
+
+#+RESULTS:
+: UNKNOWN
+
+
+#+BEGIN_SRC lisp
+(defun emphasize (x)
+  (cond
+	((equal (first x) 'good) (cons 'great (rest x)))
+	((equal (first x) 'bad) (cons 'awful (rest x)))
+	))
+#+END_SRC
+
+#+RESULTS:
+: EMPHASIZE
+
+
+#+BEGIN_SRC lisp
+(emphasize '(good mystery story))
+#+END_SRC
+
+#+RESULTS:
+| GREAT | MYSTERY | STORY |
+
+
+#+BEGIN_SRC lisp
+(emphasize '(mediocre mystery story))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(defun emphasize2 (x)
+  (cond
+	((equal (first x) 'good) (cons 'great (rest x)))
+	((equal (first x) 'bad) (cons 'awful (rest x)))
+	(t x)
+	))
+#+END_SRC
+
+#+RESULTS:
+: EMPHASIZE2
+
+
+#+BEGIN_SRC lisp
+(emphasize2 '(good day))
+#+END_SRC
+
+#+RESULTS:
+| GREAT | DAY |
+
+
+#+BEGIN_SRC lisp
+(emphasize2 '(bad day))
+#+END_SRC
+
+#+RESULTS:
+| AWFUL | DAY |
+
+
+#+BEGIN_SRC lisp
+(emphasize2 '(long day))
+#+END_SRC
+
+#+RESULTS:
+| LONG | DAY |
+
+
+#+BEGIN_SRC lisp
+(defun compute (op x y)
+(cond
+  ((equal op 'sum-of) (+ x y))
+  ((equal op 'product-of) (* x y))
+  (t '(that does not compute))
+  ))
+#+END_SRC
+
+#+RESULTS:
+: COMPUTE
+
+
+#+BEGIN_SRC lisp
+(compute 'sum-of 3 7)
+#+END_SRC
+
+#+RESULTS:
+: 10
+
+
+#+BEGIN_SRC lisp
+(compute 'product-of 2 4)
+#+END_SRC
+
+#+RESULTS:
+: 8
+
+
+#+BEGIN_SRC lisp
+(compute 'zorch-of 3 1)
+#+END_SRC
+
+#+RESULTS:
+| THAT | DOES | NOT | COMPUTE |
+
+*** AND OR
+#+BEGIN_SRC lisp
+(defun small-positive-oddp (x)
+  (and (< x 100)
+       (> x 0)
+       (oddp x)))
+#+END_SRC
+
+#+RESULTS:
+: SMALL-POSITIVE-ODDP
+
+
+#+BEGIN_SRC lisp
+(small-positive-oddp 33)
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(defun gtest (x y)
+  (or (> x y)
+      (zerop x)
+      (zerop y)))
+#+END_SRC
+
+#+RESULTS:
+: GTEST
+
+
+#+BEGIN_SRC lisp
+(gtest 0 5)
+#+END_SRC
+
+#+RESULTS:
+: T
+
+*** EVALUATING AND AND OR
+ - AND rule ::  Evaluate the clauses one at a time. If a clause returns NIL, stop and return NIL; otherwise go on to the next one. If all the clauses yield non-NIL results, return the value of the last clause.
+ - OR rule :: Evaluate the clauses one at a time. If a clause returns something other than NIL, stop and return that value; otherwise go on to the next clause, or return NIL if none are left.
+#+BEGIN_SRC lisp
+(and nil t t)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+#+BEGIN_SRC lisp
+(and 'george nil 'harry)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(and 'george 'fred 'harry)
+#+END_SRC
+
+#+RESULTS:
+: HARRY
+
+
+#+BEGIN_SRC lisp
+(and 1 2 3 4 5)
+#+END_SRC
+
+#+RESULTS:
+: 5
+
+
+#+BEGIN_SRC lisp
+(or nil t t)
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(or 'george nil 'harry)
+#+END_SRC
+
+#+RESULTS:
+: GEORGE
+
+
+#+BEGIN_SRC lisp
+(or 'george 'fred 'harry)
+#+END_SRC
+
+#+RESULTS:
+: GEORGE
+
+
+#+BEGIN_SRC lisp
+(or nil 'fred 'harry)
+#+END_SRC
+
+#+RESULTS:
+: FRED
+
+** BUILDING COMPLEX PREDICATES
+*** HOW-ALIKE
+#+BEGIN_SRC lisp
+(defun how-alike (a b)
+  (cond ((equal a b) 'the-same)
+	((and (oddp a) (oddp b)) 'both-odd)
+	((and (not (oddp a)) (not (oddp b)))
+	 'both-even)
+	((and (< a 0) (< b 0)) 'both-negative)
+	(t 'not-alike)))
+#+END_SRC
+
+#+RESULTS:
+: HOW-ALIKE
+
+
+#+BEGIN_SRC lisp
+(how-alike 7 7)
+#+END_SRC
+
+#+RESULTS:
+: THE-SAME
+
+
+#+BEGIN_SRC lisp
+(how-alike 3 5)
+#+END_SRC
+
+#+RESULTS:
+: BOTH-ODD
+
+
+#+BEGIN_SRC lisp
+(how-alike -2 -3)
+#+END_SRC
+
+#+RESULTS:
+: BOTH-NEGATIVE
+
+
+#+BEGIN_SRC lisp
+(how-alike 5 8)
+#+END_SRC
+
+#+RESULTS:
+: NOT-ALIKE
+
+*** SAME-SIGN
+#+BEGIN_SRC lisp
+(defun same-sign (x y)
+  (or (and (zerop x) (zerop y))
+      (and (< x 0) (< y 0))
+      (and (> x 0) (> y 0))))
+#+END_SRC
+
+#+RESULTS:
+: SAME-SIGN
+
+
+#+BEGIN_SRC lisp
+(same-sign 0 0)
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(same-sign -3 -4)
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(same-sign 3 4)
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(same-sign -3 4)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+*** POSNUMP
+#+BEGIN_SRC lisp
+(defun posnump (x)
+  (and (numberp x) (plusp x)))
+#+END_SRC
+
+#+RESULTS:
+: POSNUMP
+
+
+#+BEGIN_SRC lisp
+(defun posnump-2 (x)
+  (if (numberp x) (> x 0) nil))
+#+END_SRC
+
+#+RESULTS:
+: POSNUMP-2
+
+
+#+BEGIN_SRC lisp
+(defun posnump-3 (x)
+  (cond ((numberp x) (> x 0))
+	(t nil)))
+#+END_SRC
+
+#+RESULTS:
+: POSNUMP-3
+
+*** WHERE-IS
+- *IF* is the easiest to use for simple functions like absolute value.
+- *AND* and *OR* are good for writing complex predicates.
+- *COND* is easiest to use when there are many tests.
+- A useful programming trick when writing *COND* expressions is to place a list of form (T consequent) as the final clause of the *COND*.
+
+#+BEGIN_SRC lisp
+(defun where-is (x)
+  (cond ((equal x 'paris) 'france)
+	((equal x 'london) 'england)
+	((equal x 'beijing) 'china)
+	(t 'unknown)))
+#+END_SRC
+
+#+RESULTS:
+: WHERE-IS
+
+
+#+BEGIN_SRC lisp
+(defun where-is-2 (x)
+  (if (equal x 'paris) 'france
+      (if (equal x 'london) 'england
+	  (if (equal x 'beijing) 'china
+	      'unknown))))
+#+END_SRC
+
+#+RESULTS:
+: WHERE-IS-2
+
+
+#+BEGIN_SRC lisp
+(defun where-is-3 (x)
+  (or (and (equal x 'paris) 'france)
+      (and (equal x 'london) 'england)
+      (and (equal x 'beijing) 'china)
+      'unknown))
+#+END_SRC
+
+#+RESULTS:
+: WHERE-IS-3
+
+*** STEP
+#+BEGIN_SRC lisp
+(step (if (oddp 5) 'yes 'no))
+#+END_SRC
+
+#+RESULTS:
+: YES
+
+** BOOLEAN FUNCTIONS
+#+BEGIN_SRC lisp
+(defun logical-and (x y) (and x y t))
+#+END_SRC
+
+#+RESULTS:
+: LOGICAL-AND
+
+
+#+BEGIN_SRC lisp
+(logical-and 'tweet 'woof)
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(and 'tweet 'woof)
+#+END_SRC
+
+#+RESULTS:
+: WOOF
+
+** DEMORGAN'S THEOREM
+- DeMorgan's Theorem :: concerns the interchangeability of AND and OR. If you have one of these functions plus NOT you can always build the other.
+- (and x y) :: (not (or (not x) (not y)))
+- (or x y) :: (not (and (not x) (not y)))
+#+BEGIN_SRC lisp
+(defun demorgan-and (x y)
+  (not (or (not x) (not y))))
+#+END_SRC
+
+#+RESULTS:
+: DEMORGAN-AND
+
+
+#+BEGIN_SRC lisp
+(defun demorgan-or (x y)
+  (not (and (not x) (not y))))
+#+END_SRC
+
+#+RESULTS:
+: DEMORGAN-OR
+
+** Variables and Side Effects
+*** SETF
+- The first argument to SETF is the name of a variable; SETF does not evaluate this argument. (It can do this because it is a macro function.) The
+second argument is the value to which the variable is set; this argument is
+evaluated. The value returned by SETF is the value to which it set the variable.
+#+BEGIN_SRC lisp
+(setf vowels '(a e i o u))
+#+END_SRC
+
+#+RESULTS:
+| A | E | I | O | U |
+
+
+#+BEGIN_SRC lisp
+(setf long-list '(a b c d e f g h i))
+#+END_SRC
+
+#+RESULTS:
+| A | B | C | D | E | F | G | H | I |
+
+
+#+BEGIN_SRC lisp
+(setf head (first long-list))
+#+END_SRC
+
+#+RESULTS:
+: A
+
+
+#+BEGIN_SRC lisp
+(setf tail (rest long-list))
+#+END_SRC
+
+#+RESULTS:
+| B | C | D | E | F | G | H | I |
+
+
+#+BEGIN_SRC lisp
+(cons head tail)
+#+END_SRC
+
+#+RESULTS:
+| A | B | C | D | E | F | G | H | I |
+
+
+#+BEGIN_SRC lisp
+(equal long-list (cons head tail))
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(list head tail)
+#+END_SRC
+
+#+RESULTS:
+| A | (B C D E F G H I) |
+
+*** LET
+- LET :: create this local variable and give it the desired initial value.
+#+BEGIN_SRC lisp
+(defun average (x y)
+  (let ((sum (+ x y)))
+    (list x y 'average 'is (/ sum 2.0))))
+#+END_SRC
+
+#+RESULTS:
+: AVERAGE
+
+
+#+BEGIN_SRC lisp
+(average 3 7)
+#+END_SRC
+
+#+RESULTS:
+| 3 | 7 | AVERAGE | IS | 5.0 |
+
+
+#+BEGIN_SRC lisp
+(defun switch-billing (x)
+  (let ((star (first x))
+	(co-star (third x)))
+    (list co-star 'accompanied 'by star)))
+#+END_SRC
+
+#+RESULTS:
+: SWITCH-BILLING
+
+
+#+BEGIN_SRC lisp
+(switch-billing '(fred and ginger))
+#+END_SRC
+
+#+RESULTS:
+| GINGER | ACCOMPANIED | BY | FRED |
+
+*** LET*
+- The LET* special function is similar to LET, except it creates the local variables one at a time instead of all at once. Therefore, the first local variable
+forms part of the lexical context in which the value of the second variable is computed, and so on. This way of creating local variables is useful when one wants to assign names to several intermediate steps in a long computation.
+#+BEGIN_SRC lisp
+(defun price-change (old new)
+  (let* ((diff (- new old))
+	 (proportion (/ diff old))
+	 (percentage (* proportion 100.0)))
+    (list 'widgets 'changed 'by percentage
+	  'percent)))
+#+END_SRC
+
+#+RESULTS:
+: PRICE-CHANGE
+
+
+#+BEGIN_SRC lisp
+(price-change 1.25 1.35)
+#+END_SRC
+
+#+RESULTS:
+| WIDGETS | CHANGED | BY | 8.000002 | PERCENT |
+
+
+#+BEGIN_SRC lisp
+(defun correct-size-range (x y z)
+  (let* ((biggest (max x y z))
+	 (smallest (min x y z))
+	 (r (/ biggest smallest 1.0)))
+    (list 'factor 'of r)))
+#+END_SRC
+
+#+RESULTS:
+: CORRECT-SIZE-RANGE
+
+** SIDE EFFECTS CAN CAUSE BUGS
+#+BEGIN_SRC lisp
+(defun coin-with-bug ()
+  (cond ((< (random 101) 50) 'heads)
+	((> (random 101) 50) 'tails)
+	((equal (random 101) 50) 'edge)))
+#+END_SRC
+
+#+RESULTS:
+: COIN-WITH-BUG
+
+
+#+BEGIN_SRC lisp
+(coin-with-bug)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(coin-with-bug)
+#+END_SRC
+
+#+RESULTS:
+: HEADS
+
+
+#+BEGIN_SRC lisp
+(coin-with-bug)
+#+END_SRC
+
+#+RESULTS:
+: TAILS
+
+
+#+BEGIN_SRC lisp
+(coin-with-bug)
+#+END_SRC
+
+#+RESULTS:
+: HEADS
+
+
+#+BEGIN_SRC lisp
+(defun fair-coin ()
+  (let ((toss (random 101)))
+    (cond ((< toss 50) 'heads)
+	  ((> toss 50) 'tails)
+	  (t 'edge))))
+#+END_SRC
+
+#+RESULTS:
+: FAIR-COIN
+
+
+#+BEGIN_SRC lisp
+(fair-coin)
+#+END_SRC
+
+#+RESULTS:
+: TAILS
+
+
+#+BEGIN_SRC lisp
+(fair-coin)
+#+END_SRC
+
+#+RESULTS:
+: HEADS
+
+
+#+BEGIN_SRC lisp
+(fair-coin)
+#+END_SRC
+
+#+RESULTS:
+: TAILS
+
+** DOCUMENTATION and APROPOS
+*** DOCUMENTATION
+#+BEGIN_SRC lisp
+(documentation 'cons 'function)
+#+END_SRC
+
+#+RESULTS:
+: Return a list with SE1 as the CAR and SE2 as the CDR.
+
+
+#+BEGIN_SRC lisp
+(documentation '*print-length* 'variable)
+#+END_SRC
+
+#+RESULTS:
+: How many elements at any level should be printed before abbreviating
+:   with "..."?
+
+
+#+BEGIN_SRC lisp
+(defun average (x y)
+  "Returns the mean (average value) of its two
+inputs."
+  (/ (+ x y) 2.0))
+#+END_SRC
+
+#+RESULTS:
+: AVERAGE
+
+
+#+BEGIN_SRC lisp
+(documentation 'average 'function)
+#+END_SRC
+
+#+RESULTS:
+: Returns the mean (average value) of its two
+: inputs.
+
+*** COMMENT
+#+BEGIN_SRC lisp
+;;; Function to compute Einstein's E = mc2
+(defun einstein (m)
+  (let ((c 300000.0)) ; speed of light in km/sec.
+    ;; E is energy
+    ;; m is mass
+    (* m c c)))
+#+END_SRC
+
+#+RESULTS:
+: EINSTEIN
+
+*** APROPOS
+#+BEGIN_SRC lisp
+(apropos 'vector :cl-user)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC lisp
+(documentation 'apropos 'function)
+#+END_SRC
+
+#+RESULTS:
+: Briefly describe all symbols which contain the specified STRING.
+:   If PACKAGE is supplied then only describe symbols present in
+:   that package. If EXTERNAL-ONLY then only describe
+:   external symbols in the specified package.
+
+
+#+BEGIN_SRC lisp
+(setf x 57)
+(defun newvar (x)
+  (list 'value 'of 'x 'is x))
+#+END_SRC
+
+#+RESULTS:
+: NEWVAR
+
+
+#+BEGIN_SRC lisp
+x
+#+END_SRC
+
+#+RESULTS:
+: 57
+
+
+#+BEGIN_SRC lisp
+(newvar 'whoopie)
+#+END_SRC
+
+#+RESULTS:
+| VALUE | OF | X | IS | WHOOPIE |
+
+
+#+BEGIN_SRC lisp
+x
+#+END_SRC
+
+#+RESULTS:
+: 57
+
+** List Data Structures
+*** PARENTHESIS NOTATION VS. CONS CELL NOTATION
+#+BEGIN_SRC lisp
+(cons 'w '(x y z))
+#+END_SRC
+
+#+RESULTS:
+| W | X | Y | Z |
+
+
+#+BEGIN_SRC lisp
+(cons '(a b c) 'd)
+#+END_SRC
+
+#+RESULTS:
+: ((A B C) . D)
+
+*** APPEND
+- APPEND :: takes two lists as input; it returns a list containing all the elements of the first list followed by all the elements of the second.
+- APPEND does not change the value of any variable or modify any existing cons cells. For this reason, it is called a nondestructive function.
+#+BEGIN_SRC lisp
+(append '(friends romans) '(and countrymen))
+#+END_SRC
+
+#+RESULTS:
+| FRIENDS | ROMANS | AND | COUNTRYMEN |
+
+
+#+BEGIN_SRC lisp
+(append '(l m n o) '(p q r))
+#+END_SRC
+
+#+RESULTS:
+| L | M | N | O | P | Q | R |
+
+
+#+BEGIN_SRC lisp
+(append '(april showers) nil)
+#+END_SRC
+
+#+RESULTS:
+| APRIL | SHOWERS |
+
+
+#+BEGIN_SRC lisp
+(append nil '(bring may flowers))
+#+END_SRC
+
+#+RESULTS:
+| BRING | MAY | FLOWERS |
+
+
+#+BEGIN_SRC lisp
+(append nil nil)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(append '((a 1) (b 2)) '((c 3) (d 4)))
+#+END_SRC
+
+#+RESULTS:
+| A | 1 |
+| B | 2 |
+| C | 3 |
+| D | 4 |
+
+
+#+BEGIN_SRC lisp
+(setf who '(only the good))
+#+END_SRC
+
+#+RESULTS:
+| ONLY | THE | GOOD |
+
+
+#+BEGIN_SRC lisp
+(append who '(die young))
+#+END_SRC
+
+#+RESULTS:
+| ONLY | THE | GOOD | DIE | YOUNG |
+
+
+#+BEGIN_SRC lisp
+who
+#+END_SRC
+
+#+RESULTS:
+| ONLY | THE | GOOD |
+
+
+#+BEGIN_SRC lisp
+(defun add-to-end (x e)
+  "Adds element E to the end of list X."
+  (append x (list e)))
+#+END_SRC
+
+#+RESULTS:
+: ADD-TO-END
+
+
+#+BEGIN_SRC lisp
+(add-to-end '(a b c) 'd)
+#+END_SRC
+
+#+RESULTS:
+| A | B | C | D |
+
+*** COMPARING CONS, LIST, AND APPEND
+#+BEGIN_SRC lisp
+(cons '(here today) '(gone tomorrow))
+#+END_SRC
+
+#+RESULTS:
+| (HERE TODAY) | GONE | TOMORROW |
+
+
+#+BEGIN_SRC lisp
+(list '(here today) '(gone tomorrow))
+#+END_SRC
+
+#+RESULTS:
+| HERE | TODAY    |
+| GONE | TOMORROW |
+
+
+#+BEGIN_SRC lisp
+(append '(here today) '(gone tomorrow))
+#+END_SRC
+
+#+RESULTS:
+| HERE | TODAY | GONE | TOMORROW |
+
+
+#+BEGIN_SRC lisp
+(cons '(eat at) 'joes)
+#+END_SRC
+
+#+RESULTS:
+: ((EAT AT) . JOES)
+
+
+#+BEGIN_SRC lisp
+(list '(eat at) 'joes)
+#+END_SRC
+
+#+RESULTS:
+| (EAT AT) | JOES |
+
+
+#+BEGIN_SRC lisp
+(append '(eat at) 'joes)
+#+END_SRC
+
+#+RESULTS:
+: (EAT AT . JOES)
+
+*** REVERSE
+- REVERSE :: returns the reversal of a list.
+- REVERSE is nondestructive. It copies its input rather than modifying it.
+- REVERSE reverses only the top level of a list. It does not reverse the individual elements of a list of lists. Another point about REVERSE is that it doesn't work on symbols.
+#+BEGIN_SRC lisp
+(reverse '(one two three four five))
+#+END_SRC
+
+#+RESULTS:
+| FIVE | FOUR | THREE | TWO | ONE |
+
+
+#+BEGIN_SRC lisp
+(reverse '(l i v e))
+#+END_SRC
+
+#+RESULTS:
+| E | V | I | L |
+
+
+#+BEGIN_SRC lisp
+(reverse '((my oversight)
+	   (your blunder)
+	   (his negligence)))
+#+END_SRC
+
+#+RESULTS:
+| HIS  | NEGLIGENCE |
+| YOUR | BLUNDER    |
+| MY   | OVERSIGHT  |
+
+
+#+BEGIN_SRC lisp
+(setf vow '(to have and to hold))
+#+END_SRC
+
+#+RESULTS:
+| TO | HAVE | AND | TO | HOLD |
+
+
+#+BEGIN_SRC lisp
+(reverse vow)
+#+END_SRC
+
+#+RESULTS:
+| HOLD | TO | AND | HAVE | TO |
+
+
+#+BEGIN_SRC lisp
+vow
+#+END_SRC
+
+#+RESULTS:
+| TO | HAVE | AND | TO | HOLD |
+
+
+#+BEGIN_SRC lisp
+;; use REVERSE to add an element to the end of a list
+
+(defun add-to-end (x y)
+  (reverse (cons y (reverse x))))
+#+END_SRC
+
+#+RESULTS:
+: ADD-TO-END
+
+
+#+BEGIN_SRC lisp
+(add-to-end '(a b c) 'd)
+#+END_SRC
+
+#+RESULTS:
+| A | B | C | D |
+
+*** NTHCDR
+- NTHCDR :: function returns the nth successive cdr of a list.
+#+BEGIN_SRC lisp
+(nthcdr 0 '(a b c))
+#+END_SRC
+
+#+RESULTS:
+| A | B | C |
+
+
+#+BEGIN_SRC lisp
+(nthcdr 1 '(a b c))
+#+END_SRC
+
+#+RESULTS:
+| B | C |
+
+
+#+BEGIN_SRC lisp
+(nthcdr 2 '(a b c))
+#+END_SRC
+
+#+RESULTS:
+| C |
+
+
+#+BEGIN_SRC lisp
+(nthcdr 3 '(a b c))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+*** NTH
+- NTH :: function takes the CAR of the NTHCDR of a list.
+#+BEGIN_SRC lisp
+;; nth function
+;; (defun nth (n x)
+;;   "Returns the Nth element of the list X, counting from 0."
+;;   (car (nthcdr n x)))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(nth 0 '(a b c))
+#+END_SRC
+
+#+RESULTS:
+: A
+
+
+#+BEGIN_SRC lisp
+(nth 1 '(a b c))
+#+END_SRC
+
+#+RESULTS:
+: B
+
+
+#+BEGIN_SRC lisp
+(nth 2 '(a b c))
+#+END_SRC
+
+#+RESULTS:
+: C
+
+
+#+BEGIN_SRC lisp
+(nth 3 '(a b c))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+*** LAST
+- LAST :: returns the last cons cell of a list, in other words, the cell whose car is the list's last element.
+- By definition, the cdr of this cell is an atom; otherwise it wouldn't be the last cell of the list.
+- If the list is empty, LAST just returns NIL.
+#+BEGIN_SRC lisp
+(last '(all is forgiven))
+#+END_SRC
+
+#+RESULTS:
+| FORGIVEN |
+
+
+#+BEGIN_SRC lisp
+(last nil)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(last '(a b c . d))
+#+END_SRC
+
+#+RESULTS:
+: (C . D)
+
+*** REMOVE
+- REMOVE :: removes an item from a list. Normally it removes all occurrences of the item, although there are ways to tell it to remove only some.
+- The result returned by REMOVE is a new list, without the deleted items.
+#+BEGIN_SRC lisp
+(remove 'a '(b a n a n a))
+#+END_SRC
+
+#+RESULTS:
+| B | N | N |
+
+
+#+BEGIN_SRC lisp
+(remove 1 '(3 1 4 1 5 9))
+#+END_SRC
+
+#+RESULTS:
+| 3 | 4 | 5 | 9 |
+
+
+#+BEGIN_SRC lisp
+(setf spell '(a b r a c a d a b r a))
+#+END_SRC
+
+#+RESULTS:
+| A | B | R | A | C | A | D | A | B | R | A |
+
+
+#+BEGIN_SRC lisp
+(remove 'a spell)
+#+END_SRC
+
+#+RESULTS:
+| B | R | C | D | B | R |
+
+
+#+BEGIN_SRC lisp
+spell
+#+END_SRC
+
+#+RESULTS:
+| A | B | R | A | C | A | D | A | B | R | A |
+
+** Lists As Sets
+*** MEMBER
+- MEMBER :: predicate checks whether an item is a member of a list. If the item is found in the list, the sublist beginning with that item is returned. Otherwise NIL is returned.
+#+BEGIN_SRC lisp
+(setf ducks '(huey dewey louie))
+#+END_SRC
+
+#+RESULTS:
+| HUEY | DEWEY | LOUIE |
+
+
+#+BEGIN_SRC lisp
+(member 'huey ducks) ;; non-NIL means T
+#+END_SRC
+
+#+RESULTS:
+| HUEY | DEWEY | LOUIE |
+
+
+#+BEGIN_SRC lisp
+(member 'dewey ducks)
+#+END_SRC
+
+#+RESULTS:
+| DEWEY | LOUIE |
+
+
+#+BEGIN_SRC lisp
+(member 'louie ducks)
+#+END_SRC
+
+#+RESULTS:
+| LOUIE |
+
+
+#+BEGIN_SRC lisp
+(member 'mickey ducks)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(defun beforep (x y l)
+  "Returns true if X appears before Y in L"
+  (member y (member x l)))
+#+END_SRC
+
+#+RESULTS:
+: BEFOREP
+
+
+#+BEGIN_SRC lisp
+(beforep 'not 'whom
+	 '(ask not for whom the bell tolls))
+#+END_SRC
+
+#+RESULTS:
+| WHOM | THE | BELL | TOLLS |
+
+
+#+BEGIN_SRC lisp
+(beforep 'thee 'tolls '(it tolls for thee))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+*** INTERSECTION
+- INTERSECTION :: function takes the intersection of two sets and returns a list of items appearing in both sets.
+#+BEGIN_SRC lisp
+(intersection '(fred john mary)
+	      '(sue mary fred))
+#+END_SRC
+
+#+RESULTS:
+| MARY | FRED |
+
+
+#+BEGIN_SRC lisp
+(intersection '(a s d f g)
+	      '(v w s r a))
+#+END_SRC
+
+#+RESULTS:
+| S | A |
+
+
+#+BEGIN_SRC lisp
+(intersection '(foo bar baz)
+	      '(xam gorp bletch))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+*** UNION
+#+BEGIN_SRC lisp
+(union '(finger hand arm)
+       '(toe finger foot leg))
+#+END_SRC
+
+#+RESULTS:
+| LEG | FOOT | TOE | FINGER | HAND | ARM |
+
+
+#+BEGIN_SRC lisp
+(union '(fred john mary)
+       '(sue mary fred))
+#+END_SRC
+
+#+RESULTS:
+| JOHN | SUE | MARY | FRED |
+
+
+#+BEGIN_SRC lisp
+(union '(a s d f g)
+       '(v w s r a))
+#+END_SRC
+
+#+RESULTS:
+| G | F | D | V | W | S | R | A |
+
+*** SET-DIFFERENCE
+- SET-DIFFERENCE :: function performs set subtraction. It returns what is left of the first set when the elements in the second set have been removed.
+#+BEGIN_SRC lisp
+(set-difference '(alpha bravo charlie delta)
+		'(bravo charlie))
+#+END_SRC
+
+#+RESULTS:
+| DELTA | ALPHA |
+
+
+#+BEGIN_SRC lisp
+(set-difference '(alpha bravo charlie delta)
+		'(echo alpha foxtrot))
+#+END_SRC
+
+#+RESULTS:
+| DELTA | CHARLIE | BRAVO |
+
+
+#+BEGIN_SRC lisp
+(set-difference '(alpha bravo) '(bravo alpha))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(setf line1 '(all things in moderation))
+(setf line2 '(moderation in the defense of liberty
+			 is no virtue))
+#+END_SRC
+
+#+RESULTS:
+| MODERATION | IN | THE | DEFENSE | OF | LIBERTY | IS | NO | VIRTUE |
+
+
+#+BEGIN_SRC lisp
+(set-difference line1 line2)
+#+END_SRC
+
+#+RESULTS:
+| THINGS | ALL |
+
+
+#+BEGIN_SRC lisp
+(set-difference line2 line1)
+#+END_SRC
+
+#+RESULTS:
+| VIRTUE | NO | IS | LIBERTY | OF | DEFENSE | THE |
+
+*** SUBSETP
+- SUBSETP :: predicate returns T if one set is contained in another, in other words, if every element of the first set is an element of the second set.
+#+BEGIN_SRC lisp
+(subsetp '(a i) '(a e i o u))
+#+END_SRC
+
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp
+(subsetp '(a x) '(a e i o u))
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+*** PROGRAMMING WITH SETS
+**** Add a Title to a Name
+#+BEGIN_SRC lisp
+;; whether a name has a title or not
+(defun titledp (name)
+  (member (first name) '(mr ms miss mrs)))
+#+END_SRC
+
+#+RESULTS:
+: TITLEDP
+
+
+#+BEGIN_SRC lisp
+(titledp '(jane doe)) ;; ‘‘Jane’’ is not a title.
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(titledp '(ms jane doe)) ;; ‘‘Ms.’’ is in the set of titles.
+#+END_SRC
+
+#+RESULTS:
+| MS | MISS | MRS |
+
+
+#+BEGIN_SRC lisp
+(setf male-first-names
+      '(john kim richard fred george))
+
+(setf female-first-names
+      '(jane mary wanda barbara kim))
+
+(defun malep (name)
+  (and (member name male-first-names)
+       (not (member name female-first-names))))
+
+(defun femalep (name)
+  (and (member name female-first-names)
+       (not (member name male-first-names))))
+#+END_SRC
+
+#+RESULTS:
+: FEMALEP
+
+
+#+BEGIN_SRC lisp
+(malep 'richard) ;; ‘‘Richard’’ is in the set of males.
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(malep 'barbara) ;; ‘‘Barbara’’ is not a male name.
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+(femalep 'barbara) ;; ‘‘Barbara’’ is a female name.
+#+END_SRC
+
+#+RESULTS:
+: T
+
+
+#+BEGIN_SRC lisp
+(malep 'kim) ;; ‘‘Kim’’ can be either male or female, so it’s not exclusively male.
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+
+#+BEGIN_SRC lisp
+;; write the GIVE-TITLE function that adds a title to a name
+
+(defun give-title (name)
+  "Returns a name with an appropriate title on
+the front."
+  (cond ((titledp name) name)
+	((malep (first name)) (cons 'mr name))
+	((femalep (first name)) (cons 'ms name))
+	(t (append '(mr or ms) name))))
+#+END_SRC
+
+#+RESULTS:
+: GIVE-TITLE
+
+
+#+BEGIN_SRC lisp
+(give-title '(miss jane adams))
+#+END_SRC
+
+#+RESULTS:
+| MISS | JANE | ADAMS |
+
+
+#+BEGIN_SRC lisp
+(give-title '(john q public))
+#+END_SRC
+
+#+RESULTS:
+| MR | JOHN | Q | PUBLIC |
+
+
+#+BEGIN_SRC lisp
+(give-title '(barbara smith))
+#+END_SRC
+
+#+RESULTS:
+| MS | BARBARA | SMITH |
+
+
+#+BEGIN_SRC lisp
+(give-title '(kim johnson))
+#+END_SRC
+
+#+RESULTS:
+| MR | OR | MS | KIM | JOHNSON |
+
+
+#+BEGIN_SRC lisp
+(defun gender-ambiguous-names ()
+  (intersection male-first-names female-first-names))
+#+END_SRC
+
+#+RESULTS:
+: GENDER-AMBIGUOUS-NAMES
+
+
+#+BEGIN_SRC lisp
+(gender-ambiguous-names)
+#+END_SRC
+
+#+RESULTS:
+| KIM |
+
+
+#+BEGIN_SRC lisp
+(defun uniquely-male-names ()
+  (set-difference male-first-names female-first-names))
+#+END_SRC
+
+#+RESULTS:
+: UNIQUELY-MALE-NAMES
+
+
+#+BEGIN_SRC lisp
+(uniquely-male-names)
+#+END_SRC
+
+#+RESULTS:
+| GEORGE | FRED | RICHARD | JOHN |
+
+** LISTS AS TABLES
+*** TABLE
+- Table :: or *association list* (a-list for short), is a list of lists. Each list is called an *entry*, and the car of each entry is its key.
+#+BEGIN_SRC lisp
+(setf words
+      '((one un)
+	(two deux)
+	(three trois)
+	(four quatre)
+	(five cinq)))
+#+END_SRC
+
+#+RESULTS:
+| ONE   | UN     |
+| TWO   | DEUX   |
+| THREE | TROIS  |
+| FOUR  | QUATRE |
+| FIVE  | CINQ   |
+
+*** ASSOC
+- ASSOC :: function looks up an entry in a table, given its key.
+#+BEGIN_SRC lisp
+(assoc 'three words)
+#+END_SRC
+
+#+RESULTS:
+| THREE | TROIS |
+
+
+#+BEGIN_SRC lisp
+(assoc 'four words)
+#+END_SRC
+
+#+RESULTS:
+| FOUR | QUATRE |
+
+
+#+BEGIN_SRC lisp
+(assoc 'six words)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+#+BEGIN_SRC lisp
+(defun translate (x)
+  (second (assoc x words)))
+#+END_SRC
+
+#+RESULTS:
+: TRANSLATE
+
+
+#+BEGIN_SRC lisp
+(translate 'one)
+#+END_SRC
+
+#+RESULTS:
+: UN
+
+
+#+BEGIN_SRC lisp
+(translate 'five)
+#+END_SRC
+
+#+RESULTS:
+: CINQ
+
+
+#+BEGIN_SRC lisp
+(translate 'six)
+#+END_SRC
+
+#+RESULTS:
+: NIL
+
+*** RASSOC
+- RASSOC :: is like ASSOC, except it looks at the cdr of each element of the table instead of the car.
+#+BEGIN_SRC lisp
+(setf sounds
+      '((cow . moo)
+	(pig . oink)
+	(cat . meow)
+	(dog . woof)
+	(bird . tweet)))
+#+END_SRC
+
+#+RESULTS:
+: ((COW . MOO) (PIG . OINK) (CAT . MEOW) (DOG . WOOF) (BIRD . TWEET))
+
+
+#+BEGIN_SRC lisp
+(rassoc 'woof sounds)
+#+END_SRC
+
+#+RESULTS:
+: (DOG . WOOF)
+
+
+#+BEGIN_SRC lisp
+(assoc 'dog sounds)
+#+END_SRC
+
+#+RESULTS:
+: (DOG . WOOF)
+
+** PROGRAMMING WITH TABLES
+*** THINGS
+#+BEGIN_SRC lisp
+(setf things
+      '((object1 large green shiny cube)
+	(object2 small red dull metal cube)
+	(object3 red small dull plastic cube)
+	(object4 small dull blue metal cube)
+	(object5 small shiny red four-sided pyramid)
+	(object6 large shiny green sphere)))
+#+END_SRC
+
+#+RESULTS:
+| OBJECT1 | LARGE | GREEN | SHINY | CUBE       |         |
+| OBJECT2 | SMALL | RED   | DULL  | METAL      | CUBE    |
+| OBJECT3 | RED   | SMALL | DULL  | PLASTIC    | CUBE    |
+| OBJECT4 | SMALL | DULL  | BLUE  | METAL      | CUBE    |
+| OBJECT5 | SMALL | SHINY | RED   | FOUR-SIDED | PYRAMID |
+| OBJECT6 | LARGE | SHINY | GREEN | SPHERE     |         |
+
+
+#+BEGIN_SRC lisp
+(defun description (x)
+  (rest (assoc x things)))
+#+END_SRC
+
+#+RESULTS:
+: DESCRIPTION
+
+
+#+BEGIN_SRC lisp
+(description 'object3)
+#+END_SRC
+
+#+RESULTS:
+| RED | SMALL | DULL | PLASTIC | CUBE |
+
+*** SET-EXCLUSIVE-OR
+#+BEGIN_SRC lisp
+(defun differences (x y)
+  (set-exclusive-or (description x)
+		    (description y)))
+#+END_SRC
+
+#+RESULTS:
+: DIFFERENCES
+
+
+#+BEGIN_SRC lisp
+(differences 'object2 'object3)
+#+END_SRC
+#+RESULTS:
+| PLASTIC | METAL |
+
+#+BEGIN_SRC lisp
+(setf quality-table
+      '((large . size)
+	(small . size)
+	(red . color)
+	(green . color)
+	(blue . color)
+	(shiny . luster)
+	(dull . luster)
+	(metal . material)
+	(plastic . material)
+	(cube . shape)
+	(sphere . shape)
+	(pyramid . shape)
+	(four-sided . shape)))
+#+END_SRC
+#+RESULTS:
+: ((LARGE . SIZE) (SMALL . SIZE) (RED . COLOR) (GREEN . COLOR) (BLUE . COLOR) (SHINY . LUSTER) (DULL . LUSTER) (METAL . MATERIAL) (PLASTIC . MATERIAL) (CUBE . SHAPE) (SPHERE . SHAPE) (PYRAMID . SHAPE) (FOUR-SIDED . SHAPE))
+
+#+BEGIN_SRC lisp  
+(defun quality (x)
+  (cdr (assoc x quality-table)))
+#+END_SRC
+#+RESULTS:
+: QUALITY
+
+
+#+BEGIN_SRC lisp  
+(quality 'red)
+#+END_SRC
+#+RESULTS:
+: COLOR
+
+
+#+BEGIN_SRC lisp  
+(quality 'large)
+#+END_SRC
+#+RESULTS:
+: SIZE
+
+
+#+BEGIN_SRC lisp  
+(defun quality-difference (x y)
+  (quality (first (differences x y))))
+#+END_SRC
+#+RESULTS:
+: QUALITY-DIFFERENCE
+
+
+#+BEGIN_SRC lisp  
+(quality-difference 'object2 'object3)
+#+END_SRC
+#+RESULTS:
+: MATERIAL
+
+
+#+BEGIN_SRC lisp  
+(quality-difference 'object1 'object6)
+#+END_SRC
+#+RESULTS:
+: SHAPE
+
+
+#+BEGIN_SRC lisp  
+(quality-difference 'object2 'object4)
+#+END_SRC
+#+RESULTS:
+: COLOR
+
+*** SUBLIS
+#+BEGIN_SRC lisp  
+(sublis quality-table
+	(differences 'object3 'object4))
+#+END_SRC
+#+RESULTS:
+| MATERIAL | COLOR | MATERIAL | COLOR |
+
+*** REMOVE-DUPLICATES
+#+BEGIN_SRC lisp  
+(defun contrast (x y)
+  (remove-duplicates
+   (sublis quality-table (differences x y))))
+#+END_SRC
+#+RESULTS:
+: CONTRAST
+
+** SDRAW
+#+BEGIN_SRC lisp :results output
+;; M-x slime-load-file source/sdraw.lisp
+(sdraw '(alpha (bravo) charlie))
+#+END_SRC
+#+RESULTS:
+: 
+: [*|*]--->[*|*]--------->[*|*]--->NIL
+:  |        |              |
+:  v        v              v
+: ALPHA    [*|*]--->NIL   CHARLIE
+:           |
+:           v
+:          BRAVO
+
+** Trees
+*** SUBST
+- SUBST :: function substitutes one item for another everywhere it appears in a list.
+#+BEGIN_SRC lisp
+(subst 'fred 'bill
+       '(bill jones sent me an itemized
+	 bill for the tires))
+#+END_SRC
+#+RESULTS:
+| FRED | JONES | SENT | ME | AN | ITEMIZED | FRED | FOR | THE | TIRES |
+
+#+BEGIN_SRC lisp  
+(subst 'bill 'fred '(keep off the grass))
+#+END_SRC
+#+RESULTS:
+| KEEP | OFF | THE | GRASS |
+
+#+BEGIN_SRC lisp  
+(subst 'on 'off '(keep off the grass))
+#+END_SRC
+#+RESULTS:
+| KEEP | ON | THE | GRASS |
+
+#+BEGIN_SRC lisp  
+(subst 'the 'a
+       '((a hatter) (a hare) and (a dormouse)))
+#+END_SRC
+#+RESULTS:
+| (THE HATTER) | (THE HARE) | AND | (THE DORMOUSE) |
+
+*** SUBLIS
+#+BEGIN_SRC lisp  
+(sublis '((roses . violets)
+	  (red . blue))
+	'(roses are red))
+#+END_SRC
+#+RESULTS:
+| VIOLETS | ARE | BLUE |
+
+#+BEGIN_SRC lisp  
+(setf dotted-words
+      '((one . un)
+	(two . deux)
+	(three . trois)
+	(four . quatre)
+	(five . cinq)))
+#+END_SRC
+#+RESULTS:
+: ((ONE . UN) (TWO . DEUX) (THREE . TROIS) (FOUR . QUATRE) (FIVE . CINQ))
+
+#+BEGIN_SRC lisp  
+(sublis dotted-words '(three one four one five))
+#+END_SRC
+#+RESULTS:
+| TROIS | UN | QUATRE | UN | CINQ |
+
+#+BEGIN_SRC lisp 
+()
+#+END_SRC
+
+* LAND OF LISP
+** Guess My Number
+#+BEGIN_SRC lisp
+(defparameter *small* 1)
+#+END_SRC
+#+RESULTS:
+: *SMALL*
+
+#+BEGIN_SRC lisp  
+(defparameter *big* 100)
+#+END_SRC
+#+RESULTS:
+: *BIG*
+
+#+BEGIN_SRC lisp  
+(defparameter *foo* 5)
+*foo*
+#+END_SRC
+#+RESULTS:
+: 5
+
+#+BEGIN_SRC lisp  
+(defparameter *foo* 6)
+*foo*
+#+END_SRC
+#+RESULTS:
+: 6
+
+#+BEGIN_SRC lisp  
+(defvar *foo* 5)
+*foo*
+#+END_SRC
+#+RESULTS:
+: 6
+
+#+BEGIN_SRC lisp  
+(defvar *foo* 6)
+*foo*
+#+END_SRC
+#+RESULTS:
+: 6
+
+#+BEGIN_SRC lisp  
+(defun guess-my-number ()
+  (ash (+ *small* *big*) -1))
+#+END_SRC
+#+RESULTS:
+: GUESS-MY-NUMBER
+
+#+BEGIN_SRC lisp  
+(ash 11 1)
+#+END_SRC
+#+RESULTS:
+: 22
+
+#+BEGIN_SRC lisp  
+(ash 11 -1)
+#+END_SRC
+#+RESULTS:
+: 5
+
+#+BEGIN_SRC lisp  
+(guess-my-number)
+#+END_SRC
+#+RESULTS:
+: 50
+
+#+BEGIN_SRC lisp  
+(defun smaller ()
+  (setf *big* (1- (guess-my-number)))
+  (guess-my-number))
+#+END_SRC
+#+RESULTS:
+: SMALLER
+
+#+BEGIN_SRC lisp  
+(defun bigger ()
+  (setf *small* (1+ (guess-my-number)))
+  (guess-my-number))
+#+END_SRC
+#+RESULTS:
+: BIGGER
+
+#+BEGIN_SRC lisp  
+(bigger)
+#+END_SRC
+#+RESULTS:
+: 75
+
+#+BEGIN_SRC lisp  
+(smaller)
+#+END_SRC
+#+RESULTS:
+: 62
+
+#+BEGIN_SRC lisp  
+(smaller)
+#+END_SRC
+#+RESULTS:
+: 56
+
+#+BEGIN_SRC lisp  
+(defun start-over ()
+  (defparameter *small* 1)
+  (defparameter *big* 100)
+  (guess-my-number))
+#+END_SRC
+#+RESULTS:
+: START-OVER
+
+#+BEGIN_SRC lisp  
+(let ((a 5)
+      (b 6))
+  (+ a b))
+#+END_SRC
+#+RESULTS:
+: 11
+
+#+BEGIN_SRC lisp  
+(flet ((f (n)
+	 (+ n 10)))
+  (f 5))
+#+END_SRC
+#+RESULTS:
+: 15
+
+#+BEGIN_SRC lisp  
+(flet ((f (n)
+	 (+ n 10))
+       (g (n)
+	 (- n 3)))
+  (g (f 5)))
+#+END_SRC
+#+RESULTS:
+: 12
+
+#+BEGIN_SRC lisp  
+(labels ((a (n)
+	   (+ n 5))
+	 (b (n)
+	   (+ (a n) 6)))
+  (b 10))
+#+END_SRC
+#+RESULTS:
+: 21
+
+** Symbols
+#+BEGIN_SRC lisp  
+(eq 'fooo 'FoOo)
+#+END_SRC
+#+RESULTS:
+: T
+
+** Numbers
+#+BEGIN_SRC lisp  
+(+ 1 1.0)
+#+END_SRC
+#+RESULTS:
+: 2.0
+
+#+BEGIN_SRC lisp  
+(expt 53 53)
+#+END_SRC
+#+RESULTS:
+: 24356848165022712132477606520104725518533453128685640844505130879576720609150223301256150373
+
+#+BEGIN_SRC lisp  
+(/ 4 6)
+#+END_SRC
+#+RESULTS:
+: 2/3
+
+#+BEGIN_SRC lisp  
+(/ 4.0 6)
+#+END_SRC
+#+RESULTS:
+: 0.6666667
+
+** String
+#+BEGIN_SRC lisp  
+(princ "Tutti Frutti")
+#+END_SRC
+#+RESULTS:
+: Tutti Frutti
+
+#+BEGIN_SRC lisp  
+(princ "He yelled \"Stop that thief!\" from the busy street.")
+#+END_SRC
+#+RESULTS:
+: He yelled "Stop that thief!" from the busy street.
+
+** Code Mode
+#+BEGIN_SRC lisp  
+(expt 2 3)
+#+END_SRC
+#+RESULTS:
+: 8
+
+** Data Mode
+#+BEGIN_SRC lisp  
+'(expt 2 3)
+#+END_SRC
+#+RESULTS:
+| EXPT | 2 | 3 |
+
+** CONS
+#+BEGIN_SRC lisp  
+(cons 'chicken 'cat)
+#+END_SRC
+#+RESULTS:
+: (CHICKEN . CAT)
+
+#+BEGIN_SRC lisp  
+(cons 'chicken 'nil)
+#+END_SRC
+#+RESULTS:
+| CHICKEN |
+
+#+BEGIN_SRC lisp  
+(cons 'chicken ())
+#+END_SRC
+#+RESULTS:
+| CHICKEN |
+
+#+BEGIN_SRC lisp  
+(cons 'pork '(beef chicken))
+#+END_SRC
+#+RESULTS:
+| PORK | BEEF | CHICKEN |
+
+#+BEGIN_SRC lisp  
+(cons 'beef (cons 'chicken ()))
+#+END_SRC
+#+RESULTS:
+| BEEF | CHICKEN |
+
+#+BEGIN_SRC lisp  
+(cons 'pork (cons 'beef (cons 'chicken ())))
+#+END_SRC
+#+RESULTS:
+| PORK | BEEF | CHICKEN |
+
+** CAR and CDR
+#+BEGIN_SRC lisp  
+(car '(pork beef chicken))
+#+END_SRC
+#+RESULTS:
+: PORK
+
+#+BEGIN_SRC lisp  
+(cdr '(pork beef chicken))
+#+END_SRC
+#+RESULTS:
+| BEEF | CHICKEN |
+
+#+BEGIN_SRC lisp  
+(car (cdr '(pork beef chicken)))
+#+END_SRC
+#+RESULTS:
+: BEEF
+
+#+BEGIN_SRC lisp  
+(cadr '(pork beef chicken))
+#+END_SRC
+#+RESULTS:
+: BEEF
+
+** LIST
+#+BEGIN_SRC lisp  
+(list 'pork 'beef 'chicken)
+#+END_SRC
+#+RESULTS:
+| PORK | BEEF | CHICKEN |
+
+** Nested List
+- car :: getting the thing out of the first slot of a cell
+- cdr :: grab the value out of the second slot, or the remainder of a list
+- cddr :: cdr -> cdr
+- cdar :: car -> cdr
+- caddr :: cdr -> cdr -> car
+- cddar :: car -> cdr - cdr
+- cadadr :: cdr -> car -> cdr -> car
+
+#+BEGIN_SRC lisp  
+'(cat (duck bat) ant)
+#+END_SRC
+#+RESULTS:
+| CAT | (DUCK BAT) | ANT |
+
+#+BEGIN_SRC lisp  
+(car '((peas carrots tomatoes) (pork beef chicken)))
+#+END_SRC
+#+RESULTS:
+| PEAS | CARROTS | TOMATOES |
+
+#+BEGIN_SRC lisp  
+(cdr '(peas carrots tomatoes))
+#+END_SRC
+#+RESULTS:
+| CARROTS | TOMATOES |
+
+#+BEGIN_SRC lisp  
+(cdr (car '((peas carrots tomatoes) (pork beef chicken))))
+#+END_SRC
+#+RESULTS:
+| CARROTS | TOMATOES |
+
+#+BEGIN_SRC lisp  
+(cdar '((peas carrots tomatoes) (pork beef chicken)))
+#+END_SRC
+#+RESULTS:
+| CARROTS | TOMATOES |
+
+#+BEGIN_SRC lisp  
+(cons (cons 'peas (cons 'carrots (cons 'tomatoes ())))
+      (cons (cons 'pork (cons 'beef (cons 'chicken ()))) ()))
+#+END_SRC
+#+RESULTS:
+| PEAS | CARROTS | TOMATOES |
+| PORK | BEEF    | CHICKEN  |
+
+#+BEGIN_SRC lisp  
+(cddr '((peas carrots tomatoes) (pork beef chicken) duck))
+#+END_SRC
+#+RESULTS:
+| DUCK |
+
+#+BEGIN_SRC lisp  
+(caddr '((peas carrots tomatoes) (pork beef chicken) duck))
+#+END_SRC
+#+RESULTS:
+: DUCK
+
+#+BEGIN_SRC lisp  
+(cddar '((peas carrots tomatoes) (pork beef chicken) duck))
+#+END_SRC
+#+RESULTS:
+| TOMATOES |
+
+#+BEGIN_SRC lisp  
+(cadadr '((peas carrots tomatoes) (pork beef chicken) duck))
+#+END_SRC
+#+RESULTS:
+: BEEF
+
+** Empty Equals False
+#+BEGIN_SRC lisp  
+(if '()
+    'i-am-true
+    'i-am-false)
+#+END_SRC
+#+RESULTS:
+: I-AM-FALSE
+
+#+BEGIN_SRC lisp  
+(if '(1)
+    'i-am-true
+    'i-am-false)
+#+END_SRC
+#+RESULTS:
+: I-AM-TRUE
+
+#+BEGIN_SRC lisp  
+(defun my-length (list)
+  (if list
+      (1+ (my-length (cdr list)))
+      0))
+#+END_SRC
+#+RESULTS:
+: MY-LENGTH
+
+#+BEGIN_SRC lisp  
+(my-length '(list with four symbols))
+#+END_SRC
+#+RESULTS:
+: 4
+
+#+BEGIN_SRC lisp  
+(my-length ())
+#+END_SRC
+#+RESULTS:
+: 0
+
+#+BEGIN_SRC lisp  
+(eq '() nil)
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+(eq '() ())
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+(eq '() 'nil)
+#+END_SRC
+#+RESULTS:
+: T
+
+** If
+#+BEGIN_SRC lisp  
+(if (= (+ 1 2) 3)
+    'yup
+    'nope)
+#+END_SRC
+#+RESULTS:
+: YUP
+
+#+BEGIN_SRC lisp  
+(if (= (+ 1 2) 4)
+    'yup
+    'nope)
+#+END_SRC
+#+RESULTS:
+: NOPE
+
+#+BEGIN_SRC lisp  
+(if '(1)
+    'the-list-has-stuff-in-it
+    'the-list-is-empty)
+#+END_SRC
+#+RESULTS:
+: THE-LIST-HAS-STUFF-IN-IT
+
+#+BEGIN_SRC lisp  
+(if '()
+    'the-list-has-stuff-in-it
+    'the-list-is-empty)
+#+END_SRC
+#+RESULTS:
+: THE-LIST-IS-EMPTY
+
+#+BEGIN_SRC lisp  
+(if (oddp 5)
+    'odd-number
+    'even-number)
+#+END_SRC
+#+RESULTS:
+: ODD-NUMBER
+
+#+BEGIN_SRC lisp  
+(if (oddp 5)
+    'odd-number
+    (/ 1 0))
+#+END_SRC
+#+RESULTS:
+: ODD-NUMBER
+
+** PRGN
+#+BEGIN_SRC lisp  
+(defvar *number-was-odd* nil)
+#+END_SRC
+#+RESULTS:
+: *NUMBER-WAS-ODD*
+
+#+BEGIN_SRC lisp  
+(if (oddp 5)
+    (progn (setf *number-was-odd* t)
+	   'odd-number)
+    'even-number)
+#+END_SRC
+#+RESULTS:
+: ODD-NUMBER
+
+#+BEGIN_SRC lisp  
+*number-was-odd*
+#+END_SRC
+#+RESULTS:
+: T
+
+** WHEN
+#+BEGIN_SRC lisp  
+(defvar *number-is-odd* nil)
+#+END_SRC
+#+RESULTS:
+: *NUMBER-IS-ODD*
+
+#+BEGIN_SRC lisp  
+(when (oddp 5)
+  (setf *number-is-odd* t)
+  'odd-number)
+#+END_SRC
+#+RESULTS:
+: ODD-NUMBER
+
+#+BEGIN_SRC lisp  
+*number-is-odd*
+#+END_SRC
+#+RESULTS:
+: T
+
+** UNLESS
+#+BEGIN_SRC lisp  
+(unless (oddp 4)
+  (setf *number-is-odd* nil)
+  'even-number)
+#+END_SRC
+#+RESULTS:
+: EVEN-NUMBER
+
+#+BEGIN_SRC lisp  
+*number-is-odd*
+#+END_SRC
+#+RESULTS:
+: NIL
+
+** COND
+#+BEGIN_SRC lisp  
+(defvar *arch-enemy* nil)
+#+END_SRC
+#+RESULTS:
+: *ARCH-ENEMY*
+
+#+BEGIN_SRC lisp  
+(defun pudding-eater (person)
+  (cond ((eq person 'henry) (setf *arch-enemy* 'stupid-lisp-alien)
+	 '(curse you lisp alien – you ate my pudding))
+	((eq person 'johnny) (setf *arch-enemy* 'useless-old-johnny)
+	 '(i hope you choked on my pudding johnny))
+	(t
+	 '(why you eat my pudding stranger ?))))
+#+END_SRC
+#+RESULTS:
+: PUDDING-EATER
+
+#+BEGIN_SRC lisp  
+(pudding-eater 'johnny)
+#+END_SRC
+#+RESULTS:
+| I | HOPE | YOU | CHOKED | ON | MY | PUDDING | JOHNNY |
+
+#+BEGIN_SRC lisp  
+*arch-enemy*
+#+END_SRC
+#+RESULTS:
+: USELESS-OLD-JOHNNY
+
+#+BEGIN_SRC lisp  
+(pudding-eater 'george-clooney)
+#+END_SRC
+#+RESULTS:
+: (WHY YOU EAT MY PUDDING STRANGER ?)
+
+** CASE
+#+BEGIN_SRC lisp  
+(defun pudding-eater (person)
+  (case person
+    ((henry)
+     (setf *arch-enemy* 'stupid-lisp-alien)
+     '(curse you lisp alien – you ate my pudding))
+    ((johnny) (setf *arch-enemy* 'useless-old-johnny)
+     '(i hope you choked on my pudding johnny))
+    (otherwise '(why you eat my pudding stranger ?))))
+#+END_SRC
+#+RESULTS:
+: PUDDING-EATER
+
+** AND
+#+BEGIN_SRC lisp  
+(and (oddp 5) (oddp 7) (oddp 9))
+#+END_SRC
+#+RESULTS:
+: T
+
+** OR
+#+BEGIN_SRC lisp  
+(or (oddp 4) (oddp 7) (oddp 8))
+#+END_SRC
+#+RESULTS:
+: T
+
+** Using Functions That Return More than Just the Truth
+#+BEGIN_SRC lisp  
+(defparameter *is-it-even* nil)
+#+END_SRC
+#+RESULTS:
+: *IS-IT-EVEN*
+
+#+BEGIN_SRC lisp  
+(or (oddp 4) (setf *is-it-even* t))
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+*is-it-even*
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+(defparameter *is-it-even* nil)
+#+END_SRC
+#+RESULTS:
+: *IS-IT-EVEN*
+
+#+BEGIN_SRC lisp  
+(or (oddp 5) (setf *is-it-even* t))
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+*is-it-even*
+#+END_SRC
+#+RESULTS:
+: NIL
+
+#+BEGIN_SRC lisp  
+(if (member 1 '(3 4 1 5))
+    'one-is-in-the-list
+    'one-is-not-in-the-list)
+#+END_SRC
+#+RESULTS:
+: ONE-IS-IN-THE-LIST
+
+#+BEGIN_SRC lisp  
+(member 1 '(3 4 1 5))
+#+END_SRC
+#+RESULTS:
+| 1 | 5 |
+
+#+BEGIN_SRC lisp  
+(if (member nil '(3 4 nil 5))
+    'nil-is-in-the-list
+    'nil-is-not-in-the-list)
+#+END_SRC
+#+RESULTS:
+: NIL-IS-IN-THE-LIST
+
+** FIND-IF
+#+BEGIN_SRC lisp  
+(find-if #'oddp '(2 4 5 6))
+#+END_SRC
+#+RESULTS:
+: 5
+
+#+BEGIN_SRC lisp  
+(if (find-if #'oddp '(2 4 5 6))
+    'there-is-an-odd-number
+    'there-is-no-odd-number)
+#+END_SRC
+#+RESULTS:
+: THERE-IS-AN-ODD-NUMBER
+
+#+BEGIN_SRC lisp  
+(find-if #'null '(2 4 nil 6))
+#+END_SRC
+#+RESULTS:
+: NIL
+
+** EQ
+#+BEGIN_SRC lisp  
+(defparameter *fruit* 'apple)
+#+END_SRC
+#+RESULTS:
+: *FRUIT*
+
+#+BEGIN_SRC lisp  
+(cond ((eq *fruit* 'apple) 'its-an-apple)
+      ((eq *fruit* 'orange) 'its-an-orange))
+#+END_SRC
+#+RESULTS:
+: ITS-AN-APPLE
+
+** EQUAL
+#+BEGIN_SRC lisp  
+;;comparing symbols
+(equal 'apple 'apple)
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;comparing lists
+(equal (list 1 2 3) (list 1 2 3))
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;Identical lists created in different ways still compare as the same
+(equal '(1 2 3) (cons 1 (cons 2 (cons 3 ()))))
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;comparing integers
+(equal 5 5)
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;comparing floating point numbers
+(equal 2.5 2.5)
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;comparing strings
+(equal "foo" "foo")
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;comparing characters
+(equal #\a #\a)
+#+END_SRC
+#+RESULTS:
+: T
+
+** EQL
+#+BEGIN_SRC lisp  
+;;comparing symbols
+(eql 'foo 'foo)
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;comparing numbers
+(eql 3.4 3.4)
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;comparing characters
+(eql #\a #\a)
+#+END_SRC
+#+RESULTS:
+: T
+
+** EQUALP
+#+BEGIN_SRC lisp  
+;;comparing strings with different CAPS
+(equalp "Bob Smith" "bob smith")
+#+END_SRC
+#+RESULTS:
+: T
+
+#+BEGIN_SRC lisp  
+;;comparing integers against floating point numbers
+(equalp 0 0.0)
+#+END_SRC
+#+RESULTS:
+: T
+
+** The Wizard's Adventure Game
+#+BEGIN_SRC lisp  
+(defparameter *nodes* '(
+	(living-room (you are in the living-room. a wizard is snoring loudly on the couch.))
+	(garden (you are in a beautiful garden. there is a well in front of you.))
+	(attic (you are in the attic. there is a giant welding torch in the corner.))))
+#+END_SRC
+#+RESULTS:
+: *NODES*
+
+#+BEGIN_SRC lisp  
+(assoc 'garden *nodes*)
+#+END_SRC
+#+RESULTS:
+| GARDEN | (YOU ARE IN A BEAUTIFUL GARDEN. THERE IS A WELL IN FRONT OF YOU.) |
+
+#+BEGIN_SRC lisp  
+(defun describe-location (location nodes)
+   (cadr (assoc location nodes)))
+#+END_SRC
+#+RESULTS:
+: DESCRIBE-LOCATION
+
+#+BEGIN_SRC lisp  
+(describe-location 'living-room *nodes*)
+#+END_SRC
+#+RESULTS:
+| YOU | ARE | IN | THE | LIVING-ROOM. | A | WIZARD | IS | SNORING | LOUDLY | ON | THE | COUCH. |
+
+#+BEGIN_SRC lisp  
+(defparameter *edges* '((living-room (garden west door)
+                         (attic upstairs ladder))
+                        (garden (living-room east door))
+                        (attic (living-room downstairs ladder))))
+#+END_SRC
+#+RESULTS:
+: *EDGES*
+
+#+BEGIN_SRC lisp  
+(defun describe-path (edge)
+  `(there is a ,(caddr edge) going ,(cadr edge) from here.))
+#+END_SRC
+#+RESULTS:
+: DESCRIBE-PATH
+
+#+BEGIN_SRC lisp  
+(describe-path '(garden west door))
+#+END_SRC
+#+RESULTS:
+| THERE | IS | A | DOOR | GOING | WEST | FROM | HERE. |
+
+#+BEGIN_SRC lisp  
+(defun describe-paths (location edges)
+  (apply #'append (mapcar #'describe-path (cdr (assoc location edges)))))
+#+END_SRC
+#+RESULTS:
+: DESCRIBE-PATHS
+
+#+BEGIN_SRC lisp  
+(describe-paths 'living-room *edges*)
+#+END_SRC
+#+RESULTS:
+| THERE | IS | A | DOOR | GOING | WEST | FROM | HERE. | THERE | IS | A | LADDER | GOING | UPSTAIRS | FROM | HERE. |
+
+#+BEGIN_SRC lisp  
+(cdr (assoc 'living-room *edges*))
+#+END_SRC
+#+RESULTS:
+| GARDEN | WEST     | DOOR   |
+| ATTIC  | UPSTAIRS | LADDER |
+
+#+BEGIN_SRC lisp  
+(mapcar #'describe-path '((GARDEN WEST DOOR) (ATTIC UPSTAIRS LADDER)))
+#+END_SRC
+#+RESULTS:
+| THERE | IS | A | DOOR   | GOING | WEST     | FROM | HERE. |
+| THERE | IS | A | LADDER | GOING | UPSTAIRS | FROM | HERE. |
+
+** MAPCAR
+#+BEGIN_SRC lisp  
+(mapcar #'sqrt '(1 2 3 4 5))
+#+END_SRC
+#+RESULTS:
+| 1.0 | 1.4142135 | 1.7320508 | 2.0 | 2.236068 |
+
+#+BEGIN_SRC lisp  
+(mapcar #'car '((foo bar) (baz qux)))
+#+END_SRC
+#+RESULTS:
+| FOO | BAZ |
+
+#+BEGIN_SRC lisp  
+(mapcar (function car) '((foo bar) (baz qux)))
+#+END_SRC
+#+RESULTS:
+| FOO | BAZ |
+
+#+BEGIN_SRC lisp  
+(let ((car "Honda Civic"))
+  (mapcar #'car '((foo bar) (baz qux))))
+#+END_SRC
+#+RESULTS:
+| FOO | BAZ |
+
+** APPEND
+#+BEGIN_SRC lisp  
+(append '(mary had) '(a) '(little lamb))
+#+END_SRC
+#+RESULTS:
+| MARY | HAD | A | LITTLE | LAMB |
+
+#+BEGIN_SRC lisp  
+(apply #'append '((mary had) (a) (little lamb)))
+#+END_SRC
+#+RESULTS:
+| MARY | HAD | A | LITTLE | LAMB |
+
+#+BEGIN_SRC lisp  
+(apply #'append '((THERE IS A DOOR GOING WEST FROM HERE.)
+                  (THERE IS A LADDER GOING UPSTAIRS FROM HERE.)))
+#+END_SRC
+#+RESULTS:
+| THERE | IS | A | DOOR | GOING | WEST | FROM | HERE. | THERE | IS | A | LADDER | GOING | UPSTAIRS | FROM | HERE. |
+
+** Listing Visible Objects
+#+BEGIN_SRC lisp  
+(defparameter *objects* '(whiskey bucket frog chain))
+#+END_SRC
+#+RESULTS:
+: *OBJECTS*
+
+#+BEGIN_SRC lisp  
+(defparameter *object-locations* '((whiskey living-room)
+                                   (bucket living-room)
+                                   (chain garden)
+                                   (frog garden)))
+#+END_SRC
+#+RESULTS:
+: *OBJECT-LOCATIONS*
+
+#+BEGIN_SRC lisp  
+(defun objects-at (loc objs obj-locs)
+  (labels ((at-loc-p (obj)
+             (eq (cadr (assoc obj obj-locs)) loc)))
+    (remove-if-not #'at-loc-p objs)))
+#+END_SRC
+#+RESULTS:
+: OBJECTS-AT
+
+#+BEGIN_SRC lisp  
+
+#+END_SRC

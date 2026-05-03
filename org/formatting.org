@@ -1,0 +1,162 @@
+#+TEMPLATE: CMU ChemE Written Qualifier
+#+key: cmu-cheme-written-qualifier
+#+group: reports
+#+contributor: John Kitchin <jkitchin@andrew.cmu.edu>
+#+default-filename: qualifier.org
+
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [12pt]
+#+OPTIONS: toc:nil ^:{}
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+# here is where you include the relevant packages. These are pretty
+# common ones. You may add additional ones. Note that the orderauto composition of the
+# packages is significant. If you are not careful, your file will not
+# build into a pdf.
+#+LATEX_HEADER: \usepackage[top=1in, bottom=1.in, left=1in, right=1in]{geometry}
+#+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage[T1]{fontenc}
+#+LATEX_HEADER: \usepackage{mathptmx}
+#+LATEX_HEADER: \usepackage{fixltx2e}
+#+LATEX_HEADER: \usepackage{natbib}
+#+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage{minted}
+#+LATEX_HEADER: \usepackage{graphicx}
+#+LATEX_HEADER: \usepackage{textcomp}
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage{pdfpages}
+#+LATEX_HEADER: \usepackage[version=3]{mhchem}
+#+LATEX_HEADER: \usepackage{setspace}
+#+LATEX_HEADER: \usepackage{cancel}
+#+LATEX_HEADER: \usepackage{pgfgantt}
+#+LATEX_HEADER: \usepackage[linktocpage, pdfstartview=FitH, colorlinks, linkcolor=blue, anchorcolor=blue, citecolor=blue,  filecolor=blue,  menucolor=blue,  urlcolor=blue]{hyperref}
+#+LANGUAGE:  en
+#+TODO: TODO FEEDBACK VERIFY | DONE CANCELED
+
+
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	OPTICS
+
+* Formatting text
+** Simple formatting
+You can apply simple formatting to your text by enclosing words in
+special characters. These include
+ - /italicised text/
+ - *bold text*
+ - _underlines_
+ - =literal text=
+ - ~code~ (generally appears the same as literal text)
+
+** Formatted blocks of text
+For longer pieces of text you can enclose the text in blocks marking
+it as a specific sort of text. I commonly use these ones
+
+#+BEGIN_EXAMPLE
+This is an example block into which you can type text that you don't want org to mess with like a [[link]]. This will typically be rendered in a monospace font when exported.
+#+END_EXAMPLE
+
+#+BEGIN_QUOTE
+This block encloses text that you want to appear as a quotation.
+#+END_QUOTE
+
+#+BEGIN_CENTER
+This text will be centred when it is exported.
+#+END_CENTER
+
+You can save time typing out the block wrapper by using shortcuts. Go
+to the start of a new line and type <e and press TAB and it will
+expand to an example block. The same works for <q for quote and <c for
+centre.
+
+** LaTeX
+Org-mode does a good job of understanding snippets of LaTeX (a
+[[https://www.latex-project.org/][powerful typesetting language]] used in scientific and other technical
+documents). For example, it will correctly export simple superscripts
+x^2 or subscripts x_0 or symbols like \alpha, \beta, \gamma.
+
+Org also understands more complex LaTeX like this
+
+\begin{eqnarray}
+x^2 + \left(\frac{y}{z}\right)^4 = 0
+\end{eqnarray}
+
+but for longer bits of LaTeX it is better to use a LaTeX block. You
+start one with <l and TAB
+
+#+BEGIN_LaTeX
+LaTeX code goes here
+#+END_LaTeX
+
+** Source code blocks
+It is also handy to include source code in your notes - on a new line
+type <s and TAB to create a source block. You can tell org what type
+of code is contained - in this case we'll put in some simple shell
+code, so well put "sh" at the top of the block.
+
+#+BEGIN_SRC sh
+  echo "Hello $USER! Today is `date`"
+  exit
+#+END_SRC
+
+You can get org to syntax highlight the text in the block by adding
+the following to your [[http://pragmaticemacs.com/emacs/editing-your-emacs-config-file/][emacs config file]] (without the source block
+wrapper of course).
+
+#+BEGIN_SRC elisp
+;;syntax highlight code blocks
+(setq org-src-fontify-natively t)
+#+END_SRC
+
+What is more, when the cursor is inside a SRC block, you can use C-c '
+to create a new temporary buffer in the major mode of the programming
+language you have specified. Type some code in, and then type C-c '
+again to come back to this buffer.
+
+** Executing source code blocks
+Org-mode can execute your source code blocks and add the output to
+your file. This part of org-mode is called babel. I'll write more
+about this later, but it is too cool not to mention here.
+
+For example, take the simple code block we had above:
+
+#+BEGIN_SRC sh
+  echo "Hello $USER! Today is `date`"
+  exit
+#+END_SRC
+
+Put the cursor inside the block and hit C-c C-c to execute it. You
+will be asked to confirm and then you should see the output appear
+like this:
+
+#+RESULTS:
+
+
+#+begin_example
+Hello bjm! Today is Fri 25 Sep 2015 15:03:12 BST
+#+end_example
+
+You can do much more with this, like reading input data from a table
+in the same file, creating images that appear in the file, extracting
+(tangling) all the code snippets into one or more files to be executed
+separately, and much more. [[http://orgmode.org/worg/org-contrib/babel/intro.html][Here are some nice examples]].
+
+You can tell org-mode which programming languages to support by adding
+something like the following to your [[http://pragmaticemacs.com/emacs/editing-your-emacs-config-file/][emacs config file]]:
+
+
+#+BEGIN_SRC elisp
+;; Some initial languages we want org-babel to support
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '(
+   (sh . t)
+   (python . t)
+   (R . t)
+   (ditaa . t)
+   (perl . t)
+   (gnuplot t)
+   ))
+#+END_SRC
+
+#+RESULTS:

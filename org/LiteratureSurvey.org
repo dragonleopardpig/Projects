@@ -1,0 +1,99 @@
+@startmindmap
+    
+skinparam shadowing true
+skinparam dpi 600
+skinparam handwritten false
+skinparam ArrowColor DarkSeaGreen
+
+<style file=MyOwnFile.css>
+
+* Survey
+** Projects
+*** Prometheus
+****_ URL [[http://www.prometheus-laser.eu]]
+****_ Europe
+****_ Grant
+****_ Duration
+****_ Participators
+****_ Deliverables
+
+*** Laser4fun
+****_ URL [[https://www.laser4fun.eu]]
+****_ Europe
+****_ Grant
+****_ Duration
+****_ Participators
+****_ Deliverables
+
+*** Tresclean
+****_  URL [[https://www.tresclean.eu]]
+****_ Europe
+****_ Grant
+****_ Duration
+****_ Participators
+****_ Deliverables
+
+*** Shark Project
+****_ URL [[http://www.sharkproject.eu]]
+****_ Europe
+****_ Grant
+****_ Duration
+****_ Participators
+****_ Deliverables
+
+** Companies
+*** LightMotif
+****_ URL [[https://www.lightmotif.nl]]
+
+*** Microrelleus 
+****_ URL [[http://www.microrelleus.com]]
+
+left side
+
+** Patents
+*** Patent 1
+**** Claim 1
+**** Claim 2
+**** Claim 3
+**** .......
+
+*** Patent 2
+**** Claim 1
+**** Claim 2
+**** Claim 3
+**** .......
+
+*** Patent 3
+**** Claim 1
+**** Claim 2
+**** Claim 3
+**** .......
+
+
+** Journals
+*** Laser Texturing Techniques
+**** Technique 1
+**** Technique 2
+**** Technique 3
+**** ...........
+
+*** Texturing Review
+****_ Bio-inspired textures for functional applications
+
+*** Superhydrophobicity Review
+****_ An Introduction to Superhydrophobicity
+
+@endmindmap
+
+*** Theory
+**** Proof of CB equation using well defined surface structure produced by Photolithography, nanoprinting, electrom beam lithography
+
+**** Surface roughness characterization parameters and standards
+
+* Note :noexport:
+** Command
+java -jar -DPLANTUML_LIMIT_SIZE=12288 -Xmx1024m plantuml.jar -tpng -v LiteratureSurvey.org && LiteratureSurvey.png
+
+java -jar -DPLANTUML_LIMIT_SIZE=16384 -Xmx1024m plantuml.jar -tpng -v LiteratureSurvey.org && LiteratureSurvey.png
+
+java -jar -DPLANTUML_LIMIT_SIZE=12288 -Xmx1024m plantuml.jar -tsvg -v LiteratureSurvey.org && LiteratureSurvey.png

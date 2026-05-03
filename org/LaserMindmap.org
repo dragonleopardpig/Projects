@@ -1,0 +1,173 @@
+@startmindmap
+    
+skinparam shadowing true
+skinparam dpi 600
+skinparam handwritten false
+skinparam ArrowColor DarkSeaGreen
+
+<style file=MyOwnFile.css>
+
+
+* Texture
+
+** Nature
+*** Superhydrophobicity
+**** Lotus Leaf
+*****_ Self-cleaning
+**** Rose Petals
+*****_ no roll-off effect
+**** Rise Leaves
+*****_ directional and anisotropy 
+***_ Dry Adhesion
+****_ Gekco Feet
+***_ Drag Reduction
+****_ Shark Skin
+***_ Tribology and Locomotion
+****_ Snake Skin
+***_ Antireflective Surfaces
+****_ Moth Eye
+***_ Photonic Structures and Iridescence
+****_ Butterfly Wings
+***_ Chemical Texturing
+****_ Salvinia/Desert Beetle
+***_ Adaptive Texturing
+****_ Redundancy in Features
+****_ Simplicity of design and choice of materials
+****_ Regeneration Ability
+****_ Calling (multi-) Functionality on demand
+****_ Length scale dependent architectures
+****_ Heterogeneous Integration of materials
+****_ Complementary subsurface with or without sensory system
+
+
+** Instrument
+*** Scanning Electron Microscope SEM
+*** 3D SEM
+*** 3D Optical Microscopy
+*** Scanning Probe Microscope SPM
+**** AFM
+*** Profile and Aerial Roughness
+**** Surface Profiler
+*** Contact Angle Meter
+***[#FFA500] Sliding Angle Meter
+
+** Measurable
+*** Surface Roughness
+**** Mean Roughness
+**** Mean Waviness
+**** Skewness of the surface roughness profile
+**** Skewness of the surface waviness profile
+**** Texture Aspect Ratio
+**** Fractal Dimension
+*** Geometry
+**** Peak-to-base Height
+**** Mid-width Height
+**** Radius Bump Density
+
+** Surface Integrity
+***_ Calibration
+*** Standards
+**** ISO 4287
+**** ISO 25178
+**** ISO 12781
+**** ISO 22196
+**** ISO 27447
+**** ANSI/NSF 51-1997
+**** Mechanical Abrasion
+**** Thermal Stability
+
+left side
+
+** Components
+*** Shape(s) of Features
+*** Size of Features
+*** Aspect Ratio
+*** Periodicity/pitch (distribution) of Features
+*** Hierarchical Arrangement
+*** Orientation of Features/Directionality
+
+** Manufacturing
+*** Controlled Wettability (FMCG WP1.3)
+**** Laser Texturing (direct laser ablation)
+***** Structuring Techniques
+****** XY Scanner Patterning
+****** Double-Pulse
+****** Multiple Overlaid Scale of Roughness
+****** Pin Hole Diffraction
+***** Pre-Processing
+****** Ultrasonic Bath
+****** Alcohol Bath
+***** Processing
+<style>
+  leafnode {
+	BackGroundColor Pink
+  }
+</style>
+****** FemtoSecond Laser
+****** PicoSecond Laser
+<style>
+  leafnode {
+	BackGroundColor PaleGreen
+  }
+</style>
+****** NanoSecond Laser
+<style>
+  leafnode {
+	BackGroundColor Gold
+  }
+</style>
+***** Post-Processing
+****** Alcohol Bath
+****** Ultrasonic Bath
+****** Atmosphere Stabilizing Period
+***** Large Area Scaling
+****** Stitching Strategies
+****** Multi-Axes Stages
+****** Image Processing
+***** Curved Geometry
+****** Multi-Axes Stages
+****** 3D Laser Scanner
+****** Image Processing
+****** Robotic Arm
+****_ Lithography
+****_ Particles
+****_ Templating
+****_ Phase Separation
+****_ Etching
+****_ Electrospinning
+****_ Sol-gel
+****_ Crystal Growth
+****_ Textiles and Fibers
+****_ Diffusion Limited Growth
+****_ Layer-by-Layer (LBL)
+****_ Chemical Vapor Deposition (CVD)
+****_ Electroless Galvanic Deposition
+****_ Anodic Oxidation
+****_ Electrochemical Deposition
+***_ Dry Adhesion
+***_ Structural Colors
+***_ Anti-Reflection
+***_ Friction
+*** AntiFouling
+**** Anti-BioFouling
+**** Anti-Powder
+****_ Anti-Icing
+
+** Simulation
+***_ Young Equation
+***_ Wenzel State
+***_ Cassie-Baxter State
+***_ Laser-Matter Interaction
+****_ Linear
+****_ Non-Linear
+
+
+@endmindmap
+
+* Note :noexport:
+
+java -jar -DPLANTUML_LIMIT_SIZE=12288 -Xmx1024m plantuml.jar -tpng -v LaserMindmap.org && LaserMindmap.png
+
+java -jar -DPLANTUML_LIMIT_SIZE=16384 -Xmx1024m plantuml.jar -tpng -v LaserMindmap.org && LaserMindmap.png
+
+java -jar -DPLANTUML_LIMIT_SIZE=12288 -Xmx1024m plantuml.jar -tsvg -v LaserMindmap.org && LaserMindmap.png

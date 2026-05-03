@@ -1,0 +1,91 @@
+;; -*- mode: emacs-lisp; lexical-binding:t; coding: utf-8-emacs; -*-
+;; --------------------------------------------------------------------------
+;; Desktop File for Emacs
+;; --------------------------------------------------------------------------
+;; Created Fri Sep 26 07:37:32 2025
+;; Desktop file format version 208
+;; Emacs version 29.3
+
+;; Global section:
+(setq desktop-saved-frameset [frameset 1 (26837 53820 307850 643000) (desktop . "208") "thinky@thinky-MIT" nil nil ((((minibuffer . t) (undecorated) (override-redirect) (font . "-PfEd-DejaVu Sans Mono-regular-normal-normal-*-15-*-*-*-m-0-iso10646-1") (border-width . 0) (internal-border-width . 0) (child-frame-border-width) (right-divider-width . 0) (bottom-divider-width . 0) (vertical-scroll-bars) (horizontal-scroll-bars) (foreground-color . "#0F1019") (background-color . "white") (mouse-color . "black") (border-color . "black") (screen-gamma) (line-spacing) (left-fringe . 8) (right-fringe . 8) (no-special-glyphs) (scroll-bar-foreground) (scroll-bar-background) (menu-bar-lines . 0) (tab-bar-lines . 0) (tool-bar-lines . 0) (title) (wait-for-wm . t) (tool-bar-position . top) (inhibit-double-buffering) (icon-type . t) (auto-raise) (auto-lower) (cursor-type . box) (scroll-bar-width . 16) (scroll-bar-height . 16) (alpha) (alpha-background) (no-focus-on-map) (no-accept-focus) (fullscreen . maximized) (visibility . t) (use-frame-synchronization) (skip-taskbar) (z-group) (display-type . color) (background-mode . light) (cursor-color . "#009B7C") (font-parameter) (sticky) (shaded) (environment) (dnd-root-window-position) (last-focus-update . t) (frameset--id . "3109-C708-97C0-05B6") (frameset--mini t . t) (height . 55) (width . 211) (modeline . t) (unsplittable) (left . 0) (top . 0) (icon-name) (display . ":0") (explicit-name)) ((min-height . 4) (min-width . 20) (min-height-ignore . 2) (min-width-ignore . 8) (min-height-safe . 1) (min-width-safe . 4) (min-pixel-height . 72) (min-pixel-width . 180) (min-pixel-height-ignore . 36) (min-pixel-width-ignore . 72) (min-pixel-height-safe . 18) (min-pixel-width-safe . 36)) hc (pixel-width . 1920) (pixel-height . 986) (total-width . 213) (total-height . 54) (normal-height . 1.0) (normal-width . 1.0) (combination-limit) (leaf (pixel-width . 1119) (pixel-height . 986) (total-width . 124) (total-height . 54) (normal-height . 1.0) (normal-width . 0.579748163693599) (buffer "The Physics and Technology of Laser Resonators.pdf" (selected) (hscroll . 17) (fringes 8 8 nil nil) (margins nil) (scroll-bars nil 0 t nil 0 t nil) (vscroll . 52) (dedicated) (point . 1) (start . 1)) (prev-buffers ("*dashboard*" 1 960) ("The Physics and Technology of Laser Resonators.pdf" 1 1) ("*scratch*" 1 1))) (leaf (last . t) (pixel-width . 801) (pixel-height . 986) (total-width . 89) (total-height . 54) (normal-height . 1.0) (normal-width . 0.42025183630640084) (buffer "LaserResonator.org" (selected . t) (hscroll . 0) (fringes 8 8 nil nil) (margins nil) (scroll-bars nil 0 t nil 0 t nil) (vscroll . 0) (dedicated) (point . 1765) (start . 1)) (prev-buffers ("themes.el" 1 893) ("user.el" 1 1433) ("preload.el" 1918 2286) ("init.el" 1 274) ("LaserResonator.org" 1 1765) ("*dashboard*" 1 536)))))])
+(setq desktop-missing-file-warning nil)
+(setq tags-file-name nil)
+(setq tags-table-list nil)
+(setq search-ring nil)
+(setq regexp-search-ring nil)
+(setq register-alist nil)
+(setq file-name-history '("/home/thinky/NixOS/org/" "~/.emacs.d/session.10606fd8e5a8422aa6175875697510754500000018860054" "~/NixOS/org/LaserResonator.org" "/tmp/jupyter9pqz9m" "~/Downloads/PDF/The Physics and Technology of Laser Resonators.pdf" "~/Linux Command Line for New Users.epub" "~/Python and SQL Bible.epub" "~/Python Programming For Game Development.epub" "~/PyQt.epub" "~/Hands-on Python GUI Development Course With Exercises.epub" "~/.emacs.d/session.10656dccff7fa8f2a175850403950458400000020010058" "~/NixOS/org/fourier.org" "~/NixOS/emacs/user/custom/org-modern-indent.el" "~/signal/384book.net/_sources/in0101.org" "~/signal/384book.net/_sources/in0102.org" "~/NixOS/emacs/user/themes.el" "~/NixOS/emacs/user/user.el" "~/NixOS/emacs/user/preload.el" "~/NixOS/emacs/init.el" "~/.emacs.d/init.el" "~/NixOS/org/notes.org" "~/dummy_model/inference.py" "~/NixOS/org/optics.org" "~/NixOS/emacs/user/custom/heaven-and-hell.el" "~/.emacs.d/elpa/heaven-and-hell-20190713.1830/heaven-and-hell.el" "~/.emacs.d/session.1064ed7e361580aa33175826311748795000000018740067" "~/signal/384book.net/Signals and Systems Theory and Practical Explorations with Python.pdf" "~/signal/384book.net/_sources/chapter01.org" "~/.emacs.d/session.10b72f86dcd151d990175817934820943800000018100072" "~/.emacs.d/session.10d38ab65190e73c62175806709419562300000021530056" "~/output.org" "~/isPhoneNumber.py" "~/.emacs.d/elpa/mixed-pitch-20210304.1900/mixed-pitch.el" "~/signal/384book.net/_sources/in0103.org" "~/signal/384book.net/_sources/chapter01.ipynb" "~/signal/384book.net/_sources/chapter02.org" "~/.emacs.d/session.10226ad5032ede9c61175789547633213600000019080062" "~/.emacs.d/elpa/org-modern-20250827.1213/org-modern.el" "~/.emacs.d/session.106c55e80f27946b49175757165825603800000017750054" "~/in0101.org" "~/python_signal.org" "~/.emacs.d/session.10e1e74883ec3a6e6175703387681280400000017970053" "~/.emacs.d/session.109cfece173b07a190175642872751074000000018830053" "~/.emacs.d/session.108ca22a19db8110ed175625748641352400000022730055" "~/chupl_color" "~/.emacs.d/session.1027053265d66e2526175607883185977800000021940053" "~/.emacs.d/session.1066c151aeda588b7f175582224695106800000019020051" "~/.emacs.d/session.10fee0bd6e8f312888175564650030459100000021760052" "~/.emacs.d/session.109941e3ce86f58c7d175556087766875000000021830052" "~/Downloads/openrgb-udev-install.sh" "/usr/share/doc/g810-led/examples/sample_profiles/fx_vwave" "/usr/share/doc/g810-led/examples/sample_profiles/fx_cwave" "/usr/share/doc/g810-led/examples/sample_profiles/fx_color_green" "~/.emacs.d/session.103cafe14a939bbe2d175547671990330400000024720055" "~/.emacs.d/session.104920946514e1885a175522163274170200000021910051" "/usr/share/doc/g810-led/examples/sample_profiles/keys_v_gradiant_fr_ch-latin1" "/usr/share/doc/g810-led/examples/sample_profiles/fx_cycle" "~/.emacs.d/session.10dd498495ea491503175512873098719200000018940052" "/usr/share/doc/g810-led/examples/sample_profiles/group_keys" "~/.emacs.d/session.10192563d828e92af517550759119663400000021500051" "~/.emacs.d/session.101fb6be407dd39646175504497075615600000021730049"))
+
+;; Buffer section -- buffers listed in same order as in buffer list:
+(desktop-create-buffer 208
+  "/home/thinky/NixOS/org/LaserResonator.org"
+  "LaserResonator.org"
+  'org-mode
+  '(org-modern-mode visual-line-mode text-scale-mode font-lock-mode undo-tree-mode yas-minor-mode scimax-autoformat-mode flycheck-mode jupyter-org-interaction-mode flyspell-mode org-fragtog-mode mixed-pitch-mode follow-mode smartparens-mode dubcaps-mode)
+  1765
+  '(1765 nil)
+  nil
+  nil
+  '((tab-width . 8) (buffer-display-time 26837 53809 508555 149000) (buffer-file-coding-system . undecided-unix) (truncate-lines))
+  '((mark-ring (1650 1765))))
+
+(desktop-create-buffer 208
+  "/home/thinky/NixOS/emacs/user/themes.el"
+  "themes.el"
+  'emacs-lisp-mode
+  '(visual-line-mode font-lock-mode undo-tree-mode yas-minor-mode aggressive-indent-mode eldoc-mode lispy-mode rainbow-delimiters-mode display-fill-column-indicator-mode)
+  893
+  '(872 nil)
+  nil
+  nil
+  '((buffer-display-time 26837 53801 95594 602000) (buffer-file-coding-system . utf-8-unix) (truncate-lines))
+  '((mark-ring (952))))
+
+(desktop-create-buffer 208
+  "/home/thinky/NixOS/emacs/user/user.el"
+  "user.el"
+  'emacs-lisp-mode
+  '(visual-line-mode font-lock-mode undo-tree-mode yas-minor-mode aggressive-indent-mode eldoc-mode lispy-mode rainbow-delimiters-mode display-fill-column-indicator-mode)
+  1433
+  '(nil nil)
+  nil
+  nil
+  '((buffer-display-time 26837 53766 375283 787000) (buffer-file-coding-system . utf-8-unix) (truncate-lines))
+  '((mark-ring nil)))
+
+(desktop-create-buffer 208
+  "/home/thinky/NixOS/emacs/user/preload.el"
+  "preload.el"
+  'emacs-lisp-mode
+  '(visual-line-mode font-lock-mode undo-tree-mode yas-minor-mode aggressive-indent-mode eldoc-mode lispy-mode rainbow-delimiters-mode display-fill-column-indicator-mode)
+  2286
+  '(nil nil)
+  nil
+  nil
+  '((buffer-display-time 26837 53737 693372 121000) (buffer-file-coding-system . prefer-utf-8-unix) (truncate-lines))
+  '((mark-ring nil)))
+
+(desktop-create-buffer 208
+  "/home/thinky/NixOS/emacs/init.el"
+  "init.el"
+  'emacs-lisp-mode
+  '(visual-line-mode font-lock-mode undo-tree-mode yas-minor-mode aggressive-indent-mode eldoc-mode lispy-mode rainbow-delimiters-mode display-fill-column-indicator-mode)
+  274
+  '(nil nil)
+  nil
+  nil
+  '((buffer-display-time 26837 53730 313286 185000) (buffer-file-coding-system . prefer-utf-8-unix) (truncate-lines))
+  '((mark-ring nil)))
+
+(desktop-create-buffer 208
+  "/home/thinky/Downloads/PDF/The Physics and Technology of Laser Resonators.pdf"
+  "The Physics and Technology of Laser Resonators.pdf"
+  'pdf-view-mode
+  '(visual-line-mode font-lock-mode undo-tree-mode yas-minor-mode pdf-cache-prefetch-minor-mode pdf-misc-context-menu-minor-mode pdf-sync-minor-mode pdf-annot-minor-mode pdf-misc-menu-bar-minor-mode pdf-misc-size-indication-minor-mode pdf-outline-minor-mode pdf-misc-minor-mode pdf-links-minor-mode pdf-isearch-minor-mode pdf-history-minor-mode)
+  1
+  '(nil nil)
+  t
+  nil
+  '((buffer-display-time 26837 53809 508554 354000) (buffer-file-coding-system . no-conversion) (truncate-lines))
+  '((mark-ring nil)))
+

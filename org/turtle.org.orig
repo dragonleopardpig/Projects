@@ -1,0 +1,87 @@
+#+PROPERTY: header-args:python :session
+
+* Concentric Circles
+#+BEGIN_SRC python :session
+import turtle
+
+turtle.home()
+turtle.clear()
+
+turtle.width(5)
+turtle.speed(10)
+<<<<<<< HEAD
+rainbow = ["red",
+           "blue"
+           ]
+=======
+rainbow = ["DarkViolet",
+           "Salmon",
+           "Chocolate",
+           "OliveDrab",
+           "LawnGreen",
+           "DarkCyan",
+           ]
+#+End_SRC
+>>>>>>> refs/remotes/origin/main
+
+def concentricCircle(radius, step):
+    counter = 0
+    while counter < len(rainbow):
+        turtle.color(rainbow[counter])
+        # Draw Circle
+        turtle.circle(radius + counter * step)
+        # Reposition
+        turtle.up()
+        turtle.right(90)
+        turtle.forward(step)
+        turtle.down()
+        turtle.left(90)
+        # Reset counter
+        counter = counter + 1
+
+concentricCircle(radius=20, step=10)
+#+END_SRC
+#+RESULTS:
+: None
+
+* Concentric Square
+#+BEGIN_SRC python :session
+import turtle
+
+turtle.home()
+turtle.clear()
+
+turtle.width(5)
+turtle.speed(10)
+rainbow = ["red",
+           "blue",
+           "green",
+           "magenta"
+           ]
+
+def concentricSquare(length, step):
+    counter = 0
+    while counter < len(rainbow):
+        turtle.color(rainbow[counter])
+        # Draw square
+        turtle.forward(length + 2* counter * step)
+        turtle.left(90)
+        turtle.forward(length + 2* counter * step)
+        turtle.left(90)
+        turtle.forward(length + 2* counter * step)
+        turtle.left(90)
+        turtle.forward(length + 2* counter * step)
+        # Reposition
+        turtle.up()
+        turtle.forward(step)
+        turtle.right(90)
+        turtle.forward(step)
+        turtle.down()
+        turtle.left(180)
+        # Reset counter
+        counter = counter + 1
+
+concentricSquare(length=20, step=10)
+#+END_SRC
+#+RESULTS:
+: None

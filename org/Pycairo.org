@@ -1,0 +1,968 @@
+#+STARTUP: content
+#+PROPERTY: header-args:jupyter-python :session mysession
+
+* Cario example snippets with outputs
+** Initialize
+#+BEGIN_SRC jupyter-python  
+import cairo
+from IPython.display import Image, display
+from math import pi
+from io import BytesIO
+
+def disp(draw_func):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 200, 200)
+    ctx = cairo.Context(surface)
+    draw_func(ctx, 200, 200)
+    with BytesIO() as fileobj:
+        surface.write_to_png(fileobj)
+        display(Image(fileobj.getvalue(), width=200))
+#+END_SRC
+
+#+RESULTS:
+
+** Examples
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.arc(0.5, 0.5, 0.3, 0, 2 * pi)
+    cr.clip()
+
+    cr.rectangle(0, 0, 1, 1)
+    cr.fill()
+    cr.set_source_rgb(0, 1, 0)
+    cr.move_to(0, 0)
+    cr.line_to(1, 1)
+    cr.move_to(1, 0)
+    cr.line_to(0, 1)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/8bf3a60d8ed8f7019167f4800aaca99b1343daa9.png]]
+:END:
+
+#+BEGIN_SRC jupyter-python
+@dispSVG
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.arc(0.5, 0.5, 0.3, 0, 2 * pi)
+    cr.clip()
+
+    cr.rectangle(0, 0, 1, 1)
+    cr.fill()
+    cr.set_source_rgb(0, 1, 0)
+    cr.move_to(0, 0)
+    cr.line_to(1, 1)
+    cr.move_to(1, 0)
+    cr.line_to(0, 1)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+# [goto error]
+#+begin_example
+---------------------------------------------------------------------------
+ExpatError                                Traceback (most recent call last)
+Cell In[21], line 1
+----> 1 @dispSVG
+      2 def draw(cr, width, height):
+      3     cr.scale(width, height)
+      4     cr.set_line_width(0.04)
+
+Cell In[19], line 21, in dispSVG(draw_func)
+     19 with cairo.SVGSurface(fileobj, 200, 200) as surface:
+     20     context = cairo.Context(surface)
+---> 21     display(SVG(fileobj.getvalue()))
+
+File ~/.virtualenvs/tf/lib/python3.11/site-packages/IPython/core/display.py:320, in DisplayObject.__init__(self, data, url, filename, metadata)
+    316 self.filename = filename
+    317 # because of @data.setter methods in
+    318 # subclasses ensure url and filename are set
+    319 # before assigning to self.data
+--> 320 self.data = data
+    322 if metadata is not None:
+    323     self.metadata = metadata
+
+File ~/.virtualenvs/tf/lib/python3.11/site-packages/IPython/core/display.py:491, in SVG.data(self, svg)
+    489 # parse into dom object
+    490 from xml.dom import minidom
+--> 491 x = minidom.parseString(svg)
+    492 # get svg tag (should be 1)
+    493 found_svg = x.getElementsByTagName('svg')
+
+File /usr/lib/python3.11/xml/dom/minidom.py:2000, in parseString(string, parser)
+   1998 if parser is None:
+   1999     from xml.dom import expatbuilder
+-> 2000     return expatbuilder.parseString(string)
+   2001 else:
+   2002     from xml.dom import pulldom
+
+File /usr/lib/python3.11/xml/dom/expatbuilder.py:925, in parseString(string, namespaces)
+    923 else:
+    924     builder = ExpatBuilder()
+--> 925 return builder.parseString(string)
+
+File /usr/lib/python3.11/xml/dom/expatbuilder.py:223, in ExpatBuilder.parseString(self, string)
+    221 parser = self.getParser()
+    222 try:
+--> 223     parser.Parse(string, True)
+    224     self._setup_subset(string)
+    225 except ParseEscape:
+
+ExpatError: no element found: line 1, column 0
+#+end_example
+:END:
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height) # eg1
+    cr.stroke()
+    cr.set_line_cap(cairo.LINE_CAP_ROUND)
+    cr.set_line_width(0.12)
+    cr.move_to(0.5, 0.5)
+    cr.line_to(0.5, 0.5)
+    
+    cr.stroke() #eg1
+    xc=.4
+    yc=.4
+    cr.arc(xc, yc, 0.05, 0, 2 * pi)
+    cr.fill()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/b2c108df948f2673d2dc68e261d3151a812ff575.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    # a custom shape, that could be wrapped in a function
+    x0 = 0.1  # parameters like cairo_rectangle
+    y0 = 0.1
+    rect_width = 0.8
+    rect_height = 0.8
+    radius = 0.4  # and an approximate curvature radius
+
+    x1 = x0 + rect_width
+    y1 = y0 + rect_height
+
+    if rect_width / 2 < radius:
+        if rect_height / 2 < radius:
+            cr.move_to(x0, (y0 + y1) / 2)
+            cr.curve_to(x0, y0, x0, y0, (x0 + x1) / 2, y0)
+            cr.curve_to(x1, y0, x1, y0, x1, (y0 + y1) / 2)
+            cr.curve_to(x1, y1, x1, y1, (x1 + x0) / 2, y1)
+            cr.curve_to(x0, y1, x0, y1, x0, (y0 + y1) / 2)
+        else:
+            cr.move_to(x0, y0 + radius)
+            cr.curve_to(x0, y0, x0, y0, (x0 + x1) / 2, y0)
+            cr.curve_to(x1, y0, x1, y0, x1, y0 + radius)
+            cr.line_to(x1, y1 - radius)
+            cr.curve_to(x1, y1, x1, y1, (x1 + x0) / 2, y1)
+            cr.curve_to(x0, y1, x0, y1, x0, y1 - radius)
+    else:
+        if rect_height / 2 < radius:
+            cr.move_to(x0, (y0 + y1) / 2)
+            cr.curve_to(x0, y0, x0, y0, x0 + radius, y0)
+            cr.line_to(x1 - radius, y0)
+            cr.curve_to(x1, y0, x1, y0, x1, (y0 + y1) / 2)
+            cr.curve_to(x1, y1, x1, y1, x1 - radius, y1)
+            cr.line_to(x0 + radius, y1)
+            cr.curve_to(x0, y1, x0, y1, x0, (y0 + y1) / 2)
+        else:
+            cr.move_to(x0, y0 + radius)
+            cr.curve_to(x0, y0, x0, y0, x0 + radius, y0)
+            cr.line_to(x1 - radius, y0)
+            cr.curve_to(x1, y0, x1, y0, x1, y0 + radius)
+            cr.line_to(x1, y1 - radius)
+            cr.curve_to(x1, y1, x1, y1, x1 - radius, y1)
+            cr.line_to(x0 + radius, y1)
+            cr.curve_to(x0, y1, x0, y1, x0, y1 - radius)
+
+    cr.close_path()
+
+    cr.set_source_rgb(0.5, 0.5, 1)
+    cr.fill_preserve()
+    cr.set_source_rgba(0.5, 0, 0, 0.5)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/ce539c60a495ec59da8de723f916f7c8933978c6.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    x, y = 0.1, 0.5
+    x1, y1 = 0.4, 0.9
+    x2, y2 = 0.6, 0.1
+    x3, y3 = 0.9, 0.5
+
+    cr.move_to(x, y)
+    cr.curve_to(x1, y1, x2, y2, x3, y3)
+
+    cr.stroke()
+
+    cr.set_source_rgba(1, 0.2, 0.2, 0.6)
+    cr.set_line_width(0.03)
+    cr.move_to(x, y)
+    cr.line_to(x1, y1)
+    cr.move_to(x2, y2)
+    cr.line_to(x3, y3)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/5f4f4ed2f44bf22102a4acd12c1db919fc9ede86.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+def path_ellipse(cr, x, y, width, height, angle=0):
+    """
+    x      - center x
+    y      - center y
+    width  - width of ellipse  (in x direction when angle=0)
+    height - height of ellipse (in y direction when angle=0)
+    angle  - angle in radians to rotate, clockwise
+    """
+    cr.save()
+    cr.translate(x, y)
+    cr.rotate(angle)
+    cr.scale(width / 2.0, height / 2.0)
+    cr.arc(0.0, 0.0, 1.0, 0.0, 2.0 * pi)
+    cr.restore()
+
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    path_ellipse(cr, 0.5, 0.5, 1.0, 0.3, pi / 4.0)
+
+    # fill
+    cr.set_source_rgba(1, 0, 0, 1)
+    cr.fill_preserve()
+
+    # stroke
+    # reset identity matrix so line_width is a constant
+    # width in device-space, not user-space
+    cr.save()
+    cr.identity_matrix()
+    cr.set_source_rgba(0, 0, 0, 1)
+    cr.set_line_width(3)
+    cr.stroke()
+    cr.restore()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/ca5234bccdb36b37a50234d4a46446065cc67a39.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.move_to(0.5, 0.1)
+    cr.line_to(0.9, 0.9)
+    cr.rel_line_to(-0.4, 0.0)
+    cr.curve_to(0.2, 0.9, 0.2, 0.5, 0.5, 0.5)
+    cr.close_path()
+
+    cr.set_source_rgb(0, 0, 1)
+    cr.fill_preserve()
+    cr.set_source_rgb(0, 0, 0)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/bab8d9e0854cb399df2e13b7b601d6703122153c.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.move_to(0.5, 0.1)
+    cr.line_to(0.9, 0.9)
+    cr.rel_line_to(-0.4, 0.0)
+    cr.curve_to(0.2, 0.9, 0.2, 0.5, 0.5, 0.5)
+    cr.close_path()
+
+    cr.move_to(0.25, 0.1)
+    cr.rel_line_to(0.2, 0.2)
+    cr.rel_line_to(-0.2, 0.2)
+    cr.rel_line_to(-0.2, -0.2)
+    cr.close_path()
+
+    cr.set_source_rgb(0, 0, 1)
+    cr.fill_preserve()
+    cr.set_source_rgb(0, 0, 0)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/74e70627d07ba3f788cbe77c7b067ae6092653ae.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    pat = cairo.LinearGradient(0.0, 0.0, 0.0, 1.0)
+    pat.add_color_stop_rgba(1, 0, 0, 0, 1)
+    pat.add_color_stop_rgba(0, 1, 1, 1, 1)
+    cr.rectangle(0, 0, 1, 1)
+    cr.set_source(pat)
+    cr.fill()
+
+    pat = cairo.RadialGradient(0.45, 0.4, 0.1,
+                               0.4, 0.4, 0.5)
+    pat.add_color_stop_rgba(0, 1, 1, 1, 1)
+    pat.add_color_stop_rgba(1, 0, 0, 0, 1)
+    cr.set_source(pat)
+    cr.arc(0.5, 0.5, 0.3, 0, 2 * pi)
+    cr.fill()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/4f7e89f3f3aabcaa87041f047bc56b8d0f895598.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    pattern = cairo.LinearGradient(0, 0, 1, 1)
+    pattern.add_color_stop_rgb(0, 0, 0.3, 0.8)
+    pattern.add_color_stop_rgb(1, 0, 0.8, 0.3)
+
+    mask = cairo.RadialGradient(0.5, 0.5, 0.25, 0.5, 0.5, 0.5)
+    mask.add_color_stop_rgba(0, 0, 0, 0, 1)
+    mask.add_color_stop_rgba(0.5, 0, 0, 0, 0)
+
+    cr.set_source(pattern)
+    cr.mask(mask)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/f31705b9aae8ad3ed047c2149e92a56836da4294.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.rectangle(0.1, 0.1, 0.6, 0.6)
+    cr.set_line_width(0.03)
+    cr.set_source_rgb(0.8, 0.8, 0.8)
+    cr.fill()
+
+    cr.push_group()
+    cr.rectangle(0.3, 0.3, 0.6, 0.6)
+    cr.set_source(cairo.SolidPattern(1, 0, 0))
+    cr.fill_preserve()
+    cr.set_source(cairo.SolidPattern(0, 0, 0))
+    cr.stroke()
+    cr.pop_group_to_source()
+    cr.paint_with_alpha(0.5)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/b40713a055d641818984095db228177e5f95d3fe.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(ctx, width, height):
+    LINES = 32
+    MAX_THETA = .80 * pi * 2
+    THETA_INC = 2.0 * MAX_THETA / (LINES - 1)
+
+    ctx.set_source_rgb(0, 0, 0)
+    ctx.set_line_width(2.0)
+
+    ctx.save()
+
+    ctx.translate(width / 2, height / 2)
+    ctx.rotate(MAX_THETA)
+
+    for i in range(LINES):
+        ctx.move_to(-2 * width, 0)
+        ctx.line_to(2 * width, 0)
+        ctx.stroke()
+
+        ctx.rotate(- THETA_INC)
+
+    ctx.restore()
+
+    ctx.set_line_width(6)
+    ctx.set_source_rgb(1, 0, 0)
+
+    ctx.move_to(width / 4.0, 0)
+    ctx.rel_line_to(0, height)
+    ctx.stroke()
+
+    ctx.move_to(3 * width / 4.0, 0)
+    ctx.rel_line_to(0, height)
+    ctx.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/10516910f5d9af62fff98ff792d0ea8bc724dafb.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.move_to(0.5, 0.1)
+    cr.line_to(0.9, 0.9)
+    cr.rel_line_to(-0.4, 0.0)
+    cr.curve_to(0.2, 0.9, 0.2, 0.5, 0.5, 0.5)
+
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/8f864e506a9a200a31756eac365d68aedabb9c4d.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.set_line_width(0.12)
+    cr.set_line_cap(cairo.LINE_CAP_BUTT)  # default
+    cr.move_to(0.25, 0.2)
+    cr.line_to(0.25, 0.8)
+    cr.stroke()
+    cr.set_line_cap(cairo.LINE_CAP_ROUND)
+    cr.move_to(0.5, 0.2)
+    cr.line_to(0.5, 0.8)
+    cr.stroke()
+    cr.set_line_cap(cairo.LINE_CAP_SQUARE)
+    cr.move_to(0.75, 0.2)
+    cr.line_to(0.75, 0.8)
+    cr.stroke()
+
+    # draw helping lines
+    cr.set_source_rgb(1, 0.2, 0.2)
+    cr.set_line_width(0.01)
+    cr.move_to(0.25, 0.2)
+    cr.line_to(0.25, 0.8)
+    cr.move_to(0.5, 0.2)
+    cr.line_to(0.5, 0.8)
+    cr.move_to(0.75, 0.2)
+    cr.line_to(0.75, 0.8)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/db223393a75408fe06dc7a74d789bf0302ceb835.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.set_line_width(0.16)
+    cr.move_to(0.3, 0.33)
+    cr.rel_line_to(0.2, -0.2)
+    cr.rel_line_to(0.2, 0.2)
+    cr.set_line_join(cairo.LINE_JOIN_MITER)  # default
+    cr.stroke()
+
+    cr.move_to(0.3, 0.63)
+    cr.rel_line_to(0.2, -0.2)
+    cr.rel_line_to(0.2, 0.2)
+    cr.set_line_join(cairo.LINE_JOIN_BEVEL)
+    cr.stroke()
+
+    cr.move_to(0.3, 0.93)
+    cr.rel_line_to(0.2, -0.2)
+    cr.rel_line_to(0.2, 0.2)
+    cr.set_line_join(cairo.LINE_JOIN_ROUND)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/8b83bd1bf7dd066a482fe0dfb0c5966e66a917b3.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL,
+                        cairo.FONT_WEIGHT_NORMAL)
+    # draw 0.08 glyphs in 0.10 squares, at(0.01, 0.02) from left corner
+    cr.set_font_size(0.08)
+
+    glyphs = []
+    index = 0
+    for y in range(10):
+        for x in range(10):
+            glyphs.append((index, x / 10.0 + 0.01, y / 10.0 + 0.08))
+            index += 1
+
+    cr.show_glyphs(glyphs)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/9db5fa09735aab6b3083ac7827e7a9a9ac338733.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL,
+                        cairo.FONT_WEIGHT_NORMAL)
+    # draw 0.16 glyphs in 0.20 squares, at (0.02, 0.04) from left corner
+    cr.set_font_size(0.16)
+
+    glyphs = []
+    index = 20
+    for y in range(5):
+        for x in range(5):
+            glyphs.append((index, x / 5.0 + 0.02, y / 5.0 + 0.16))
+            index += 1
+
+    cr.glyph_path(glyphs)
+    cr.set_source_rgb(0.5, 0.5, 1.0)
+    cr.fill_preserve()
+    cr.set_source_rgb(0, 0, 0)
+    cr.set_line_width(0.005)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/09828e24e515f47abc38e6688191400ac11c39ff.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(ctx, width, height):
+    wd = .02 * width
+    hd = .02 * height
+
+    width -= 2
+    height -= 2
+
+    ctx.move_to(width + 1, 1 - hd)
+    for i in range(20):
+        ctx.rel_line_to(0, height - hd * (2 * i - 1))
+        ctx.rel_line_to(-(width - wd * (2 * i)), 0)
+        ctx.rel_line_to(0, -(height - hd * (2 * i)))
+        ctx.rel_line_to(width - wd * (2 * i + 1), 0)
+
+    ctx.set_source_rgb(0, 0, 1)
+    ctx.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/1b9102787f3243b317fd57deabcfff97990a1973.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL,
+                        cairo.FONT_WEIGHT_BOLD)
+    cr.set_font_size(0.35)
+
+    cr.move_to(0.04, 0.53)
+    cr.show_text("Hello")
+
+    cr.move_to(0.27, 0.65)
+    cr.text_path("void")
+    cr.set_source_rgb(0.5, 0.5, 1)
+    cr.fill_preserve()
+    cr.set_source_rgb(0, 0, 0)
+    cr.set_line_width(0.01)
+    cr.stroke()
+
+    # draw helping lines
+    cr.set_source_rgba(1, 0.2, 0.2, 0.6)
+    cr.arc(0.04, 0.53, 0.02, 0, 2 * pi)
+    cr.arc(0.27, 0.65, 0.02, 0, 2 * pi)
+    cr.fill()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/3bfe4d337f2a361266081d6dff8df514ef0ae58f.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    utf8 = "cairo"
+
+    cr.select_font_face("Sans",
+                        cairo.FONT_SLANT_NORMAL,
+                        cairo.FONT_WEIGHT_NORMAL)
+
+    cr.set_font_size(0.2)
+    x_bearing, y_bearing, width, height, x_advance, y_advance = \
+        cr.text_extents(utf8)
+    x = 0.5 - (width / 2 + x_bearing)
+    y = 0.5 - (height / 2 + y_bearing)
+
+    cr.move_to(x, y)
+    cr.show_text(utf8)
+
+    # draw helping lines
+    cr.set_source_rgba(1, 0.2, 0.2, 0.6)
+    cr.arc(x, y, 0.05, 0, 2 * pi)
+    cr.fill()
+    cr.move_to(0.5, 0)
+    cr.rel_line_to(0, 1)
+    cr.move_to(0, 0.5)
+    cr.rel_line_to(1, 0)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/d6396339f9b7cffe2682aa3386f671bee8dcea13.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+@disp
+def draw(cr, width, height):
+    cr.scale(width, height)
+    cr.set_line_width(0.04)
+
+    utf8 = "cairo"
+
+    cr.select_font_face("Sans",
+                        cairo.FONT_SLANT_NORMAL,
+                        cairo.FONT_WEIGHT_NORMAL)
+
+    cr.set_font_size(0.4)
+    x_bearing, y_bearing, width, height, x_advance, y_advance = \
+        cr.text_extents(utf8)
+
+    x = 0.1
+    y = 0.6
+
+    cr.move_to(x, y)
+    cr.show_text(utf8)
+
+    # draw helping lines
+    cr.set_source_rgba(1, 0.2, 0.2, 0.6)
+    cr.arc(x, y, 0.05, 0, 2 * pi)
+    cr.fill()
+    cr.move_to(x, y)
+    cr.rel_line_to(0, -height)
+    cr.rel_line_to(width, 0)
+    cr.rel_line_to(x_bearing, -y_bearing)
+    cr.stroke()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/3e7dc020580aa7e0c750c48cc651118297a7976f.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+import math
+all_width = all_height = text_width = 0
+
+def warpPath(ctx, function):
+    first = True
+
+    for type, points in ctx.copy_path():
+        if type == cairo.PATH_MOVE_TO:
+            if first:
+                ctx.new_path()
+                first = False
+            x, y = function(*points)
+            ctx.move_to(x, y)
+
+        elif type == cairo.PATH_LINE_TO:
+            x, y = function(*points)
+            ctx.line_to(x, y)
+
+        elif type == cairo.PATH_CURVE_TO:
+            x1, y1, x2, y2, x3, y3 = points
+            x1, y1 = function(x1, y1)
+            x2, y2 = function(x2, y2)
+            x3, y3 = function(x3, y3)
+            ctx.curve_to(x1, y1, x2, y2, x3, y3)
+
+        elif type == cairo.PATH_CLOSE_PATH:
+            ctx.close_path()
+
+
+def spiral(x, y):
+    theta0 = -math.pi * 3 / 4
+    theta = x / all_width * math.pi * 2 + theta0
+    radius = y + 200 - x / 7
+    xnew = radius * math.cos(theta)
+    ynew = radius * math.sin(-theta)
+    return xnew + all_width / 2, ynew + all_height / 2
+
+
+def curl(x, y):
+    xn = x - text_width / 2
+    xnew = xn
+    ynew = y + xn ** 3 / ((text_width / 2) ** 3) * 70
+    return xnew + all_width / 2, ynew + all_height * 2 / 5
+
+
+@disp
+def draw(ctx, width, height):
+    global text_width, all_width, all_height
+
+    all_width, all_height = width, height
+
+    solidpattern = ctx.get_source()
+
+    # background
+    pat = cairo.LinearGradient(0.0, 0.0, 0, height)
+    pat.add_color_stop_rgba(1, 0, 0, 0, 1)
+    pat.add_color_stop_rgba(0, 1, 1, 1, 1)
+
+    ctx.rectangle(0, 0, width, height)
+    ctx.set_source(pat)
+    ctx.fill()
+
+    # foreground
+    ctx.set_source(solidpattern)
+    ctx.set_source_rgb(1, 1, 1)
+
+    ctx.select_font_face("Sans")
+    ctx.set_font_size(80)
+
+    # spiral text
+    ctx.new_path()
+    ctx.move_to(0, 0)
+    ctx.text_path("pycairo - " + "spam " * 5)
+    warpPath(ctx, spiral)
+    ctx.fill()
+
+    # curly text
+    ctx.new_path()
+    ctx.move_to(0, 0)
+    ctx.set_source_rgb(0.3, 0.3, 0.3)
+    text = "I am curly :)"
+    ctx.text_path(text)
+    text_width = ctx.text_extents(text)[2]
+    warpPath(ctx, curl)
+    ctx.fill()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/25eddf14cc1d1c321f805e0dc3568e307f08b7dc.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+from contextlib import contextmanager
+
+@disp
+def draw(ctx, width, height):
+    cr = ctx
+    @contextmanager
+    def saved(cr):
+        cr.save()
+        try:
+            yield cr
+        finally:
+            cr.restore()
+
+    def Tree(angle):
+        cr.move_to(0, 0)
+        cr.translate(0, -65)
+        cr.line_to(0, 0)
+        cr.stroke()
+        cr.scale(0.72, 0.72)
+        if angle > 0.12:
+            for a in [-angle, angle]:
+                with saved(cr):
+                    cr.rotate(a)
+                    Tree(angle * 0.75)
+
+
+    cr.translate(140, 203)
+    cr.set_line_width(5)
+    Tree(0.32)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+attr_org: :width 200
+[[./.ob-jupyter/7177c33c507852616b3cd423807fa86a80d90d83.png]]
+:END:
+
+* SVG
+#+BEGIN_SRC jupyter-python
+import cairo
+from IPython.display import SVG, display
+
+def show_svg(file):
+    display(SVG(filename=file))
+
+with cairo.SVGSurface('example.svg', 200, 200) as surface:
+    context = cairo.Context(surface)
+    x, y, x1, y1 = 0.1, 0.5, 0.4, 0.9
+    x2, y2, x3, y3 = 0.6, 0.1, 0.9, 0.5
+    context.scale(200, 200)
+    context.set_line_width(0.04)
+    context.move_to(x, y)
+    context.curve_to(x1, y1, x2, y2, x3, y3)
+    context.set_source_rgb(1, 0.2, 0.2)
+    context.stroke()
+    context.set_source_rgba(0, 0, 0, 0.6)
+    context.set_line_width(0.02)
+    context.move_to(x, y)
+    context.line_to(x1, y1)
+    context.move_to(x2, y2)
+    context.line_to(x3, y3)
+    context.stroke()
+
+show_svg('example.svg')
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/5d88bfb3a13f3c6104fc49785f8c3244b731508c.svg]]
+
+* PNG
+#+BEGIN_SRC jupyter-python  
+import cairo
+from IPython.display import display, Image
+
+def show_img(file):
+    display(Image(filename=file))
+
+surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 200, 200)
+context = cairo.Context(surface)
+
+x, y, x1, y1 = 0.1, 0.5, 0.4, 0.9
+x2, y2, x3, y3 = 0.6, 0.1, 0.9, 0.5
+context.scale(200, 200)
+context.set_line_width(0.04)
+context.move_to(x, y)
+context.curve_to(x1, y1, x2, y2, x3, y3)
+context.set_source_rgb(0, 0, 0)
+context.stroke()
+context.set_source_rgba(1, 0.2, 0.2, 0.6)
+context.set_line_width(0.02)
+context.move_to(x, y)
+context.line_to(x1, y1)
+context.move_to(x2, y2)
+context.line_to(x3, y3)
+context.stroke()
+
+surface.write_to_png("example.png")
+show_img('example.png')
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/a782c44d2f2500591d82a0756be8ca29db978efc.png]]
+
+
+#+BEGIN_SRC jupyter-python  
+
+#+END_SRC
+

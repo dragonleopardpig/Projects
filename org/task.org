@@ -1,0 +1,4 @@
+* Tasks
+** TODO Setup Org Capture
+  [2023-09-19 Tue]
+  [[file:~/mountdir/emacs/user/user.el::setq org-default-notes-file (concat org-directory "/task.org")]]

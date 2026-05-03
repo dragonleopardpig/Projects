@@ -1,0 +1,125 @@
+#+LATEX_CLASS: elsarticle
+#+LATEX_CLASS_OPTIONS: [a4paper, 5p]
+#+OPTIONS: tags:nil toc:nil
+#+LATEX_HEADER: \usepackage{ecrc}
+#+LATEX_HEADER: \usepackage{enumitem}
+#+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage[scaled=1.0]{newtxtext}
+#+LATEX_HEADER: \usepackage[cmintegrals]{newtxmath}
+#+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage{graphicx}
+#+LATEX_HEADER: \usepackage{textcomp}
+#+LaTeX_HEADER: \usepackage{marvosym}
+#+LaTeX_HEADER: \usepackage{wasysym}
+#+LaTeX_HEADER: \usepackage{latexsym}
+#+LaTeX_HEADER: \usepackage{amssymb}
+#+LaTeX_HEADER: \usepackage{listings}
+#+LaTeX_HEADER: \usepackage{longtable}
+#+LATEX_HEADER: \usepackage{pdfpages}
+#+LATEX_HEADER: \usepackage{setspace}
+#+LATEX_HEADER: \usepackage{cancel}
+#+LATEX_HEADER: \usepackage{cuted} 
+#+LATEX_HEADER: \setlength{\stripsep}{12pt}
+#+LaTeX_HEADER: \usepackage[linktocpage,
+#+LaTeX_HEADER:   pdfstartview=FitH,
+#+LaTeX_HEADER:   colorlinks,
+#+LaTeX_HEADER:   linkcolor=blue,
+#+LaTeX_HEADER:   anchorcolor=blue,
+#+LaTeX_HEADER:   citecolor=blue,
+#+LaTeX_HEADER:   filecolor=blue,
+#+LaTeX_HEADER:   menucolor=blue,
+#+LaTeX_HEADER:   urlcolor=blue]{hyperref}
+
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+#+BEGIN_EXPORT latex
+%% The ecrc package defines commands needed for running heads and logos.
+%% For running heads, you can set the journal name, the volume, the starting page and the authors
+
+%% set the volume if you know. Otherwise `00'
+\volume{00}
+
+%% set the starting page if not 1
+\firstpage{1}
+
+%% Give the name of the journal
+\journalname{ARTC FMCG}
+
+%% Give the author list to appear in the running head
+%% Example \runauth{C.V. Radhakrishnan et al.}
+\runauth{}
+
+%% The choice of journal logo is determined by the \jid and \jnltitlelogo commands.
+%% A user-supplied logo with the name <\jid>logo.pdf will be inserted if present.
+%% e.g. if \jid{yspmi} the system will look for a file yspmilogo.pdf
+%% Otherwise the content of \jnltitlelogo will be set between horizontal lines as a default logo
+
+%% Give the abbreviation of the Journal.
+\jid{procs}
+
+%% Give a short journal name for the dummy logo (if needed)
+\jnltitlelogo{ARTC FMCG}
+
+%% Hereafter the template follows `elsarticle'.
+%% For more details see the existing template files elsarticle-template-harv.tex and elsarticle-template-num.tex.
+
+%% Elsevier CRC generally uses a numbered reference style
+%% For this, the conventions of elsarticle-template-num.tex should be followed (included below)
+%% If using BibTeX, use the style file elsarticle-num.bst
+
+%% End of ecrc-specific commands
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{frontmatter}
+\dochead{ARTC FMCG W1.3}
+%% Use \dochead if there is an article header, e.g. \dochead{Short communication}
+
+\title{FMCG WP1.3 Laser Texturing\tnoteref{t1,t2}}
+\tnotetext[t1]{This document is a collaborative effort.}
+\tnotetext[t2]{The second title footnote which is a longer
+longer than the first one and with an intention to fill
+in up more than one line while formatting.}
+\author[rvt]{C.V.˜Radhakrishnan\corref{cor1}\fnref{fn1}}
+\ead{cvr@river-valley.com}
+\author[rvt,focal]{K.˜Bazargan\fnref{fn2}}
+\ead{kaveh@river-valley.com}
+\author[els]{S.˜Pepping\corref{cor2}\fnref{fn1,fn3}}
+\ead[url]{http://www.elsevier.com}
+\cortext[cor1]{Corresponding author}
+\cortext[cor2]{Principal corresponding author}
+\fntext[fn1]{This is the specimen author footnote.}
+\fntext[fn2]{Another author footnote, but a little more longer.}
+\fntext[fn3]{Yet another author footnote. Indeed, you can have
+any number of author footnotes.}
+\address[rvt]{River Valley Technologies, SJP Building,
+Cotton Hills, Trivandrum, Kerala, India 695014}
+\address[focal]{River Valley Technologies, 9, Browns Court,
+Kennford, Exeter, United Kingdom}
+\address[els]{Central Application Management,
+Elsevier, Radarweg 29, 1043 NX\\
+Amsterdam, Netherlands}
+ \begin{abstract}[S U M M A R Y]
+	 Materials sticking to the inner walls of filling machines (e.g. tanks,
+	mixers, augers) is a common problem in the FMCG industry. The problem
+	is further aggravated by processing conditions (temperature, heat,
+	duration, batch size), product characteristics (hygroscopicity of
+	powder) and environmental conditions (temperature, humidity). There is
+	a challenge of cross contamination, especially for batch one (or low
+	MOQ) production, where cleaning after every recipe change is not
+	feasible. The scope includes development of anti-sticking surfaces by
+	micro/nano texturisation of metal parts (stainless steel). Nano
+	texturisation on plastics have been commercialized for optics and
+	medtech applications, but this is not achieved on steel surfaces for
+	tooling yet. Preliminary research by EU Shark Project1 had
+	demonstrated feasibility of laser texturising metals to improve
+	hydrophobicity.
+ \end{abstract}
+
+ \begin{keyword}
+  laser \sep texturing \sep metal
+ \end{keyword}
+\end{frontmatter}
+#+END_EXPORT
+
+
+#+INCLUDE: raw.org

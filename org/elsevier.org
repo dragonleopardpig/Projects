@@ -1,0 +1,84 @@
+#+LATEX_CLASS: cas-dc
+#+LATEX_CLASS_OPTIONS: [a5paper,18pt,oneside,fleqn,final]
+#+OPTIONS: tags:nil toc:nil H:5 num:5 todo:nil
+
+#+LATEX_HEADER: \usepackage{savesym}
+#+LATEX_HEADER: \savesymbol{fax}
+#+LATEX_HEADER: \savesymbol{Hermaphrodite}
+#+LATEX_HEADER: \usepackage{marvosym}
+#+LATEX_HEADER: \restoresymbol{MARV}{fax}
+#+LATEX_HEADER: \restoresymbol{MARV}{Hermaphrodite}
+
+#+LATEX_HEADER: \usepackage[numbers]{natbib}
+#+LATEX_HEADER: \usepackage{enumitem}
+#+LATEX_HEADER: \usepackage[normalem]{ulem}
+#+LATEX_HEADER: \usepackage{soul}
+# #+LaTeX_HEADER: \usepackage{listings}
+# #+LaTeX_HEADER: \usepackage{longtable}
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+
+#+LATEX_HEADER: \definecolor{lightgray}{gray}{0.90}
+#+LATEX_HEADER: \sethlcolor{lightgray}
+#+LATEX_HEADER: \setcounter{tocdepth}{2}
+
+#+BEGIN_EXPORT latex
+
+\title[mode = title]{FMCG WP1.3 LASER TEXTURING}
+\title[mode = alt]{ARTC - University of Coventry collaboration}
+
+\shorttitle{FMCG Laser Texturing}
+\shortauthors{Chu PL et~al.}
+
+\author{Chu PL}[style=chinese, orcid=0000-0000-0000-0000]
+\ead{chu_pau_loong@artc.a-star.edu.sg}
+
+\author{David G. Waugh}
+\ead{ac4963@coventry.ac.uk}
+
+\author{Yap FL}[style=chinese]
+\ead{Yap_Fung_Ling@artc.a-star.edu.sg}
+
+\author{Ng KL}[style=chinese]
+\ead{gary-ng@artc.a-star.edu.sg}
+\address{3 Cleantech Loop, \#01/01 CleanTech Two, Singapore 637143}
+
+\begin{abstract}[S U M M A R Y]
+	Materials sticking to the inner walls of filling machines (e.g. tanks,
+	mixers, augers) is a common problem in the FMCG industry. The problem
+	is further aggravated by processing conditions (temperature, heat,
+	duration, batch size), product characteristics (hygroscopicity of
+	powder) and environmental conditions (temperature, humidity). There is
+	a challenge of cross contamination, especially for batch one (or low
+	MOQ) production, where cleaning after every recipe change is not
+	feasible. The scope includes development of anti-sticking surfaces by
+	micro/nano texturisation of metal parts (stainless steel). Nano
+	texturisation on plastics have been commercialized for optics and
+	medtech applications, but this is not achieved on steel surfaces for
+	tooling yet. Preliminary research by EU Shark Project1 had
+	demonstrated feasibility of laser texturising metals to improve
+	hydrophobicity.
+\end{abstract}
+
+\begin{keywords}
+  laser \sep texturing \sep metal
+\end{keywords}
+
+
+\maketitle
+
+\tableofcontents
+ 
+%% \twocolumn[
+%% \begin{@twocolumnfalse}
+%%    \tableofcontents
+%% \end{@twocolumnfalse}
+%% ]
+
+\newpage
+
+#+END_EXPORT
+
+# #+INCLUDE: raw.org
+# #+INCLUDE: scoping.org
+#+INCLUDE: coventry.org

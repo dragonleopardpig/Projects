@@ -1,0 +1,206 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	COVENTRY
+
+* Goal
+The main study is to find a method to achieve Omniphobic effect on Stainless Steel 316L.
+** Least Effort
+Reducing complexity and number of manufacturing steps means cost saving. Here are some direction:
+   + Smallest amount of energy used in the process
+   + Simplest textured topography
+   + Common and cheap energy source
+** Optimum Quality
+Since this is an industrial project, optimization is important as finding the sweet spot for competing quality
+   + Largest water contact angle
+   + Profile Integrity, strongest against abrasion
+   + Stable over long period of time
+** Scalability
+   + To be able to scale with large area
+   + To be able to applied to different geometry
+** Standards Compliance
+   + Textured surface compliance to food grade standard
+     
+* Basic Laser Parameters
+Figure [[fig:PulseOverlap]]. Basic Parameters include:
+    #+NAME: fig:PulseOverlap
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION:Pulse Overlap and Beam Mode
+    [[file:PulseOverlap.png]]
+** Pulse Width
+Linear or non-linear effect to absorption coeffient.
+** Pulse Overlaps
+Coupling of Repetition Rate and Speed.
+** Focused Spot Size
+Coupling of Average Power, Peak Power, Energy and Wavelength.
+** Depth of Focus
+Spot Size is a trade off. Larger DOF means larger spot size.
+** Beam mode
+Gaussian or Bessel, might be able to go deeper with Bessel beam.
+** Wavelength
+Other than Femtosecond laser, material absorption depends on wavelength.
+** Polarization
+Usually we randomize the polarization or make it circular. However, some laser texturing techniques require the use of polarization direction, for example those found in Femtosecond laser.
+
+* Measurement and Diagnostic Techniques
+** Water Droplet Capacitance
+In order to measure the actual contact area occupied by the water droplet on the surface, can we design measurement system? Perhaps it looks like Figure [[fig:WaterCapacitance]]?
+
+Capacitance Measurement:
+$$\text{Capacitance}=\epsilon_0\frac{\text{Water Contact Area}}{\text{Plate Distance}}$$
+
+    #+NAME: fig:WaterCapacitance
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION:Contact Area Measurement
+    [[file:WaterCapacitance.png]]
+
+** Transient Temperature
+Although this is old topic, there is currently no good measurement technique to diagnose the transient temperature change at a micron size area surrounded by plume and plasma.
+
+Can we design a measurement device to consists of for example a Pin Hole + Spectrometer to study the transient temperature change? 
+
+** Bulk Heat Effect
+Bulk heat transfer matters because we found the sample material is distorted in shape by dense laser scan hatching. By studying the heat effect to the material we can then determine correct cooling method or choose correct material thickness.
+** Surface Composition vs Time
+Objective is to study the surface chemical composition developed over time. It is well known that the textured surface transform from Wenzel state to Cassie–Baxter state over a period of time. It is however desired to control the hydrophobicity through topology rather than chemical composition change. 
+
+Also we want to know whether the processed stainless steel will get rusty?
+
+For a complete study, we can start by scanning the surface without ablation, for example to do Color Marking. For each color, we can then measure the various oxide level, particularly Rare Earth oxide level. Subsequent ablation of texturing follows. 
+
+Figure [[fig:composition]] illustrate an example.
+
+
+    #+NAME: fig:composition
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION:Chemical composition change
+    [[file:composition.png]]    
+
+** Ablation Energy Threshold
+This is just a standard result to be delivered by any laser material processing, Figure [[fig:AblationThreshold]]. However, this might be important factor such as the report of Double-pulse reporting more material removal with the same energy.
+
+    #+NAME: fig:AblationThreshold
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION:Ablation Energy Threshold
+    [[file:AblationThreshold.png]]
+    
+* Parameters Optimization
+Systematic study through design of experiment speed up the optimum parameters finding. It helps to prove to industrial partners about our result.
+
+** Aspect Ratio
+Report found the aspect ratio of the pillar will compromise physical abrasion resistance to hydrophobicity. Study shown in Figure [[fig:aspectratio]] is needed to find optimize parameters.
+
+    #+NAME: fig:aspectratio
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION:Pillars Aspect Ratio
+    [[file:aspectratio.png]]
+
+** Minimum energy
+Minimum energy helps us to define the laser power for purchasing purpose.
+** Simplest Topography
+Simple topography helps us to scale with large area and curve geometry.
+** Chemically Stable
+Contact angle is not changing with time
+      
+* Texture Structuring Techniques
+This section is the most critical part, some novel structuring techniques is expected as deliverable.
+
+** Preprocessing
+Any special preprocessing needed?
+    - Cleaning agent
+    - Polishing
+** Processing
+Any Novel processing techniques to get:
+    - Stable Superhydrophobic
+    - Stable Superhydrophilic
+    - Controllable Water Contact Angle values
+** Post-processing
+Any Post processing needed to stabilize the textured surface?
+    - Cleaning
+    - Oven
+
+* Texture Pattern and Geometries
+** Quantify Nature of Surface
+We have to find a way to quantify the nature of surface texture. One way is using abott-Firestone Curve, Figure [[fig:abbott]].
+    #+NAME: fig:abbott
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION:Abott-Firestone Curve (from Wikipedia)
+    [[file:Abbott-firestone.png]]
+** Roll-off Angle
+/David/: For applications to reduce material sticking we could do to develop a surface with a low roll-off angle. This would assist in cleaning/maintenance of the equipment. As a result of this, we really need to make sure that we are developing a true Lotus Leaf-type surface (\theta > 150°, Hysteresis < 10° and this leads to a low roll-off angle). Sometimes you can accidentally end up with the Rose Petal Effect (\theta > 150°, Hysteresis > 10° and this leads to a high roll-off angle). On account of this, we could do to include experiments to determine the roll-off angle as some of the initial studies.
+
+    #+NAME: fig:RolledOff
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION:Rolled-off Angle (from 10.1103/Physics.9.23)
+    [[file:RolledOff.png]]
+** Re-entrant Shape
+Re-entrant shape is particularly good for Oleophobic. Can
+we achieve this shape by direct laser?
+
+/David/: A re-entrant shape could assist with the point above. We have previously possibly observed re-entrant type features before using a CO2 laser to direct write on polymeric materials. The rapid melting and solidification gave rise to areas of material ‘over-hang’ which would very likely impacted the wetting nature of the surface, as a re-entrant structure might do. The surface gave rise to a slightly higher contact angle than we expected too. Figure [[fig:Reentrant]].
+    #+NAME: fig:Reentrant
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION:Re-entrant shape
+    [[file:reentrant.png]]
+
+** Rapid Melt-Solidification Bump Formation
+Rapid melting and resolidification can be done on metal such as stainless steel? Will be interesting to try out since it is non-ablation process. Figure [[fig:MeltandPull]].
+    #+NAME: fig:MeltandPull
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION:Melt-resolidified direct bump formation
+    [[file:MeltandPull.png]]
+** Capillary Length
+Not sure how to design an experiment for this, can we relate capillary length of different type of liquids to topography?
+
+/David/: For the Capillary Length, I have two initial thoughts for your consideration to define capillary length
+- One method would be to keep adding liquid to a droplet on a flat surface to increase the droplet volume. This in turn would change the droplet radius. Below the capillary length the contact angle should remain constant. If the droplet radius was to be taken above the capillary length then gravity would start to act, changing the contact angle values compared to those values of smaller droplet radii (which are below the Capillary Length).
+- The other method for determining the Capillary Length of liquids is using the pendant method to determine the surface tension. The surface tension can then be used within the Capillary Length Equation
+
+$$\text{capillary length} = \sqrt{\frac{\text{surface tension}}{(\text{density})(\text{acceleration due to gravity})}}$$ 
+
+** Multiple Overlaid Scales of Roughness
+We can try overlay a few scales of roughness, for example changing the repetition rate, spot size or line spacing, to get Roughness 1 + Rougness 2 + Roughness 3, etc. The aim is to simplify getting the hydrophobic effect. Figure [[fig:Overlaid]].
+    #+NAME: fig:Overlaid
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION:Multiple Overlaid Roughness
+    [[file:overlaid.png]]
+** Continually Changing Pattern
+If we found the relationship between the viscosity and structuring pattern, can we apply a continually changing pattern to accomodate various viscosity in one go?
+** Gravity Assisted Hysterisis Dynamics
+Since the container design always exert a nett force downward shown in Figure [[fig:CurveGeometry]], is a simple straight grooves design which is similar to bunch of fibers sufficient to achieve hydrophobic?
+
+    #+NAME: fig:CurveGeometry
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION:Curve Geometry Dynamics
+    [[file:CurveGeometry.png]]
+
+How can we make use of the nature of hysterysis together with gravity force?
+
+/David/: As you have a vertical cylinder to consider, my first approach would also be to put simple straight grooves into the surface. To optimise the system though, we will likely need to follow surfaces found in nature and have a multiple roughness surface consisting of both micro- and nano-scale roughnesses.
+
+/Chu/: I summarize this as Directional and Anisotropic wettability similar to rice leaves.
+
+* Manufacturing Process and Engineering
+** Tumbler-less Design
+To be discussed.
+** Partially Wetting, Clean by Vibration
+- Rose Petals superhydrophobic effect :: water droplets on rose petals have high adhesion to the surface so no roll-off effect can be observed.
+
+The idea is to create water droplet sticking on the surface and subsequent vibration is introduced to make the droplets roll off.
+** Large Area Texturing
+To be discussed.
+** Curved Geometry Texturing
+To be discussed.
+** Inner Wall of Tube Texturing
+To be discussed.
+** Female Mold
+Direct laser texture on Ceramics to create a Female Mold. Stainless steel melt is poured onto the surface and resolidify to create textured Male counterpart.
+** Active Cleaning of powder by Water Droplets
+- Lotus leaf self-cleaning :: Dust and dirt are cleaned along the water droplet sliding path.
+
+This might be a solution to clean residual powder (provided roughening of surfaces does not promote powder adhesion).
+
+* Simulation
+We are now really lack of simulation technique.
+
+* Note
+This Document generated by using EMACS(OrgMode) + Latex using Elsevier template. Graphics created using Inkscape.

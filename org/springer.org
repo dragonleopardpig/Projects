@@ -1,0 +1,89 @@
+#+STARTUP:		content latexpreview
+#+LATEX_CLASS:		svjour3
+#+LATEX_CLASS_OPTIONS:	[twocolumn, final, natbib]
+#+OPTIONS:		tags:nil toc:nil author:nil
+
+#+LATEX_HEADER: \RequirePackage{fix-cm}
+
+#+LATEX_HEADER: \usepackage[top=0.75in, 
+#+LATEX_HEADER:             bottom=0.75in, 
+#+LATEX_HEADER:             left=0.5in, 
+#+LATEX_HEADER:             right=0.5in]{geometry}
+#+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage[scaled=1.0]{newtxtext}
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage[cmintegrals]{newtxmath}
+#+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage{graphicx}
+#+LaTeX_HEADER: \usepackage{color}
+#+LATEX_HEADER: \usepackage{textcomp}
+#+LaTeX_HEADER: \usepackage{marvosym}
+#+LaTeX_HEADER: \usepackage{wasysym}
+#+LaTeX_HEADER: \usepackage{latexsym}
+#+LaTeX_HEADER: \usepackage{amssymb}
+#+LaTeX_HEADER: \usepackage{listings}
+#+LaTeX_HEADER: \usepackage{longtable}
+#+LaTeX_HEADER: \usepackage[linktocpage,
+#+LaTeX_HEADER:   pdfstartview=FitH,
+#+LaTeX_HEADER:   colorlinks,
+#+LaTeX_HEADER:   linkcolor=blue,
+#+LaTeX_HEADER:   anchorcolor=blue,
+#+LaTeX_HEADER:   citecolor=blue,
+#+LaTeX_HEADER:   filecolor=blue,
+#+LaTeX_HEADER:   menucolor=blue,
+#+LaTeX_HEADER:   urlcolor=blue]{hyperref}
+#+LATEX_HEADER: \usepackage[justification=centering]{caption}
+#+LATEX_HEADER: \usepackage{setspace}
+#+LATEX_HEADER: \usepackage{cancel}
+#+LATEX_HEADER: \usepackage{cuted} 
+#+LATEX_HEADER: \setlength{\stripsep}{12pt}
+#+LATEX_HEADER: \usepackage{enumitem}
+#+LATEX_HEADER: \renewcommand{\labelitemi}{$\bullet$}
+#+LATEX_HEADER: \renewcommand{\labelitemiii}{$\checkmark$}
+
+
+#+LATEX_HEADER: \let\vec\mathbf % fix svjour3 wrong definition
+#+LATEX_HEADER: \journalname{ARTC FMCG}
+
+#+TITLE:FMCG WP1.3 Laser Texturing
+
+#+BEGIN_EXPORT latex
+\title{FMCG WP1.3 Laser Texturing \thanks{Support form Ng KL, Gary;
+Granted by WP1.3 FMCG}}
+
+\subtitle{Overall Studies}
+
+\dedication{Dedication to Prof Hong MH}
+
+\author{Chu PL \and Yap FL \and Teh KM}
+
+\institute{Chu PL \at ARTC, \email{chu\_pau\_loong@artc.a-star.edu.sg} 
+      \and Yap FL \at ARTC, \email{yap\_fung\_ling@artc.a-star.edu.sg}
+      \and Teh KM \at ARTC, \email{tehkm@artc.a-star.edu.sg}
+}
+
+\date{Received: 10 July 2019 / Revised version: 10 July 2019}
+
+\maketitle
+
+\abstract{
+Materials sticking to the inner walls of filling machines (e.g. tanks,
+mixers, augers) is a common problem in the FMCG industry. The problem
+is further aggravated by processing conditions (temperature, heat,
+duration, batch size), product characteristics (hygroscopicity of
+powder) and environmental conditions (temperature, humidity). There is
+a challenge of cross contamination, especially for batch one (or low
+MOQ) production, where cleaning after every recipe change is not
+feasible. The scope includes development of anti-sticking surfaces by
+micro/nano texturisation of metal parts (stainless steel). Nano
+texturisation on plastics have been commercialized for optics and
+medtech applications, but this is not achieved on steel surfaces for
+tooling yet. Preliminary research by EU Shark Project1 had
+demonstrated feasibility of laser texturising metals to improve
+hydrophobicity. 
+\keywords{Laser, texturing}
+}
+
+#+END_EXPORT
+
+#+INCLUDE: raw.org

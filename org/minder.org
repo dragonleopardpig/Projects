@@ -1,0 +1,97 @@
+* Django
+
+  * Template
+
+    * .html
+
+  * tests
+
+  * View
+
+    * urls.py
+
+    * view.py
+
+  * apps
+
+  * Model
+
+    * models.py
+
+* SQLITE
+
+* HTML
+
+* Python
+
+  * Matplotlib
+
+  * Numpy
+
+  * Scipy
+
+  * Sympy
+
+  * Pandas
+
+  * Scikit-learn
+
+  * Tensorflow
+
+  * Scikit-image
+
+* CSS
+
+* Javascript
+
+* Linux
+
+  * Encryption
+
+  * Emacs
+
+  * Shell Scripting
+
+  * Regex
+
+  * Git
+
+* Deep Learning
+
+* Image Processing
+
+* Experimental Physics
+
+  * Data and Error Analysis
+
+  * Instrumentation and Control System
+
+  * DOE
+
+  * Optical Metrology
+
+  * Signal Acquisition and Analysis
+
+  * Modeling and Optimization
+
+* Maths
+
+  * Linear Algebra
+
+  * Statistics
+
+  * Series
+
+  * Calculus
+
+* Robustness in Vision System
+
+  * Depth of Field
+
+    * Vibration
+
+    * Thickness variation
+
+[[./data/minder.svg]]
+
+* 

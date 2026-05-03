@@ -1,0 +1,492 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	RAW
+
+* Literatures Review :WhatWeHave:
+
+** Journal Review
+*** \hl{Recent advances in designing superhydrophobic surfaces}
+:PROPERTIES:  
+  :UNNUMBERED: t  
+  :END:  
+
+     Young Equation of Contact Angle (Fig. [[fig:WaterContact]]):
+     $$\cos\theta=\frac{T_{sg} - T_{sl}}{T_{lg}}$$
+
+     $$\theta \mapsto \begin{cases}
+	< 90^\circ, & \text{Hydrophilic} \\
+	90^\circ < \theta < 150^\circ, & \text{Hydrophobic} \\
+	 > 150^\circ, & \text{SuperHydrophobic}
+	\end{cases}$$
+
+
+     Hydrophobic surface Model (Fig. [[fig:WenzelCassieBexter]]):
+
+     - Wenzel State :: 
+	 $$r=\text{roughness factor}=\frac{\text{actual surface area}}{\text{planar area}}$$
+	 /r/ is the amplification factor of increased surface area.\\
+	 Therefore \(\cos\theta\) is modified to become:$$\cos\theta_{W} = r \cos\theta$$
+	 
+    - Cassie-Bexter State ::
+         $$\cos \theta_{CB} = f_1 \cos \theta_1 + f_2 \cos \theta_2$$
+	 where
+         $$f_1 = \text{Surface Fraction of Phase 1}$$
+         and
+         $$f_2 = \text{Surface Fraction of Phase 2}$$
+     
+
+
+	 
+    If only one type of protrusion is present, given /f/ the fraction of
+         asperities, $(1 - f)$ is the air fraction. Water droplet has a
+         \(180^\circ\) contact angle with air, so the equation becomes:
+         $$\cos \theta_{CB} = f(1 + \cos \theta_W) - 1$$
+    Intermediate Wenzel-Cassie state:
+         $$\cos \theta_{CW} = rf \cos \theta + f - 1$$	 
+    For many surfaces, a transition from Cassie-Baxter to Wenzel state was observed.
+    
+    Reason for Adhesion Hysteresis:
+	 + Surface Heterogeneity
+	 + Chemical Heterogeneity
+	 + Roughness
+	 + Interaction at the contact line
+
+
+		   
+    Chemical heterogeneity and roughness can engender a contact angle hysteresis
+(H) between the water front advancing across a surface and receding from the
+surface. Generally, advancing contact angle ($\theta_A$) exceeds receding
+contact angle ($\theta_R$).  Young equation is valid for ideal, smooth, and
+homogeneous surfaces; water contact angle is measured at the equilibrium and it
+is unique.
+
+Methods to measure contact angle hysteresis: 
+  + Sessile Drop Method
+  + Sliding Method (self cleaning, usually sliding angle \(\alpha <10^\circ \))
+
+
+	   
+    #+NAME: fig:WaterContact
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp, align=center]
+    #+CAPTION:Water Contact Angle Definition
+    [[file:ContactAngle.png]]
+
+    #+ATTR_LATEX: :width 7cm :placement [pos=htbp]
+    #+CAPTION: Wenzel and Cassie-Bexter state 
+    #+NAME: fig:WenzelCassieBexter
+    [[file:WenzelCassieBexter.png]]
+
+    
+_Methods to prepare superhydrophobic surfaces:_
+1. Top-down approach
+   - /Lithography/
+   - /Template/
+   - /Plasma/
+2. Bottom-up approach
+   + /Chemical deposition/
+   + /Layer-by-Layer deposition/
+   + /Colloidal assemblies/
+3. Combination of both
+
+_Process Breadown:_
+ - Lithography :: process of transferring the geometric patterns of the IC design to a thin layer of polymer, called a /*resist*/, producing a /*resist mask*/ on the surface of the silicon wafer.
+ - Template :: material is printed, pressed, or grown against the voids of a
+      template. Often, template is removed, leaving the inverse of the original:
+      creating replica of the original.
+     
+** Books Review
+*** Books List
+:PROPERTIES:  
+  :UNNUMBERED: t  
+  :END:  
+   - Student's Guide to Wave
+   - Optics [[file:optics.org]]
+   - Optics Schaum Series
+   - Lasers Fundamentals and Applications
+   - Principles of Lasers
+   - Fundamentals of Photonics
+   - Principles of Modern Manufacturing
+   - Materials and Processes in Manufacturing
+   - Design and Analysis of Experiments
+
+*** \hl{MATERIALS AND PROCESSES IN MANUFACTURING}
+:PROPERTIES:  
+  :UNNUMBERED: t  
+  :END:  
+
+*Surface Integrity and Finishing Processes* \\
+/Topography Characteristics/
+1) Surface Finish
+   1) Surface Roughness
+   2) Waviness
+   3) Lay
+2) Surface-layer Characteristics
+
+*** \hl{FUNDAMENTALS OF PHOTONICS} 
+:PROPERTIES:  
+  :UNNUMBERED: t  
+  :END:
+
+*Light and Matter*
+- Thermal light
+- Luminescence
+- \v{C}erenkov radiation
+- Bremsstrahlung
+- $\textrm{Schr\"{o}dinger}$ equation:
+
+/_Scattering_/
+- Transition takes place via virtual states.
+  
+*Nonlinear Optical Media* \\
+/_Nonlinear_/
+- nonlinear(quadratic, cubic) relation between $\mathcal{P}$ and $\mathcal{E}$
+
+/_Facts_/
+- Refractive Index (speed of light) depends on light intensity.
+- Principle of Superposition is violated in nonlinear optical medium.
+- Frequency of light is altered as it passes through nonlinear optical medium.
+- Photons do interact within the confines of a nonlinear optical medium (light can be used to control light).
+
+/_Principal Assumption_/
++ Optical medium is passive (it does not exchange energy with light waves).
++ Waves of different frequencies may exchange energy with each other iva the nonliear property of the medium, but their total energy is conserved.
+
+/_Chapter Assumption_/
+- Light is described by stationary continuous waves.
+
+/_Parametric Interactions_/
+- Parameter of the system is varied periodically in time (eg. strong  $\mathcal{E}$ field causes $\chi$ to oscillate in time.)
+
+** Patent Search
+
+* Theory :BoringPart:
+
+** Laser Basics
+
+*** Intracavity
+
+*** Beam Delivery System
+
+*** Laser Material Interaction
+
+** Hydrophilic and Hydrophobic structure
+
+*** Geometry analysis
+    - variaties, effect      
+*** Electrostatic force analysis
+    - static charge, surface tension
+*** Interaction with moving particles
+    - flow of liquid, powder
+*** Theoretical foundation meeting
+
+* Experiments :TryItOut:FunPart:
+
+** Experimental method
+*** Contributors 
+    - team members
+*** Abstract, Hypothesis, Objective.
+*** Safety requirement
+    - licence
+    - POE
+    - SOP
+    - etc
+*** BOM list
+    - Equipment
+    - Material
+    - Fixture
+    - Chemical
+    - Gas
+    - etc
+*** Pre-experiment setup and design
+    - In-line Vision
+    - Motion control
+    - etc
+*** Algorithm
+    - Techniques
+    - DOE
+    - etc
+*** Physical Data Analysis
+    - SEM
+    - XRD
+    - Contact Angle
+    - etc
+*** Statistical Data Analysis
+    - Curve fitting
+    - etc
+*** Results and Discussion
+    - Improvement method
+*** Process Flow chart and Milestone
+    - Duration for tasks
+
+* Manufacturing Process & Product Development
+** Human Resource
+   Engineers:
+   - Design Engineers
+   - Manufacturing Engineers
+   - Technician
+   - Electrical Engineers
+   - Programmers
+   - Process Engineers
+   - Material Engineers
+     
+** Manufacturing System Design
+    1) Job shop
+    2) Flow shop
+    3) Liked-cell shop
+    4) Project shop
+    5) Continous process
+
+** Characterizing a Process Technology
+    1. Mechanics (statics and dynamics of the process)
+       1. How does the process work?
+       2. What are the process mechanics (statics, dynamics, friction)?
+       3. What physically happens, and what makes it happen? (Understand the physics)
+    2. Economics or costs
+       1. What are the tooling costs, the engineering costs?
+       2. Which costs are short term, which long term?
+       3. What are the setup costs?
+    3. Time spans
+       1. How long does it take to set up the process initially?
+       2. What is the througput time?
+       3. How can these times be shortened?
+       4. How long does it take to run a part once it is set up (cycle time)?
+       5. What process parameters affect the cycle time?
+    4. Constraints
+       1. What are the process limits?
+       2. What cannot be done?
+       3. What constraints this process (sizes, speeds, forces, volumes, power, cost)?
+       4. What is very hard to do within an acceptable time/cost frame?
+    5. Uncertainties, process reliability and safety
+       1. What can go wrong?
+       2. How can this machine fail?
+       3. What do people worry about with this process?
+       4. Is this a reliable, safe, and stable process?
+    6. Skills
+       1. What operator skills are critical?
+       2. What is not done automatically?
+       3. How long does it take to learn to do this process?
+    7. Flexibility
+       1. Can this process react to changes in part design and demand?
+       2. What changes are easy to do?
+    8. Process capability
+       1. What are the accuracy and precision of the process?
+       2. What tolerances does the process meet? (What is the process capability?)
+       3. How repeatable are those tolerances?
+
+** Sequence of Operation :illustration:
+        
+** Product Life-Cycle
+    a) Startup
+    b) Rapid growth
+    c) Maturation
+    d) Commodity
+    e) Decline
+     
+** Material Properties
+
+** Powder Metallurgy
+   - Particulate Processing
+*** Advantage
+    - Little material waste
+    - Controlled degrees of porosity
+*** Pie Charts / Numbers
+    + Size: < 50mm mostly
+    + Weight: < 2.25kg mostly
+    + Automotive application: 70%
+    + Iron and low alloy steels: 85%
+*** Basic Process flow Chart
+    - Powder Manufacture
+    - Mixing or blending
+    - Compacting
+    - Sintering
+#+begin_src dot :file PowderBasicProcess.png :cmdline -Kdot -Tpng :results drawer raw
+digraph G {
+  size="8,6"
+  ratio=expand
+  edge [dir=both]
+  plcnet [shape=box, label="PLC Network"]
+  subgraph cluster_wrapline {
+    label="Wrapline Control System"
+    color=purple
+    subgraph {
+    rank=same
+    exec
+    sharedmem [style=filled, fillcolor=lightgrey, shape=box]
+    }
+    edge[style=dotted, dir=none]
+    exec -> opserver
+    exec -> db
+    plc -> exec
+    edge [style=line, dir=both]
+    exec -> sharedmem
+    sharedmem -> db
+    plc -> sharedmem
+    sharedmem -> opserver
+  }
+  plcnet -> plc [constraint=false]
+  millwide [shape=box, label="Millwide System"]
+  db -> millwide
+
+  subgraph cluster_opclients {
+    color=blue
+    label="Operator Clients"
+    rankdir=LR
+    labelloc=b
+    node[label=client]
+    opserver -> client1
+    opserver -> client2
+    opserver -> client3
+  }
+}
+#+end_src
+
+*** Properties of Powders
+    1. Chemistry and purity
+    2. Particle size
+    3. Size distribution
+    4. Particle shape
+    5. Surface texture
+    6. Internal structure
+    7. Suitability for further processing
+*** Powder Manufacture
+    1) Melt atomization
+    2) Rotating electrode atomization
+    3) Chemical reduction of particulate compounds
+    4) Electrolytic deposition
+    5) Pulverization or griding of brittle materials (comminution)
+    6) Thermal decomposition of particulate hydrides or carbonyls.
+    7) Precipitation from solution.
+    8) Condensation of metal vapors.
+*** Powder Testing and Evaluation
+    1) Flow rate
+    2) Apparent density
+    3) Compressibility
+    4) Green Strength
+*** Powder Mixing and Blending
+    1) Lubricants
+    2) Binders
+*** Compacting
+*** Sintering
+    1) Stage 1: Preheat or Burn-off
+    2) Stage 2: High Temperature
+    3) State 3: Cooling
+** Additive Processing
+
+* Simulation :TryItOut:OnPaper:
+** Heat Flow & Temperature Distribution
+** Pillars' geometry
+
+* ARTC Collaboration
+
+** ARTC - Local Institute Collaboration
+*** ARTC - NUS Collaboration
+    - Prof Hong Nanosecond Fiber laser
+
+** ARTC - Oversea Institute Collaboration
+*** ARTC - University of Coventry Collaboration
+    + David Waugh UV laser
+
+** ARTC - Member Collaboration
+*** ARTC - Trumpf Collaboration
+    1) Femtosecond laser
+*** ARTC - Voestalpine Collaboration
+    1) New Stainless Steel
+
+** ARTC - InterRI Collaboration
+*** ARTC - SIMTech Collaboration
+    - MTG-Laser Picosecond laser machine
+      
+** ARTC - Local Industry Collaboration
+    + GF Machining - Multiaxis automation
+      
+* Questions to be answered
+   - correlation between surface morphology and wettability
+   - Fundamentals of ElectroMagnetism applied to the surface interaction
+   - Measure surface energy
+
+* Brainstorming
+** Low Surface Energy Coating
+** Air Cushion thinking direction
+** Spring effect thinking direction
+** Laser Metal Surface Hot Embosing
+** Non-removal bump formation through temperature gradient
+** Localized mixing of droplet particles
+** Load taking using water droplets as bearing
+** Build a website encouraging brainstorming input
+
+* References
+bibliographystyle:<replace: style>
+bibliography:<replace: bibfile>
+
+* Quick Reference
+** Gaussian Beam
+   1) Spot Size: \(2 \omega_0= \frac{4}{\pi} \lambda \frac{f}{D} M^2\)
+   2) Depth Of Focus: \(DOF = \frac{8}{\pi} \lambda \frac{f}{D}\)
+** Bessel Beam
+** Repetition Rate vs Speed vs Pulse Overlap
+** Fluence
+** Melting
+** Resolidification
+
+* Tasks :noexport:
+** TODO Setting OrgMode for reproducible research
+   - It start from the Keyboard: Ctrl, Alt(Meta), Esc, Fn
+   - A text editor that make full use of those keys.
+   - A text editor which can be fully customized through programming.
+** DONE Meeting with SIMTech :interRI:Laser:
+CLOSED: [2019-06-27 Thu 07:46] SCHEDULED: <2019-06-26 Wed>
+   - Zhongke willing to provide FYP student to assist laser texturing study.
+   - Xincai has metal surface laser texturing experience, but mentioned that hard to apply on actual industrial use.
+** DONE Meeting with GF Machining :Industry:Laser:
+CLOSED: [2019-07-01 Mon 14:06] SCHEDULED: <2019-07-01 Mon>
+   - Pro:
+     - Looks promising on laser texturing capability: matching laser type, 5-axis capable.
+     - Confident on Switzerland + Germany quality.
+     - Williing to do FOC trial.
+   - Con:
+     - Discourage full customization: not cost effective.
+     - Price on high side.
+
+** DONE DOE meeting
+CLOSED: [2019-07-09 Tue 11:37] SCHEDULED: <2019-07-05 Fri>
+    - To install Minitab
+    - To perform actual Laser experiment run using Minitab
+** DONE Meeting with NUS :LocalU:Laser:
+CLOSED: [2019-07-09 Tue 11:38]
+    - To texture hydrophobic surface using Nanosecond laser - 1 month duration
+    - To provide student's thesis
+** TODO Meeting with Coventry :OverseaU:Laser:
+** TODO Tender Purchase :Tender:
+** DONE Meeting with Voestalpine
+CLOSED: [2019-07-17 Wed 14:26]
+ + To submit problem statement to Voestalpine.
+ + To propose collaboration opportunity.
+** TODO Meeting of Collabration
+** TODO SIMTech inter-RI Collaboration :YapFungLing:
+*** Background:
+    + Use Picosecond laser to texture food grade metal (stainless steel)  
+    + Pre and Post processing of structured surface to sustain
+      hydrophobicity
+*** Curved surface texturing
+*** TODO Prepare RCA
+** TODO OrgMode output
+    - PDF, HTML(Sphinx-doc), Presentation(Beamer).
+
+* Courses
+
+** Responsible Conduct of Research
+* build :noexport:
+
+[[elisp:(org-open-file (org-latex-export-to-pdf))]]
+
+* Note :noexport:
+
+  - Must add shell-escape to org-preview-latex-process-alist (M-x customize-variable org-preview-latex-process-alist)
+  - ("latex -shell-escape -interaction nonstopmode -output-directory %o %f")
+# * numbered
+# ** subnumbered
+# * unnumbered
+# :PROPERTIES:
+# :UNNUMBERED: t
+# :END:
+# ** also unnumbered

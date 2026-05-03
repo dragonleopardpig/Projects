@@ -1,0 +1,69 @@
+# -*- buffer-auto-save-file-name: nil; -*-
+* Postgresql :crypt:
+-----BEGIN PGP MESSAGE-----
+
+jA0ECQMCLqQOt5siamb/0ukBs4eyd74hkGqph/zEmCs/Y/3+wDgbaUE+bXLEOOCt
+LivQcXmx1GPBXH0g6k66Diryk9JmvpwNBu8GdoF3Vn0JnXlKo1sn24pWHN19zdNa
+uC5RRYfPrvdEE+3x5p9IS9RVaymLR6rmvNeM2R5WhDVr8Eiolc86Q9fSKu8EMe/0
+tK7uZHw68k5edLAIG89b31zq/mAQoVOpRzl6k72CX5Rcd1F1SiVbZOPxd8cgpK0b
+YRp+ZGIHi7FKWnZTMiblRacKoe3lfIo81VDxxAeICpLff5IXjn/ZHGM9fXwt0mQH
+AQphtRUTUTB8+WDcj8JMO7pog5UK4L1VoCi5xaYwfG1icEaqyrkAOTjBL/+nyClZ
+txNT4M1EG1Nj9P7fzgMyCYu02CKY+8mAXExIxG+47NO2UAPRcK/Bk+FMwWogKTe6
+FaboaYHpKSzzA0OlWddt2y0EkaMQYEbxT8QyZNNSnXM06bW1afEkM28eKEtADKFi
+3ajnJIuveAtRF/YyL+oIYfgvrj2/fQAjGoum9CtKVVBdZOYjKYgnAR2/L3nOS3qI
+P2i0gBIIPD+qrE11KOpzA6v4bGq4EOeujW+UYE0RGwVTn4GuIg6jNtDacjlJVDm0
+PYMSKS755aVGBc+yZVcYNUIcu6qEgAogMu38GKqDN5qnXW8s8TdKoNx+pQ8/f9Ie
+ysAZwvLZMLg3+TAI9J1yT5nT0H0Z9Mu0qlZWtOgKXfFhDkVxS+3j0K8sBFfRZZCq
+N+u/tNu1+qCeHOGPK58LAj36Vz/AlxMkhQXuHZVQtagP6nkRVIUnhPokRlFaOBW5
+C6spridwqfPFg9i9LFHehRXMorQLGB+NL2GNXQfYezYJqLKuwFsPHNEEY1Wakp4C
+vw/aysBxQGCSMyxLPMqmDSxw3QP0KCuXm41aruen9AWdE/kKoZNe6Pkrr8x86G4T
+wzq62YghmUbmsFrQ+AnwFHqC947UW934XeQQGA==
+=bOTy
+-----END PGP MESSAGE-----
+
+
+
+* Postgres Ubuntu 20.04
+- Debian and Ubuntu provide their own command to control the cluster, pg_ctlcluster
+- configuration files are under the /etc/postgresql/13/main
+- data directory is set by default to /var/lib/postgresql/13/main
+- sudo -u postgres -i
+- sudo service postgresql start stop status
+- sudo pg_ctlcluster 12 main status/start/stop
+- Add OS user to postgres: sudo -u postgres createuser --superuser $USER
+- LibPQ :: underlying library that every application can use to connect to a PostgreSQL cluster and is, for example, used in C and C++ clients, as well as non-native connectors.
+- postgresql://username@host:port/database
+- PostgreSQL does not allow a single file to be greater than 1 GB in size
+- Tablespaces :: storage space that can be outside the PGDATA directory
+
+** List All Databases in Cluster
+- \l
+
+** Connect to a Database
+- \c mydb
+
+** List All Tables in current Database
+- \d
+
+** PGAdmin4 Setup
+- sudo apt install pgadmin4-web
+- sudo service apache2 start
+- sudo /usr/pgadmin4/bin/setup-web.sh
+- http://localhost/pgadmin4
+
+** SQL
+*** Babel
+-----BEGIN PGP MESSAGE-----
+
+jA0ECQMCJvf/NCbMEZv/0sASAfiAOEbPluMW5gYKiOTpqu463kCv25b83F3qiE6F
+T1udMMbl2BysVYPFo81UOZo5xUnzLEFcUbR5u5gmrK4C77RTyEV9DzOIaXY7YA/1
+QFSnaBrDeZiE95XZPPxnUxG2bHhkaLTMpieZ37N8JM2+Qv73Dz4qyeYnSQDOYR8j
+RfXwKGrmQ1wCWq5q+xGjkhaC/elvTGwnqxcABkfh6cD8BnHMX80WnqR0vHYffLbo
+3zGpunY25g89yi1W1m6qHm0hz/DR3CqBaBHUJawRohvLpPPV
+=ki1M
+-----END PGP MESSAGE-----
+
+*** SQL REPL
+- M-x sql-postgres
+- evaluate .sql file, C-c C-c
+

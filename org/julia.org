@@ -1,0 +1,128 @@
+#+PROPERTY: header-args:julia :results output :session 
+* Julia as a Second Language
+** Intro
+#+BEGIN_SRC julia
+1 + 2
+#+END_SRC
+
+#+RESULTS:
+: 3
+
+#+BEGIN_SRC julia  
+print("Hello World!")
+#+END_SRC
+
+#+RESULTS:
+: Hello World!
+
+#+BEGIN_SRC julia  
+reverse("abc")
+#+END_SRC
+
+#+RESULTS:
+: "cba"
+
+** Julia as a Calculator
+#+BEGIN_SRC julia  
+(1.5 + 3.5) * 4
+#+END_SRC
+
+#+RESULTS:
+: 20.0
+
+#+BEGIN_SRC julia  
+2^3
+#+END_SRC
+
+#+RESULTS:
+: 8
+
+#+BEGIN_SRC julia  
+log(2.71828^4)
+#+END_SRC
+
+#+RESULTS:
+: 3.999997309389128
+
+#+BEGIN_SRC julia  
+sin(3.1415926/2)
+#+END_SRC
+
+#+RESULTS:
+: 0.9999999999999997
+
+#+BEGIN_SRC julia  
+sqrt(9)
+#+END_SRC
+
+#+RESULTS:
+: 3.0
+
+#+BEGIN_SRC julia  
+rand()
+#+END_SRC
+
+#+RESULTS:
+: 0.5021435901115621
+
+#+BEGIN_SRC julia  
+using Base.MathConstants
+pi
+#+END_SRC
+#+RESULTS:
+: π = 3.1415926535897...
+
+#+BEGIN_SRC julia  
+using Base.MathConstants
+e
+#+END_SRC
+
+#+RESULTS:
+: ℯ = 2.7182818284590...
+
+#+BEGIN_SRC julia  
+using Base.MathConstants
+golden
+#+END_SRC
+
+#+RESULTS:
+: φ = 1.6180339887498...
+
+#+BEGIN_SRC julia  
+using Base.MathConstants
+catalan
+#+END_SRC
+
+#+RESULTS:
+: catalan = 0.9159655941772...
+
+#+BEGIN_SRC julia  
+using Base.MathConstants
+log(e^4)
+#+END_SRC
+
+#+RESULTS:
+: 4.0
+
+#+BEGIN_SRC julia  
+using Base.MathConstants
+sin(pi/2)
+#+END_SRC
+
+#+RESULTS:
+: 1.0
+
+#+BEGIN_SRC julia  
+const foo = 3481
+const bar = 200
+foo + bar
+#+END_SRC
+
+#+RESULTS:
+: 3481
+: 200
+: 3681
+
+#+BEGIN_SRC julia  
+
+#+END_SRC

@@ -1,0 +1,892 @@
+* Survey
+** ARTC Self Learning
+*** Surface Science
+**** Instrumentation
+**** Characterization through standards
+**** Functional Properties
+*** Photonics
+**** Optical Design and Simulation
+*** Manufacturing
+**** Statistical Process Control
+**** General techniques and workshop
+**** Laser Additive
+**** Laser Removal
+*** Text-based Tools
+**** Orgmode
+***** CAD-CAM
+***** Diagramming
+***** Statistical Chart
+***** Scientific Programming
+
+** Flowchart
+
+* Journals
+** Texturing Review
+*** Learn from Nature
+**** "Bio-inspired textures for functional applications"
+** Laser Texturing Techniques
+*** Review
+**** "Review of Laser Texturing and Chemistry Modification Methods for Achieving Extreme Wetting Behaviors of Metal Alloys"
+*** Direct Femtosecond laser
+**** "Multifunctional surfaces produced by femtosecond laser pulses"
+**** "Surface micro- and nano-texturing of stainless steel by femtosecond laser for the control of cell migration"
+*** Direct Picosecond Laser
+**** "Creating Superhydrophobic Surface Structures Via the Rose Petal Effect on Stainless steel with a Picosecond Laser"
+**** "Surface structuring with a 500 W picosecond laser"
+*** Direct Nanosecond laser
+**** "Controlling the stainless steel surfaces wettability by nanosecond direct laser texturing at high fluences"
+*** Beam Mode Modification
+**** "Laser-Ablation-Induced Concentric Ring Structures"
+*** Pulse timing
+**** "Controllable Fabrication of Unidirectional Liquid Spreading Surface through Confining Plasma Eruption and Femtosecond Laser Double Pulses"
+*** Novel Post-processing techniques
+**** "Fast wettability transition from hydrophilic to superhydrophobiclaser-textured stainless steel surfaces under low-temperature annealing"
+** Surface Characterization
+*** Quantify Roughness
+**** "How to select the most relevant 3D Roughness Parameters of a Surface"
+***** The Multiscale Analyses of the Relevance of Surface Topography (MARST)
+****** Step 0: Experimental Aspect, the Cold Rolling Process
+****** Step 1: Roughness Measurement
+******* White light interferometer
+******* Mirau Objective
+******* Camera
+****** Step 2: The Multiscale Decomposition
+******* Gaussian Filter according to ISO 11562-'96 and ASME B46.1-'95
+******* 3D roughness according to ISO 25178, EUR 15178N, Flatness according to ISO 12781
+| Symbol                                       | Name of Parameter                              | Standard    |
+|----------------------------------------------+------------------------------------------------+-------------|
+| 3D Roughness Parameters                      |                                                |             |
+| Amplitude parameters                         |                                                |             |
+| S_q (um)                                     | Root mean square height                        | ISO 25178   |
+| S_{sk}                                       | Skewness                                       | ISO 25178   |
+| S_{ku}                                       | Kurtosis                                       | ISO 25178   |
+| S_p (um)                                     | Maximum peak height                            | ISO 25178   |
+| S_v (um)                                     | Maximum pit height                             | ISO 25178   |
+| S_z (um)                                     | Maximum height                                 | ISO 25178   |
+| S_a (um)                                     | Arithmetic mean height                         | ISO 25178   |
+| S_t (um)                                     | Total height                                   | EUR 15178N  |
+| Spatial parameters (ISO 25178)               |                                                |             |
+| S_{al} (mm)                                  | Auto-correlation length                        | ISO 25178   |
+| S_{tr}                                       | Texture-aspect ratio                           | ISO 25178   |
+| S_{td} (°)                                   | Texture direction                              | ISO 25178   |
+| S_{al} (um)                                  | Fastest decay autocorrelation length           | ISO 25178   |
+| Hybrid parameters (ISO 25178)                |                                                |             |
+| S_{dq}                                       | Root mean square gradient                      | ISO 25178   |
+| S_{dr} (%)                                   | Developed interfacial area ratio               | ISO 25178   |
+| S_{ds} (1/mm^2)                              | Density of summits                             | EUR 15178N  |
+| S_{sc} (1/mm)                                | Arithmetic mean summit curvature               | EUR 15178N  |
+| S_{fd}                                       | Fractal dimension of the surface               | EUR 15178N  |
+| Functional parameters                        |                                                |             |
+| S_k (um)                                     | Core roughness depth                           | EUR 15178N  |
+| S_{pk} (um)                                  | Reduced summit height                          | EUR 15178N  |
+| S_{vk} (um)                                  | Reduced valley depth                           | EUR 15178N  |
+| S_{r1} (%)                                   | Upper bearing area                             | EUR 15178N  |
+| S_{r2} (%)                                   | Lower bearing area                             | EUR 15178N  |
+| S_{pq}                                       | Plateau root mean square roughness             | EUR 15178N  |
+| S_{vq}                                       | Valley root mean square roughness              | EUR 15178N  |
+| S_{mq}                                       | Material ratio at plateau-to-valley transition | EUR 15178N  |
+| S_{mr} (%)                                   | Areal material ratio                           | ISO 25178   |
+| S_{mc} (mm)                                  | Inverse areal material ratio                   | ISO 25178   |
+| S_{xp} (mm)                                  | Extreme peak height                            | ISO 25178   |
+| S_{dc} (mm)                                  | Areal height difference                        | ISO 25178   |
+| Volume functional parameters                 |                                                |             |
+| V_m (mm^3/mm^2)                              | Material volume                                | ISO 25178   |
+| V_v (mm^3/mm^2)                              | Void volume                                    | ISO 25178   |
+| V_{mp} (mm^3/mm^2)                           | Peak material volume                           | ISO 25178   |
+| V_{mc} (mm^3/mm^2)                           | Core material volume                           | ISO 25178   |
+| V_{vc}                                       | Core void volume                               | ISO 25178   |
+| V_{vv} (mm^3/mm^2)                           | Pit void volume                                | ISO 25178   |
+| Functional indices                           |                                                |             |
+| S_{bi}                                       | Surface bearing index                          | EUR 15178N  |
+| S_{ci}                                       | Core fluid retention index                     | EUR 15178N  |
+| S_{vi}                                       | Valley fluid retention index                   | EUR 15178N  |
+| Feature parameters                           |                                                |             |
+| S_{pd} (1/mm^2)                              | Density of peaks                               | ISO 25178   |
+| S_{pc} (1/mm)                                | Arithmetic mean peak curvature                 | ISO 25178   |
+| S_{10z} (mm)                                 | Ten point height                               | ISO 25178   |
+| S_{5p} (mm)                                  | Five point peak height                         | ISO 25178   |
+| S_{5v} (mm)                                  | Five point pit height                          | ISO 25178   |
+| S_{da} (mm^2)                                | Mean dale area                                 | ISO 25178   |
+| S_{ha} (mm^2)                                | Mean hill area                                 | ISO 25178   |
+| S_{dv} (mm^3)                                | Mean dale volume                               | ISO 25178   |
+| S_{hv} (mm^3)                                | Mean hill volume                               | ISO 25178   |
+| Other 3D parameters (from mountain software) |                                                |             |
+| S_{mean} (mm)                                | Mean height in absolute                        | No standard |
+| S_{dar} (mm^2)                               | Developed area                                 | No standard |
+| S_{par} (mm^2)                               | Projected area                                 | No standard |
+| — (mm^3)                                     | Mean volume of islands                         | No standard |
+| — (mm)                                       | Mean height of islands                         | No standard |
+| — (mm^2)                                     | Mean surface of islands                        | No standard |
+****** Step 3: The Measure of Parameters Relevancy by Variance Analysis
+******* Measure relevancy of the Roughness Parameters computed at a given Spatial Scale.
+******* Variance Analysis ::
+******** $p_i(\epsilon,k,n)=\alpha_{0}+\Sigma\alpha_{j}k_{j}(i,\epsilon)+\xi_{k,n}(i,\epsilon)$
+******** $p_i(\epsilon,k,n$ is the Roughness parameter of the /n/ th profile when the process parameters are taken at the /k/ th level, /k/ denotes the initial surface after 1,2,3,... /k/ process for an evaluation length \epsilon
+******** $\alpha_{j}k_{j}(i,\epsilon)$ represents the influence on the roughness parameter value of the /j/ th process parameter at the /k_{j}/ level
+******** $\xi_{k,n}(i,\epsilon)$ is a zero-mean Gaussian noise with standard deviation \sigma
+******** Between Group Variability (BGV) = Estimation Error of the roughness parameter between group
+******** Within Group Variability (WGV) = Estimation Error of the roughness parameter within group
+******** Result: $F(p_{i},\epsilon)=\frac{BGV}{WGV}$ compares the effect of each process parameter on the roughness parameter's value with its estimation error
+******** $F(p_{i},\epsilon)\approx 1$ suggests an /irrelevancy/ of the roughness parameter p_{i} estimated at the evaluation length \epsilon
+******** $F(p_{i},\epsilon)> 1$ or $F(p_{i},\epsilon)>> 1$ the more relevant the parameter p_{i} estimated at scale \epsilon becomes
+******** Flowchart
+#+begin_src plantuml :file Flowchart_Roughness.png
+@startuml
+skinparam backgroundColor #FFFFFA
+skinparam dpi 150
+(*) --> "Roughness Measurement"
+--> "Roughness Parameter"
+if "result (F)" then
+  --> [F ~ 1] "Irrelevance"
+else
+  --> [F >> 1] "Relevance"
+@enduml
+#+end_src
+
+#+RESULTS:
+[[file:Flowchart_Roughness.png]]
+****** Step 4: The Classification of Roughness Parameters
+******* Classifying the F-values in descending order to organize relevancies of all roughness parameters.
+******* Apply "Bootstrap" to estimate the error in the computation of the coefficients of statistical computing.
+****** Step 5: Bootstrap and Probability Density Function of the Most Relevant Parameters
+******* Calculate the mean Probability Density Function (PDF) of the most relevant parameters.
+****** Step 6: Physical Interpretations of Selected Parameters
+***** Application of the MARST Methodology - Characterization of the EDM Process
+****** Step 0: Experiment aspect, the EDM
+****** Step 1: Roughness Measurements
+****** Step 3 - 5: Core of the MARST Analyses
+****** Conclusions
+**** "Unification of the textures formed on aluminum after laser treatment"
+**** "Industrial survey of ISO surface texture parameters"
+*** Surface Energy
+**** Solid Surface Energy
+***** "Technical Note - from contact angle to surface free energy"
+***** "Technical Note - So you want to measure surface energy"
+**** Liquid Surface Energy - Surface Tension
+*** Capillary Length - Capillary Constant
+**** Water = 3.83mm
+*** Food Contact Surface Material Characterization
+**** "Characteristics of Food Contact Surface Materials - Stainless Steel"
+***** 
+** Wettability Review
+*** Superhydrophobicity
+**** "An Introduction to Superhydrophobicity"
+**** "What do we need for a superhydrophobic surface? A review on the recent progress in the preparation of superhydrophobic surfaces"
+*** Superhydrophilicity
+**** "Hydrophilic and superhydrophilic surfaces and materials"
+**** "LASER ABLATION FOR COPPER OXIDE NANOWIRES GROWTH AND ITS APPLICATION IN OIL-WATER SEPARATION"
+*** Superoleophobicity
+**** "Superoleophobic surfaces"
+*** Powder Wettability
+**** "Technical Note - Wettability studies for porous solids including powders and fibrous materials"
+**** "Technical Note - Two-Component Surface Energy Characterization as a Predictor of Wettability and Dispersability"
+** Antifouling and Cleanability Review
+*** Laser parameters vs Roughness
+**** "Design and characterization of textured surfaces for applications in the food industry"
+1) Material: AISI 316L Stainlees Steel, 50x50x2mm, S_a < 0.5um
+2) Pre-processing:
+   1) Cleaned for 5 min in acetone in ultrasound bath.
+3) Post-processing:
+   1) Immerse in an ultrasonic bath for 10 min using ethanol at room temperature.
+   2) Wash with fresh ethanol.
+   3) Dry in vacuum at room temperature.
+4) Processing: Linear Polarized, Laser Parameters with set [RR, v, F(F1,F2,F3)]:
+   | Parameters          | Values/Range                                               |
+   |---------------------+------------------------------------------------------------|
+   | Wavelength          | 1030 nm                                                    |
+   | Repetition Rate, RR | 100, 250, 500, 1000 kHz (corresponds to each scan speed)   |
+   | Spot Diameter       | 25 um                                                      |
+   | Pulse Overlap, HOL  | 92%                                                        |
+   | Scan Speed, v       | 200, 500, 1000, 2000 mms-1                                 |
+   | Hatch Distance, H   | 5 um                                                       |
+   | Laser Fluence, F    | 0.36, 0.48, 0.69, 0.86, 1.14, 1.35, 1.69, 1.94, 2.33 Jcm-2 |
+   | Number of Scans, N  | 10                                                         |
+   | Energy Dose, E      | 178, 235, 340, 423, 560, 663, 831, 950, 1143 Jcm-2         |
+5) Surface Characterization:
+   1) SEM up to 6000x magnification: make sure the presence of hierarchical structures.
+   2) Coherence Scanning Interferometer: quantify surface topology.
+   3) ISO 25178, ISO 12781.
+6) Results Analysis:
+   1) Correlation between S_a and E.
+   2) Correlation between S_q and E.
+   3) Correlation between S_{sk} and E.
+   4) Correlation between S_{dr} and E.
+   5) Correlation between S_{pd} and E.
+   6) Correlation between S_k and E.
+   7) Correlation between S_{pk} and E.
+   8) Correlation between S_{vk} and E.
+7) Fundamental design requirement for anti-biofouling based on few hypotheses:
+   1) Multiscale hierarchical structures in which nanscale features are superimposed on the microscale roughness.
+   2) This surface morphology minimizes the number of contact points between cell and surface.
+8) Quantify Roughness: Roughness parameter based on spatial information such as peak density S_{pd} combined with a parameter inferring amplitude properties.
+9) Biofilm prevention: S_{pd} > $S^{\text{crit}}_{\text{pd}}$
+*** Roughness vs Cleanability
+**** "Influence of Surface Finish on the Cleanability of Stainless Steel"
+**** "Assessing the cleanability of stainless steel surfaces – effect of surface roughness and various parameters on cleaning of protein based soils"
+*** Determine how clean a surface
+**** "Application Note - Determine how clean surfaces are Quickly and on the go"
+*** Anti-biofouling
+**** "Towards Laser-Textured Antibacterial Surfaces"
+** Theory
+*** Proof of CB equation using well defined surface structure produced by Photolithography, nanoprinting, electrom beam lithography
+*** Surface roughness characterization parameters and standards
+*** Surface Plasmon
+**** "Surface Plasmon Resonance in a Thin Metal Film"
+*** Surface Topography vs Wettability
+** Food related Publisher and Organization
+*** European Hygienic Engineering & Design Group
+*** Journal of Hygienic Engineering and Design
+*** Journal of Food Protection
+
+* Surface Finishing Standards
+** Mind Map for Surface Finishing
+#+begin_src plantuml :file SurfaceFinishMindMap.png
+@startmindmap
+skinparam backgroundColor #FFFFFA
+skinparam dpi 120
+,*  Surface Finish
+,** Surface Integrity
+,*** Topography characteristics
+,**** Roughness
+,***** Cleanability
+,***** Wettablity
+,***** Biofouling
+,***** 3D Roughness Parameters
+,******_ Amplitude
+,******_ Spatial
+,******_ Hybrid
+,******_ Functional
+,******_ Feature
+,******_ Other
+,****_ Waviness
+,****_ Error of forms
+,****_ Flaws
+,*** Surface Layer characteristics
+,****_ plastic deformation
+,****_ residual stresses
+,****_ cracks
+,****_ hardness
+,****_ overaging
+,****_ phase changes
+,****_ recrystallization
+,****_ intergranular attack
+,****_ hydrogen embrittlement
+,** Modification
+,***_ Coatings
+,****_ Painting
+,****_ Powder Coating
+,****_ Hot-Dip Coating
+,****_ Chemical Conversion Coating
+,****_ Blackening or Coloring Metals
+,****_ Electroplating
+,****_ Anodizing
+,****_ Electroless Plating
+,****_ Electroless Composite Plating
+,****_ Mechanical Plating
+,****_ Porcelain Enameling
+,****_ Vaporized Metal Coatings
+,*****_ Physical Vapor Deposition (PVD)
+,*****_ Chemical Vapor Deposition (CVD)
+,****_ Clad Materials
+,****_ Blank Coatings (Coil-Coated Sheets)
+,*** Texturing
+,** Cleaning
+,***_ Abrasive cleaning
+,***_ Chemical cleaning
+,****_ Alkaline cleaning
+,****_ Solvent cleaning
+,****_ Vapor Degreasing
+,****_ Ultrasonic cleaning
+,****_ Acid pickling
+@endmindmap
+#+end_src
+
+#+RESULTS:
+[[file:SurfaceFinishMindMap.png]]
+** Food Contact Materials Standard Organization
+*** Food and Drug Administration (FDA)
+*** Code of Federal Regulations (CFR)
+*** NSF International (NSF)
+*** The American National Standards Institute (ANSI)
+*** 3-A Sanitary Standards (3-A)
+1) R_a < 0.8 um
+*** Water Quality Association (WQA)
+*** Canada AG
+*** United States Department of Agriculture (USDA)
+*** European Hygienic Engineering Design Group (EHEDG)
+*** American Meat Institute (AMI) Equipment Design Task Force
+*** German Institute for Standardization (DIN)
+*** American Iron and Steel Institute (AISI)
+*** British Standards for stainless steel
+*** Test and Certification Institutes
+**** TÜV SÜD Singapore
+** Geometrical Product Specification (GPS) - Roughness
+*** Standards Organization
+**** The International Standards Organization (ISO)
+**** The European Utility Requirements (EUR)
+**** American Society of Mechanical Engineers (ASME)
+*** Down selection of roughness parameters
+**** Survey
+**** Down selection
+** Wear resistance
+** Chemical resistance
+** Corrosion resistance
+** Thermal resistance
+** Biofilm resistance
+
+* Projects
+** Prometheus
+*** URL [[http://www.prometheus-laser.eu]]
+*** Europe
+*** Grant
+*** Duration
+*** Participators
+*** Deliverables
+
+** Laser4fun
+*** URL [[https://www.laser4fun.eu]]
+*** Europe
+*** Grant
+*** Duration
+*** Participators
+*** Deliverables
+
+** Tresclean
+*** URL [[https://www.tresclean.eu]]
+*** Europe
+*** Grant
+*** Duration
+*** Participators
+*** Deliverables
+
+** Shark Project
+*** URL [[http://www.sharkproject.eu]]
+*** Europe
+*** Grant
+*** Duration
+*** Participators
+*** Deliverables
+
+* Companies
+** LightMotif
+*** URL [[https://www.lightmotif.nl]]
+
+** Microrelleus 
+*** URL [[http://www.microrelleus.com]]
+
+left side
+
+* Patents
+** Patent 1
+*** Claim 1
+*** Claim 2
+*** Claim 3
+*** .......
+
+** Patent 2
+*** Claim 1
+*** Claim 2
+*** Claim 3
+*** .......
+
+** Patent 3
+*** Claim 1
+*** Claim 2
+*** Claim 3
+*** .......
+
+* Books
+** Physics of Continuous Matter
+*** Mindmap
+#+begin_src plantuml :file MindMapPhysicsContinuousMatter.png
+@startmindmap
+skinparam backgroundColor #FFFFFA
+skinparam dpi 150
+,* Physics of Continuos Matter
+,** Fluid at rest
+,*** Surface Tension
+,**** Surface Energy Density
+,**** Force and Surface Tension
+,**** Capillary Length
+,**** Wetting
+,** Solids at rest
+,*** Surface Roughness
+,**** Roughness Standards
+,**** Food Sanitary Roughness Standards
+,** Fluids in motion
+,*** Viscosity
+@endmindmap
+#+end_src
+
+#+RESULTS:
+[[file:MindMapPhysicsContinuousMatter.png]]
+*** Chapter 1 - Continuous Matter
+- Continuum Physics :: Continuum physics deals with the systematic description of matter at length scales that are large compared to the molecular scale.
+- Macroscopic continuum description must necessarily be *statistical* in nature, but that random statistical fluctuations are strongly suppressed by the enormity of the number of molecules in any macroscopic material object.
+*** Chapter 5 - Surface Tension
+**** Basic physics of surface tension
+- A surface molecule will only be bound by $\frac{5}{6}$ E, E = Total Binding Energy.
+- Surface Energy Density :: $\alpha$
+     \[\begin{align*}
+     \alpha &\approx \frac{\frac{1}{6}E}{L^2_{mol}} \\
+            &= \frac{hm}{6L^2_{mol}} \\
+     \therefore \Aboxed{\alpha &\approx \frac{1}{6}h\rho L_{mol}} \\
+     \text{where:} \\
+     \rho L_{mol} &= \text{effective surface mass density of a layer of thickness}\ L_{mol} \\
+     E &\approx hm,\ L_{mol}=\text{molecular seperation length} \\
+     m &= \text{specific heat of evaporation (evaporation enthalpy per unit of mass)}  \\
+       &= \frac{M_{mol}}{N_A} \\
+       &= \rho L^3_{mol}
+     \end{align*}\]
+- Work and surface energy density :: Increasing the area of an interface with surface energy density $\alpha$ by a tiny amount dA requires an amount of work equal to the surface energy contained in the extra piece of interface,
+     $\boxed{dW=\alpha\ dA}$
+  - Increasing the area against a positive surface energy density requires work /from/ the environment.
+  - The surface energy density associated with a liquid or solid interface against vacuum (or gas) is always positive because of the missing negative binding energy of the surface molecules. The positivity of the surface energy density guarantees that such interfaces seek toward the minimal area, consistent with the other forces that may be at play, for example gravity.
+  - Interfaces between solids and liquids or between liquids and liquids are not required to have positive interfacial energy density. The sign depends on the strength of the cohesive forces holding molecules of a material together compared to the strength of the adhesive forces between the opposing molecules of the interfacing materials.
+- Force and surface tension :: Surface tension is identical to surface energy density, unit = N m^-1 = J m^-2.
+     Let an oriented open surface be divided into two parts by an oriented curve, such that the surface has a uniquely defined left- and right-hand side with respect to the curve. If On denotes the normal to the surface, then
+     $\boxed{d\boldsymbol{F}=\alpha\ d\boldsymbol{l} \times \boldsymbol{\hat{n}}}$ is the force that the right-hand side of the surface exerts on the left-hand side through the curve element $d\boldsymbol{l}$
+  - At an interface between homogeneous materials, surface tension does not depend on how much the interface has already been stretched (not behaved like Hooke's law).
+  - In the absence of all external forces, surface tension will attempt to make the water droplet spherical because that shape has the smallest area for a given volume ($\frac{\partial{A}}{\partial{V}}=0$).
+- Pressure excess in a sphere :: Surface tension will attempt to contract the ball but is stopped by the build-up of an extra positive pressure $\Delta{p}$ inside the liquid.
+     Increase radius R by amount of dR, work done:
+     \[\begin{split}
+       dW &= \alpha\ dA - \Delta{p}dV \\
+       dA &= d(4\pi R^2) \\
+          &= 8\pi R dR \\
+       dV &= d(\frac{4}{3}\pi R^3) \\
+          &= 4\pi R^2 dR \\
+       \therefore dW &= (\alpha8\pi R - \Delta p 4\pi R^2)dR \\
+       \end{split}\]
+       $\Rightarrow \boxed{\Delta{p} &= \frac{2\alpha}{R}}$
+- Capillary length :: is a length scaling factor that relates gravity and surface tension.
+       When pressure excess due to surface tension balances the pressure due to gravity, we have
+       \[\begin{split}
+         \rho_0g_02R &= \frac{2\alpha}{R} \\
+         \therefore L_c &= \sqrt{\frac{\alpha}{\rho_0 g_0}} = \text{capillary length or capillary constant}
+       \end{spilt}\]
+  - To disregard the influence of gravity on the shape of water droplet, $\boxed{R\ll L_c}$
+  - The capillary length equals 2.7 mm for the air–water interface at $25^\circ \text{C}$.
+- Marangoni forces :: Variations in surface tension create both normal and shear Marangoni forces in the surface. Such variations can arise from inhomogeneous material properties, or from temperature variations. Surface tension generally decreases with rising temperature.
+**** Soap bubbles
+- Surfactant :: molecule with hydrophilic (electrically charged) heads and hydrophobic (neutral) tails, for example soap.
+  - Surface tension of soapy water is only about one third of that of pure water.
+  - On the surface of soapy water, the soap molecules tend to orient themselves with their /hydrophobic tails sticking out of the surface and their heads buried in the water/. In a thin film of soapy water, the tails of the soap molecules stick out on both sides and form a bilayer with water in between.
+  - The /stabilizing/ effect of soap is primarily due to the =coherence of the bilayer= in conjunction with the =lower surface tension= of soapy water. The soap molecules crowding at the surface furthermore prolong the lifetime of a soap bubble by =diminishing evaporation=.
+  - Buoyancy almost completely cancels the weight of the air in the bubble, so that the effective mass of the whole bubble always equals the mass of its skin.
+**** Pressure discontinuity
+**** The Rayleigh–Plateau instability
+**** Contact angle
+- Contact Line ::
+- Contact Angle :: For the typical case of a three-phase contact between solid, liquid, and gas the /contact angle/ $\chi$ is defined as the angle between the solid and the interface (inside the liquid). the contact angle is extremely sensitive to surface properties, fluid composition, and additives.
+- Young's Law ::
+     \[\begin{split}
+      \alpha_{sg} &= \alpha_{sl}+\alpha\cos\chi \\
+      \cos\chi &= \frac{\alpha_{sg}-\alpha_{sl}}{\alpha} \\
+       \end{split}\]
+     #+NAME: fig:WaterContactAngle
+     #+ATTR_LATEX: :width 7cm :placement [pos=htbp, align=center]
+     #+CAPTION:Water Contact Angle Definition
+     [[./Chapter_5_Contact_Angle_Young.png]]
+-  :: 
+**** Meniscus at a flat wall
+**** Meniscus in a cylindrical tube
+**** Application - Sessile drops and captive bubbles
+**** Application - Pendant drops and tethered bubbles
+
+** Capillarity and Wetting Phenomena
+
+** Handbook of Surface and Nanometrology
+*** Introduction—Surface and Nanometrology
+*** Characterization
+*** Processing, Operations, and Simulations
+*** Measurement Techniques
+*** Standardization–Traceability–Uncertainty
+*** Surfaces and Manufacture
+*** Surface Geometry and Its Importance in Function
+*** Surface Geometry, Scale of Size Effects, Nanometrology
+*** General Comments
+
+** Fundamental Principles of Engineering Nanometrology
+*** Introduction to Metrology for Advanced Manufacturing and Micro- and Nanotechnology
+*** Some Basics of Measurement
+*** Precision Measurement Instrumentation - Some Design Principles
+*** Length Traceability Using Interferometry
+*** Displacement Measurement
+*** Surface Topography Measurement Instrumentation
+*** Scanning Probe and Particle Beam Microscopy
+*** Surface Topography Characterisation
+*** Coordinate Metrology
+*** Mass and Force Measurement
+
+** Characterisation of Areal Surface Texture
+*** Introduction to Surface Topography
+*** The Areal Field Parameters
+*** The Areal Feature Parameters
+*** Areal Filtering Methods
+*** Areal Form Removal
+*** Areal Fractal Methods
+*** Choosing the Appropriate Parameter
+*** Characterisation of Individual Areal Features .
+*** Multi-Scale Signature of Surface Topography
+*** Correlation of Areal Surface Texture Parameters to Solar Cell Efficiency
+*** Characterisation of Cylinder Liner Honing Textures for Production Control.
+*** Characterisation of the Mechanical Bond Strength for Copper on Glass Plating Applications
+*** Inspection of Laser Structured Cams and Conrods
+*** Road Surfaces
+
+** Surface Science An Introduction
+*** Introduction
+*** Basics of Two-Dimensional Crystallography
+*** Experimental Background
+*** Surface Analysis 1. Diffraction Methods
+*** Surface Analysis 2. Electron Spectroscopy Methods
+*** Surface Analysis 3. Probing Surfaces with Ions
+*** Surface Analysis 4. Microscopy
+*** Atomic Structure of Clean Surfaces
+*** Atomic Structure of Surfaces with Adsorbates
+*** Structural Defects at Surfaces
+*** Electronic Structure of Surfaces
+*** Elementary processes at Surfaces 1. Adsorption and Desorption
+*** Elementary processes at Surfaces 2. Surface Diffusion
+*** Growth of Thin Films
+*** Atomic Manipulations and Nanostructure Formation
+
+** Handbook of Food Processing Equipment
+*** Design of Food Processes and Food Processing Plants
+*** Design and Selection of Food Processing Equipment
+*** Mechanical Transport and Storage Equipment
+*** Mechanical Processing Equipment
+*** Mechanical Separation Equipment
+*** Heat Transfer Equipment
+*** Food Evaporation Equipment
+*** Food Dehydration Equipment
+*** Refrigeration and Freezing Equipment
+*** Thermal Processing Equipment
+*** Mass Transfer Equipment
+*** Equipment for Novel Food Processes
+*** Food Packaging Equipment
+
+* Literature Survey FAQ
+** Why use AISI 316L Stainless Steel? 
+** Why use Laser? What type of laser best suited?
+** Who are doing similar project? What are the achievements?
+** Any patent infringement issue?
+** How to quantify surface topography? Any standard to follow?
+
+* Tasks
+** TODO Down selection of materials
+** TODO Down selection of texturing techniques
+** TODO Down selection of lasers
+** TODO Down selection of roughness standard
+** TODO Down selection of measurement instrument
+** TODO Down selection of techniques
+
+* Trial
+#+PLOT: title:"Citas" ind:1 deps:(3) type:2d with:histograms set:"yrange [0:]"
+| Sede      | Max cites | H-index |
+|-----------+-----------+---------|
+| Chile     |    257.72 |   21.39 |
+| Leeds     |    165.77 |   19.68 |
+| Sao Paolo |     71.00 |   11.50 |
+| Stockholm |    134.19 |   14.33 |
+| Morelia   |    257.56 |   17.67 |
+
+* Appendix
+** Applied Statistics and Probability for Engineers
+*** Chapter 1 The Role of Statistics in Engineering
+- Adjustments to a process based on random disturbances can actually increase the variation of the process. This is referred to as /overcontrol/ or /tampering/. Adjustments should be applied only to compensate for a nonrandom shift in the process—then they can help.
+- Mechanistic Model :: built from our underlying knowledge of the basic physical mechanism that relates process variables.
+- Empirical Model :: uses our engineering and scientific knowledge of the phenomenon, but it is not directly developed from our theoretical or first-principles understanding of the underlying mechanism.
+  - Regression Model
+    - Least Square Method :: this method chooses the parameters in the empirical model (the β’s) to minimize the sum of the squared distances in each data point and the plane represented by the model equation.
+- Probability models :: help quantify the risks involved in statistical inference, that is, the risks involved in decisions made every day.
+*** Chapter 2 Probability
+- Random Experiment :: An experiment that can result in different outcomes, even though it is repeated in the same manner every time
+- Sample Space :: The set of all possible outcomes of a random experiment is called the sample space of the experiment. The sample space is denoted as S.
+  - Discrete Sample Spaces :: consists of a finite or countable infinite set of outcomes.
+  - Continous Sample Spaces :: contains an interval (either finite or infinite) of real numbers.
+  - A *tree diagram* can effectively represent a sample space. Even if a tree becomes too large to construct, it can still conceptually clarify the sample space.
+- Event :: An event is a subset of the sample space of a random experiment. Events are used to define outcomes of interest from a random experiment. One is often interested in the probabilities of specified events.
+  - Union :: The union of two events is the event that consists of all outcomes that are contained in either of the two events. We denote the union as E_1 ∪ E_2.
+  - Intersection :: The intersection of two events is the event that consists of all outcomes that are contained in both of the two events. We denote the intersection as E_1 ∩ E_2.
+  - Complement :: The complement of an event in a sample space is the set of outcomes in the sample space that are not in the event. We denote the complement of the event E as E′ or E^c.
+  - We can use *Venn diagrams* to represent a sample space and events in a sample space.
+  - Mutually Exclusive Events :: Two events, denoted as E_1 and E_2, such that E_1 ∩ E_2 = Ø are said to be mutually exclusive.
+- Counting Techniques :: counts of the numbers of outcomes in the sample space and various events are used to analyze the random experiments.
+  - Multiplication Rule (for counting techniques) :: Assume an operation can be described as a sequence of k steps, and
+    + the number of ways to complete step 1 is n_1, and
+    + the number of ways to complete step 2 is n_2 for each way to complete step 1, and
+    + the number of ways to complete step 3 is n_3 for each way to complete step 2, and
+    + so forth.
+      The total number of ways to complete the operation is n_1 × n_2 × · · · × n_k
+  - Permutations (linear) :: The number of permutations of n different elements is n! where n! = n×(n−1)×(n−2)×...×2×1
+  - Permutations of Subsets :: The number of permutations of subsets of r elements selected from a set of n different elements is
+         $P^n_r=n(n-1)(n-2)...(n-r+1)=\frac{n!}{(n-r)!}$
+  - Permutations of Similar Objects :: The number of permutations of n = n_1 + n_2 + · · · + n_r objects of which n_1 are of one type, n_2 are of a second type, …, and nr are of an rth type is $\frac{n!}{n_1!n_2!n_3!...n_r!}$
+  - Combinations :: The number of combinations, subsets of r elements that can be selected from a set of n elements, is denoted as $n\choose r$ or $C^n_r$ and
+                    $C^n_r={n\choose r}=\frac{n!}{(n-r)!}$
+- Probability :: is used to quantify the likelihood, or chance, that an outcome of a random experiment will occur.
+- Equally Likely Outcomes :: Whenever a sample space consists of N possible outcomes that are equally likely, the probability of each outcome is 1/N.
+- Probability of an Event :: For a discrete sample space, the probability of an event E, denoted as P(E), equals the sum of the probabilities of the outcomes in E.
+- Axioms of Probability :: Probability is a number that is assigned to each member of a collection of events from a random experiment that satisfies the following properties:
+  1) P(S) = 1 where S is the sample space
+  2) 0 ≤ P(E) ≤ 1 for any event E
+  3) For two events E_1 and E_2 with E_1 ∩ E_2 = Ø
+  =P(E1 ∪ E2) = P(E1) + P(E2)=
+        =P(Ø) = 0=
+        =P(E′) = 1 − P(E) for any event E=
+        =P(E1) ≤ P(E2) for event E1 contained in event E2=
+- Probability of a Union :: =P(A ∪ B) = P(A) + P(B) − P(A ∩ B)=
+  - If A and B are mutually exclusive events, =P(A ∪ B) = P(A) + P(B)=
+  - Three or More Events, =P(A ∪ B ∪ C) = P(A) + P(B) + P(C) − P(A ∩ B) − P(A ∩ C) − P(B ∩ C) + P(A ∩ B ∩ C)=
+- Mutually Exclusive Events :: A collection of events, E1, E2, …, Ek, is said to be mutually exclusive if for all pairs, =Ei ∩ Ej = Ø=
+     For a collection of mutually exclusive events, =P(E1 ∪ E2 ∪…∪Ek) = P(E1) + P(E2) + · · · P(Ek)=
+- Conditional Probability of B given A :: P(B|A)
+- Conditional Probability :: The conditional probability of an event B given an event A, denoted as P(B|A), is
+     $P(B|A)=\frac{P(A\cap{B})}{P(A)}$ for P(A) > 0.
+- Random Samples :: To select randomly implies that at each step of the sample, the items that remain in the batch are equally likely to be selected.
+- Multiplication Rule :: P(A ∩ B) = P(A | B)P(B) = P(B ∩ A) = P(B | A)P(A)
+     $P(A|B)=\frac{P(B|A)P(A)}{P(B)}$ for P(B) > 0
+- Total Probability Rule (Two Events) :: For any events A and B, P(B) = P(B ∩ A) + P(B ∩ A′) = P(B|A)P(A) + P(B|A′)P(A′)
+- Total Probability Rule (Multiple Events) :: Assume E_1, E_2,…, E_k are k mutually exclusive and exhaustive sets. Then
+     P(B) = P(B ∩ E_1) + P(B ∩ E_2) + · · · + P(B ∩ E_k) = P(B | E_1)P(E_1) + P(B | E_2)P(E_2) + · · · + P(B | E_k)P(E_k)
+- Independence (two events) :: Two events are independent if any one of the following equivalent statements is true:
+  1) P(A | B) = P(A)
+  2) P(B | A) = P(B)
+  3) P(A ∩ B) = P(A)P(B)
+  implies P(A′ ∩ B′) = P(A′)P(B′)
+- Independence (multiple events) :: The events E_1, E_2, …, E_n are independent if and only if for any subset of these events
+     P(E_i1 ∩ E_i2 ∩ · · · ∩ E_ik) = P(E_i1) x P(E_i2) x ... x P(E_ik)
+- Bayes’ Theorem :: If E1, E2,…, Ek are k mutually exclusive and exhaustive events and B is any event,
+                    $P(E_1|B)=\frac{P(B|E_1)P(E_1)}{P(B|E_1)P(E_1) + P(B|E_2)P(E_2) + · · · + P(B|E_k)P(E_k)}$ for P(B) > 0
+- Random Variable :: A random variable is a function that assigns a real number to each outcome in the sample space of a random experiment.
+- Notation :: A random variable is denoted by an uppercase letter such as X. After an experiment is conducted, the measured value of the random variable is denoted by a lowercase letter such as x = 70 milliamperes.
+- Discrete and Continuous Random Variables :: A discrete random variable is a random variable with a finite (or countably infinite) range. A continuous random variable is a random variable with an interval (either finite or infinite) of real numbers for its range.
+- Examples of Random Variables :: Examples of continuous random variables: electrical current, length, pressure, temperature, time, voltage, weight. Examples of discrete random variables: number of scratches on a surface, proportion of defective parts among 1000 tested, number of transmitted bits received in error.
+*** Chapter 3 Discrete Random Variables and Probability Distributions
+**** Probability Distributions and Probability Mass Functions
+- Discrete Random Variables :: possible values for X are {0, 1, 2, 3, 4, ...}.
+- Probability Distribution :: probability distribution of a random variable X is a description of the probabilities associated with the possible values of X.
+- Probability Mass Function :: For a discrete random variable X with possible values x1, x2,…, xn, a probability mass function is a function such that
+     (1) $f(x_i)\geq0$
+     (2) $$\sum_{i=1}^n f(x)=1$$
+     (3) $f(x_i)=P(X=x_i)$
+**** Cumulative Distribution Functions 
+- Cumulative Distribution Function :: The cumulative distribution function of a discrete random variable X, denoted as F(x), is
+     $$F(x)=P(X\leq{x})=\sum_{x_i\leq{x}} f(x)$$
+     For a discrete random variable X, F(x) satisfies the following properties.
+     (1) $$F(x)=P(X\leq{x})=\sum_{x_i\leq{x}} f(x)$$
+     (2) $0\leq F(x) \leq 1$
+     (3) $\text{If } x \leq y, \text{then } F(x) \leq F(y)$
+**** Mean and Variance of a Discrete Random Variable 
+- mean or expected value :: The mean or expected value of the discrete random variable X, denoted as μ or E(X), is
+     $$\mu=E(X)=\sum_x xf(x)$$
+- variance :: variance of a random variable X is a measure of dispersion or scatter in the possible values for X.
+              The variance of X, denoted as σ^2 or V(X), is
+              $$\sigma^2=V(x)=E(X-\mu)^2=\sum_x(x-\mu)^2 f(x)=\sum_x x^2 f(x)-\mu^2$$
+- standard deviation :: The standard deviation of X is $\sigma=\sqrt{\sigma^2}$
+- Expected Value of a Function of a Discrete Random Variable :: If X is a discrete random variable with probability mass function f (x), $$E[h(X)]=\sum_x h(x)f(x)$$,
+**** Discrete Uniform Distribution
+**** Binomial Distribution
+**** Geometric and Negative Binomial Distributions
+**** Hypergeometric Distribution
+**** Poisson Distribution
+*** Chapter 4 Continuous Random Variables and Probability Distributions
+**** Probability Distributions and Probability Density Functions
+- Probability Density Function :: For a continuous random variable X, a probability density function is a function such that
+     (1) $f(x)\geq 0$
+     (2) $$\int_{-\infty}^{\infty} f(x) dx = 1 $$
+     (3) $$P(a\leq X \leq b)=\int_{a}^{b} f(x) dx=$$ area under f(x) from a to b for any a and b.
+     If X is a continuous random variable, for any x_1 and x_2, P(x_1 ≤ X ≤ x_2) = P(x_1 < X ≤ x_2) = P(x_1 ≤ X < x_2) = P(x_1 < X < x_2)
+**** Cumulative Distribution Functions
+**** Mean and Variance of a Continuous Random Variable
+**** Continuous Uniform Distribution
+**** Normal Distribution
+**** Normal Approximation to the Binomial and Poisson Distributions
+**** Exponential Distribution
+**** Erlang and Gamma Distributions
+**** Weibull Distribution
+**** Lognormal Distribution
+**** Beta Distribution
+*** Chapter 5
+*** Chapter 6
+*** Chapter 7 Point Estimation of Parameters and Sampling Distributions 
+- Statistical Inference :: process of reasoning from a sample of objects to conclusions for a population of objects.
+  - Parameter Estimation :: 
+  - Hypothesis Testing ::
+**** Point Estimation 
+- Point Estimator :: Apoint estimate of some population parameter θ is a single numerical value $\hat{\theta}$ of a statistic $\hat{\theta}$. The statistic $\hat{\Theta}$ is called the point estimator.
+**** Sampling Distributions and the Central Limit Theorem
+- Random Sample :: The random variables X_1, X_2,… , X_n are a random sample of size n if (a) the X_i’s are independent random variables and (b) every X_i has the same probability distribution.
+- Statistic :: A statistic is any function of the observations in a random sample.
+- Sampling Distribution :: probability distribution of a statistic.
+- Central Limit Theorem :: If X_1, X_2, … , X_n is a random sample of size n taken from a population (either finite or infinite) with mean μ and finite variance σ2 and if X is the sample mean, the limiting form of the distribution of $Z=\frac{\bar{X}-\mu}{\frac{\sigma}{\sqrt{n}}}$ as n → ∞, is the standard normal distribution.
+- Approximate Sampling Distribution of a Difference in Sample Means :: If we have two independent populations with means μ_1 and μ_2 and variances σ^2_1 and σ^2_2 and if X_1 and X_2 are the sample means of two independent random samples of sizes n_1 and n_2 from these populations, then the sampling distribution of $Z=\frac{\bar{X_1}-\bar{X_2}-(\mu_1-\mu_2)}{\sqrt{\frac{\sigma^2_1}{n_1}+\frac{\sigma^2_2}{n_2}}}$ is approximately standard normal if the conditions of the central limit theorem apply. If the two populations are normal, the sampling distribution of Z is exactly standard normal.
+**** General Concepts of Point Estimation
+***** Unbiased Estimators
+- Bias of an Estimator :: The point estimator $\hat{\Theta}$ is an unbiased estimator for the parameter θ if $E(\hat{\Theta})=\theta$.
+     If the estimator is not unbiased, then the difference $E(\hat{\Theta})-\theta$ is called the bias of the estimator $\hat{\Theta}$.
+     When an estimator is unbiased, the bias is zero; that is, $E(\hat{\Theta})-\theta=0$
+***** Variance of a Point Estimator
+***** Standard Error - Reporting a Point Estimate
+***** Bootstrap Standard Error
+***** Mean Squared Error of an Estimator
+**** Methods of Point Estimation
+***** Method of Moments
+***** Method of Maximum Likelihood
+***** Bayesian Estimation of Parameters
+*** Chapter 8 Statistical Intervals for a Single Sample 
+- Confidence Interval :: bounds population or distribution parameters (such as the mean viscosity).
+- Tolerance Interval :: bounds a selected proportion of a distribution.
+- Prediction Interval :: bounds future observations from the population or distribution.
+- Confidence Interval on the Mean, Variance Known :: If $\bar{x}$ is the sample mean of a random sample of size /n/ from a normal population with known variance σ^2, a 100(1 − α)% confidence interval on μ is given by $\bar{x}-z_{\frac{\alpha}{2}}\frac{\sigma}{\sqrt(n)}\leq\mu\leq\bar{x}+z_{\frac{\alpha}{2}}\frac{\sigma}{\sqrt(n)}=1-\alpha$ where z_{\alpha/2} is the upper 100\alpha/2 percentage point of the standard normal distribution.
+- Sample Size for Specified Error on the Mean, Variance Known :: If $\bar{x}$ is used as an estimate of μ, we can be 100(1 − α)% confident that the error $|\bar{x}- \mu|$ will not exceed a specified amount E when the sample size is $n=(\frac{z_{\alpha/2}\sigma}{E})^2$ 
+*** Chapter 9
+*** Chapter 10
+*** Chapter 11
+*** Chapter 12
+*** Chapter 13
+*** Chapter 14
+*** Chapter 15
+*** Normal Distribution - Transformation
+*** Standard Error for Difference between Mean - s.e.d.m
+*** Hypotheses testing
+*** t-test
+*** Paired t-test
+*** ANOVA
+*** Chi-Square test
+*** Factorial Experiments
+*** Linear Regression and Correlation
+** Statistics for Engineering and the Sciences
+*** Chapter 10 Simple Linear Regression
+**** Regression Models
+- Dependent/Response Variable :: The variable to be predicted (or modeled), y, is called the dependent (or response) variable.
+- Independent Variables :: The variables used to predict (or model) y are called independent variables and are denoted by the symbols x1, x2, x3, etc.
+**** Model Assumptions
+- Deterministic Model
+- Probability Model
+  - Simple Linear Regression Model :: makes the assumption that the mean value of y for a given value of x graphs as a straight line and that points deviate about this line of means by a random (positive or negative) amount equal to \epsilon, i.e.
+       $\underbrace{y=\beta_0+\beta_1x}_{\text{Mean value of y given x}}+\underbrace{\varepsilon}_{\text{random error}}$ where \beta_0 and \beta_1 are unknown parameters of the deterministic (nonrandom) portion of the model.
+    - Mean value of y, assume that the points deviate above and below the line of means, with some deviations positive, some negative, and with E(\varepsilon)=0:
+      $$\begin{align*}
+        E(y)&=E(Y|x) \\
+            &=E(\beta_0+\beta_1x+\varepsilon) \\
+            &=\beta_0+\beta_1x+E(\varepsilon) \\
+            &=\beta_0+\beta_1x
+        \end{align*}$$
+- Assumptions
+  - Assumption 1 :: The mean of the probability distribution of e is 0. That is, the average of the errors over an infinitely long series of experiments is 0 for each setting of the independent variable x. This assumption implies that the mean value of y, E(y), for a given value of x is $E(y)=\beta_0+\beta_1x$
+  - Assumption 2 :: The variance of the probability distribution of e is constant for all settings of the independent variable x. For our straight-line model, this assumptionnmeans that the variance of e is equal to a constant, say, \sigma^2, for all values of x.
+  - Assumption 3 :: The probability distribution of \varepsilon is normal.
+  - Assumption 4 :: The errors associated with any two different observations are independent. That is, the error associated with one value of y has no effect on the errors associated with other y values.
+**** Estimating \beta_0 and \beta_1 - The Method of Least Squares
+- There is one and only one line for which the =sum of squares of the deviations= is a minimum. The sum of squares of the deviations is called the *sum of squares for error* and is denoted by the symbol SSE. The line is called the *least-squares line*, the *regression line*, or the *least-squares prediction equation*.
+- Fitted line we hope to find is $\hat{y}=\hat{\beta_0}+\hat{\beta_1}x$, $\hat{y}$ is an estimator of E(y), $\hat{\beta_0}$ is estimator of \beta_0, $\hat{\beta_1}$ is estimator of \beta_1.
+- Regression Residual :: A regression residual $\hat{\epsilon}$ is defined as the difference between an observed y value and its corresponding predicted value: $\hat{\epsilon}=y-\hat{y}$
+- Least-Square Line :: The least-squares line is one that has a smaller SSE than any other straight-line model.
+- SSE :: $$\text{SSE}=\sum_{i=1}^n [y_i-(\hat{\beta_0}+\hat{\beta_1}x_i)]^2$$, the quantities $\hat{\beta_0}$ and $\hat{\beta_1}$ that make the SSE a minimum are called the least-squares estimates of the population parameters \beta_0 and \beta_1.
+- Setting $\frac{\partial{\text{SSE}}}{\partial{\hat{\beta_0}}}=0$ and $\frac{\partial{\text{SSE}}}{\partial{\hat{\beta_1}}}=0$ and solve the resulting simultaneous linear system of least-square equations.
+- Formula for the Least Square Estimates ::
+     $$\begin{align*}
+           Slope: \hat{\beta_1}&= \frac{SS_{xy}}{SS_{xx}} \\
+     y-intercept: \hat{\beta_0}&= \bar{y}-\hat{\beta_1}\bar{x} \ \text{where:}  \\
+          SS_{xy} &= \sum\limits_{i=1}^{n}(x_i-\bar{x})(y_i-\bar{y}) \\
+             &= \sum\limits_{i=1}^{n} x_iy_i - \frac{\left(\sum\limits_{i=1}^{n} x_i\right)\left(\sum\limits_{i=1}^{n} y_i\right)}{n} \\
+     SS_{xx} &= \sum\limits_{i=1}^{n}(x_i-\bar{x})^2 \\
+             &= \sum\limits_{i=1}^{n}x_{i}^2 - \frac{\left(\sum\limits_{i-1}^{n}x_i\right)^2}{n} \\
+           n &= \text{Sample size}
+     \end{align*}$$
+- Plot ::
+  #+BEGIN_SRC ipython :session :results raw drawer
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+mpl.rcParams['figure.dpi'] = 150
+
+def estimate_coef(x, y): 
+	# number of observations/points 
+	n = np.size(x) 
+
+	# mean of x and y vector 
+	m_x, m_y = np.mean(x), np.mean(y) 
+
+	# calculating cross-deviation and deviation about x 
+	SS_xy = np.sum(y*x) - n*m_y*m_x 
+	SS_xx = np.sum(x*x) - n*m_x*m_x 
+
+	# calculating regression coefficients 
+	b_1 = SS_xy / SS_xx 
+	b_0 = m_y - b_1*m_x 
+
+	return(b_0, b_1) 
+
+def plot_regression_line(x, y, b): 
+	# plotting the actual points as scatter plot 
+	plt.scatter(x, y, color = "m", 
+			marker = "o", s = 30) 
+
+	# predicted response vector 
+	y_pred = b[0] + b[1]*x 
+
+	# plotting the regression line 
+	plt.plot(x, y_pred, color = "g") 
+
+	# putting labels 
+	plt.xlabel('x') 
+	plt.ylabel('y') 
+
+	# function to show plot 
+	plt.show() 
+
+def main(): 
+	# observations 
+	x = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) 
+	y = np.array([1, 3, 2, 5, 7, 8, 8, 9, 10, 12]) 
+
+	# estimating coefficients 
+	b = estimate_coef(x, y) 
+	print("Estimated coefficients:\nb_0 = {} \
+		\nb_1 = {}".format(b[0], b[1])) 
+
+	# plotting regression line 
+	plot_regression_line(x, y, b) 
+
+if __name__ == "__main__": 
+	main() 
+  #+END_SRC
+
+  #+RESULTS:
+  :results:
+  # Out [2]: 
+  # output
+  Estimated coefficients:
+  b_0 = 1.2363636363636363 		
+  b_1 = 1.1696969696969697
+
+  # text/plain
+  : <Figure size 900x600 with 1 Axes>
+
+  # image/png
+  [[file:obipy-resources/af2d25544bdb97b1b895e00d5fd1bfcb4f3c49b0/d869a9c68890fb76a63e7909fae3274d040a6795.png]]
+  :end:
+
+* Note
+Preview Equation: C-c C-x C-l, C-u C-c C-x C-l (subtree), C-u C-u C-c C-x C-l (everything)
+Preview Subscript, Superscript, Symbol: C-c C-x \
+
+* Code
+#+BEGIN_SRC ipython :session :results raw drawer
+import pandas as pd
+df = pd.read_csv('gapminder.tsv',sep='\t')
+print(df.info())
+#+END_SRC
+
+import matplotlib as mpl
+mpl.rcParams['figure.dpi'] = 75
+
+#  ov-highlight-data: KCg0MDA3MyA0MDEwNiAob3YtdHlwZSAiYm94IiBvdi1oaWdobGlnaHRlciB0IGZhY2UgKDpib3ggdCkpKSk=
+
+# Local Variables:
+# eval: (ov-highlight-load)
+# End:

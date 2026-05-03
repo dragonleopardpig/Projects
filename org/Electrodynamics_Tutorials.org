@@ -1,0 +1,936 @@
+#+STARTUP: content
+#+PROPERTY: header-args:jupyter-python :session mysession
+
+* CREATING A RANGE OF VALUES WITH PYTHON
+** arange
+#+BEGIN_SRC jupyter-python
+import numpy as np
+
+x = np.arange(-5,7,2)
+
+print("Full array:",x)
+print("First element:",x[0])
+print("Second element:",x[1])
+print("Last element:",x[-1])
+print("Second to the last element:",x[-2])
+
+print(x[1:4]) # elements 1, 2, 3 (but not 4)
+print(x[:4]) # elements 0, 1, 2, 3
+print(x[1:]) # elements 1, 2, ..., -1.
+print(x[:]) # Full array.
+print(x[1:6:2]) # elements 1, 3, 5
+#+END_SRC
+
+#+RESULTS:
+: Full array: [-5 -3 -1  1  3  5]
+: First element: -5
+: Second element: -3
+: Last element: 5
+: Second to the last element: 3
+: [-3 -1  1]
+: [-5 -3 -1  1]
+: [-3 -1  1  3  5]
+: [-5 -3 -1  1  3  5]
+: [-3  1  5]
+
+** Plotting
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define x and y.
+step = 0.25
+x = np.arange(-1,1+step,step)
+y = 2*(x**2)+1
+
+# Make a scatter plot with lines that connect adjacent points.
+plt.scatter(x,y,color='gray')
+plt.plot(x,y,color='black')
+
+# Make the plot look nice by specifying limits and tick marks.
+# Improve the signal-to-noise ratio of the visualization.
+plt.xlim((-1.25,1.25))
+plt.ylim((-1,5))
+plt.xticks((-1,0,1))
+plt.yticks(np.arange(0,5,2))
+plt.xlabel('x')
+plt.ylabel('y')
+
+# Save the plot.
+plt.savefig('fig_ch1_scatter_plot.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/d6e7266da47e4a1c090053241b757a54a8660c57.png]]
+
+** meshgrid
+#+BEGIN_SRC jupyter-python  
+step = 0.1
+x = np.arange(-1,1+step,step)
+y = np.arange(0,2+step,step)
+xv, yv = np.meshgrid(x,y,indexing='ij')
+
+plt.scatter(xv,yv,color='gray')
+plt.xlim((-1.5,1.5))
+plt.ylim((-0.5,2.5))
+plt.xticks((-1,0,1))
+plt.yticks((0,1,2))
+plt.xlabel('x')
+plt.ylabel('y')
+plt.axis('equal')
+plt.axis('square')
+plt.savefig('fig_ch1_meshgrid.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/b7dcbb60c43018a9391343d798dd245bfdcb1051.png]]
+
+
+#+BEGIN_SRC jupyter-python  
+# A tedious way of generating a two-dimensional array.
+# meshgrid() is more convenient.
+
+x_slow = np.zeros((len(x),len(y)))
+y_slow = np.zeros((len(x),len(y)))
+
+for i in range(len(x)):
+    for j in range(len(y)):
+        x_slow[i,j] = x[i]
+        y_slow[i,j] = y[j]
+
+# Check if two different methods produce the same array.
+assert np.array_equal(xv,x_slow)
+assert np.array_equal(yv,y_slow)
+#+END_SRC
+
+#+RESULTS:
+
+** Combine 2D matrices into a list of pairs
+#+BEGIN_SRC jupyter-python  
+p = np.vstack((xv.flatten(),yv.flatten()))
+
+# With the array p, the same plot can be created with this command:
+plt.scatter(p[0],p[1],color='gray')
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: <matplotlib.collections.PathCollection at 0x7fc6b611a990>
+[[./.ob-jupyter/27cbd8e82e3a0ee05fe976ca9d683adc792b72a6.png]]
+:END:
+
+* LANDSCAPE OF GAUSSIANS
+** 1D Gaussian Plot
+#+BEGIN_SRC jupyter-python  
+import matplotlib.pyplot as plt
+import numpy as np
+
+step = 0.01
+x = np.arange(-1,1,step)
+f = +np.exp(-(x-0.3)**2/2/0.2**2)
+g = -np.exp(-(x+0.3)**2/2/0.3**2)
+f_label = r'$+e^{-\frac{(x-0.3)^2}{2 \times 0.2^2}}$'
+g_label = r'$-e^{-\frac{(x+0.3)^2}{2 \times 0.3^2}}$'
+fig = plt.figure(figsize=(5,3))
+
+plt.plot(x,f,label=f_label,color='black')
+plt.plot(x,g,label=g_label,color='gray')
+plt.legend(framealpha=1)
+plt.xticks((-1,0,1))
+plt.yticks((-1,0,1))
+plt.ylim((-1.2,1.2))
+plt.xlabel('x')
+plt.ylabel('y')
+plt.savefig('fig_ch1_gauss_1d.eps')
+plt.show()
+
+# Make a plot of a sum of two Gaussian functions.
+h = f+0.5*g
+h_label = r'$e^{-\frac{(x-0.3)^2}{2 \times 0.2^2}}$'
+h_label = h_label + r'$-0.5e^{-\frac{(x+0.3)^2}{2 \times 0.3^2}}$'
+fig = plt.figure(figsize=(5,3))
+plt.plot(x,h,color='black',label=h_label)
+plt.legend(framealpha=1)
+plt.xticks((-1,0,1))
+plt.yticks((-1,0,1))
+plt.ylim((-1.2,1.2))
+plt.xlabel('x')
+plt.ylabel('y')
+plt.savefig('fig_ch1_gauss_1d_sum.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[./.ob-jupyter/16886ed10e3eb115fd9043d591fab8673bad2cb7.png]]
+[[./.ob-jupyter/eadd7661d67fbb73752ab3970127018355342cda.png]]
+:END:
+
+** 2D Gaussian Plotting
+#+BEGIN_SRC jupyter-python  
+step = 0.05
+x, y = np.meshgrid(np.arange(-1,1,step),
+                   np.arange(-1,1,step),
+                   indexing='ij')
+
+x0, y0 = 0.3, 0.1
+sig = 0.3
+g = np.exp(-((x-x0)**2+(y-y0)**2)/2/sig**2)
+
+fig = plt.figure(figsize=(5,4))
+ax = plt.axes(projection='3d')
+ax.plot_surface(x,y,g,cmap='gray')
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
+ax.set_xticks((-1,0,1))
+ax.set_yticks((-1,0,1))
+ax.set_zticks((0,0.5,1))
+ax.view_init(10, -60)
+ax.set_rasterized(True)
+plt.tight_layout()
+plt.savefig('fig_ch1_gauss_2d.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/44bab99c84aecda5f785b2e7f15da239cebcca2a.png]]
+
+
+#+BEGIN_SRC jupyter-python  
+# Make a 3D plot of a landscape.
+def sample_sum_of_gauss(step=0.01):
+    x, y = np.meshgrid(np.arange(-1,1,step),
+                       np.arange(-1,1,step),
+                       indexing='ij')
+    x0,y0,x1,y1,x2,y2 = -0.3,-0.2,0.3,0.1,0.0,0.1
+    sig0,sig1,sig2 = 0.3,0.2,0.5
+    g0 = +3.0*np.exp(-((x-x0)**2+(y-y0)**2)/2/sig0**2)
+    g1 = +2.0*np.exp(-((x-x1)**2+(y-y1)**2)/2/sig1**2)
+    g2 = -2.0*np.exp(-((x-x2)**2+(y-y2)**2)/2/sig2**2)
+    z = g0+g1+g2
+    return x,y,z
+
+x,y,z = sample_sum_of_gauss()
+fig = plt.figure(figsize=(5,4))
+ax = plt.axes(projection='3d')
+ax.plot_surface(x,y,z,cmap='gray')
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
+ax.set_xticks((-1,0,1))
+ax.set_yticks((-1,0,1))
+ax.set_zticks((-1,0,1))
+ax.view_init(30, -70)
+ax.set_rasterized(True)
+plt.tight_layout()
+plt.savefig('fig_ch1_gauss_2d_sum.eps')
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/6592b41a395a2571f99018c64fe717b81d3e9183.png]]
+
+** Landscape with Bird's Eye View
+#+BEGIN_SRC jupyter-python  
+# Make a 2D contour plot.
+fig = plt.figure(figsize=(4,4))
+
+plt.contourf(x,y,z,cmap='gray')
+plt.xlim((-2,2))
+plt.ylim((-2,2))
+plt.axis('square')
+plt.axis('equal')
+plt.axis('off')
+plt.savefig('fig_ch1_gauss_2d_sum_contour.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/51927633c67de097845af0134db4ac618b736a2e.png]]
+
+** Length of Arrow to Represent Landscape Steepness
+#+BEGIN_SRC jupyter-python  
+# Show the gradient with quiver.
+fig = plt.figure(figsize=(4,4))
+plt.contour(x,y,z,cmap='gray')
+
+# Coarse version of x,y,z
+xc,yc,zc = sample_sum_of_gauss(step=0.1)
+u,v = np.gradient(zc)
+
+plt.quiver(xc,yc,-u,-v)
+plt.xlim((-2,2))
+plt.ylim((-2,2))
+plt.axis('square')
+plt.axis('equal')
+plt.axis('off')
+plt.savefig('fig_ch1_gauss_2d_sum_grad.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/318d74d69bbe6395de27a74af5d9959dadcc6124.png]]
+
+* VECTOR
+** Drawing a vector plt.quiver()
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Let us draw a vector with the quiver() function.
+# Note: the extra arguments (angles, scale, ...)
+# ensures that the arrow lengths are properly scaled.
+A = np.array([1,2])
+plt.quiver(0,0,A[0],A[1],angles='xy',scale_units='xy',scale=1)
+plt.text(A[0]+0.1,A[1]+0.1,r"$\vec{A}$")
+
+B = np.array([1,-2])
+plt.quiver(0,0,B[0],B[1],angles='xy',scale_units='xy',scale=1)
+plt.text(B[0]+0.1,B[1]+0.1,r"$\vec{B}$")
+
+C = np.array([-2,-1])
+plt.quiver(0,0,C[0],C[1],angles='xy',scale_units='xy',scale=1)
+plt.text(C[0]+0.1,C[1]-0.5,r"$\vec{C}$")
+
+plt.grid()
+plt.axis('square')
+plt.xlabel('x')
+plt.ylabel('y')
+lim = 3
+plt.xlim((-lim,lim))
+plt.ylim((-lim,lim))
+plt.xticks(np.arange(-lim,lim+0.1))
+plt.yticks(np.arange(-lim,lim+0.1))
+plt.savefig('fig_ch2_vector_quiver.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/f347f6ff7b12c3b08482b1310ca841b07c378305.png]]
+** Vector Products
+#+BEGIN_SRC jupyter-python  
+# Visualizing the cross product
+import numpy as np
+import matplotlib.pyplot as plt
+
+A = np.array([2,1,0])
+B = np.array([0,0,1])
+C = np.cross(A,B)
+
+x, z = np.meshgrid(np.linspace(-1,1,5), np.linspace(-1,1,5))
+y = x/2 # Define a plane formed by A and B.
+
+fig = plt.figure(figsize=(5,5))
+ax = plt.axes(projection='3d')
+ax.plot_surface(x,y,z,color='#CCCCCC',alpha=0.2)
+ax.quiver(0,0,0,A[0],A[1],A[2],color='k',
+          arrow_length_ratio=0.1,normalize=True)
+ax.quiver(0,0,0,B[0],B[1],B[2],color='k',
+          arrow_length_ratio=0.1,normalize=True)
+ax.quiver(0,0,0,C[0],C[1],C[2],color='k',
+          arrow_length_ratio=0.1,normalize=True)
+ax.text(1,0.5,0,r"$\vec{A}$")
+ax.text(0,0,1.1,r"$\vec{B}$")
+ax.text(0.5,-1,0,r"$\vec{A}\times\vec{B}$")
+ax.set_xticks((-1,0,1))
+ax.set_yticks((-1,0,1))
+ax.set_zticks((-1,0,1))
+ax.set_xlim(-1, 1)
+ax.set_ylim(-1, 1)
+ax.set_zlim(-1, 1)
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
+ax.view_init(20,-120)
+plt.savefig('fig_ch2_vector_cross.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: The PostScript backend does not support transparency; partially transparent artists will be rendered opaque.
+[[./.ob-jupyter/0acd1a2acc5f04ad96490080f6b982f35b0cefad.png]]
+:END:
+
+** Vector Decomposition
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Vector decomposition
+# defining the famous constant pi = 3.14...
+pi = np.pi
+r = 1
+phi_circle = np.arange(0,2*pi,0.01)
+x_circle = r*np.cos(phi_circle)
+y_circle = r*np.sin(phi_circle)
+phi = pi/6
+x = r*np.cos(phi)
+y = r*np.sin(phi)
+
+plt.figure(figsize=(5,5))
+plt.plot(x_circle,y_circle,color='gray')
+plt.quiver(0,0,x,y,angles='xy',scale_units='xy',scale=1)
+plt.quiver(0,0,x,0,angles='xy',scale_units='xy',scale=1)
+plt.quiver(0,0,0,y,angles='xy',scale_units='xy',scale=1)
+plt.plot([0,0],[-r,r],linestyle='dotted',color='gray')
+plt.plot([-r,r],[0,0],linestyle='dotted',color='gray')
+plt.plot([0,x],[y,y],linestyle='dotted',color='gray')
+plt.plot([x,x],[0,y],linestyle='dotted',color='gray')
+plt.text(0.3,-0.15,r"$a_x = r\ \cos \phi$")
+plt.text(-0.1,0.6,r"$a_y = r\ \sin \phi$")
+plt.text(0.4,0.3,"r")
+plt.text(0.25,0.05,r"$\phi$")
+plt.text(1.1,0,"x")
+plt.text(0,1.1,"y")
+plt.axis('square')
+plt.axis('off')
+plt.xlim(np.array([-1,1])*r*1.1)
+plt.ylim(np.array([-1,1])*r*1.1)
+plt.savefig('fig_ch2_vector_decompose.eps')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/adad745f79a76e03ba7511ee3438ab6946dc31d0.png]]
+* Plotting Exercises
+** sinc Function
+#+BEGIN_SRC jupyter-python  
+x = np.linspace(-20, 20, 1001)
+y = np.sin(x)/x
+plt.plot(x, y)
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: /tmp/ipykernel_7548/2074971241.py:2: RuntimeWarning: invalid value encountered in divide
+:   y = np.sin(x)/x
+[[./.ob-jupyter/131ea9a345705fbc446ab58153bd7e24ae484794.png]]
+:END:
+
+** Some Oscillating Functions
+#+BEGIN_SRC jupyter-python  
+# sudo apt-get install dvipng
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rc('text', usetex=True)
+
+x = np.linspace(-10,10,1001)
+
+for n in range(1,5):
+    y = x**n * np.sin(x)
+    y /= max(y)
+    plt.plot(x,y, label=r'$x^{}\sin x$'.format(n))
+
+plt.legend(loc='lower center')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/a1a5b557fe87edba582b20044be614f65aaacad5.png]]
+
+** Moore's Law
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+# The data - lists of years:
+year = [1972, 1974, 1978, 1982, 1985, 1989, 1993, 1997, 1999, 2000, 2003, 2004, 2007, 2008, 2012]
+
+# and number of transistors (ntrans) on CPUs in millions:
+ntrans = [0.0025, 0.005, 0.029, 0.12, 0.275, 1.18, 3.1, 7.5, 24.0, 42.0, 220.0, 592.0, 1720.0, 2046.0, 3100.0]
+
+# turn the ntrans list into a NumPy array and multiply by 1 million
+ntrans = np.array(ntrans) * 1.e6
+
+y0, n0 = year[0], ntrans[0]
+# A linear array of years spanning the data's years
+y = np.linspace(y0, year[-1], year[-1] - y0 + 1)
+# Time taken in years for the number of transistors to double
+T2 = 2.
+
+moore = np.log10(n0) + (y - y0) / T2 * np.log10(2)
+
+plt.plot(year, np.log10(ntrans), '*', markersize=12, color='r',
+         markeredgecolor='r', label='observed')
+plt.plot(y, moore, linewidth=2, color='k', linestyle='--',
+         label='predicted')
+plt.legend(fontsize=16, loc='upper left')
+plt.xlabel('Year', fontsize=16)
+plt.ylabel('log(ntrans)', fontsize=16)
+plt.title("Moore's Law")
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/af4d4c03e518856fddc353084645ed69de1b5d37.png]]
+
+** Cardioid
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+theta = np.linspace(0, 2.*np.pi, 1000)
+a = 1.
+r = 2 * a * (1. + np.cos(theta))
+plt.polar(theta, r)
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/d1cd15cfe1bab24865d0dc0a66dd12563d8f2ea6.png]]
+
+** Margarine consumption and divorce
+#+BEGIN_SRC jupyter-python  
+import matplotlib.pyplot as plt
+
+years = range(2000, 2010)
+divorce_rate = [5.0, 4.7, 4.6, 4.4, 4.3, 4.1, 4.2, 4.2, 4.2, 4.1]
+margarine_consumption = [8.2, 7, 6.5, 5.3, 5.2, 4, 4.6, 4.5, 4.2, 3.7]
+
+line1 = plt.plot(years, divorce_rate, 'b-o',
+                   label='Divorce rate in Maine')
+plt.ylabel('Divorces per 1000 people')
+plt.legend()
+
+plt.twinx()
+line2 = plt.plot(years, margarine_consumption, 'r-o',
+                   label='Margarine consumption')
+plt.ylabel('lb of Margarine (per capita)')
+
+# Jump through some hoops to get the both line's labels in the same legend:
+lines = line1 + line2
+labels = []
+
+for line in lines:
+    labels.append(line.get_label())
+
+plt.legend(lines, labels)
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/e9a0b9c104f4c42805aa3331cc84dba852bd7313.png]]
+
+* Vector Field
+** Uniform Vector Field
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+step = 0.25
+
+# Set up a grid of (x,y) coordinates
+x,y = np.meshgrid(np.arange(-1,1+step,step),
+                  np.arange(-1,1+step,step),
+                  indexing='ij')
+dx = 1
+dy = 0
+fig = plt.figure(figsize=(2,2))
+plt.quiver(x,y,dx,dy,angles='xy',scale_units='xy')
+plt.axis('square')
+plt.axis('off')
+plt.xlim(np.array([-1,1])*1.1)
+plt.ylim(np.array([-1,1])*1.1)
+plt.savefig('fig_ch3_simple_field.pdf')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/3dc4070be325f9bf617b092f0bb160e3304b2272.png]]
+
+** Static Vector Field
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+f, axes = plt.subplots(2,2,figsize=(6,6))
+
+ax = axes[0,0]
+ax.set_title('(a) left')
+ax.quiver(x,y,-1,0,angles='xy',scale_units='xy')
+ax = axes[0,1]
+ax.set_title('(b) up')
+ax.quiver(x,y,0,1,angles='xy',scale_units='xy')
+ax = axes[1,0]
+ax.set_title('(c) up-right')
+ax.quiver(x,y,1,1,angles='xy',scale_units='xy')
+ax = axes[1,1]
+ax.set_title('(d) down-right')
+ax.quiver(x,y,1,-1,angles='xy',scale_units='xy')
+
+for i in range(2):
+    for j in range(2):
+        ax = axes[i,j]
+        ax.axis('square')
+        ax.axis('off')
+        ax.set_xlim(np.array([-1,1])*1.1)
+        ax.set_ylim(np.array([-1,1])*1.1)
+
+plt.tight_layout()
+plt.savefig('fig_ch3_other_fields_1.pdf')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/c6ead05133141913ff739e66cb925e2eb1ba6bfd.png]]
+
+** Non-uniform Vector Fields
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Add a small number to avoid dividing by zero.
+small_number = 10**(-10)
+r = np.sqrt(x**2+y**2)+small_number
+xhat = x/r
+yhat = y/r
+
+f, axes = plt.subplots(2,2,figsize=(6,6))
+
+ax = axes[0,0]
+ax.set_title('(a) radial')
+ax.quiver(x,y,xhat,yhat,angles='xy',scale_units='xy')
+ax = axes[0,1]
+ax.set_title('(b) 1/r')
+ax.quiver(x,y,xhat/r,yhat/r,angles='xy',scale_units='xy')
+ax = axes[1,0]
+ax.set_title('(c) cw swirl')
+ax.quiver(x,y,y,-x,angles='xy',scale_units='xy')
+ax = axes[1,1]
+ax.set_title('(d) ccw swirl')
+ax.quiver(x,y,-y,x,angles='xy',scale_units='xy')
+
+for i in range(2):
+    for j in range(2):
+        ax = axes[i,j]
+        ax.axis('square')
+        ax.axis('off')
+        ax.set_xlim(np.array([-1,1])*1.1)
+        ax.set_ylim(np.array([-1,1])*1.1)
+
+plt.tight_layout()
+plt.savefig('fig_ch3_other_fields_2.pdf')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/185eefed7134181ece2ec06bd0e9e64ae1a02f50.png]]
+
+* Flux
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+fig = plt.figure(figsize=(2,2))
+
+# Put a line inside the vector field.
+lw = 8 # line-width
+pos = 0.5
+plt.plot([0,0],[-pos,+pos],color='gray',linewidth=lw,alpha=0.4)
+
+# Make a uniform vector field.
+step = 0.25
+x,y = np.meshgrid(np.arange(-1,1+step,step),
+np.arange(-1,1+step,step),
+indexing='ij')
+
+plt.quiver(x,y,1,0,angles='xy',scale_units='xy',color='k')
+plt.axis('square')
+plt.axis('off')
+plt.xlim(np.array([-1,1])*1.1)
+plt.ylim(np.array([-1,1])*1.1)
+plt.savefig('fig_ch3_uniform_flux_through_line.pdf')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/8a0fd454d6680e7ac2d6744194a9a8bd7e0fca87.png]]
+
+
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+scale = 3
+N = 8
+fig = plt.figure(figsize=(6,3))
+
+for i in range(3):
+    vec_mag = 1
+    lim = 2**(i-2)
+    step = 0.1
+    plt.subplot(1,4,i+1)
+    y = np.linspace(-lim,lim,N)
+    y = np.arange(-lim,lim+step,step)
+    x = np.zeros(len(y))
+    plt.quiver(x,y,vec_mag,0,color='k',
+               angles='xy',scale_units='xy',scale=scale)
+    plt.plot([0,0],[-lim,+lim],color='gray',linewidth=lw,alpha=0.4)
+    plt.axis('square')
+    plt.axis('off')
+    plt.xlim(np.array([-0.5,1])*0.8)
+    plt.ylim(np.array([-1,1])*1.1)
+    plt.title('L = %2.1f'%(2*lim))
+plt.tight_layout()
+plt.savefig('fig_ch3_diff_boundary_extent.pdf',bbox_inches='tight')
+plt.show()
+
+fig = plt.figure(figsize=(6,3))
+N = 11
+
+for i in range(3):
+    vec_mag = 2**(i-1) # (0.5, 1, 2)
+    plt.subplot(1,4,i+1)
+    plt.quiver(np.zeros(N),np.linspace(-1,1,N)*0.5,vec_mag,0,
+               color='k',angles='xy',scale_units='xy',scale=scale)
+    plt.plot([0,0],[-0.5,+0.5],color='gray',linewidth=lw,alpha=0.4)
+    plt.axis('square')
+    plt.axis('off')
+    plt.xlim(np.array([-0.5,1])*0.8)
+    plt.ylim(np.array([-1,1])*1.1)
+    plt.title('|v| = %2.1f'%vec_mag)
+
+plt.tight_layout()
+plt.savefig('fig_ch3_diff_v_mag.pdf',bbox_inches='tight')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[./.ob-jupyter/3154a763db89e777c154f5a7ba6b06bb282688b9.png]]
+[[./.ob-jupyter/4cbb174df3a1104b74271390d627f14436b72703.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+lw = 8
+pos = 0.5
+
+# Make a uniform vector field.
+step = 0.25
+x,y = np.meshgrid(np.arange(-1,1+step,step),
+                  np.arange(-1,1+step,step),
+                  indexing='ij')
+
+fig = plt.figure(figsize=(6,3))
+
+plt.subplot(1,2,1)
+plt.title('(a) Perpendicular')
+plt.plot([+0.0,-0.0],[-0.5,+0.5],color='gray',linewidth=lw,alpha=0.4)
+
+plt.subplot(1,2,2)
+plt.title('(b) Slanted')
+plt.plot([+0.6,-0.6],[-0.5,+0.5],color='gray',linewidth=lw,alpha=0.4)
+
+for i in range(2):
+    plt.subplot(1,2,i+1)
+    plt.quiver(x,y,1,0,angles='xy',scale_units='xy',color='k')
+    plt.axis('square')
+    plt.axis('off')
+    plt.xlim(np.array([-1,1])*1.1)
+    plt.ylim(np.array([-1,1])*1.1)
+
+plt.tight_layout()
+plt.savefig('fig_ch3_boundary_slanted.pdf',bbox_inches='tight')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/8cf1342338a310c33064f15a5a948247503dc3a9.png]]
+
+** Flux Calculation
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+lw = 8
+theta_range = [-90,-75,-60,-45] # in degrees
+fig = plt.figure(figsize=(6,3))
+
+for i,theta in enumerate(theta_range):
+    plt.subplot(1,4,i+1)
+    y0 = -0.5
+    y1 = +0.5
+    x0 = y0/np.tan(theta*np.pi/180)
+    x1 = -x0
+    plt.plot([x0,x1],[y0,y1],color='gray',linewidth=lw,alpha=0.4)
+    nx = 1
+    ny = -(x1-x0)/(y1-y0)
+    n_mag = np.sqrt(nx**2+ny**2)
+    plt.quiver(0,0,nx/n_mag,ny/n_mag,
+               angles='xy',scale_units='xy',color='black',scale=2)
+    plt.axis('square')
+    plt.xlim(np.array([-1,1])*1.1)
+    plt.ylim(np.array([-1,1])*1.1)
+    plt.xticks((-1,0,1))
+    plt.yticks((-1,0,1))
+
+plt.tight_layout()
+plt.savefig('fig_ch3_normal_vectors.pdf',bbox_inches='tight')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/618cfcbf3a1527a2fdd6922fa182aee0b0417fdc.png]]
+
+
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Illustration of how a normal vector is found.
+
+# Define a boundary.
+step = 0.05
+x = np.arange(0,1,step)
+y = np.sqrt(1**2 - x**2)
+
+i = 16 # Point to focus on.
+
+plt.figure(figsize=(4,6))
+plt.subplot(3,1,1)
+
+plt.scatter(x,y,color='gray')
+plt.plot(x,y,color='gray')
+plt.text(x[i+0]+0.05,y[i+0],r"$(x_{i}, y_{i})$")
+plt.axis('square')
+plt.xlim((0.0,1.2))
+plt.ylim((0.0,1.2))
+plt.xlabel('x')
+plt.ylabel('y')
+plt.xticks((0,0.5,1))
+plt.yticks((0,0.5,1))
+plt.title('Boundary')
+
+space = 0.012
+plt.subplot(3,1,2)
+plt.scatter(x[i-1:i+2],y[i-1:i+2],color='gray')
+plt.plot([x[i-1],x[i+1]],[y[i-1],y[i+1]],color='gray')
+plt.text(x[i+0]+space,y[i+0],r"$(x_{i}, y_{i})$")
+plt.text(x[i-1]+space,y[i-1],r"$(x_{i-1}, y_{i-1})$")
+plt.text(x[i+1]+space,y[i+1],r"$(x_{i+1}, y_{i+1})$")
+plt.axis('square')
+plt.xlim((0.7,1.0))
+plt.ylim((0.5,0.7))
+plt.xlabel('x')
+plt.ylabel('y')
+plt.xticks((0.7,0.8,0.9))
+plt.yticks((0.5,0.6,0.7))
+plt.title('Line between neighbors')
+
+plt.subplot(3,1,3)
+
+# Calculate the slope of two immediate neighbors.
+slope = (y[i+1]-y[i-1])/(x[i+1]-x[i-1])
+# Calcualte the slope of an orthogonal line.
+norm_vec_slope = -1/(slope)
+# Find the components of the normal vector.
+u, v = 1, norm_vec_slope
+# Normalize the vector.
+mag = np.sqrt(u**2+v**2)
+u, v = u/mag, v/mag
+
+plt.scatter(x[i-1:i+2],y[i-1:i+2],color='gray')
+plt.quiver(x[i],y[i],u,v,color='black',
+           angles='xy',scale_units='xy',scale=10,width=0.01)
+plt.text(x[i+0]+space,y[i+0]-0.01,r"$(x_{i}, y_{i})$")
+plt.axis('square')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.xlim((0.7,1.0))
+plt.ylim((0.5,0.7))
+plt.xticks((0.7,0.8,0.9))
+plt.yticks((0.5,0.6,0.7))
+plt.title('Normal Vector')
+
+plt.tight_layout()
+plt.savefig('fig_ch3_normal_illustrate.pdf',bbox_inches='tight')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/f79fa438545885896c491b31aeabc8b84c927e7d.png]]
+
+
+#+BEGIN_SRC jupyter-python  
+import numpy as np
+import matplotlib.pyplot as plt
+
+def get_normals (boundary):
+    # The input argument defines a boundary
+    # as a set of adjacent points.
+    very_small_num = 10**(-10) # avoid divide by zero.
+    x, y = boundary[0], boundary[1]
+    slope = (y[2:]-y[:-2])/(x[2:]-x[:-2] + very_small_num)
+    norm_vec_slope = -1/(slope + very_small_num)
+    u, v = 1, norm_vec_slope
+    mag = np.sqrt(u**2+v**2)
+    u, v = u/mag, v/mag
+    n = np.vstack((u,v))
+    return n
+
+def plot_normals (boundary,ax,scale=2):
+    n = get_normals(boundary)
+    x, y = boundary[0], boundary[1]
+    ax.scatter(x,y,color='gray')
+    ax.plot(x,y,color='gray')
+    ax.quiver(x[1:-1],y[1:-1],n[0],n[1],color='gray',
+              angles='xy',scale_units='xy',scale=scale)
+    ax.axis('equal')
+    ax.axis('square')
+    #ax.set_xlabel('x')
+    #ax.set_ylabel('y')
+    ax.set_xlim((-1.0,2.0))
+    ax.set_ylim((-1.5,1.5))
+    ax.set_xticks((-1,0,1,2))
+    ax.set_yticks((-1,0,1))
+    return
+
+# Examples of normal vectors for different boundaries.
+fig, ax = plt.subplots(1,4,figsize=(6,3),sharey=True)
+
+step = 0.2
+y = np.arange(-1,1+step,step)
+
+# Vertical line.
+x = np.zeros(len(y))
+p0 = np.vstack((x,y))
+plot_normals(p0,ax[0])
+
+# Slanted line
+x = -y/3
+p1 = np.vstack((x,y))
+plot_normals(p1,ax[1])
+
+# Parabola (concave from right)
+x = 1-y**2
+p2 = np.vstack((x,y))
+plot_normals(p2,ax[2])
+
+# Half circle.
+theta = np.arange(np.pi/2,-np.pi/2-step,-step)
+x = np.cos(theta)
+y = np.sin(theta)
+p3 = np.vstack((x,y))
+plot_normals(p3,ax[3])
+plt.tight_layout()
+plt.savefig('fig_ch3_normal_diff_boundary.pdf',bbox_inches='tight')
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/7468933eb4da326cf9afcc7d5bb3202c83d9475e.png]]
+
+
+#+BEGIN_SRC jupyter-python  
+
+#+END_SRC
+

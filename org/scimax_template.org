@@ -1,0 +1,701 @@
+# #+STARTUP:		content latexpreview
+# #+TEMPLATE:		CMU ChemE Written Qualifier
+# #+key:			cmu-cheme-written-qualifier
+# #+group:		reports
+# #+contributor:		John Kitchin <jkitchin@andrew.cmu.edu>
+# #+default-filename: qualifier.org
+# #+OPTIONS:		toc:4 ^:{}
+# #+EXPORT_EXCLUDE_TAGS:	noexport
+# #+LANGUAGE:		en
+# #+TODO:			TODO FEEDBACK VERIFY | DONE CANCELED
+
+# # here is where you include the relevant packages. These are pretty
+# # common ones. You may add additional ones. Note that the orderauto composition of the
+# # packages is significant. If you are not careful, your file will not
+# # build into a pdf.
+# #+LATEX_CLASS:		article
+# #+LATEX_CLASS_OPTIONS:	[10pt]
+
+# #+LATEX_HEADER:	\usepackage[top=1in, bottom=1.in, left=1in, right=1in]{geometry}
+# #+LATEX_HEADER:	\usepackage[utf8]{inputenc}
+# #+LATEX_HEADER:	\usepackage[T1]{fontenc}
+# #+LATEX_HEADER:	\usepackage{fixltx2e}
+# #+LATEX_HEADER:	\usepackage{natbib}
+# #+LATEX_HEADER:	\usepackage{url}
+# #+LATEX_HEADER:	\usepackage{minted}  % for source code
+# #+LATEX_HEADER:	\usepackage{graphicx}
+# #+LATEX_HEADER:	\usepackage{textcomp}
+# #+LATEX_HEADER:	\usepackage{amsmath}
+# #+LATEX_HEADER:	\usepackage{pdfpages}
+# #+LATEX_HEADER:	\usepackage[version=3]{mhchem}
+# #+LATEX_HEADER:	\usepackage{setspace}
+# #+LATEX_HEADER:	\usepackage[linktocpage, pdfstartview=FitH, colorlinks, linkcolor=blue, anchorcolor=blue, citecolor=blue,  filecolor=blue,  menucolor=blue,  urlcolor=blue]{hyperref}
+
+
+# \doublespace
+
+
+#+TITLE:	SCIENTIFIC TEMPLATE
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+
+
+# \maketitle
+# #+BEGIN_abstract
+# This article describe how to practically setup all neccessary software for publishing document in scientific journal style in both PDF and HTML.
+# #+END_abstract
+
+# \thispagestyle{empty}
+# \clearpage
+# \setcounter{page}{1}
+
+* INTRODUCTION
+** Programming
+    - Python
+    - Lisp
+    - HTML/CSS/Javascript
+    - DOT
+** testing<2019-06-20 Thu 08:17>
+
+** Emacs
+    - Orgmode
+
+* BACKGROUND AND THEORY
+
+* METHODS
+** Philosophy
+   1) Don't think too much, start typing!
+   2) Enjoy learning, enjoy emacs!
+   3) Scientific Journal template.
+   4) Version Control, Diff, Merge.
+   5) Project Management.
+   6) Python Source Block
+   7) Mathematical Expression
+   8) Table tabulation
+   9) Mind Map and Flow Chart
+   10) Output to Latex/PDF and restructuredtext/Sphinx-doc
+   11) That's all!!!
+
+** ORGMODE Function
+   - Insert code block <type><, <type>s, <TAB>, <type>python
+
+** Domain Name Registration
+   - optics.expert
+   - lasers.expert
+
+** Email Registration
+   - chupl@optics.expert using protonmail
+
+** Company Registration
+   - OPTICS EXPERT ENTERPRISE
+
+** Company Bank Account
+*** TODO need introducer
+
+** VPS Setup
+   SCHEDULED: <2018-08-24 Fri>
+*** TODO Hardware: CPU + RAM + Hardisk
+    DEADLINE: <2018-08-17 Fri> SCHEDULED: <2018-08-18 Sat>
+*** TODO Install Ubuntu OS 16.04
+    SCHEDULED: <2018-08-17 Fri> DEADLINE: <2018-08-18 Sat>
+
+** Encrypted Partition
+*** TODO Partition: [[https://www.digitalocean.com/community/tutorials/how-to-partition-and-format-storage-devices-in-linux][Partition]]
+*** TODO Encryption: [[https://www.digitalocean.com/community/tutorials/how-to-create-an-encrypted-file-system-on-a-digitalocean-block-storage-volume][Encryption]]
+    
+** Microservice Architecture - Web Server
+*** TODO [#A] Docker Swarm: multiple servers
+*** DONE Traefik: reverse proxy and auto HTTPS
+    - [[https://monitor.optics.expert/][https://monitor.optics.expert/]]
+*** DONE Radicale: address book sync
+    - [[https://radicale.optics.expert/][https://radicale.optics.expert/]]
+*** DONE Syncthing: file sync (private)
+    - [[https://syncthing.optics.expert/][https://syncthing.optics.expert/]]
+*** DONE Sparkleshare: file sync (development git based)
+*** DONE Nextcloud: file sync (phone photos)
+    - [[https://nextcloud.optics.expert/][https://nextcloud.optics.expert/]]
+*** DONE Adminer: database administration
+    - [[https://adminer.optics.expert/][https://adminer.optics.expert/]]
+*** DONE Portainer: Docker UI management
+    - [[https://portainer.optics.expert/][https://portainer.optics.expert/]]
+*** DONE Shadowsocks: VPN/proxy
+*** DONE SageMath
+    - [[https://sagemath.optics.expert/][https://sagemath.optics.expert/]]
+*** TODO persistence storage?
+*** DONE FTP
+    - [[ftp://ftp.optics.expert/][ftp://ftp.optics.expert/]]
+*** DONE Distance Learning
+    - [[https://moodle.optics.expert/][https://moodle.optics.expert/]]
+*** TODO Online office collaboration and communication:
+*** TODO Remote Automation and Monitoring, IoT:
+*** TODO Web Server:
+**** Welcome/Main:
+   - Python based CMS: Wagtail
+   - [[https://www.optics.expert/][https://www.optics.expert/]]
+**** Ecommerce:
+   - Python based ecommerce: Saleor
+   - [[https://store.optics.expert/][https://store.optics.expert/]]
+**** Learning:
+   - Python based documentation: Sphinx-doc
+   - ERP
+   - [[https://learn.optics.expert/][https://learn.optics.expert/]]
+
+** OS
+*** Choice of OS
+    - Debian: stable
+    - Desktop: Cinnamon
+
+*** VirtualBox setup (Debian 9.5)
+    1) Login as root;
+    2) Update your APT database with apt-get update;
+    3) Install the latest security updates with apt-get upgrade;
+    4) Install required packages with apt-get install build-essential module-assistant;
+    5) Configure your system for building kernel modules by running m-a prepare;
+    6) Click on Install Guest Additions from the Devices menu, then run mount /media/cdrom.
+    7) Run sh /media/cdrom/VBoxLinuxAdditions.run, and follow the instructions on screen.
+
+    8) Adduser to vboxsf
+       1) usermod -aG vboxsf thinky
+
+    9) Adduser to sudo
+       1) adduser thinky sudo
+       2) REBOOT
+
+    10) Customize .bashrc
+	1) nano ~/.bashrc
+	2) uncomment #force_color=yes
+	3) replace =\$= with =\n\$=
+	4) for root user, add:
+	   1) ~PS1='${debian_chroot:+($debian_chroot)}\~
+	   2) =[\033[01;31m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\n\$ '=
+	
+** Editor
+   - Emacs starter kit: scimax
+     1) sudo add install emacs25
+     2) bash -c "$(curl -fsSL https://raw.githubusercontent.com/jkitchin/scimax/master/install-scimax-linux.sh)"
+     3) ./scimax.sh
+
+   - Emacs: server + client
+     - Server: emacs25 -q -l ./scimax/init.el --daemon
+     - Client: /usr/bin/emacsclient -c --alternate-editor=""
+     - Kill emacs server: emacsclient -e "(kill-emacs)"
+
+** Version Control
+   - Git
+
+** Programming Language
+   - Python
+     - Jupyter
+       - [ ] jupyterlab
+     - Numpy
+     - Scipy
+     - Matplotlib
+     - Pandas
+
+** Debugger
+   - ipdb
+     
+** Virtualenv for scimax
+   - Setup Virtualenvwrapper:
+     1) sudo apt install python3-pip virtualenv curl git
+     2) /usr/bin/pip3 install virtualenvwrapper
+     3) nano ~/.bashrc
+     4) export WORKON_HOME=~/.virtualenvs
+     5) export VIRTUALENV_PYTHON=/usr/bin/python3
+     6) export VIRTUALENVWRAPPER_PYTHON='/usr/bin/python3'
+     7) export PROJECT_HOME='/home/thinky/Projects/'
+     8) source /home/thinky/.local/bin/virtualenvwrapper.sh
+     9) source ~/.bashrc
+     10) mkproject --python=/usr/bin/python3 scimax
+     11) pip install jupyter matplotlib pandas numpy graphviz
+     12) sudo apt install graphviz
+
+** Encryption:
+   - Sirikali
+   - gocryptfs
+   - Veracrypt
+
+** Terminal/Console shell
+   - zsh
+   - bash
+     
+** CAD tools
+   - FreeCAD
+
+** Scientific Illustration
+   - Inkscape
+
+** Engineering product design
+   - Blender
+     
+** Web-based annimation tools
+   - Blender
+     
+** Flow Chart
+   - graphviz
+   - Mindmaster
+     
+** Mind Mapping Tool
+   - graphviz
+   - Mindmaster
+   - Emacs setup for mind mapping
+     1) Emacs package: org-mind-map
+     2) (require 'ox-org)
+     3) (require 'org-mind-map)
+	
+** Web Gui
+   - Flexx
+   - BeeWare
+   - kivy
+   - Remi
+   - plot.ly
+   - bokeh
+   - altair
+     
+** PDF edit
+   - Master PDF editor
+     
+** Latex
+   - Setup tlmgr:
+    1) sudo apt install emacs25 texlive-full xzdec default-jre -y
+    2) tlmgr install framed
+    3) (optional) tlmgr init-usertree
+
+** Sphinx-doc
+   - ox-rst, rst2html5
+     1) pip install rst2html5
+     2) sudo ln -s ~/.virtualenvs/VIRTUAL_ENV/bin/rst2html5 /usr/bin/rst2html
+     3) C-c C-e r r output rst file
+       
+** Python Optics
+   - [ ] rayopt
+   - [ ] poppy
+
+** Raspberry Pi Setup
+
+* RESULTS AND DISCUSSION
+** Ipython Source Block
+
+#+BEGIN_SRC ipython :session :results raw drawer
+print('Hello world!')
+%matplotlib inline
+import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.linspace(0, 20 * np.pi, 200)
+y = np.exp(-0.1 * x) * np.sin(x)
+plt.plot(x, y)
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Decaying sin wave')
+
+# new plot
+plt.figure()
+y2 = np.exp(-0.1 * x) * np.cos(x)
+plt.plot(x, y2)
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Decaying cosine')
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [1]: 
+# text/plain
+: Text(0.5,1,'Decaying cosine')
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/0526e6feaabb7ec477fc888debc2855bd0e4ab88/c0faa759dbbbbeed45f49004255193405c2a73d3.png]]
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/0526e6feaabb7ec477fc888debc2855bd0e4ab88/35226400849bbae96961e62c208d92563999a292.png]]
+:end:
+
+
+#+BEGIN_SRC ipython :session :results raw drawer
+from graphviz import Graph
+
+g = Graph('G', filename='g_c_n.gv')
+g.attr(bgcolor='purple:pink', label='agraph', fontcolor='white')
+
+with g.subgraph(name='cluster1') as c:
+    c.attr(fillcolor='blue:cyan', label='acluster', fontcolor='white',
+           style='filled', gradientangle='270')
+    c.attr('node', shape='box', fillcolor='red:yellow',
+           style='filled', gradientangle='90')
+    c.node('anode')
+
+g
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [3]: 
+
+
+# image/svg
+[[file:obipy-resources/0526e6feaabb7ec477fc888debc2855bd0e4ab88/f79bb3a9f9c929edc4ef6ca21bd039c6a2a26fff.svg]]
+:end:
+
+
+
+#+BEGIN_SRC ipython :session :results raw drawer
+import matplotlib as mpl
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+import matplotlib.pyplot as plt
+
+mpl.rcParams['legend.fontsize'] = 10
+
+fig = plt.figure()
+ax = fig.gca(projection='3d')
+theta = np.linspace(-4 * np.pi, 4 * np.pi, 100)
+z = np.linspace(-2, 2, 100)
+r = z**2 + 1
+x = r * np.sin(theta)
+y = r * np.cos(theta)
+ax.plot(x, y, z, label='parametric curve')
+ax.legend()
+
+plt.show()
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out [2]: 
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/0526e6feaabb7ec477fc888debc2855bd0e4ab88/9fcc2b6d04e1256438921603e416a884d66d475a.png]]
+:end:
+
+** Mathematical Expression
+   
+\begin{equation}
+x=\sqrt{b}
+\end{equation}
+\(x=a+b\)
+
+
+If $a^2=b$ and \( b=2 \), then the solution must be either $$ a=+\sqrt{2} $$ or \[ a=-\sqrt{2} \].
+
+** Ditaa output
+
+#+begin_src ditaa :file ./_static/ditaa-seqboxes.png :results drawer raw
+    +-----------+        +---------+  
+    |    PLC    |        |         |                
+    |  Network  +<------>+   PLC   +<---=---------+ 
+    |    cRED   |        |  c707   |              | 
+    +-----------+        +----+----+              | 
+                              ^                   | 
+                              |                   | 
+                              |  +----------------|-----------------+
+                              |  |                |                 |
+                              v  v                v                 v
+      +----------+       +----+--+--+      +-------+---+      +-----+-----+       Windows clients
+      |          |       |          |      |           |      |           |      +----+      +----+
+      | Database +<----->+  Shared  +<---->+ Executive +<-=-->+ Operator  +<---->|cYEL| . . .|cYEL|
+      |   c707   |       |  Memory  |      |   c707    |      | Server    |      |    |      |    |
+      +--+----+--+       |{d} cGRE  |      +------+----+      |   c707    |      +----+      +----+
+         ^    ^          +----------+             ^           +-------+---+
+         |    |                                   |                        
+         |    +--------=--------------------------+                    
+         v                                                             
++--------+--------+                                                         
+|                 |                                                         
+| Millwide System |            -------- Data ---------                      
+| cBLU            |            --=----- Signals ---=--   
++-----------------+                
+#+end_src
+
+#+RESULTS:
+[[file:ditaa-seqboxes.png]]
+
+** UML diagrams with PlantUML
+*** Class diagrams
+
+#+begin_src plantuml :file ./_static/PlantumlRaw.png
+skinparam monochrome true
+FitsHdu <|-- PrimaryHdu
+FitsHdu <|-- ExtensionHdu
+
+FitsHdu : header
+FitsHdu : getHeaderKeyword()
+
+ExtensionHdu <|-- ImageHdu
+ImageHdu : image
+ImageHdu : getPixel(row, column)
+
+ExtensionHdu <|-- BinaryTableHdu
+BinaryTableHdu : table
+BinaryTableHdu : getRow(row)
+BinaryTableHdu : getColumn(column)
+#+end_src
+
+#+RESULTS:
+[[file:PlantumlRaw.png]]
+
+#+begin_src plantuml :file ./_static/PlantumlDotSupport.png
+@startdot
+digraph foo {
+  node [style=rounded]
+  node1 [shape=box]
+  node2 [fillcolor=yellow, style="rounded,filled", shape=diamond]
+  node3 [shape=record, label="{ a | b | c }"]
+
+  node1 -> node2 -> node3
+}
+@enddot
+#+end_src
+
+#+RESULTS:
+[[file:PlantumlDotSupport.png]]
+
+#+begin_src plantuml :file ./_static/PlantumlDitaaSupport.png
+@startuml
+ditaa(--no-shadows, scale=0.8)
+/--------\   +-------+
+|cAAA    +---+Version|
+|  Data  |   |   V3  |
+|  Base  |   |cRED{d}|
+|     {s}|   +-------+
+\---+----/
+@enduml
+#+end_src
+
+#+RESULTS:
+[[file:PlantumlDitaaSupport.png]]
+
+*** Sequences diagrams
+
+#+begin_src plantuml :file ./_static/sequencediagram.png
+skinparam monochrome true
+ Foo -> Bar: synchronous call
+ Foo ->> Bar: asynchronous call
+#+end_src
+
+#+RESULTS:
+[[file:sequencediagram.png]]
+
+** Graphviz DOT
+#+begin_src dot :file ./_static/DOT.png :cmdline -Kdot -Tpng :results drawer raw
+digraph G {
+  size="8,6"
+  ratio=expand
+  edge [dir=both]
+  plcnet [shape=box, label="PLC Network"]
+  subgraph cluster_wrapline {
+    label="Wrapline Control System"
+    color=purple
+    subgraph {
+    rank=same
+    exec
+    sharedmem [style=filled, fillcolor=lightgrey, shape=box]
+    }
+    edge[style=dotted, dir=none]
+    exec -> opserver
+    exec -> db
+    plc -> exec
+    edge [style=line, dir=both]
+    exec -> sharedmem
+    sharedmem -> db
+    plc -> sharedmem
+    sharedmem -> opserver
+  }
+  plcnet -> plc [constraint=false]
+  millwide [shape=box, label="Millwide System"]
+  db -> millwide
+
+  subgraph cluster_opclients {
+    color=blue
+    label="Operator Clients"
+    rankdir=LR
+    labelloc=b
+    node[label=client]
+    opserver -> client1
+    opserver -> client2
+    opserver -> client3
+  }
+}
+#+end_src
+
+#+RESULTS:
+[[file:DOT.png]]
+
+** Symbolic algebra with GNU calc
+*** Calculation using a formula
+#+BEGIN_SRC calc :var x=5 :var y=2
+2+a*x**y
+#+END_SRC
+
+#+RESULTS:
+: 25 a + 2
+
+*** Exporting GNU calc input as well as output
+
+#+BEGIN_SRC calc :exports both
+x*2+x=4
+#+END_SRC
+
+#+RESULTS:
+: 0.75 x = 1
+
+** Orgmode TODO list method
+*** Customize TODO:
+    - #+TODO: TODO FEEDBACK VERIFY | DONE CANCELED
+    - C-c c to quickly capture a quick note or task from any buffer
+    - C-c C-w to refile or C-c C-c to commit.
+*** Shortcuts:
+    - C-c C-x d to insert drawer.
+    - C-c C-c on headline to insert tags.
+    - Insert tags: crypt, to encrypt text below headline, auto-encrypt during save.
+    - M-x org-encrypt-entry to encrypt.
+    - M-x org-decrypt-entry to decrypt.
+      
+   My favorite scenes are (in this order)
+   1. The attack of the Rohirrim
+   2. Eowyn's fight with the witch king
+      + this was already my favorite scene in the book
+      + I really like Miranda Otto.
+   Important actors in this film are:
+   - Elijah Wood :: He plays Frodo
+   - Sean Austin :: He plays Sam, Frodo's friend.
+   - myself :: play games
+   *** TODO 
+		    
+** Tables
+   - | followed by <TAB> to create COLUMN.
+   - |- followed by <TAB> to create Horizontal Divider.
+   - C-c ? to reference current Column and Line number.
+   - C-c } to turn on reference visualization grid.
+   - C-c <space> to blank a field.
+   - :=vmean($2..$3), example to insert formula at a field.
+   - Chinese font input: cnfonts-edit-profile, choose 文泉驿等宽正黑
+     
+   | NAME       | PHONE      | GENDER    |  DOB | EMAIL | COUNTRY |
+   |------------+------------+-----------+------+-------+---------|
+   | 40         | 23         | 45        |   36 |       |         |
+   | Cell four  | Cell Five  | Cell Six  |  200 |       |         |
+   | Cell Seven | Cell Eight | Cell Nine | 3002 |       |         |
+   |------------+------------+-----------+------+-------+---------|
+   |            |            |           | 3236 |       |         |
+#+TBLFM: @2$4=vmean($1..$3)
+
+** Plot.ly
+*** Core Components
+    - Dropdown
+    - Text Input Box
+    - Text Output
+    - Slider
+*** Update applayout
+ 
+* CONCLUSIONS
+
+Summarize the main conclusions here.
+Good!
+
+
+
+\newpage
+bibliographystyle:unsrt
+
+\setcounter{secnumdepth}{0}
+
+* BIBLIOGRAPHY
+**  <replace: your bibfile>
+** 
+
+* build :noexport:
+
+[[elisp:(org-open-file (org-latex-export-to-pdf))]]
+
+* Tasks :noexport:
+** TODO Programming
+   - Python
+   - CSS/SCSS
+   - Javascript
+   - Bootstrap
+   - Jinja2
+   - Django/templating
+   [2018-08-28 Tue]
+   [[file:~/Projects/scimax/try.py][file:~/Projects/scimax/try.py]]
+
+** TODO Advance formula with Table
+   [2019-06-05 Wed]
+   [[nb:optics.expert::simple_table.org::c1962]]
+
+* My Notes :noexport:
+
+** For each chapter:
+   - Properly defined terms
+   - Examples
+   - Graphical or diagram explanation
+   - Analytical solution (latex equation)
+   - Numerical solution (programming)
+   - Keep everything clear and concise
+
+** For each new chapter:
+   Start with:
+   - Refresher:
+     - What we have learnt so far:
+       - topic 1
+       - topic 2
+     - Stepping forward from here:
+       - Raise questions to be answered later
+
+* Note :noexport:
++ Amazon Lightsail ::
+  - touch ~/.ssh/config
+  - echo 'Host lasers.expert' >> ~/.ssh/config
+  - echo 'IdentityFile ~/.ssh/MyKeyPair.pem' >> ~/.ssh/config
+  - ssh admin@lasers.expert
+  - scp -r ./_build admin@lasers.expert:/home/admin
+  - rm -rf _build && make html && cp Dockerfile _build\html
+  - unison ./_build/html ssh://admin@lasers.expert/webserver/site/lasers.expert/web
+  - C-x C-f: ~/plink:cpl@optics.expert:/home/cpl/~
+  - C-x C-f: ~/sshx:admin@18.141.42.183:/home/admin~
++ CREATE SWAP ::
+  - sudo bash
+  - fallocate -l 1G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - cp /etc/fstab /etc/fstab.bak
+  - echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  - sysctl vm.swappiness=10
+  - echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+  - sysctl vm.vfs_cache_pressure=50
+  - echo 'vm.vfs_cache_pressure=50' | sudo tee -a /etc/sysctl.conf
++ DOCKER STOP REMOVE ::
+  - docker stop $(docker ps -a -q)
+  - docker rm $(docker ps -a -q)
+  - docker system prune -a
+  - docker volume prune
+  - docker rmi $(docker images -a -q)
++ VIRTUAL ENV ::
+  - python3 -m venv my-virtual-env
+  - source my-virtual-env/bin/activate
+  - deactivate
++ BAKERY DEMO ::
+  - git clone https://github.com/wagtail/bakerydemo.git
+  - cd bakerydemo
+  - docker-compose up --build -d
+  - docker-compose run app /venv/bin/python manage.py load_initial_data
+  - docker-compose up
++ SIMPLE DOCKER HOSTING ::
+  - ~unison ./_build/html ssh://admin@18.141.42.183/sphinx_website~
+  - [[file:Dockerfile]]
+  - docker build -t sphinxdoc_image:v1 .
+  - docker run -d -p 80:80 sphinxdoc_image:v1
++ DOCKER-COMPOSE DEVELOPMENT ::
+  + docker-compose build
+  + docker-compose run --rm web python3 manage.py migrate
+  + docker-compose run --rm web python3 manage.py createsuperuser

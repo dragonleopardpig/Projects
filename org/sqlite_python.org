@@ -1,0 +1,122 @@
+#+STARTUP: content
+* Create Database
+- First, we need to create a new database and open a database connection to allow sqlite3 to work with it.
+#+begin_src jupyter-python
+import sqlite3
+con = sqlite3.connect("tutorial.db")
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+<sqlite3.Connection at 0x7fca1c548310>
+:END:
+* Database Cursor
+- In order to execute SQL statements and fetch results from SQL queries, we will need to use a database cursor.
+#+begin_src jupyter-python
+cur = con.cursor()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+<sqlite3.Cursor at 0x7fca1da0af40>
+:END:
+* Create Table
+- Create a database table movie with columns for title, release year, and review score.
+#+begin_src jupyter-python
+cur.execute("CREATE TABLE movie(title, year, score)")
+#+end_src
+
+#+RESULTS:
+* Query Table
+- We can verify that the new table has been created by querying the sqlite_master table built-in to SQLite, which should now contain an entry for the movie table definition
+#+begin_src jupyter-python
+res = cur.execute("SELECT name FROM sqlite_master")
+res.fetchone()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+| movie |
+:END:
+* Update Table
+- Add two rows of data supplied as SQL literals by executing an INSERT statement
+#+begin_src jupyter-python
+cur.execute("""
+    INSERT INTO movie VALUES
+        ('Monty Python and the Holy Grail', 1975, 8.2),
+        ('And Now for Something Completely Different', 1971, 7.5)
+""")
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+<sqlite3.Cursor at 0x7fca1da0af40>
+:END:
+* Commit
+- The INSERT statement implicitly opens a transaction, which needs to be committed before changes are saved in the database.
+#+begin_src jupyter-python
+con.commit()
+#+end_src
+
+#+RESULTS:
+* Verify Commit
+- We can verify that the data was inserted correctly by executing a SELECT query.
+#+begin_src jupyter-python
+res = cur.execute("SELECT score FROM movie")
+res.fetchall()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+| 8.2 |
+| 7.5 |
+:END:
+* Insert Multiple Rows
+- Insert three more rows by calling cur.executemany(...):
+#+begin_src jupyter-python
+data = [
+    ("Monty Python Live at the Hollywood Bowl", 1982, 7.9),
+    ("Monty Python's The Meaning of Life", 1983, 7.5),
+    ("Monty Python's Life of Brian", 1979, 8.0),
+]
+cur.executemany("INSERT INTO movie VALUES(?, ?, ?)", data)
+con.commit() 
+#+end_src
+
+#+RESULTS:
+* Verify New Commit
+- We can verify that the new rows were inserted by executing a SELECT query, this time iterating over the results of the query:
+#+begin_src jupyter-python
+for row in cur.execute("SELECT year, title FROM movie ORDER BY year"):
+    print(row)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+(1971, 'And Now for Something Completely Different')
+(1975, 'Monty Python and the Holy Grail')
+(1979, "Monty Python's Life of Brian")
+(1982, 'Monty Python Live at the Hollywood Bowl')
+(1983, "Monty Python's The Meaning of Life")
+:END:
+* Close Connection
+- Close existing connection:
+#+begin_src jupyter-python
+con.close()
+#+end_src
+
+#+RESULTS:
+* Verify Database Written to Disk
+#+begin_src jupyter-python
+new_con = sqlite3.connect("tutorial.db")
+new_cur = new_con.cursor()
+res = new_cur.execute("SELECT title, year FROM movie ORDER BY score DESC")
+title, year = res.fetchone()
+print(f'The highest scoring Monty Python movie is {title!r}, released in {year}')
+new_con.close()
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+The highest scoring Monty Python movie is 'Monty Python and the Holy Grail', released in 1975
+:END:

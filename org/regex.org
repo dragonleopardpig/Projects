@@ -1,0 +1,354 @@
+* Chapter 5
+#+BEGIN_SRC jupyter-python
+import re
+# Shakespeare
+text = '''
+Ha! let me see her: out, alas! he's cold:
+Her blood is settled, and her joints are stiff;
+Life and these lips have long been separated:
+Death lies on her like an untimely frost
+Upon the sweetest flower of all the field.
+'''
+
+re.findall('her', text)
+#+END_SRC
+
+#+RESULTS:
+| her | her | her |
+
+* Chapter 6
+#+BEGIN_SRC jupyter-python  
+import re
+
+text = '''
+Ha! let me see her: out, alas! he's cold:
+Her blood is settled, and her joints are stiff;
+Life and these lips have long been separated:
+Death lies on her like an untimely frost
+Upon the sweetest flower of all the field.
+'''
+
+print(re.findall('\w+\W+\w+', text))
+#+END_SRC
+
+#+RESULTS:
+: ['Ha! let', 'me see', 'her: out', 'alas! he', 's cold', 'Her blood', 'is settled', 'and her', 'joints are', 'stiff;\nLife', 'and these', 'lips have', 'long been', 'separated:\nDeath', 'lies on', 'her like', 'an untimely', 'frost\nUpon', 'the sweetest', 'flower of', 'all the']
+
+
+#+BEGIN_SRC jupyter-python  
+print(re.findall('\d', text))
+#+END_SRC
+
+#+RESULTS:
+: []
+
+
+#+BEGIN_SRC jupyter-python  
+print(re.findall('\n\t', text))
+#+END_SRC
+
+#+RESULTS:
+: []
+
+
+#+BEGIN_SRC jupyter-python  
+print(re.findall('\n', text))
+#+END_SRC
+
+#+RESULTS:
+: ['\n', '\n', '\n', '\n', '\n', '\n']
+
+
+#+BEGIN_SRC jupyter-python
+import re
+
+# Shakespeare
+text = '''
+Ha! let me see her: out, alas! he's cold:
+Her blood is settled, and her joints are stiff;
+Life and these lips have long been separated:
+Death lies on her like an untimely frost
+Upon the sweetest flower of all the field.
+'''
+
+print(re.findall('\s\w\w\s', text))
+print(len(re.findall('\s\w\w\s', text)))
+#+END_SRC
+
+#+RESULTS:
+: [' me ', ' is ', ' on ', ' an ', ' of ']
+: 5
+
+* Chapter 7
+#+BEGIN_SRC jupyter-python  
+import re
+re.findall('[abcde]', 'hello world!')
+#+END_SRC
+
+#+RESULTS:
+| e | d |
+
+
+#+BEGIN_SRC jupyter-python  
+re.findall('[a-e]', 'hello world!')
+#+END_SRC
+
+#+RESULTS:
+| e | d |
+
+
+#+BEGIN_SRC jupyter-python  
+re.findall('[a-eA-E0-4]', 'hello WORLD 42!')
+#+END_SRC
+
+#+RESULTS:
+| e | D | 4 | 2 |
+
+
+#+BEGIN_SRC jupyter-python  
+re.findall('[^a-e]+', 'hello world')
+#+END_SRC
+
+#+RESULTS:
+| h | llo worl |
+
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+def special_name(s):
+    return True if re.match('j[a-z]+n', s) else False
+
+print(special_name('chris'))
+print(special_name('johanna'))
+print(special_name('joan'))
+#+END_SRC
+
+#+RESULTS:
+: False
+: True
+: True
+
+** Match
+#+BEGIN_SRC jupyter-python  
+m = re.match('h....o', 'helllo world')
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python  
+m.start()
+#+END_SRC
+
+#+RESULTS:
+: 0
+
+
+#+BEGIN_SRC jupyter-python  
+m.end()
+#+END_SRC
+
+#+RESULTS:
+: 6
+
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+text = '''
+Ha! let me see her: out, alas! he's cold:
+Her blood is settled, and her joints are stiff;
+Life and these lips have long been separated:
+Death lies on her like an untimely frost
+Upon the sweetest flower of all the field.
+'''
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python  
+re.match('lips', text)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python  
+re.match('(.|\n)*lips', text)
+#+END_SRC
+
+#+RESULTS:
+: <re.Match object; span=(0, 110), match="\nHa! let me see her: out, alas! he's cold:\nHer >
+
+
+#+BEGIN_SRC jupyter-python  
+m = re.match('(.|\n)*lips', text)
+text[m.start():m.end()]
+#+END_SRC
+
+#+RESULTS:
+: \nHa! let me see her: out, alas! he's cold:\nHer blood is settled, and her joints are stiff;\nLife and these lips
+
+
+#+BEGIN_SRC jupyter-python  
+m = re.match('.*lips', text, flags=re.DOTALL)
+text[m.start():m.end()]
+#+END_SRC
+
+#+RESULTS:
+: \nHa! let me see her: out, alas! he's cold:\nHer blood is settled, and her joints are stiff;\nLife and these lips
+
+** Match vs Findall
+#+BEGIN_SRC jupyter-python  
+text = 'Python is superior to Python'
+re.match('Py...n', text)
+#+END_SRC
+
+#+RESULTS:
+: <re.Match object; span=(0, 6), match='Python'>
+
+
+#+BEGIN_SRC jupyter-python  
+re.findall('Py...n', text)
+#+END_SRC
+
+#+RESULTS:
+| Python | Python |
+
+** Fullmatch
+#+BEGIN_SRC jupyter-python  
+import re
+
+text = '''
+Call me Ishmael. Some years ago--never mind how long
+precisely
+--having little or no money in my purse, and nothing
+particular
+to interest me on shore, I thought I would sail about
+a little
+and see the watery part of the world.
+'''
+len(text)
+#+END_SRC
+
+#+RESULTS:
+: 229
+
+
+#+BEGIN_SRC jupyter-python  
+re.fullmatch('Call(.|\n)*', text)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python  
+re.fullmatch('\nCall(.|\n)*', text)
+#+END_SRC
+
+#+RESULTS:
+: <re.Match object; span=(0, 238), match='\nCall me Ishmael. Some years ago--never mind how>
+
+** Match vs Fullmatch
+#+BEGIN_SRC jupyter-python  
+text = 'More with less'
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python  
+re.match('More', text)
+#+END_SRC
+
+#+RESULTS:
+: <re.Match object; span=(0, 4), match='More'>
+
+
+#+BEGIN_SRC jupyter-python  
+re.fullmatch('More', text)
+#+END_SRC
+
+#+RESULTS:
+
+* Chapter 8
+#+BEGIN_SRC jupyter-python  
+import re
+
+text = '''But then I saw no harm, and then I
+, heard
+Each syllable that breath made up between them.'''
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python  
+re.findall('B..', text)
+#+END_SRC
+
+#+RESULTS:
+| But |
+
+
+#+BEGIN_SRC jupyter-python  
+re.findall('heard.Each', text)
+#+END_SRC
+
+#+RESULTS:
+
+
+
+#+BEGIN_SRC jupyter-python  
+re.findall('heard\nEach', text)
+#+END_SRC
+
+#+RESULTS:
+| heard\nEach |
+
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+text = '''
+Ha! let me see her: out, alas! he's cold:
+Her blood is settled, and her joints are stiff;
+Life and these lips have long been separated:
+Death lies on her like an untimely frost
+Upon the sweetest flower of all the field.
+'''
+
+print(re.findall('HER', text, flags=re.IGNORECASE))
+# ['her', 'Her', 'her', 'her']
+#+END_SRC
+
+#+RESULTS:
+: ['her', 'Her', 'her', 'her']
+
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+text = '''
+Ha! let me see her: out, alas! he's cold:
+Her blood is settled, and her joints are stiff;
+Life and these lips have long been separated:
+Death lies on her like an untimely frost
+Upon the sweetest flower of all the field.
+'''
+
+print(re.findall(' HER # Ignored', text,
+flags=re.IGNORECASE + re.VERBOSE))
+# ['her', 'Her', 'her', 'her']
+#+END_SRC
+
+#+RESULTS:
+: ['her', 'Her', 'her', 'her']
+
+* Chapter 9
+#+BEGIN_SRC jupyter-python  
+
+#+END_SRC
+

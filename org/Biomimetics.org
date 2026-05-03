@@ -1,0 +1,91 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	Biomimetics Overview
+
+* Biomimetics
+- Biomimetics :: Biomimetics is derived from the Greek word biomimesis. It means mimicking biology or living nature, or living organisms, and is also called biomimicry. Webster's Dinionary defines: The study of the formation, structure or function of biologically produced substances and materials (as enzymes or silk) and biological mechanisms and processes (as protein synthesis or photosynthesis) especially for the purpose of synthesizing similar products by artificial mechanisms which mimic natural ones.
+- Bionics :: Bionics combines two words, biology and technology/electronics. It translates to the creation of products, devices, and processes by using materials and processes found in living nature. Bionics today is referred to as robotics and replacement or enhancement of living matter, tissue, body parts, and organs.
+- Biognis :: Biognis, which is defined as the scientific investigation of life.
+- Golden Ratio :: The Golden Ratio is a unique ratio whose proportions are considered to represent a functional and aesthetic ideal. It is defined as $\frac{\text{length 1}}{\text{length 2}}\approx1.618$, where length 1 and length 2 are larger and smaller dimensions of a rectangle, respectively.
+- Fibonacci numbers :: Fibonacci numbers are described by the mathematical expression F_{n}=F_{n-1}+F_{n-2}. The sequence begins with the seed values of F_{0}=0$ and $F_{1}=1, then, the recursive expression provides the values following, resulting in 0, 1, 1, 2, 3, 5, 8, 13, 21, 34,… and so on.
+- Found in Nature ::
+     #+ATTR_RST: :alt alternate text :align center :scale 100%
+     [[file:_static/Fibonacci.png]]
+     
+     #+ATTR_RST: :alt alternate text :align center :scale 100%
+     [[file:_static/GoldenRatioFibonacciNature.png]]
+* Biomimetics Mind Map
+     #+ATTR_RST: :alt alternate text :align center :scale 100%
+     [[file:_static/BiomimeticsMindMap.png]]
+* Bioinspired Texture Mindmap
+
+#+Name: Biomimetics
+#+begin_src plantuml :file _static/MindMapBiomimetics.png :results output raw :post attr_wrap(data=*this*) 
+@startmindmap
+,* Nature
+,** Self-Cleaning
+,*** Superhydrophobic Surface
+,**** Lotus Leaf
+,*****_ Superhydrophobicity
+,*****_ Low adhesion
+,*****_ Low drag
+,**** Rose Petals
+,*****_ Superhydrophobicity
+,*****_ No roll-off effect
+,**** Rise Leaves
+,*****_ Superhydrophobicity
+,*****_ Directional and anisotropy
+,*****_ Low drag
+,**** Cicada Wing
+,*****_ Superhydrophobicity
+,*****_ Anti-Reflection
+,**** Butterfly Wing
+,*****_ Superhydrophobicity
+,*****_ Directional Adhesion
+,*****_ Low drag
+,*** Hydrophilic and\nSuperoleophobic\n(in water) surface
+,**** Snail Shell
+,*****_ Superoleophobicity
+,**** Fish Scale
+,*****_ Superoleophobicity
+,**** Shark Skin
+,*****_ Superoleophobicity
+,*****_ Low drag
+,*****_ Anti-fouling
+,*** Superhydrophilic Surface
+,**** Pitcher plant
+,*****_ low drag (slippery)
+,**** Photosynthesis
+,*****_ Photocatalysis
+,*****_ Photo induced Superhydrophilicity
+,*****_ Self-sterilizing
+,*****_ Anti-fogging
+,**_ Dry Adhesion
+,***_ Gekco Feet
+,**_ Drag Reduction
+,***_ Shark Skin
+,**_ Tribology and Locomotion
+,***_ Snake Skin
+,**_ Antireflective Surfaces
+,***_ Moth Eye
+,**_ Photonic Structures and Iridescence
+,***_ Butterfly Wings
+,**_ Chemical Texturing
+,***_ Salvinia/Desert Beetle
+,**_ Adaptive Texturing
+,***_ Redundancy in Features
+,***_ Simplicity of design and choice of materials
+,***_ Regeneration Ability
+,***_ Calling (multi-) Functionality on demand
+,***_ Length scale dependent architectures
+,***_ Heterogeneous Integration of materials
+,***_ Complementary subsurface with or without sensory system
+@endmindmap
+#+end_src
+
+* NOEXPORT :noexport:
+#+name: attr_wrap
+#+begin_src sh :var data="" :var width="\\textwidth" :results output
+  echo "#+ATTR_RST: :alt alternate text :align center :scale 90%"
+  echo "$data"
+#+end_src

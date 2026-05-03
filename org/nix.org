@@ -1,0 +1,23 @@
+#+BEGIN_SRC nix
+let
+  f = { a, b }: a + b;
+in f { a = 10; b = 20; }
+#+END_SRC
+
+#+RESULTS:
+: 30
+
+#+BEGIN_SRC nix  
+let
+  f = a: b: a + b;
+in f 10 20
+#+END_SRC
+
+#+RESULTS:
+: 30
+
+
+#+BEGIN_SRC nix  
+
+#+END_SRC
+

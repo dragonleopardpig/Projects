@@ -1,0 +1,958 @@
+* SQLite3
+** Definitions
+- Relational Database :: collection of data organised in tables.
+- Table :: a set of values that is organised using a model of vertical columns and horizontal rows.
+- Schema :: a database system is its structure described in a formal language. It defines the tables, the fields, relationships, views, indexes, procedures, functions, queues, triggers, and other elements.
+- Row :: a single, implicitly structured data item in a table. It is also called a tuple or a record.
+- Column :: a set of data values of a particular simple type, one for each row of the table. The columns provide the structure according to which the rows are composed.
+- Field :: a single item that exists at the intersection between one row and one column.
+- Primary Key :: uniquely identifies each record in the table.
+- Foreign Key :: a referential constraint between two tables. The foreign key identifies a column or a set of columns in one (referencing) table that refers to a column or set of columns in another (referenced) table.
+- Trigger :: a procedural code that is automatically executed in response to certain events on a particular table in a database.
+- View :: a specific look on data in from one or more tables.
+- Transaction :: an atomic unit of database operations against the data in one or more databases.
+- Result set :: a set of rows from a database returned by the SELECT statement.
+- Index :: a data structure that improves the speed of data retrieval operations on a database table.
+** Resource File
+Place .sqliterc to $HOME directory. Contents of .sqliterc:
+#+begin_src sqlite
+.mode column
+.headers on
+.nullvalue NULL
+#+end_src
+
+Example of loading .sqliterc:
+#+begin_src sh :results output
+sqlite3 test.db
+#+end_src
+-- Loading resources from \/home/plchu/.sqliterc
+SQLite version 3.37.2 2022-01-06 13:25:41
+Enter ".help" for usage hints.
+
+** Change Working Directory
+While in sqlite prompt, we change directory by:
+#+begin_src sqlite
+.shell pwd;
+.cd sqlite
+#+end_src
+Assuming sqlite is the directory you change from current directory.
+* Data Definition Language
+** SQL CREATE DATABASE Statement
+- CREATE DATABASE :: create a new SQL database.
+*** Syntax:
+#+begin_src sqlite
+CREATE DATABASE databasename;
+#+end_src
+*** Example:
+#+begin_src sqlite
+CREATE DATABASE testDB;
+#+end_src
+** SQL DROP DATABASE Statement
+- DROP DATABASE :: drop an existing SQL database.
+*** Syntax:
+#+begin_src sqlite
+DROP DATABASE databasename;
+#+end_src
+*** Example:
+#+begin_src sqlite
+DROP DATABASE testDB;
+#+end_src
+** Show all database:
+#+begin_src sqlite
+SHOW DATABASES;
+
+.open /home/plchu/mountdir/sqlite/db/chinook.db
+.database
+
+ATTACH DATABASE "/home/plchu/mountdir/sqlite/db/chinook.db" AS chinook;
+.databases
+#+end_src
+** SQL BACKUP DATABASE Statement
+- BACKUP DATABASE :: create a full back up of an existing SQL database.
+*** Syntax:
+#+begin_src sqlite
+BACKUP DATABASE databasename
+TO DISK = 'filepath';
+
+BACKUP DATABASE databasename
+TO DISK = 'filepath'
+WITH DIFFERENTIAL; 
+#+end_src
+*** Example:
+#+begin_src sqlite
+BACKUP DATABASE testDB
+TO DISK = 'D:\backups\testDB.bak'
+WITH DIFFERENTIAL;
+#+end_src
+** SQL CREATE TABLE Statement
+- CREATE TABLE :: create a new table in a database.
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE table_name (
+    column1 datatype,
+    column2 datatype,
+    column3 datatype,
+   ....
+);
+
+-- Create Table Using Another Table
+CREATE TABLE new_table_name AS
+    SELECT column1, column2,...
+    FROM existing_table_name
+    WHERE ....;
+#+end_src
+*** Example:
+#+begin_src sqlite
+CREATE TABLE Persons (
+    PersonID int,
+    LastName varchar(255),
+    FirstName varchar(255),
+    Address varchar(255),
+    City varchar(255)
+);
+
+CREATE TABLE TestTable AS
+SELECT customername, contactname
+FROM customers;
+#+end_src
+** SQL DROP TABLE Statement
+- DROP TABLE :: drop an existing table in a database.
+*** Syntax:
+#+begin_src sqlite
+DROP TABLE table_name;
+#+end_src
+*** Example:
+#+begin_src sqlite
+DROP TABLE Shippers;
+#+end_src
+** SQL TRUNCATE TABLE Statement
+- TRUNCATE TABLE :: delete the data inside a table, but not the table itself.
+- TRUNCATE TABLE (in sqlite) :: remove all records from a table.
+- Normally, when you execute a DELETE statement, the database must visit each row in the table to perform the deletion. In SQLite, when you execute a DELETE statement without a WHERE clause, the TRUNCATE optimizer is run instead of the normal delete behavior. The TRUNCATE optimizer removes all data from the table without the need to visit each row in the table. This is much faster than a normal delete operation.
+*** Syntax:
+#+begin_src sqlite
+TRUNCATE TABLE table_name;
+#+end_src
+*** Example:
+#+begin_src sqlite
+TRUNCATE TABLE Shippers;
+#+end_src
+** SQL ALTER TABLE Statement
+- ALTER TABLE :: to add, delete, or modify columns in an existing table.
+- The ALTER TABLE statement is also used to add and drop various constraints on an existing table.
+*** Syntax:
+#+begin_src sqlite
+-- ADD Column
+ALTER TABLE table_name
+ADD column_name datatype;
+
+-- DROP Column
+ALTER TABLE table_name
+DROP COLUMN column_name;
+
+-- RENAME Column
+ALTER TABLE table_name
+RENAME COLUMN old_name to new_name;
+
+-- ALTER/MODIFY DATATYPE
+ALTER TABLE table_name
+ALTER COLUMN column_name datatype; 
+#+end_src
+*** Example:
+#+begin_src sqlite
+ALTER TABLE Customers
+ADD Email varchar(255);
+
+ALTER TABLE Customers
+DROP COLUMN Email;
+
+ALTER TABLE Persons
+ALTER COLUMN DateOfBirth year;
+
+ALTER TABLE Persons
+DROP COLUMN DateOfBirth; 
+#+end_src
+** SQL Constraints
+- SQL Constraints :: specify rules for data in a table.
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE table_name (
+    column1 datatype constraint,
+    column2 datatype constraint,
+    column3 datatype constraint,
+    ....
+);
+#+end_src
+*** Example:
+#+begin_src sqlite
+The following constraints are commonly used in SQL:
+    NOT NULL - Ensures that a column cannot have a NULL value
+    UNIQUE - Ensures that all values in a column are different
+    PRIMARY KEY - A combination of a NOT NULL and UNIQUE. Uniquely identifies each row in a table
+    FOREIGN KEY - Prevents actions that would destroy links between tables
+    CHECK - Ensures that the values in a column satisfies a specific condition
+    DEFAULT - Sets a default value for a column if no value is specified
+    CREATE INDEX - Used to create and retrieve data from the database very quickly
+#+end_src
+** SQL NOT NULL Constraint
+- SQL NOT NULL Constraints :: enforces a column to NOT accept NULL values.
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE table_name (
+    column1 datatype constraint,
+    column2 datatype constraint,
+    column3 datatype constraint,
+    ....
+);
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE TABLE
+CREATE TABLE Persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255) NOT NULL,
+    Age int
+);
+
+-- ALTER TABLE
+ALTER TABLE Persons
+ALTER COLUMN Age int NOT NULL;
+#+end_src
+** SQL UNIQUE Constraint
+- SQL UNIQUE Constraints :: ensures that all values in a column are different.
+- Both the UNIQUE and PRIMARY KEY constraints provide a guarantee for uniqueness for a column or set of columns.
+- A PRIMARY KEY constraint automatically has a UNIQUE constraint.
+- However, you can have many UNIQUE constraints per table, but only one PRIMARY KEY constraint per table. 
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE table_name (
+    column1 datatype constraint,
+    column2 datatype constraint,
+    column3 datatype constraint,
+    ....
+);
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE TABLE
+CREATE TABLE Persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255),
+    Age int,
+    UNIQUE (ID)
+);
+
+-- Multiple Columns
+CREATE TABLE Persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255),
+    Age int,
+    CONSTRAINT UC_Person UNIQUE (ID,LastName)
+); 
+-- ALTER TABLE
+ALTER TABLE Persons
+ADD UNIQUE (ID);
+
+-- DROP a UNIQUE Constraint
+ALTER TABLE Persons
+DROP CONSTRAINT UC_Person; 
+#+end_src
+** SQL PRIMARY KEY Constraint
+- SQL PRIMARY KEY Constraints :: uniquely identifies each record in a table.
+- Primary keys must contain UNIQUE values, and cannot contain NULL values.
+- A PRIMARY KEY constraint automatically has a UNIQUE constraint.
+- A table can have only ONE primary key; and in the table, this primary key can consist of single or multiple columns (fields). 
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE table_name (
+    column1 datatype constraint,
+    column2 datatype constraint,
+    column3 datatype constraint,
+    ....
+);
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE TABLE
+CREATE TABLE Persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255),
+    Age int,
+    PRIMARY KEY (ID)
+);
+
+-- Note: In the example below there is only ONE PRIMARY KEY (PK_Person). However, the VALUE of the primary key is made up of TWO COLUMNS (ID + LastName).
+CREATE TABLE Persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255),
+    Age int,
+    CONSTRAINT PK_Person PRIMARY KEY (ID,LastName)
+);
+
+-- ALTER TABLE
+ALTER TABLE Persons
+ADD PRIMARY KEY (ID);
+
+-- To allow naming of a PRIMARY KEY constraint, and for defining a PRIMARY KEY constraint on multiple columns.
+-- Note: If you use ALTER TABLE to add a primary key, the primary key column(s) must have been declared to not contain NULL values (when the table was first created).
+ALTER TABLE Persons
+ADD CONSTRAINT PK_Person PRIMARY KEY (ID,LastName); 
+
+-- DROP a UNIQUE Constraint
+ALTER TABLE Persons
+DROP PRIMARY KEY;
+
+ALTER TABLE Persons
+DROP CONSTRAINT PK_Person;
+#+end_src
+** SQL FOREIGN KEY Constraint
+- SQL FOREIGN KEY Constraints :: to prevent actions that would destroy links between tables.
+- A FOREIGN KEY is a field (or collection of fields) in one table, that refers to the PRIMARY KEY in another table.
+- The table with the foreign key is called the /child table/, and the table with the primary key is called the referenced or /parent table/.
+- The FOREIGN KEY constraint prevents invalid data from being inserted into the foreign key column, because it has to be one of the values contained in the parent table.
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE table_name
+(
+  column1 datatype [ NULL | NOT NULL ],
+  column2 datatype [ NULL | NOT NULL ],
+  ...
+
+  CONSTRAINT fk_column
+    FOREIGN KEY (column1, column2, ... column_n)
+    REFERENCES parent_table (column1, column2, ... column_n)
+);
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE TABLE
+CREATE TABLE Orders (
+    OrderID int NOT NULL,
+    OrderNumber int NOT NULL,
+    PersonID int,
+    PRIMARY KEY (OrderID),
+    FOREIGN KEY (PersonID) REFERENCES Persons(PersonID)
+);
+
+-- ALTER TABLE
+ALTER TABLE Orders
+ADD CONSTRAINT FK_PersonOrder
+FOREIGN KEY (PersonID) REFERENCES Persons(PersonID);
+
+-- DROP a FOREIGN KEY Constraint
+ALTER TABLE Orders
+DROP FOREIGN KEY FK_PersonOrder;
+#+end_src
+** SQL CHECK Constraint
+- SQL CHECK Constraints :: limit the value range that can be placed in a column.
+- A FOREIGN KEY is a field (or collection of fields) in one table, that refers to the PRIMARY KEY in another table.
+- If you define a CHECK constraint on a column it will allow only certain values for this column.
+- If you define a CHECK constraint on a table it can limit the values in certain columns based on values in other columns in the row.
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE table_name(
+    ...,
+    column_name data_type CHECK(expression),
+    ...
+);
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE TABLE
+CREATE TABLE Persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255),
+    Age int,
+    CHECK (Age>=18)
+);
+
+-- ALTER TABLE
+ALTER TABLE Persons
+ADD CHECK (Age>=18);
+
+-- Multiple Columns
+ALTER TABLE Persons
+ADD CONSTRAINT CHK_PersonAge CHECK (Age>=18 AND City='Sandnes');
+
+-- DROP a CHECK Constraint
+ALTER TABLE Persons
+DROP CHECK CHK_PersonAge;
+#+end_src
+** SQL DEFAULT Constraint
+- SQL DEFAULT Constraints :: set a default value for a column.
+- The default value will be added to all new records, if no other value is specified.
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE tablename
+(colum1 INTEGER PRIMARY KEY,
+column2 TEXT NOT NULL,
+column3 INTEGER DEFAULT defaultvalue);
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE TABLE
+CREATE TABLE Persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255),
+    Age int,
+    City varchar(255) DEFAULT 'Sandnes'
+);
+
+CREATE TABLE Orders (
+    ID int NOT NULL,
+    OrderNumber int NOT NULL,
+    OrderDate date DEFAULT GETDATE()
+);
+
+-- ALTER TABLE
+ALTER TABLE Persons
+ALTER City SET DEFAULT 'Sandnes';
+
+-- DROP a CHECK Constraint
+ALTER TABLE Persons
+ALTER City DROP DEFAULT;
+#+end_src
+** SQL CREATE INDEX Constraint
+- SQL CREATE INDEX Constraints :: create indexes in tables.
+- Indexes are used to retrieve data from the database more quickly than otherwise. The users cannot see the indexes, they are just used to speed up searches/queries.
+- Updating a table with indexes takes more time than updating a table without (because the indexes also need an update). So, only create indexes on columns that will be frequently searched against. 
+*** Syntax:
+#+begin_src sqlite
+CREATE INDEX index_name
+ON table_name (column1, column2, ...);
+
+-- CREATE UNIQUE INDEX Syntax
+-- Creates a unique index on a table. Duplicate values are not allowed:
+CREATE UNIQUE INDEX index_name
+ON table_name (column1, column2, ...);
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE INDEX
+CREATE INDEX idx_lastname
+ON Persons (LastName); 
+
+-- DROP INDEX Statement
+DROP INDEX table_name.index_name;
+#+end_src
+** SQL AUTO INCREMENT Field
+- SQL AUTO INCREMENT Field :: Auto-increment allows a unique number to be generated automatically when a new record is inserted into a table.
+- Often this is the primary key field that we would like to be created automatically every time a new record is inserted. 
+*** Syntax:
+#+begin_src sqlite
+CREATE TABLE table_name (
+    ID PRIMARY KEY AUTO_INCREMENT = initial_value
+);
+
+ALTER TABLE table_name AUTO_INCREMENT = initial_value;
+
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE INDEX
+CREATE TABLE Persons (
+    Personid int NOT NULL AUTO_INCREMENT,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255),
+    Age int,
+    PRIMARY KEY (Personid)
+);
+
+-- Other AUTO_INCREMENT value
+ALTER TABLE Persons AUTO_INCREMENT=100;
+
+-- DROP INDEX Statement
+DROP INDEX table_name.index_name;
+#+end_src
+** SQL Working With Dates
+- SQL Working With Dates :: The most difficult part when working with dates is to be sure that the format of the date you are trying to insert, matches the format of the date column in the database.
+- As long as your data contains only the date portion, your queries will work as expected. However, if a time portion is involved, it gets more complicated.
+- DATE - format YYYY-MM-DD
+- DATETIME - format: YYYY-MM-DD HH:MI:SS
+- TIMESTAMP - format: YYYY-MM-DD HH:MI:SS
+- YEAR - format YYYY or YY
+ 
+*** Syntax:
+#+begin_src sqlite
+SELECT * FROM Orders WHERE OrderDate='2008-11-11'
+#+end_src
+*** Example:
+#+begin_src sqlite
+SELECT * FROM Orders WHERE OrderDate='2008-11-11'
+#+end_src
+** SQL Views
+- SQL View :: a virtual table based on the result-set of an SQL statement.
+- A view contains rows and columns, just like a real table. The fields in a view are fields from one or more real tables in the database.
+- You can add SQL statements and functions to a view and present the data as if the data were coming from one single table. 
+*** Syntax:
+#+begin_src sqlite
+CREATE VIEW view_name AS
+SELECT column1, column2, ...
+FROM table_name
+WHERE condition;
+
+-- SQL CREATE OR REPLACE VIEW Syntax
+CREATE OR REPLACE VIEW view_name AS
+SELECT column1, column2, ...
+FROM table_name
+WHERE condition;
+
+-- SQL DROP VIEW Syntax
+DROP VIEW view_name;
+#+end_src
+*** Example:
+#+begin_src sqlite
+-- CREATE VIEW
+CREATE VIEW [Brazil Customers] AS
+SELECT CustomerName, ContactName
+FROM Customers
+WHERE Country = 'Brazil';
+
+SELECT * FROM [Brazil Customers];
+
+-- The following SQL creates a view that selects every product in the "Products" table with a price higher than the average price:
+CREATE VIEW [Products Above Average Price] AS
+SELECT ProductName, Price
+FROM Products
+WHERE Price > (SELECT AVG(Price) FROM Products); 
+
+SELECT * FROM [Products Above Average Price];
+
+-- The following SQL adds the "City" column to the "Brazil Customers" view:
+CREATE OR REPLACE VIEW [Brazil Customers] AS
+SELECT CustomerName, ContactName, City
+FROM Customers
+WHERE Country = 'Brazil';
+
+-- SQL DROP VIEW Syntax
+DROP VIEW [Brazil Customers];
+#+end_src
+** Table
+*** Basics
+**** Create Table:
+#+begin_src sqlite
+CREATE TABLE table_name
+(
+   column_name  column_type    column_constraints...,
+   [... ,]
+
+   table_constraints,
+   [...]
+);
+
+--- Example table with constraints
+CREATE TABLE parts
+(
+    part_id    INTEGER   PRIMARY KEY,
+    stock      INTEGER   DEFAULT 0   NOT NULL,
+    desc       TEXT      CHECK( desc != '' )    -- empty strings not allowed
+);
+#+end_src
+- Column names
+- Column types
+- Constraints on columns
+| Storage Classes | Type Affinity |
+|-----------------+---------------|
+| NULL            | Text          |
+| Integer         | Numeric       |
+| Float           | Integer       |
+| Text            | Float         |
+| BLOB            | None          |
+
+Show Tables:
+#+begin_src sqlite
+.tables
+
+.table '%es'
+
+.schema albums
+
+.fullschema
+
+.indexes albums
+
+.indexes %es
+#+end_src
+
+*** Primary Keys
+#+begin_src sqlite
+CREATE TABLE rooms
+(
+    room_number       INTEGER  NOT NULL,
+    building_number   INTEGER  NOT NULL,
+    [...,]
+
+    PRIMARY KEY( room_number, building_number )
+);
+#+end_src
+- We need to allow for more than one room with the number 101.
+- We also need to allow for more than one room in building 103.
+- But there should only be one room 101 in building 103, so we apply the constraint across both columns.
+- We’ve chosen to make these columns into a compound primary key, since the building number and room number combine to quintessentially define a specific room.
+*** Views
+#+begin_src sqlite
+CREATE [TEMP] VIEW view_name AS SELECT query_statement
+DROP VIEW view_name;
+#+end_src
+*** Indexes
+#+begin_src sqlite
+CREATE [UNIQUE] INDEX index_name ON table_name ( column_name [, ...] );
+DROP INDEX index_name;
+
+--- Example
+CREATE INDEX idx_employees_name ON employees ( name );       
+#+end_src
+** SELECT
+#+begin_src sqlite
+SELECT	1 + 1;
+
+SELECT 
+   10 / 5, 
+   2 * 4 ;
+
+SELECT DISTINCT column_list
+FROM table_list
+  JOIN table ON join_condition
+WHERE row_filter
+ORDER BY column
+LIMIT count OFFSET offset
+GROUP BY column
+HAVING group_filter;
+#+end_src
+
+- Use *ORDER* BY clause to sort the result set
+- Use *DISTINCT* clause to query unique rows in a table
+- Use *WHERE* clause to filter rows in the result set
+- Use *LIMIT* OFFSET clauses to constrain the number of rows returned
+- Use *INNER* JOIN or LEFT JOIN to query data from multiple tables using join.
+- Use *GROUP* BY to get the group rows into groups and apply aggregate function for each group.
+- Use *HAVING* clause to filter groups
+- try to avoid using the asterisk (*) as a good habit when you use the SELECT statement.
+
+** Order By
+* Data Manipulation Language
+** Row Modification Commands
+*** INSERT and REPLACE
+- INSERT :: create new rows in the specified table.
+#+begin_src sqlite
+INSERT INTO table_name (column_name [, ...]) VALUES (new_value [, ...]);
+
+INSERT INTO table_name (column_name, [...]) SELECT query_statement;
+
+--- Example
+INSERT INTO parts ( name, stock, status ) VALUES ( 'Widget', 17, 'IN STOCK' );
+#+end_src
+*** UPDATE
+- UPDATE :: assign new values to one or more columns of existing rows in a table.
+#+begin_src sqlite
+UPDATE table_name SET column_name=new_value [, ...] WHERE expression
+
+--- Example
+UPDATE parts SET price = 4.25, stock = 75 WHERE part_id = 454;
+#+end_src
+*** DELETE
+- DELETE :: delete or remove one or more rows from a single table.
+#+begin_src sqlite
+DELETE FROM table_name WHERE expression;
+
+--- Example
+-- Delete the row with rowid 385:
+DELETE FROM parts WHERE part_id = 385;
+
+-- Delete all rows with a rowid greater than or equal to 43
+-- and less than or equal to 246:
+DELETE FROM parts WHERE part_id >= 43 AND part_id <= 246;
+
+-- delete all rows, force per-row processing
+DELETE FROM parts WHERE 1; 
+#+end_src
+*** SELECT
+- SELECT :: extract or return values from the database.
+#+begin_src sqlite
+SELECT output_list FROM input_table WHERE row_filter;
+
+--- Example
+CREATE TABLE tbl ( a, b, c, id INTEGER PRIMARY KEY );
+INSERT INTO tbl ( a, b, c ) VALUES ( 10, 10, 10 );
+INSERT INTO tbl ( a, b, c ) VALUES ( 11, 15, 20 );
+INSERT INTO tbl ( a, b, c ) VALUES ( 12, 20, 30 );
+
+SELECT * FROM tbl;
+SELECT a, c FROM tbl;
+SELECT * FROM tbl WHERE id = 2;
+#+end_src
+* Transaction Control Language
+- Transaction Control Language :: used in conjunction with the Data Manipulation Language to control the processing and exposure of changes.
+- Transaction :: A transaction is used to group together a series of low-level changes into a single, logical update. A transaction can be anything from updating a single value to a complex, multistep procedure that might end up inserting several rows into a number of different tables.
+** ACID Transactions
+- ACID :: Atomic, Consistent, Isolated, and Durable.
+- Atomic :: change cannot be broken down into smaller pieces.When a transaction is committed to the database, the entire transaction must be applied or the entire transaction must /not/ be applied. It should be impossible for only part of a transaction to be applied.
+- Consistent :: A transaction should also keep the database consistent.
+- Isolated :: When a client opens a transaction and starts to issue individual change commands, the results of those commands are visible to the client. Those changes should /not/, however, be visible to any other system accessing the database, nor should they be integrated into the permanent database record until the entire transaction is committed.
+- Durable :: If the transaction is successfully committed, it must have become a permanent and irreversible part of the database record.
+** SQL Transactions
+- SQLite is in /autocommit mode/. This means that SQLite will automatically start a transaction for each command, process the command, and (assuming no errors were generated) automatically commit the transaction.
+#+begin_src sqlite
+BEGIN [ DEFERRED | IMMEDIATE | EXCLUSIVE ] [TRANSACTION]
+COMMIT [TRANSACTION]
+END [TRANSACTION]
+ROLLBACK [TRANSACTION]
+#+end_src
+- By default, all transactions (including autocommit transactions) use the DEFERRED mode.
+- BEGIN :: to start or open a transaction.
+- DEFERRED :: none of the database locks are acquired until they are required.
+- IMMEDIATE :: acquire a reserved lock immediately.
+- EXCLUSIVE :: to lock out all other clients, including read-only clients.
+- COMMIT :: close out a transaction and commit the changes to the database.
+- END :: alias with END.
+- ROLLBACK :: undo and revert all the proposed changes made by the current transaction and then close the transaction.
+** Save-Points
+- Save-Points :: allow you to mark specific points in the transaction. You can then accept or rollback to individual save-points without having to commit or rollback an entire transaction.
+- RELEASE :: To release a save-point and accept all of the proposed changes made since the save-point was set.
+- ROLLBACK :: To cancel a set of commands and undo everything back to where a save-point was set.
+- ROLLBACK TO :: rolls back and cancels any changes issued since the save-point was established, but leaves the transaction state exactly as it was after the SAVEPOINT command was issued.
+- The RELEASE command does not commit any changes to disk. Rather, it flattens all of the changes in the save-point stack into the layer below the named save-point. The save-point is then removed. Any save-points contained by the named save-point are automatically released.
+- Save-points act as a stack. Whenever you create a new one, it is put at the top of the stack. 
+#+begin_src sqlite
+SAVEPOINT savepoint_name
+RELEASE [SAVEPOINT] savepoint_name
+ROLLBACK [TRANSACTION] TO [SAVEPOINT] savepoint_name
+
+--- Example
+CREATE TABLE t (i);
+BEGIN;
+  INSERT INTO t (i) VALUES 1;
+  SAVEPOINT aaa;
+    INSERT INTO t (i) VALUES 2;
+    SAVEPOINT bbb;
+      INSERT INTO t (i) VALUES 3;
+
+--- ROLLBACK TO bbb
+CREATE TABLE t (i);
+BEGIN;
+  INSERT INTO t (i) VALUES 1;
+  SAVEPOINT aaa;
+    INSERT INTO t (i) VALUES 2;
+    SAVEPOINT bbb;
+
+--- rolling back to save-point bbb still leaves the save-point in place. Any new commands will be associated with SAVEPOINT bbb.
+CREATE TABLE t (i);
+BEGIN;
+  INSERT INTO t (i) VALUES 1;
+  SAVEPOINT aaa;
+    INSERT INTO t (i) VALUES 2;
+    SAVEPOINT bbb;
+      DELETE FROM t WHERE i=1;
+#+end_src
+* System Catalogs
+- System Catalogs :: keep system state data in a series of data structures.
+- All nontemporary SQLite databases have an *sqlite_master* catalog.
+- sqlite_master :: master record of all database objects.
+| Column name | Column type | Meaning                   |
+|-------------+-------------+---------------------------|
+| type        | Text        | Type of database object   |
+| name        | Text        | Identifier name of object |
+| tbl_name    | Text        | Name of associated table  |
+| rootpage    | Integer     | Internal use only         |
+| sql         | Text        | SQL used to define object |
+* SQL SELECT Command
+- SELECT :: select data from a database.
+** Syntax:
+#+begin_src sqlite
+SELECT column1, column2, ...
+FROM table_name;
+#+end_src
+** Select ALL columns:
+#+begin_src sqlite
+SELECT * FROM Customers;
+#+end_src
+* SQL SELECT DISTINCT Statement
+- SELECT DISTINCT :: return only distinct (different) values.
+#+begin_src sqlite
+SELECT DISTINCT Country FROM Customers;
+#+end_src
+- SELECT COUNT :: By using the DISTINCT keyword in a function called COUNT, we can return the number of different countries.
+#+begin_src sqlite
+SELECT Count(*) AS DistinctCountries
+FROM (SELECT DISTINCT Country FROM Customers);
+#+end_src
+* SQL WHERE Clause
+** Syntax:
+#+begin_src sqlite
+SELECT column1, column2, ...
+FROM table_name
+WHERE condition;
+#+end_src
+** Example:
+#+begin_src sqlite
+SELECT * FROM Customers
+WHERE Country='Mexico';
+
+SELECT * FROM Customers
+WHERE CustomerID=1;
+
+SELECT * FROM Customers
+WHERE CustomerID > 80;
+#+end_src
+* SQL ORDER Clause
+** Syntax:
+#+begin_src sqlite
+SELECT column1, column2, ...
+FROM table_name
+ORDER BY column1, column2, ... ASC|DESC;
+#+end_src
+** Example:
+#+begin_src sqlite
+SELECT * FROM Products
+ORDER BY Price;
+
+SELECT * FROM Products
+ORDER BY Price DESC;
+
+SELECT * FROM Customers
+ORDER BY Country ASC, CustomerName DESC; 
+#+end_src
+* SQL AND Operator
+** Syntax:
+#+begin_src sqlite
+SELECT column1, column2, ...
+FROM table_name
+WHERE condition1 AND condition2 AND condition3 ...;
+#+end_src
+** Example:
+#+begin_src sqlite
+SELECT * FROM Customers
+WHERE Country = 'Germany'
+AND City = 'Berlin'
+AND PostalCode > 12000;
+
+SELECT * FROM Customers
+WHERE Country = 'Spain' AND (CustomerName LIKE 'G%' OR CustomerName LIKE 'R%');
+#+end_src
+* SQL OR Operator
+** Syntax:
+#+begin_src sqlite
+SELECT column1, column2, ...
+FROM table_name
+WHERE condition1 OR condition2 OR condition3 ...; 
+#+end_src
+** Example:
+#+begin_src sqlite
+SELECT * FROM Customers
+WHERE City = 'Berlin' OR CustomerName LIKE 'G%' OR Country = 'Norway';
+
+SELECT * FROM Customers
+WHERE Country = 'Spain' AND CustomerName LIKE 'G%' OR CustomerName LIKE 'R%';
+#+end_src
+* SQL NOT Operator
+** Syntax:
+#+begin_src sqlite
+SELECT column1, column2, ...
+FROM table_name
+WHERE NOT condition;
+#+end_src
+** Example:
+#+begin_src sqlite
+SELECT * FROM Customers
+WHERE NOT Country = 'Spain';
+
+SELECT * FROM Customers
+WHERE CustomerName NOT LIKE 'A%';
+
+SELECT * FROM Customers
+WHERE CustomerID NOT BETWEEN 10 AND 60;
+
+SELECT * FROM Customers
+WHERE City NOT IN ('Paris', 'London');
+#+end_src
+* SQL INSERT INTO Operator
+** Syntax:
+#+begin_src sqlite
+INSERT INTO table_name (column1, column2, column3, ...)
+VALUES (value1, value2, value3, ...);
+
+INSERT INTO table_name
+VALUES (value1, value2, value3, ...);
+#+end_src
+** Example:
+#+begin_src sqlite
+INSERT INTO Customers (CustomerName, ContactName, Address, City, PostalCode, Country)
+VALUES ('Cardinal', 'Tom B. Erichsen', 'Skagen 21', 'Stavanger', '4006', 'Norway');
+
+INSERT INTO Customers (CustomerName, ContactName, Address, City, PostalCode, Country)
+VALUES
+('Cardinal', 'Tom B. Erichsen', 'Skagen 21', 'Stavanger', '4006', 'Norway'),
+('Greasy Burger', 'Per Olsen', 'Gateveien 15', 'Sandnes', '4306', 'Norway'),
+('Tasty Tee', 'Finn Egan', 'Streetroad 19B', 'Liverpool', 'L1 0AA', 'UK');
+#+end_src
+* SQL NULL Values
+** Syntax:
+#+begin_src sqlite
+SELECT column_names
+FROM table_name
+WHERE column_name IS NULL;
+
+SELECT column_names
+FROM table_name
+WHERE column_name IS NOT NULL; 
+#+end_src
+** Example:
+#+begin_src sqlite
+SELECT CustomerName, ContactName, Address
+FROM Customers
+WHERE Address IS NULL;
+#+end_src
+* SQL UPDATE Statement
+- UPDATE :: modify the existing records in a table.
+- If you omit the WHERE clause, ALL records will be updated! 
+** Syntax:
+#+begin_src sqlite
+UPDATE table_name
+SET column1 = value1, column2 = value2, ...
+WHERE condition;
+#+end_src
+** Example:
+#+begin_src sqlite
+UPDATE Customers
+SET ContactName = 'Alfred Schmidt', City= 'Frankfurt'
+WHERE CustomerID = 1;
+
+UPDATE Customers
+SET ContactName='Juan'
+WHERE Country='Mexico';
+#+end_src
+* SQL DELETE Statement
+- DELETE :: delete existing records in a table.
+- If you omit the WHERE clause, ALL records will be updated! 
+** Syntax:
+#+begin_src sqlite
+DELETE FROM table_name WHERE condition;
+#+end_src
+** Example:
+#+begin_src sqlite
+DELETE FROM Customers WHERE CustomerName='Alfreds Futterkiste';
+
+--- Delete All Records
+DELETE FROM Customers;
+#+end_src
+* SQL SELECT TOP Clause
+- SELECT :: specify the number of records to return.
+- The SELECT TOP clause is useful on large tables with thousands of records.
+** Syntax:
+#+begin_src sqlite
+-- SQLITE does not support SELECT TOP, use LIMIT
+SELECT * FROM Table_Name LIMIT <number>;
+#+end_src
+** Example:
+#+begin_src sqlite
+SELECT * FROM Customers
+ORDER BY CustomerName DESC
+LIMIT 3;
+#+end_src

@@ -1,0 +1,2 @@
+* Welcome
+This is a site to document surface texturing techniques. It is about the actual manufacturing process and background theory. Refer to the site: [[https://texturing.expert]]

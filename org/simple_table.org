@@ -1,0 +1,97 @@
+#+TEMPLATE: CMU ChemE Written Qualifier
+#+key: cmu-cheme-written-qualifier
+#+group: reports
+#+contributor: John Kitchin <jkitchin@andrew.cmu.edu>
+#+default-filename: qualifier.org
+
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [12pt]
+#+OPTIONS: toc:nil ^:{}
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+# here is where you include the relevant packages. These are pretty
+# common ones. You may add additional ones. Note that the orderauto composition of the
+# packages is significant. If you are not careful, your file will not
+# build into a pdf.
+#+LATEX_HEADER: \usepackage[top=1in, bottom=1.in, left=1in, right=1in]{geometry}
+#+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage[T1]{fontenc}
+#+LATEX_HEADER: \usepackage{mathptmx}
+#+LATEX_HEADER: \usepackage{fixltx2e}
+#+LATEX_HEADER: \usepackage{natbib}
+#+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage{minted}
+#+LATEX_HEADER: \usepackage{graphicx}
+#+LATEX_HEADER: \usepackage{textcomp}
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage{pdfpages}
+#+LATEX_HEADER: \usepackage[version=3]{mhchem}
+#+LATEX_HEADER: \usepackage{setspace}
+#+LATEX_HEADER: \usepackage{cancel}
+#+LATEX_HEADER: \usepackage{pgfgantt}
+#+LATEX_HEADER: \usepackage[linktocpage, pdfstartview=FitH, colorlinks, linkcolor=blue, anchorcolor=blue, citecolor=blue,  filecolor=blue,  menucolor=blue,  urlcolor=blue]{hyperref}
+#+LANGUAGE:  en
+#+TODO: TODO FEEDBACK VERIFY | DONE CANCELED
+
+
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	OPTICS
+
+* Tables
+Hopefully you can see straight away that the simple structure provided
+by org-mode gives a nice way to keep an electronic note book.
+
+Often it is nice to include tables in our notes. Org handles this by
+using | to separate columns, and a line of --- (inserted with C-c -)
+to add horizontal lines.
+
+Exercise: start typing in this table below; type the first line in
+verbatim
+ 1) when you get to the "s" of comments, press TAB to go to the next
+    line
+ 2) go up to the previous line and use C-c - to add the row of dashes
+ 3) next enter a few lines of data, using TAB to go through the
+    cells - you should notice the columns changing width as needed
+
+| ID | x |  y | comments       |
+|----+---+----+----------------|
+| A  | 2 |  4 | blah           |
+| B  | 3 |  9 | blah           |
+| C  | 4 | 16 | blah blah blah |
+| D  | 5 | 25 | blah           |
+
+Now, you can move rows and columns around using M-arrow and insert or
+delete rows and columns using M-S-arrow. Try this out now.
+
+** Creating and exporting tables
+You can create an empty table using C-c | to run the command
+org-table-create-or-convert-from-region, which will prompt for table
+dimensions if no region is selected.
+
+The same command can easily convert some text to a table; select the
+following text and use C-c | to run the command
+org-table-create-or-convert-from-region again to convert the text to a
+table
+
+ ID  x   y
+ A   2   4
+ B   3   9
+ C   4  16
+ D   5  25
+
+You can also save tables to their own files by putting the cursor in
+the table and using M-x org-table-export. You'll be asked for a
+file name and a format. For the format, type orgtbl-to and press TAB
+to see the available options (e.g. orgtbl-to-csv will convert to csv
+in the output file).
+
+** Formulae
+You can use formulae to do arithmetic on tables, and use them like a
+spreadsheet. This is something I keep meaning to use more often, but
+don't generally find I need it. One useful command is C-c + which runs
+org-table-sum to sum the numbers in the current column.
+
+For more on this, see e.g. this introduction. Notice that we just
+added a link in our org-mode file - this is a teaser for what we will
+cover next!

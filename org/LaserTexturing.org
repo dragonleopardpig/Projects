@@ -1,0 +1,115 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	Laser Texturing
+
+* Laser Basics
+** Vector
+- Vector: \(\vec{A}=A_x \hat{\imath} + A_y \hat{\jmath} + A_z \hat{k}\)
+- Del operator:  \(\vec{\nabla}=\frac{\partial}{\partial x}\hat{\imath}+\frac{\partial}{\partial y}\hat{\jmath}+\frac{\partial}{\partial z}\hat{k}\)
+- Divergence: \(\vec{\nabla}\cdot \vec{A} = \frac{\partial A_x}{\partial x}+\frac{\partial A_y}{\partial y}+\frac{\partial A_z}{\partial z}\)
+- Curl: \(\vec{\nabla}\times\vec{A}=(\frac{\partial A_z}{\partial y}-\frac{\partial A_y}{\partial z})\hat{\imath} + (\frac{\partial A_x}{\partial z}-\frac{\partial A_z}{\partial x})\hat{\jmath} + (\frac{\partial A_y}{\partial x}-\frac{\partial A_x}{\partial y})\hat{k}\)
+- Curl of curl: \(\vec{\nabla}\times(\vec{\nabla}\times\vec{A})=\vec{\nabla}(\vec{\nabla}\cdot\vec{A})-\nabla^2\vec{A}\)
+  
+** Wave and vibration
+- Coherence
+- Wavenumber, \(k=\frac{2\pi}{\lambda}\)
+- Phase Change constant t, \(\frac{\Delta\phi_{const\:t}}{2\pi}=\frac{\Delta x}{\lambda}=k\Delta x\)
+- Phase Change constant x, \(\Delta\phi_{const\:x}=\omega \Delta t\)
+- Phase Change total, \(\Delta\phi=k\Delta x \pm \omega\Delta t\)
+- Wave(phase) going -x direction: \(y(x,t)=f(kx+\omega t)\)
+- Wave(phase) going +x direction: \(y(x,t)=f(kx- \omega t)\)
+- Period: \(T=\frac{2\pi}{\omega}\)
+- Phase speed: \(v=\frac{\omega}{k}\)
+- Wave(displacement): \(y(x,t)=f(x\pm vt)\)
+- Euler relation: \(e^{\pm i\theta}=\cos\theta\pm i\sin\theta\)
+  - \(\cos\theta=\frac{e^{i\theta}+e^{-i\theta}}{2}\)
+  - \(\sin\theta=\frac{e^{i\theta}-e^{-i\theta}}{2i}\)
+- Classical Wave Equation: \(\frac{\partial^2 y}{\partial x^2}=\frac{1}{v^2}\frac{\partial^2 y}{\partial t^2}\), true for either +x or -x direction.
+- Phase Velocity: \(v_{phase}=\frac{\omega}{k}\)
+- Group Velocity: \(v_{group}=\frac{d\omega}{dk}\)
+
+** Electromagnetic Wave
+- Maxwell Equation (differential form)
+  - Gauss's law for electric fields: \(\mathbf{\nabla}\cdot\mathbf{E}=\frac{\rho}{\epsilon_0}\)
+  - Gauss's law for magnetic fields: \(\mathbf{\nabla}\cdot\mathbf{B}=0\)
+  - Faraday's law: \(\mathbf{\nabla}\times\mathbf{E}=-\frac{\mathbf{\partial B}}{\partial t}\)
+  - Ampere-Maxwell law: \(\mathbf{\nabla}\times\mathbf{B}=\mu_0\mathbf{J}+\mu_0\epsilon_0\frac{\partial\mathbf{E}}{\partial t}\)
+  - Graphical representation ::
+       #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+       #+CAPTION: Maxwell Equation 
+       #+NAME: fig:MaxwellEquation
+       #+ATTR_RST: :alt alternate text :align center :scale 80%
+       [[file:_static/Maxwell.png]]
+       
+       \begin{tabular}{ |l| c| r| }
+         Laws & Diffrential Form & Integral Form \\
+         Gauss's law for electric fields &
+         $\vec{\nabla}\cdot\vec{E}=\frac{\rho}{\epsilon_0}$ &  \\
+         7 & 8 & 9 \\
+       \end{tabular}
+
+** Energy Density
+- Field Strength Ratio: \(\frac{|\mathbf{E}|}{|\mathbf{B}|}=c\)
+- Energy Density (Electric Field in vacuum, per unit volume): \(u_E=\frac{1}{2}\epsilon_0|\mathbf{E}|^2\)
+- Energy Density (Magnetic Field in vacuum, per unit volume): \(u_B=\frac{1}{2\mu_0}|\mathbf{B}|^2\)
+- Total Energy Density: 
+  - \(u_{tot}=u_E+u_B\)
+  - \(u_{tot}=\epsilon_0|\mathbf{E}|^2\)
+  - \(u_{tot}=\frac{1}{\mu_0}|\mathbf{B}|^2\)
+- Power (per unit area): \(|\mathbf{S}|=u_{tot}c\)
+- Poynting Vector:
+  - \(|\mathbf{S}|=\sqrt{\frac{\epsilon_0}{\mu_0}}|\mathbf{E}|^2\)
+  - \(\mathbf{S}=\frac{1}{\mu_0}\mathbf{E}\times\mathbf{B}\)
+- Average Energy (over \(sin^2\) function): \(|\mathbf{E}|_{avg}^2=\frac{1}{2}|\mathbf{E}_0|^2\)
+- Average Power Density (sine wave): \(|\mathbf{S}|_{avg}=\frac{1}{2}\sqrt{\frac{\epsilon_0}{\mu_0}}|\mathbf{E}|^2\)
+- Electromagnetic Impedance: \(Z_0=\sqrt{\frac{\mu_0}{\epsilon_0}}\)
+- Intensity: \(I=\epsilon_0c|\mathbf{E}|^2\)
+- Intensity, temporal averaging: \(I=|E_0|^2\)
+          
+** Incoherent Sources
+- n Coherent sources with amplitude a: \(Total\: Intensity=n^2 a^2\)
+- n InCoherent sources with amplitude a: \(Total\:Intensity=n a^2\)
+        
+** METHODS
+*** Optical Metrology
+- In most practical systems, the emerging wave front departs from a perfect sphere by an optical path difference (OPD). The OPD represents aberration. When the OPD is less than a wavelength, the distribution of light in the image point is determined by diffraction. OPD values greater than two waves indicate that the light distribution in the image is determined primarilyby the geometrical distribution of rays. The OPD is measured with respect to a central chief ray (which is often called the principal ray). When a design calls for a near-diffraction-limited lens, the designer concentrates on reducing the optical-path-length differences to the lowest possible values for several image points over the field of the object. When the images are several waves of OPD, the designer usually concentrates on the geometrical transverse deviations from a perfect point. 
+* Laser Texturing Techniques
+| No | Laser Parameters                 | Contact Angle ($^\circ$) | Substrate        | Structures                              |
+|----+----------------------------------+--------------------------+------------------+-----------------------------------------|
+|  1 | 532nm, 14ns, 2.4x10^{4} W/cm^{2} |                 31 - 125 | SS 304           | Grooves                                 |
+|  2 | 1064nm, 30ns, 3.3-25.1 J/cm^{2}  |                  5 - 150 | SS 316           | LIPPS and Groove                        |
+|  3 | 355nm, 30ns                      |                      160 | Ti-6Al-4V        | Micro-Pillars and LIPSS                 |
+|  4 | 1064nm, 40ns, 0.22mJ             |                      168 | SS 316L          | Periodic Square                         |
+|  5 | 355nm, 30ns, 1.7-4.9uJ           |                    161.5 | AL Alloy         | Hierarchical Periodic Structures        |
+|    | 1064nm, 10ps, 89-293uJ           |                          |                  |                                         |
+|  6 | 1064nm, 100ns, 14W               |                    144.7 | SS 316L          | Gaussian holes                          |
+|  7 | 1064nm, 150ns, 10W               |                    157.2 | High Speed Steel | Micro/nanoscale hierarchical structures |
+|  8 | 1060nm, 10us                     |                    154.6 | 6061 AL Alloy    | Cross Groove Structures                 |
+|  9 | 500mW, 40 and 80 pulses          |                  148+/-3 | AL               | Micro holes Array                       |
+| 10 | 1064nm, 6-8ns                    |                    157.3 | AISI 4130 Steel  | Micro/nano scale surface                |
+| 11 | 1064nm, 100ns, 10W               |                    152.4 | SS 304           | Groove                                  |
+| 12 | 355nm, 3W                        |                      150 | AL               | Groove                                  |
+| 13 | 355nm, 3W                        |                      169 | Titanium         | Groove                                  |
+| 14 | 1064nm Fiber 20W                 |                    161.5 | SS 304           | Groove                                  |
+| 15 | 1064nm, 100ns, 6W                |                      153 | SS 304           | Column Array                            |
+| 16 | 1064nm, 15ns, 280mW              |                      113 | Ti-6Al-4V        | Groove                                  |
+| 17 | 1064nm, 100ns                    |                      152 | SS 304           | Groove                                  |
+| 18 | 1064nm                           |                      131 | Al               | Point Array                             |
+1. Laser texturing of stainless steel under different processing atmospheres: From superhydrophobic to superhydrophobic surfaces
+2. Long-term influence of laser-processing parameters on (super)hydrophobicity development and stability of stainless-steel surfaces
+3. Wettability modification of laser-fabricated hierarchical surface structures in ti-6al-4v titanium alloy
+4. Transition from superhydrophilic to superhydrophobic state of laser textured stainless steel surface and its effect on corrosion resistance
+5. Superhydrophobicity on hierarchical periodic surface structures fabricated via direct laser writing and direct laser interference patterning on an aluminum alloy
+6. Superhydrophobic structures on 316l stainless steel surfaces machined by nanosecond pulsed laser
+7. Preparation of superhydrophobic and anti-resin-adhesive surfaces with micro/nanoscale structures on high-speed steel via laser processing
+8. One-step fabrication of superhydrophobic surfaces with different adhesion via laser processing
+9. One-step fabrication of near superhydrophobic aluminum surface by nanosecond laser ablation
+10. Nanostructuring of laser textured surface to achieve superhydrophobicity on engineering metal surface
+11.	A simple two-step approach for the fabrication of bio-inspired superhydrophobic and anisotropic wetting surfaces having corrosion resistance
+12. Control of laser-ablated aluminum surface wettability to superhydrophobic or superhydrophilic through simple heat treatment or water boiling post-processing
+13. Controlling the Wetting Properties of superhydrophobic Titanium Surface Fabricated by UV Nanosecond-Pulsed Laser and Heat Treatment
+14. Fabricating robust and repairable superhydrophobic surface on carbon steel by nanosecond laser texturing for corrosion protection
+15. Fabrication of a super-hydrophobic surface on metal using laser ablation and electrodeposition
+16. Fabrication of multi-scale periodic surface structures on Ti-6Al-4V by direct laser writing and direct laser interference patterning for modified wettability applications
+17. Fabrication of self-cleaning superhydrophobic surface on stainless steel by nanosecond laser
+18. Unification of the textures formed on aluminum after laser treatment

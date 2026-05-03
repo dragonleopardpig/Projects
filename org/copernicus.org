@@ -1,0 +1,56 @@
+#+LATEX_CLASS: copernicus
+#+LATEX_CLASS_OPTIONS: [journal abbreviation, manuscript]
+#+OPTIONS: tags:nil toc:nil
+
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+#+BEGIN_EXPORT latex
+\title{TEXT}
+
+
+% \Author[affil]{given_name}{surname}
+
+\Author[]{}{}
+\Author[]{}{}
+\Author[]{}{}
+
+\affil[]{ADDRESS}
+\affil[]{ADDRESS}
+
+%% The [] brackets identify the author with the corresponding affiliation. 1, 2, 3, etc. should be inserted.
+
+
+
+\runningtitle{TEXT}
+
+\runningauthor{TEXT}
+
+\correspondence{NAME (EMAIL)}
+
+
+
+\received{}
+\pubdiscuss{} %% only important for two-stage journals
+\revised{}
+\accepted{}
+\published{}
+
+%% These dates will be inserted by Copernicus Publications during the typesetting process.
+
+
+\firstpage{1}
+
+\maketitle
+
+
+
+\begin{abstract}
+TEXT
+\end{abstract}
+
+
+\copyrightstatement{TEXT}
+#+END_EXPORT
+
+#+INCLUDE: raw.org
+# #+INCLUDE: scoping.org

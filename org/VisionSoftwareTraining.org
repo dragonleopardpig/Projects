@@ -1,0 +1,30 @@
+* Result Type
+- Total 21 result type
+** Standard Result
+** Alignment Result
+** ULT Result
+** Matrix ID and OCR Result
+** GPI Result
+** 
+
+* Inspection Module
+** 2D BGA Inspect
+** Cal Global Loc
+** CSP Inspect
+** GPI
+** ID Matrix
+** Lead Inspect
+** Lead PVI
+** Mark Inspect
+** Measurement
+** OCR Inspect
+** Package Locate
+** Part Detection
+** Pattern Locate
+** Pin 1 Inspect
+** Post Seal
+** Product General Info
+** QFN Inspect
+** Reference Locate
+** Surface Inspect
+** Wafer OCR

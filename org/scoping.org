@@ -1,0 +1,432 @@
+
+#+LATEX_HEADER: \usepackage{xcolor,colortbl}
+#+LATEX_HEADER: \usepackage{longtable}
+
+# #+AUTHOR:	ChuPL
+# #+EMAIL:	chu_pau_loong@artc.a-star.edu.sg
+# #+TITLE:	Scoping Pack
+
+
+* Scoping Pack
+
+** Scope
+Materials sticking to the inner walls of filling machines (e.g. tanks, mixers,
+augers) is a common problem in the FMCG industry. The problem is further
+aggravated by processing conditions (temperature, heat, duration, batch size),
+product characteristics (hygroscopicity of powder) and environmental conditions
+(temperature, humidity). There is a challenge of cross contamination, especially
+for batch one (or low MOQ) production, where cleaning after every recipe change
+is not feasible. The scope includes development of anti-sticking surfaces by
+micro/nano texturisation of metal parts (stainless steel). Nano texturisation on
+plastics have been commercialized for optics and medtech applications, but this
+is not achieved on steel surfaces for tooling yet. Preliminary research by EU
+Shark Project1 had demonstrated feasibility of laser texturising metals to
+improve hydrophobicity.
+
+** Methodology:
+- To understand the mechanism for material sticking and fouling of commonly used
+  powders and liquids in FMCG industry
+- Design of microstructures/morphology that can reduce sticking and fouling
+- Develop and test processes and parameters, and setup system to achieve
+  designed surface morphology
+- To leverage on IMRE and NUS on nanostructures design and laser patterning
+- Optimise the texturising process for different surface configurations,
+  including flat, curve, and internal surfaces
+- Evaluation of texturised parts for performance in a testbed environment
+  
+** Deliverable:
+- Identify the most optimal surface texturising process for specific
+  applications of powder-surface interactions, such as small storage silos,
+  auger fillers, bin activators, screw conveyors, powder and liquid conveying
+  piping etc. that will reduce risks of material build up, powder bridging,
+  sticking on surfaces, liquid adhesion etc.
+- A prototype system for surface texturizing that is capable of creating
+  specified surface textures on filling machine parts for enhanced
+  functionalities – non-stick, anti-fouling.
+  
+Please refer to Annex B.1.3 for details.
+
+
+* Annex B.1.3
+
+** Key objective and description
+
+  The objective is to investigate the causes of sticking and fouling on the
+  inner surfaces of machine parts, such as tanks, pipes, hoppers, auger during
+  filling of common FMCG powder and liquids. With a better understanding of the
+  sticking and fouling mechanisms, suitable design of microstructures and
+  surface morphology with the desired anti-sticking properties can be developed.
+
+_Scope_
+- Literature review of current state-of-art in metal surface texturising
+  techniques
+- Characterisation of powder products and metal substrate surfaces to understand
+  the mechanism of sticking and fouling
+- Design of microstructures and surface morphology that can reduce sticking and
+  fouling of FMCG products
+- Develop laser process parameters and system setup to achieve designed surface
+  morphology
+- Feasibility testing of generating designed surface morphology
+- Develop a scalable industrialised metal texturising method that can be adopted
+  on industrial components. Potential techniques include laser texturising,
+  metal etching, micromachining
+  - Curved surfaces
+  - Inner surfaces
+  - Large metal parts
+- Evaluation of long term performance in testbed environment
+
+  In surface fouling, there is potentially a number of mechanisms such as
+  mechanical interlocking, thermodynamic absorption, diffusion, and
+  electrostatic absorption. The various factors that lead to fouling may be a
+  result of multiple factors such as rheological properties, surface tension,
+  wettability, and roughness. As such, the exact mechanism and factors involved
+  is not clearly understood. Nevertheless, it is generally accepted that surface
+  energy and surface micro/nanostructures are the two key factors to achieve
+  high performance anti-sticking surfaces.
+
+  A secondary surface coating can be applied to change the free energy of the
+  surface, such as Teflon where chemicals are used to modify the surface
+  chemistry to achieve anti-sticking surfaces. However, there is a risk of wear
+  and tear, leading to peeling off from the substrate and health concerns on the
+  Teflon’s side effect on human health, especially when these anti-sticking
+  surfaces need to endure high temperature food treatment. Similarly, in the
+  case of food production, any such coatings must be food grade, otherwise, they
+  are deemed not to be suitable.
+
+  The other approach is the use of surface texturising to tailor surface
+  properties like wettability so as to reduce sticking and fouling. The presence
+  of surface topographies promotes a nearly spherical liquid droplet such that
+  they have minimal contact with the surface. Liquids that are challenging to
+  repel from the surface are liquid with low surface tensions e.g. ethanol
+  based, oil. Re-entrant structures that are known to be hydrophobic and
+  oleophobic were fabricated on steel. Re-entrant textures generally have
+  overhang, inverted trapezoid, mushroom like structures. Weisensee et al.,^33
+  reported using micromushroom steel structures that are close spacing to
+  support a fully non-wetting state. The use of hierarchical structures to
+  achieve superhydrophobic properties has also been explored quite
+  extensively. Hierarchical structures have features of two levels of dimension,
+  usually containing micro, macro features and finer nano features atop. The
+  presence of the fine nanostructures contributes to further reducing the
+  contact surface of the liquid to the substrate. A good example is
+  micro/nanostructures on laminated films for food packaging to enhance their
+  anti-sticking performances such as the Toyo’s yogurt cup lid as shown in
+  Figure 27.
+
+  Some of the methods used for micro-structuring of steel include laser
+  texturising, plasma etching, chemical etching, shot blasting and
+  micromachining. Many of these techniques have limitations and poses ecological
+  implications that make them undesirable. Compared amongst the various
+  processing technology to achieve textured surfaces, laser texturising stands
+  out as a strong contender that can address many of the issues mentioned. It is
+  a rapid process that can scale up to cover a large area, making it suitable
+  for industry implementation. The use of ultrashort pulsed laser enables direct
+  writing of specific structures on metallic substrates or the formation of
+  self-organising effect from laser material interaction. The critical laser
+  parameters include dose, wavelength, polarisation. The typical structures are
+  ripple like features, and the resolution are usually few hundreds of
+  nanometers. The ability to tailor and control both surface morphology and
+  wettability using ultrashort pulsed laser is an effective methodology to
+  generate functional properties on the surfaces of industrial component and has
+  profound implications to FMCG and other industry. Preliminary research by EU
+  Shark Project^35 had demonstrated feasibility of laser texturising metals to
+  improve hydrophobicity.
+
+** Significance and potential impact
+
+Material sticking to the walls of filling machines, tanks, vessels, pipes,
+augers, molds is a common problem in the Industry. The problem is further
+aggravated by processing conditions (temperature, heat, time, duration, batch
+size), product characteristics (hygroscopicity of powder) and environmental
+conditions (temperature, humidity). Excessive fouling happens when strong
+bonding occurs between the ingredients and the surface of the metal. This may
+lead to severe microbial contamination, called biofilm, resulting in severe
+contamination. Hence, the adhesion of food to production equipment surfaces is
+problematic as it may lead to severe microbial contamination, called biofilm,
+resulting in severe contamination. Equipment has to undergo frequent and
+exhaustive cleaning to remove residual adhesion on the surfaces, leading to
+significant production down time.
+
+** Implementation plan and proposed collaborators
+
+For implementation, the generic flow is as shown schematically in Figure 28, and
+the following steps will be executed as part of the implementation.
+
+*** Literature Review and Design of Surface Texturising Structure
+Literature review based on various properties requirements including
+hydrophobic, oleophobic, powder-phobic and select appropriate fabrication
+method, according to target substrate format. The review will look at
+state-of-the-art texturising techniques and currently achievable microstructures
+and morphology for powder-phobic properties. This will be followed by
+down-selection of materials of interest to one powder-based
+material. Identification of the mechanism of fouling and the specific areas on a
+hopper that are prone to being fouled will be taken into consideration during
+the design phase.
+
+*** Fabrication of Micro and Nano Structures
+Laser texturising is a versatile means to fabricate the micro/nanostructures
+directly on the metal surfaces as shown in Figure 29. The geometry and
+dimensions of the microstructures can be controlled by the pulse energy, number
+of pulses, and spot diameter by adjusting the level of beam defocus. Typically,
+the depth of the microstructure increases with the number of pulses, and the
+diameter of the microstructure increases with the amount of beam defocus.
+
+The micro-array can be prepared by adjusting the pitch between the scanning
+spots. The nanostructures are periodic ripples generally defined as
+laser-induced periodic surface structure (LIPSS). The periodic nano-textures are
+the result of the spatial energy distribution. When the incident laser beam
+interferes with surface electromagnetic waves generated by the rough surface
+that induces the excitation of surface plasmon polaritons, then the periodic
+ripples are generated. The dimensions of LIPSS can be influenced by the laser
+energy density and scanning speed of the laser beam. With increasing energy
+dose, the effects of ablation, heat accumulation and hydrodynamic instability
+lead to hierarchical micro-scale bumps and spikes. The characteristics of LIPSS
+can be influenced by the properties of the incident laser beam, including the
+polarisation orientation and wavelength.
+
+Once the respective microstructure and nanostructure has been established,
+micro/nano hierarchical structure can be generated by overlaying the periodic
+nanostructure on the prepared microstructure array. This will be followed by
+optimisation of structure geometry through tuning of fabrication parameters.
+
+*** Characterisation of Surface Properties
+SEM analysis, optical profilometry, and shear force microscopy will be used to
+characterise the resultant morphology and topology. The wettability of the
+textured surface can be investigated by measuring the static water contact angle
+and sliding angle. Wettability of a surface can be broadly divided into
+hydrophobic and hydrophilic, which can be defined by the surface contact
+angle. When the contact angle is greater than 90° then it is considered
+hydrophobic, which typically exhibits antifouling and anti-corrosion properties.
+
+However, there has been report that a laser textured surface may initially
+exhibit hydrophilicity, only to increase the contact angle and transition to
+hydrophobic properties over time, due to dissociative absorption of carbon
+dioxide from air. This suggests the need to understand the storage conditions
+and the eventual surface properties when it becomes stable. Also, low
+temperature annealing of the textured surface may result in different
+wettability, and hence, a comparison will be made between two sets of textured
+coupons, one in the as-texturised condition, and one with low temperature anneal
+treatment after surface texturising.
+
+It is generally known that wettability is affected by the surface chemistry. In
+this work, energy dispersive x-ray spectroscopy (EDS) will be used to analyse
+the surface chemistry, in particular, the change in the mass ratio of O and Fe
+elements, which is likely to undergo changes during the laser texturising
+process.
+
+**** Implementation of Metal Surface Texturising
+The developed process will be assessed for feasibility of scaling up in terms of
+areas of coverage and adapting to the contour of the industrial equipment. On
+top of that, any internal surfaces with limited access will pose a challenge for
+laser beam delivery. Hence, up-scaling of fabrication process to achieve surface
+structuring on larger format, curve surfaces, and inner surfaces will be
+developed. Potentially, the beam scanner can be mounted to a robot to manipulate
+the laser beam for better flexibility in order to enable laser processing on
+complex food production equipment surfaces.
+
+*** Budget Request
+Dr Gary Ng (Technical Lead for WP1.3) is Group Manager for Additive
+Manufacturing Industrialisation at ARTC. He will lead the technical development
+of WP1.3
+
+Prof Hong Minghui (co-I for WP1.3) is a professor at Electrical and Computer
+Engineering at NUS. He specialises in laser microprocessing and nanofabrication,
+optical engineering and applications. He has co-authored 10 book chapters, 24
+patents granted, and 400+ scientific papers in Nature, Chemical Reviews, Nature
+Nanotechnology, Advanced Materials, Nano Letters, Light: Science and
+Applications, ACS Nano, Science Advances, Nature Communications, and Laser &
+Photonics Reviews etc. and given 60+ plenary/keynote/invited talks in
+international conferences. He is the Chair of International Workshop of
+Plasmonics and Applications in Nanotechnologies (2006), Chair of Conference on
+Laser Ablation (2009) and Chair of Asia-Pacific Near-field Optics Conference
+(2013 and 2019). Prof. Hong is invited to serve as an Editor of Light: Science
+and Applications (Nature Publishing Group), Associate Editor of Science China G,
+Editor of Laser Micro/Nanoengineering, and Executive Editor-in-Chief of
+Opto-Electronic Advances. Prof. Hong is the Fellow of Optical Society of America
+(OSA), Fellow of International Society for Optics and Photonics (SPIE), and
+Founding Fellow and Vice President of International Academy of Photonics and
+Laser Engineering (IAPLE) as well as Fellow and Council Member of Institute of
+Engineers, Singapore (IES). Prof. Hong is currently a Full Professor and the
+Director of Optical Science and Engineering Centre (OSEC), Department of
+Electrical and Computer Engineering, National University of Singapore. He is
+also the Chairman of an NUS spin-off company Phaos Technology Pte. Ltd.
+
+Prof. Hong’s contributions in this work package include the followings:
+1. To design micro/nanostructures for anti-sticking surfaces for commonly used
+   liquid and powder in FMCG
+2. To carry out theoretical simulation, predict and optimise anti-sticking
+   surface property
+3. To build experimental setup and carry our extensive laser experiment to make
+   micro/nanostructures and evaluate their anti-sticking performance
+4. build the prototype for laser fabrication of anti-sticking surfaces for FMCG
+   industry
+
+Proposed Collaborators: Nanoimprint Foundry, IMRE has extensive experience in
+designing surface nanostructures for enhanced surface functionalities (e.g
+superhydrophobic, anti-microbial) on plastic surfaces; similar design principles
+can be adapted for metals texturizing. In addition, IMRE has extensive surface
+characterization capabilities.
+
+Dr David Waugh from School of Mechanical, Aerospace and Automotive Engineering,
+Coventry University, UK is experience in laser material processing and
+wettability / adhesion engineering which is highly relevant for this work
+package.
+
+Industry Partners: Voestapline
+
+\onecolumn
+
+#+CAPTION:Total budget for WP1.3 (ARTC and NUS)
+#+NAME:TOTALbudget
+| */WP1.3/*                            | */Year 1 ($k)/* | */Year 2 ($k)/* | */Year 3 ($k)/* | */Total ($k)/* |
+|--------------------------------------+-----------------+-----------------+-----------------+----------------|
+| EOM                                  |             270 |             190 |             190 |            650 |
+| EQPT                                 |             500 |             150 |             100 |            750 |
+| OOE                                  |              15 |              20 |              20 |             55 |
+|--------------------------------------+-----------------+-----------------+-----------------+----------------|
+| Total (Direct costs)                 |             785 |             360 |             310 |           1455 |
+|--------------------------------------+-----------------+-----------------+-----------------+----------------|
+| Overhead costs (20% of direct costs) |                 |                 |                 |            291 |
+|--------------------------------------+-----------------+-----------------+-----------------+----------------|
+| *GRAND TOTAL*                        |                 |                 |                 |           1746 |
+#+TBLFM: $2=remote(ARTCbudget,@5$2)+remote(NUSbudget,@5$2)::$3=remote(ARTCbudget,@5$3)+remote(NUSbudget,@5$3)::$4=remote(ARTCbudget,@5$4)+remote(NUSbudget,@5$4)::$5=vsum(@5..@6)::@7$5=vsum(@5..@6)
+
+#+CAPTION:Budget for WP1.3 (ARTC)
+#+NAME:ARTCbudget
+| */ARTC budget breakdown/*            | */Year 1 ($k)/* | */Year 2 ($k)/* | */Year 3 ($k)/* | */Total ($k)/* |
+|--------------------------------------+-----------------+-----------------+-----------------+----------------|
+| EOM (one Technical Lead)             |             110 |             110 |             110 |            330 |
+| EQPT(fixtures, sensors, prototypes)  |             100 |             150 |             100 |            350 |
+| OOE                                  |              15 |              20 |              20 |             55 |
+|--------------------------------------+-----------------+-----------------+-----------------+----------------|
+| Total (Direct costs)                 |             225 |             280 |             230 |            735 |
+|--------------------------------------+-----------------+-----------------+-----------------+----------------|
+| Overhead costs (20% of direct costs) |                 |                 |                 |            147 |
+|--------------------------------------+-----------------+-----------------+-----------------+----------------|
+| *GRAND TOTAL*                        |                 |                 |                 |            882 |
+#+TBLFM: $5=vsum($2..$4)::@5$2=vsum(@2..@4)::@5$3=vsum(@2..@4)::@5$4=vsum(@2..@4)::@6$5=@5$5*20/100::@7$5=vsum(@5..@6)
+
+#+CAPTION:Budget for WP1.3 (NUS)
+#+NAME:NUSbudget
+| */NUS budget breakdown/*               | */Year 1 ($k)/* | */Year 2 ($k/*) | */Year 3 ($k)/* | */Total ($k)/* |
+|----------------------------------------+-----------------+-----------------+-----------------+----------------|
+| EOM                                    |             160 |              80 |              80 |            320 |
+| EQPT(Laser and optical setup, testing) |             400 |               0 |               0 |            400 |
+| OOE                                    |               0 |               0 |               0 |              0 |
+|----------------------------------------+-----------------+-----------------+-----------------+----------------|
+| Total (Direct costs)                   |             560 |              80 |              80 |            720 |
+|----------------------------------------+-----------------+-----------------+-----------------+----------------|
+| Overhead costs (20% of direct costs)   |                 |                 |                 |            144 |
+|----------------------------------------+-----------------+-----------------+-----------------+----------------|
+| *GRAND TOTAL*                          |                 |                 |                 |            864 |
+#+TBLFM: $5=vsum($2..$4)::@5$2=vsum(@2..@4)::@5$3=vsum(@2..@4)::@5$4=vsum(@2..@4)::@6$5=@5$5*20/100::@7$5=vsum(@5..@6)
+
+
+\onecolumn
+
+#+attr_latex: :environment longtable :align |l|cccc|cccc|cccc|
+#+CAPTION:Milestone for WP1.3
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| \cellcolor{gray!40} *Tasks, Milestone and Deliverables* | \cellcolor{gray!40} *Y1* | \cellcolor{gray!40} *Y1* | \cellcolor{gray!40} *Y1* | \cellcolor{gray!40} *Y1* | \cellcolor{gray!40} *Y2* | \cellcolor{gray!40} *Y2* | \cellcolor{gray!40} *Y2* | \cellcolor{gray!40} *Y2* | \cellcolor{gray!40} *Y3* | \cellcolor{gray!40} *Y3* | \cellcolor{gray!40} *Y3* | \cellcolor{gray!40} *Y3* |
+| \cellcolor{gray!40}                                     | \cellcolor{gray!40} *Q1* | \cellcolor{gray!40} *Q2* | \cellcolor{gray!40} *Q3* | \cellcolor{gray!40} *Q4* | \cellcolor{gray!40} *Q1* | \cellcolor{gray!40} *Q2* | \cellcolor{gray!40} *Q3* | \cellcolor{gray!40} *Q4* | \cellcolor{gray!40} *Q1* | \cellcolor{gray!40} *Q2* | \cellcolor{gray!40} *Q3* | \cellcolor{gray!40} *Q4* |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Understanding the                                       | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| business and                                            | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| technical requirements                                  | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Literature review                                       | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| of state-of-art in                                      | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| surface texturing technology                            | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Understanding the                                       | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| the mechanism of                                        | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| of sticking and fouling                                 | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Down-selection of potential                             |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| technology for                                          |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| surface texturing                                       |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Down-selection of potential                             |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| technology for                                          |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| surface texturing                                       |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| \cellcolor{gray!40} *Milestone 1*:                      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} Define experimental                 | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} approach for surface texturing      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Experimental design and                                 |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+| methodology developed                                   |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Sourcing for equipment and                              |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |
+| optics                                                  |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Experimental setup                                      |                          |                          |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| \cellcolor{gray!40} *Milestone 2*                       | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} Experimental setup completed        | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} Simulation and modelling of         | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} desired surface texture             | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Simulation and modelling of                             |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |
+| desired surface texture                                 |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Identify key process variables                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |
+| for surface texturing                                   |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Characterisation of surface                             |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |
+| structure and surface properties                        |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Validate surface performance                            |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Optimisation of processing                              |                          |                          |                          |                          |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |
+| conditions on test coupons                              |                          |                          |                          |                          |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| \cellcolor{gray!40} *Milestone 3*                       | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} Optimised process for surface       | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} texturising on flat surfaces        | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Develop tool path and beam                              |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |
+| delivery for texturising on                             |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |
+| curved geometry                                         |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Develop tool path and beam                              |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |
+| delivery for texturising on                             |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |
+| internal geometry                                       |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Characterisation of surface                             |                          |                          |                          |                          |                          |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |
+| structure and surface properties                        |                          |                          |                          |                          |                          |                          | \cellcolor{black}        |                          |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Validate surface performance                            |                          |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Optimisation of processing                              |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        |                          |                          |                          |                          |
+| conditions for curved and                               |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        |                          |                          |                          |                          |
+| internal geometries                                     |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        |                          |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| \cellcolor{gray!40} *Milestone 4*                       | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} Optimised process for suface        | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} texturising on curved and           | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} internal geometries                 | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Develop and design surface                              |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |
+| texturising system                                      |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |                          |                          |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Integration of prototype                                |                          |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        | \cellcolor{black}        |                          |
+| surface texturising system                              |                          |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        | \cellcolor{black}        |                          |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| Demonstrate prototype system                            |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |
+| for surface texturising on                              |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |
+| component                                               |                          |                          |                          |                          |                          |                          |                          |                          |                          |                          | \cellcolor{black}        | \cellcolor{black}        |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+| \cellcolor{gray!40} *Milestone 5*                       | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} Final project report with           | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} demonstration on the prototype      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} system developed for surface        | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+| \cellcolor{gray!40} texturising of industrial component | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      | \cellcolor{gray!40}      |
+|---------------------------------------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------+--------------------------|
+
+
+
+* Note :noexport:
+
+  - Table Caption: put below table (M-x set-variable RET org-latex-caption-above
+    RET nil)
+  - 

@@ -1,0 +1,200 @@
+#+STARTUP: content latexpreview
+#+TEMPLATE: CMU ChemE Written Qualifier
+#+key: cmu-cheme-written-qualifier
+#+group: reports
+#+contributor: John Kitchin <jkitchin@andrew.cmu.edu>
+#+default-filename: qualifier.org
+
+#+LATEX_CLASS: article
+#+LATEX_CLASS_OPTIONS: [12pt]
+#+OPTIONS: toc:nil ^:{}
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+# here is where you include the relevant packages. These are pretty
+# common ones. You may add additional ones. Note that the orderauto composition of the
+# packages is significant. If you are not careful, your file will not
+# build into a pdf.
+#+LATEX_HEADER: \usepackage[top=1in, bottom=1.in, left=1in, right=1in]{geometry}
+#+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage[T1]{fontenc}
+#+LATEX_HEADER: \usepackage{fixltx2e}
+#+LATEX_HEADER: \usepackage{natbib}
+#+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage{minted}  % for source code
+#+LATEX_HEADER: \usepackage{graphicx}
+#+LATEX_HEADER: \usepackage{textcomp}
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage{pdfpages}
+#+LATEX_HEADER: \usepackage[version=3]{mhchem}
+#+LATEX_HEADER: \usepackage{setspace}
+#+LATEX_HEADER: \usepackage[linktocpage, pdfstartview=FitH, colorlinks, linkcolor=blue, anchorcolor=blue, citecolor=blue,  filecolor=blue,  menucolor=blue,  urlcolor=blue]{hyperref}
+#+LANGUAGE:  en
+#+TODO: TODO FEEDBACK VERIFY | DONE CANCELED
+
+\doublespace
+
+#+TITLE:	SCIENTIFIC TEMPLATE
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+
+
+\maketitle
+#+BEGIN_abstract
+This article describe Python programming concepts and task based source code collection.
+#+END_abstract
+
+\thispagestyle{empty}
+\clearpage
+\setcounter{page}{1}
+
+* INTRODUCTION
+** Programming
+    - Python3
+
+
+* BACKGROUND AND THEORY
+
+
+** Python Basics
+
+    • **Everything in Python is an object**, including functions. You can assign them to variables, store them in data structures, and pass or return them to and from other functions (first-class functions.)
+
+*** Functions
+
+    • **Functions are objects** —they can be assigned to variables and passed to and returned from other functions
+    • Functions can be defined inside other functions — and a child function can capture the parent function’s local state (lexical closures)
+    • First-class functions allow you to abstract away and pass around behavior in your programs.
+    • Functions can be nested and they can capture and carry some of the parent function’s state with them. Functions that do this are called closures.
+    • Objects can be made callable. In many cases this allows you to treat them like functions.
+
+*** Decorators
+    - Python’s decorators allow you to extend and modify the behavior of a /callable/ (functions, methods, and classes) without permanently modifying the callable itself.
+    - They “decorate” or “wrap” another function and let you execute code before and after the wrapped function runs.
+    - A decorator is a callable that takes a callable as input and returns another callable.
+    - Use Python’s @ syntax for decorating a function.
+    - Use multiple decorator on single function. Decorator stacking: the order of decorators applied is from bottom to top.
+
+*** *args and **kwargs
+    - allow a function to accept optional arguments, so you can create flexible APIs in your modules and classes.
+    - args will collect extra positional arguments as a tuple because the parameter name has a * prefix.
+    - kwargs will collect extra keyword arguments as a dictionary because the parameter name has a ** prefix.
+   
+* METHODS
+
+** Python Cookbooks
+   - [ ] rayopt
+   - [ ] poppy
+
+
+
+* RESULTS AND DISCUSSION
+** Ipython Source Block
+
+#+BEGIN_SRC ipython :session :results raw drawer
+print('Hello world!')
+%matplotlib inline
+import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.linspace(0, 20 * np.pi, 200)
+y = np.exp(-0.1 * x) * np.sin(x)
+plt.plot(x, y)
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Decaying sin wave')
+
+# new plot
+plt.figure()
+y2 = np.exp(-0.1 * x) * np.cos(x)
+plt.plot(x, y2)
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Decaying cosine')
+#+END_SRC
+
+#+RESULTS:
+:results:
+# Out[1]:
+# output
+: Hello world!
+: 
+# text/plain
+: Text(0.5, 1.0, 'Decaying cosine')
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/a0641e7bd3ed5e0a2d925685c08d3be8-2573EeB.png]]
+
+# text/plain
+: <Figure size 432x288 with 1 Axes>
+
+# image/png
+[[file:obipy-resources/a0641e7bd3ed5e0a2d925685c08d3be8-2573RoH.png]]
+:end:
+
+#+BEGIN_SRC ipython :session :results raw drawer
+from graphviz import Graph
+
+g = Graph('G', filename='g_c_n.gv')
+g.attr(bgcolor='purple:pink', label='agraph', fontcolor='white')
+
+with g.subgraph(name='cluster1') as c:
+    c.attr(fillcolor='blue:cyan', label='acluster', fontcolor='white',
+           style='filled', gradientangle='270')
+    c.attr('node', shape='box', fillcolor='red:yellow',
+           style='filled', gradientangle='90')
+    c.node('anode')
+
+g
+
+#+END_SRC
+
+* CONCLUSIONS
+
+Summarize the main conclusions here.
+Good!
+
+\newpage
+bibliographystyle:unsrt
+bibliography:<replace: your bibfile>
+
+
+
+* build :noexport:
+
+[[elisp:(org-open-file (org-latex-export-to-pdf))]]
+
+
+
+* Tasks :noexport:
+** TODO Programming
+   - Python
+   - CSS/SCSS
+   - Javascript
+   - Bootstrap
+   - Jinja2
+   - Django/templating
+   [2018-08-28 Tue]
+   [[file:~/Projects/scimax/try.py][file:~/Projects/scimax/try.py]]
+
+   
+* My Notes:
+
+** For each chapter:
+   - Properly defined terms
+   - Examples
+   - Graphical or diagram explanation
+   - Analytical solution (latex equation)
+   - Numerical solution (programming)
+   - Keep everything clear and concise
+
+** For each new chapter:
+   Start with:
+   - Refresher:
+     - What we have learnt so far:
+       - topic 1
+       - topic 2
+     - Stepping forward from here:
+       - Raise questions to be answered later

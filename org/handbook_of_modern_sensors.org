@@ -1,0 +1,11 @@
+* Data Acuisition
+** Sensors Signals Systems
+- Sensor :: A sensor is a device that receives a stimulus and responds with an electrical signal.
+  - Direct and Hybrid :: A direct sensor converts a stimulus into an electrical signal or modifies an externally supplied electrical signal, whereas a hybrid sensor (or simply—a sensor) in addition needs one or more transducers before a direct sensor can be employed to generate an electrical output.
+  - Active and Passive :: A passive sensor does not need any additional energy source. It generates an electric signal in response to an external stimulus. That is, the input stimulus energy is converted by the sensor into the output signal. The active sensors require external power for their operation, which is called an excitation signal. That signal is modified (modulated) by the sensor to produce the output signal. The active sensors sometimes are called parametric because their own properties change in response to an external stimulus and these properties can be subsequently converted into electric signals. It can be stated that a sensor’s parameter modulates the excitation signal and that modulation carries information of the measured value.
+  - Absolute and Relative :: An absolute sensor detects a stimulus in reference to an absolute physical scale that is independent on the measurement conditions, whereas a relative sensor produces a signal that relates to some special case.
+- Detector :: The terms sensor and term detector are synonyms, used interchangeably and have the same meaning. However, detector is more often used to stress qualitative rather than quantitative nature of measurement. For example, a PIR (passive infrared) detector is employed to indicate just the existence of human movement but generally cannot measure direction, speed, or acceleration.
+- Transducer :: is a converter of any one type of energy or property into another type of energy or property
+- Actuator :: An actuator may be described as opposite to a sensor — it converts electrical signal into generally nonelectrical energy.
+** Mathematical Models
+- 

@@ -1,0 +1,52 @@
+#+STARTUP: content
+* Installation
+#+BEGIN_SRC jupyter-python 
+import django
+print(django.get_version())
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+4.2.5
+:END:
+
+* Process Flow
+** Main Site
+- /django-admin startproject mysite/
+- /python manage.py startapp polls/
+- mysite/urls.py --> polls.urls.py --> views.py --> index
+- /python manage.py runserver/
+** Path() Argument
+- route :: a string that contains a URL pattern. When processing a request, Django starts at the first pattern in urlpatterns and makes its way down the list, comparing the requested URL against each pattern until it finds one that matches. Patterns don’t search GET and POST parameters, or the domain name. 
+- view :: When Django finds a matching pattern, it calls the specified view function with an HttpRequest object as the first argument and any “captured” values from the route as keyword arguments.
+- kwargs :: Arbitrary keyword arguments can be passed in a dictionary to the target view.
+- name :: Naming your URL lets you refer to it unambiguously from elsewhere in Django, especially from within templates.
+* Database
+** Main
+- mysite/settings.py
+- By default, the configuration uses SQLite.
+- Model :: single, definitive source of information about your data. It contains the essential fields and behaviors of the data you’re storing.
+- The goal is to define your data model in one place and automatically derive things from it.
+- migrate :: command that will run the migrations for you and manage your database schema automatically.
+- sqlmigrate :: takes migration names and returns their SQL
+- polls/models.py
+- Django apps are “pluggable”: You can use an app in multiple projects, and you can distribute apps, because they don’t have to be tied to a given Django installation.
+- /python manage.py makemigrations polls/
+- /python manage.py check/
+- /python manage.py migrate/
+- /python manage.py shell/
+** Admin
+- /python manage.py createsuperuser/
+* View
+- View :: a “type” of web page in your Django application that generally serves a specific function and has a specific template.
+- In Django, web pages and other content are delivered by views. Each view is represented by a Python function (or method, in the case of class-based views). Django will choose a view by examining the URL that’s requested (to be precise, the part of the URL after the domain name).
+- Each view is responsible for doing one of two things: returning an *HttpResponse* object containing the content for the requested page, or raising an exception such as *Http404*.
+- Use Django’s template system to separate the design from Python by creating a template that the view can use. 
+* Template
+- We need to be able to point Django at the right one, and the best way to ensure this is by namespacing them. That is, by putting those templates inside another directory named for the application itself.
+- The template system uses dot-lookup syntax to access variable attributes. 
+* CSS
+- When DEBUG = False, static files have to be collected and put in a specified folder before we can use it.
+- To collect all necessary static files for your project, start by specifying a STATIC_ROOT property in the settings.py file.
+- Django does not have a built-in solution for serving static files, at least not in production when DEBUG has to be False. We have to use a third-party solution to accomplish this: WHITENOISE.
+- /python manage.py collectstatic/ 

@@ -1,0 +1,416 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	Wetting Theory
+
+* Mindmap
+#+begin_src plantuml :file _static/MindMapPhysicsContinuousMatter.png :results output raw :post attr_wrap(data=*this*) 
+@startmindmap
+,* Physics of Continuos Matter
+,** Fluid at rest
+,*** Surface Tension
+,**** Surface Energy
+,***** Gibbs Free Energy
+,***** Helmholtz Free Energy
+,**** Force and Surface Tension
+,**** Capillary Length
+,**** Contact Angle
+,***** Surface Roughness
+,***** Heterogeneity/\nContamination
+,***** Wax coating
+,** Solids at rest
+,*** Surface Roughness
+,**** Roughness Standards
+,**** Food Sanitary Roughness Standards
+,** Fluids in motion
+,*** Viscosity
+@endmindmap
+#+end_src
+* Origin of Wetting - Case Studies
+** Capillary Rise in a Vertical Tube
+** Directionally Biased Inception of Flow in a Horizontal Tube
+** Repellency of Structured Surfaces
+* Surface Tension and Surface Energy Density
+** Definition
+- Surface Molecule :: Figure [[fig:SurfaceMolecule]] shows Cross-section of a primitive three-dimensional model of a material interfacing to vacuum. A molecule at the surface has only five bonds compared to the six that link a molecule in the interior. The missing bond energy at the surface gives rise to a positive surface energy density, which is the cause of surface tension. A surface molecule will only be bound by $\frac{5}{6}E\text{, E = Total Binding Energy}$.
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION: Surface Molecule 
+    #+NAME: fig:SurfaceMolecule
+    #+ATTR_RST: :alt alternate text :align center :scale 80%
+     [[file:_static/SurfaceMolecule.png]]
+- Surface Energy Density :: Surface Energy Density = $\alpha$
+     \[\begin{split}
+       \alpha &\approx \frac{\frac{1}{6}E}{L^2_{mol}} \\
+       &= \frac{hm}{6L^2_{mol}} \\
+       \therefore \alpha &\approx \frac{1}{6}h\rho L_{mol} \\
+       \text{where:} \\
+       E &= \text{Total Binding Energy}, J \\
+       h &= \text{specific heat of evaporation (evaporation enthalpy per unit of mass)}, Jkg^{-1} \\
+       L_{mol} &= \text{molecular seperation length} \\
+       \rho L_{mol} &= \text{effective surface mass density of a layer of thickness}\ L_{mol} \\
+       E &\approx hm \\
+       m &= \text{mass of a single molecule}  \\
+       &= \frac{M_{mol}}{N_A} \\
+       &= \rho L^3_{mol} \\
+       \end{split}\]
+- Work and surface energy density :: Increasing the area of an interface with surface energy density $\alpha$ by a tiny amount dA requires an amount of work equal to the surface energy contained in the extra piece of interface,
+     $\boxed{dW=\alpha\ dA}$
+  - Increasing the area against a positive surface energy density requires work /from/ the environment.
+  - The surface energy density associated with a liquid or solid interface against vacuum (or gas) is always positive because of the missing negative binding energy of the surface molecules. The positivity of the surface energy density guarantees that such interfaces seek toward the minimal area, consistent with the other forces that may be at play, for example gravity.
+  - Interfaces between solids and liquids or between liquids and liquids are not required to have positive interfacial energy density. The sign depends on the strength of the cohesive forces holding molecules of a material together compared to the strength of the adhesive forces between the opposing molecules of the interfacing materials.
+- Force and surface tension :: =Surface tension is identical to surface energy density=, unit = N m^-1 = J m^-2.
+     Let an oriented open surface be divided into two parts by an oriented curve, such that the surface has a uniquely defined left- and right-hand side with respect to the curve. If On denotes the normal to the surface, then
+     $\boxed{d\boldsymbol{F}=\alpha\ d\boldsymbol{l} \times \boldsymbol{\hat{n}}}$ is the force that the right-hand side of the surface exerts on the left-hand side through the curve element $d\boldsymbol{l}$
+  - At an interface between homogeneous materials, surface tension does not depend on how much the interface has already been stretched (not behaved like Hooke's law).
+  - In the absence of all external forces, surface tension will attempt to make the water droplet spherical because that shape has the smallest area for a given volume ($\frac{\partial{A}}{\partial{V}}=0$).
+- Pressure excess in a sphere :: Surface tension will attempt to contract the ball but is stopped by the build-up of an extra positive pressure $\Delta{p}$ inside the liquid.
+     Increase radius R by amount of dR, work done:
+     \[\begin{split}
+       dW &= \alpha\ dA - \Delta{p}dV \\
+       dA &= d(4\pi R^2) \\
+          &= 8\pi R dR \\
+       dV &= d(\frac{4}{3}\pi R^3) \\
+          &= 4\pi R^2 dR \\
+       \therefore dW &= (\alpha8\pi R - \Delta p 4\pi R^2)dR \\
+       \Rightarrow \Delta{p} &= \frac{2\alpha}{R} \\
+       \end{split}\]       
+** Measurement
+* Line Tension and its measurement
+* Capillary Length and Gravity
+- Capillary length :: is a length scaling factor that relates gravity and surface tension.
+     When pressure excess due to surface tension balances the pressure due to gravity, we have
+     \[\begin{split}
+       \rho_0g_02R &= \frac{2\alpha}{R} \\
+       \therefore L_c &= \sqrt{\frac{\alpha}{\rho_0 g_0}} = \text{capillary length or capillary constant} \\
+       \end{split}\]
+  - To disregard the influence of gravity on the shape of water droplet, $\boxed{R\ll L_c}$
+  - The capillary length equals 2.7 mm for the air–water interface at 25^{\circ}C.
+- Marangoni forces :: Variations in surface tension create both normal and shear Marangoni forces in the surface. Such variations can arise from inhomogeneous material properties, or from temperature variations. Surface tension generally decreases with rising temperature.
+* Surfactant as Softening Agent
+* Contact Angle and Apparent Contact Angle
+** Fundamentals:
+- Contact Line :: horizontal and vertical
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION: Contact Line 
+    #+NAME: fig:ContactLine
+    #+ATTR_RST: :alt alternate text :align center :scale 50%
+     [[file:_static/VerticalContactAngle.png]]
+- Contact Angle :: For the typical case of a three-phase contact between solid, liquid, and gas the /contact angle/ $\chi$ is defined as the angle between the solid and the interface (inside the liquid). the contact angle is extremely sensitive to surface properties, fluid composition, and additives.
+- Dupré Equation :: When a solid is in contact with liquid, the molecular attraction will reduce the energy of the system below that for the two separate surfaces. This is expressed by the Dupré equation,
+     \[W_{SL}=\gamma_{SA}+\gamma_{LA}-\gamma_{SL}\]
+     where \(W_{SL}\) is the work of adhesion per unit area, \(\gamma_{SA}\), \(\gamma_{LA}\), and \(\gamma_{SL}\) are the solid-air, solid-liquid, and liquid-air surface tensions, respectively.
+- Minimized Surface Energy :: If a liquid droplet is placed on a smooth solid surface, the liquid and solid surfaces come together under equilibrium at a characteristic angle called the static contact $\theta_{0}$ (Fig. [[Smooth Rough Angle]]). This contact angle can be determined by minimizing the net surface free energy of the system. The total energy $E_{tot}$ is given by,
+     \[E_{tot}=\gamma_{LA}(A_{LA}+A_{SL})-W_{SL}A_{SL}\]
+     where $A_{SL}$ and $A_{LA}$ are the contact areas of the liquid with the solid and air, respectively. It is assumed that the droplet of density $\rho$ is smaller than the capillary length, \(\left(\frac{\gamma_{LA}}{\rho g}\right)^{\frac{1}{2}}\), so that the gravitational potential energy can be neglected. It is also assumed that the volume and pressure are constant, so that the volumetric energy does not change. At the equilibrium $dE_{tot} = 0$, which yields,
+     \[\gamma_{LA}(dA_{LA}+dA_{SL}-W_{SL}dA_{SL})=0\]
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION: Smooth and Rough Contact Angle
+    #+NAME: Smooth Rough Angle
+    #+ATTR_RST: :alt alternate text :align center :scale 80%
+     [[file:_static/SmoothRoughAngle.png]]
+- Young's Law :: For a droplet of constant volume, it is easy to show using geometrical considerations that,
+     \[\frac{dA_{LA}}{dA_{SL}}=\cos\theta_{0}\]
+     proves =Young's equation=:
+     \[\begin{split}
+      \alpha_{sg} &= \alpha_{sl}+\alpha\cos\chi \\
+      \cos\chi &= \frac{\alpha_{sg}-\alpha_{sl}}{\alpha} \\
+       \end{split}\]
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION: Young Contact Angle
+    #+NAME: Young Angle
+    #+ATTR_RST: :alt alternate text :align center :scale 50%
+     [[file:_static/Chapter_5_Contact_Angle_Young.png]]
+- Young-Dupre equation :: expression for the work of adhesion:
+     \[W_{SL}=\gamma_{LA}(1+\cos\theta_{0})\]
+     W_{SL} should be reduced to reduce interfacial adhesion which implies a high value of \theta_{0}.
+- Mostly Wetting :: $0<\alpha_{sg}-\alpha_{sl}<\alpha \text{ and } 0<\chi<90^\circ$
+- Mostly Non-wetting :: $-\alpha<\alpha_{sg}-\alpha_{sl}<0 \text{ and } 90^\circ\leq\chi\leq180^\circ$
+- Completely Wetting :: $\alpha_{sg}-\alpha_{sl}>\alpha$, \theta_{0}=0^{\circ}, occurs when the work of adhesion is greater than the fluid adhesion, \(W_{SL}\geq2\gamma_{LA}\)
+- Completely Non-Wetting :: $\alpha_{sg}-\alpha_{sl}<-\alpha$
+- Dewetting :: liquid collects into nearly spherical pearls
+- Capillary Effect :: Water has a well-known ability to rise above the ambient level in a narrow, vertical, cylindrical glass tube that is lowered into the liquid. This is called the capillary effect and takes place because the surface tension of glass in contact with air is larger than that of glass in contact with water, $\alpha_{sg}>\alpha_{sl}$.
+** Hydrophobic surface Model
+- Young Equation of Contact Angle :: (Fig. [[Water Contact Angle]]):
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp, align=center]
+    #+CAPTION:Water Contact Angle Definition
+    #+NAME: Water Contact Angle
+    #+ATTR_RST: :alt alternate text :align center :scale 80%
+    [[file:_static/ContactAngle.png]]
+     $$\cos\theta=\frac{T_{sg} - T_{sl}}{T_{lg}}$$
+     $$\theta \mapsto \begin{cases}
+    	< 90^\circ, & \text{Hydrophilic} \\
+    	90^\circ < \theta < 150^\circ, & \text{Hydrophobic} \\
+	        > 150^\circ, & \text{SuperHydrophobic}
+    	\end{cases}$$
+- Wenzel State :: modified with roughness factor
+     Fig. [[Wenzel Cassie Bexter]]
+     \[r=\text{roughness factor}=\frac{\text{actual surface area}}{\text{planar area}}\]
+     /r/ is the amplification factor of increased surface area. Therefore \(\cos\theta\) is modified to become:
+     \[\cos\theta_{W}=r\cos\theta\]
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION: Wenzel and Cassie-Bexter state 
+    #+NAME: Wenzel Cassie Bexter
+    #+ATTR_RST: :alt alternate text :align center :scale 80%
+    [[file:_static/WenzelCassieBexter.png]]
+- Cassie-Bexter State ::
+     Fig. [[Wenzel Cassie Bexter]]
+     \[\begin{split}
+     \cos \theta_{CB} &= f_1 \cos \theta_1 + f_2 \cos \theta_2 \\
+     \text{where} \\
+     f_1 &= \text{Surface Fraction of Phase 1} \\
+     f_2 &= \text{Surface Fraction of Phase 2} \\
+     \end{split}\]
+     If only one type of protrusion is present, given /f/ the fraction of asperities, $(1 - f)$ is the air fraction. Water droplet has a \(180^\circ\) contact angle with air, so the equation becomes:
+         $$\cos \theta_{CB} = f(1 + \cos \theta_W) - 1$$
+- Intermediate Wenzel-Cassie state ::
+     For many surfaces, a transition from Cassie-Baxter to Wenzel state was observed.
+     $$\cos \theta_{CW} = rf \cos \theta + f - 1$$     
+** Wetting Regime
+*** Cassie - Air Trapping
+*** Wenzel
+*** Cassie - Impregnating
+*** Mixed
+** Derivation from Thermodynamics
+** Derivation from Variation Principle
+* Contact Angle Hysteresis
+* Directionality
+* Sliding Angle
+* Surface Roughness vs. Wettability
+** Rough Surface with Homogeneous and Heterogeneous Interfaces
+- Wenzel Interface :: Consider a liquid droplet on a rough surface with a homogeneous interface. The interface area increases with respect to that for a smooth surface. Using the surface force balance and empirical considerations, the contact angle of a liquid droplet upon a rough solid surface, $\theta$, is related to that upon a smooth surface, $\theta_{0}$ for a homogeneous interface (Fig. ), through the non-dimensional surface roughness factor, $R_{f}>1$, which is equal to the ratio of the rough surface area, $A_{SL}$, to its flat projected area, $A_{F}$
+     \[\begin{split}
+     \cos\theta &= \frac{dA_{LA}}{dA_{F}} \\
+                &= \frac{A_{SL}}{A_{F}}\frac{dA_{LA}}{dA_{SL}} \\
+                &= R_{f}\cos\theta_{0} \\
+     \text{where} \\
+            R_{f} &= \frac{A_{SL}}{A_{F}} \\
+     \end{split}\]
+     $\boxed{\cos\theta=R_{f}\cos\theta_{0}}$ is called =Wenzel Equation=.
+- Heterogeneous :: For a heterogeneous interface composed of two fractions, one with the fractional area $f_{1}$ and the contact angle $\theta_{1}$ and the other with $f_{2}$ and $\theta_{2}$, respectively (so that $f_{1} + f_{2} = 1$), the contact angle is given by the =Cassie equation=:
+     \[\boxed{\cos\theta=f_{1}\cos\theta_{1}+f_{2}\cos\theta_{2}}\]
+- Cassie-Baxter Interface/Composite Interface :: 
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp, align=center]
+    #+CAPTION: Composite Interface
+    #+NAME: Composite Interface
+    #+ATTR_RST: :alt alternate text :align center :scale 80%
+     [[file:_static/CompositeInterface.png]]
+     A composite interface (Figure [[Composite Interface]]), consists of a fractional geometrical area of the /solid-liquid interface under the droplet/ ($f_{1} = f_{SL}, \theta_{1} = \theta$) and of the /liquid-air interface/ ($f_{2} = f_{LA} = 1-f_{SL}, \cos\theta_{2} = −1$).
+     \[\begin{split}
+     \cos\theta &= R_{f}f_{SL}\cos\theta_{0}-1+f_{SL} \\
+     \cos\theta &= R_{f}\cos\theta_{0}-f_{LA}(R_{f}\cos\theta_{0}+1) \\
+     \end{split}\]
+
+     This is =Cassie-Baxter Equation=.
+     For the homogeneous interface, f_{LA} = 0, whereas for the composite interface f_{LA} is a non-zero number.
+- Cassie-impregnated interface :: Interface in which liquid film impregnates some of the cavities in an area surrounding the liquid droplet, while the top of the rough surface remains dry. It consists of two fractions – solid-liquid homogeneous interface (Wenzel interface) and some of the neighboring cavities filled with liquid with dry tops. The energy of such a rough surface with filled cavities is different from the energy of the surface with empty cavities. Filled cavities correspond to the liquid-liquid interface with $\cos\theta_{2}=1,\theta_{2}=0^\circ$. For this case, one gets,
+     \[\cos\theta=1+f_{SL}(R_{f}\cos\theta_{0}-1)\]
+     A liquid film filling the cavities surrounding the droplet is possible when $\theta_{0}<\theta_{c}$, where $\theta_{c}$ is the =critical contact angle= given by
+     \[\cos\theta_{c}=\frac{1-f_{SL}}{R_{f}-f_{SL}}\]
+     This wetting interface is referred to as the Cassie-impregnated interface or simply the Cassie interface.
+- Mixed or Impregnated State :: Pure Cassie-Baxter and Wenzel wetting situations rarely occur. An intermediate state between the Wenzel and Cassie-Baxter interfaces is more common. In this interface, underneath the droplet, liquid penetrates and the cavities are partially impregnated or filled, and is referred to as the mixed/impregnated state. =This state is metastable=.
+    #+NAME: fig:FourConfigurationInterface
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp, align=center]
+    #+CAPTION: Four Configuration Interface
+    #+ATTR_RST: :alt alternate text :align center :scale 80%
+     [[file:_static/FourConfigurationInterface.png]]
+- Roughness Factor and Fractional Liquid-Air Area :: the contact angle increases with an increase of $f_{LA}$. At a high value of $f_{LA}$, a surface can become liquiphobic; however, the value required may be unachievable, or the formation of air pockets may become unstable. Using the Cassie-Baxter equation, the value of $f_{LA}$ at which a liquiphilic surface could turn into a liquiphobic one is given as
+     \[f_{LA}\geq\frac{R_{f}\cos\theta_{0}}{R_{f}\cos\theta_{0}+1},\text{ for } \theta_{0}<90^\circ\]
+     For high fLA, a nanopattern is desirable because whether a liquid-air interface is generated depends upon the ratio of distance between two adjacent asperities and droplet radius. Furthermore, asperities can pin liquid droplets and thus prevent liquid from filling the valleys between asperities. High Rf can be achieved by both micropatterns and nanopatterns.
+- Curvature of the Liquid-Air Interface :: spreading of a liquid over a rough solid surface continues until (Young’s equation) is satisfied locally at the =triple line= (the line of contact of the solid, liquid, and air interfaces) and, simultaneously, the surface area is minimized over the entire liquid-air interface. The minimal surface area condition states that the sum of the inverse of the principal radii of curvature $R_{1}$ and $R_{2}$ of the liquid surface along the two mutually orthogonal planes (mean curvature) is constant at any point, which governs the shape of the liquid-air interface. The same condition is also the consequence of the Laplace equation, which relates pressure change through an interface, ΔP, with its mean curvature
+     \[\frac{1}{R_{1}}+\frac{1}{R_{2}}=\frac{\Delta P}{\gamma_{LA}}\]
+     Note that at the thermodynamic equilibrium (when condensation and evaporation occurs at the same speed), $\Delta P$ is dependent on the partial vapor pressure. For contact with saturated vapor the mean curvature of the liquid-air interface is zero at equilibrium. A convex interface $\left(\frac{1}{R_{1}}+\frac{1}{R_{2}}>0\right)$ results in evaporation prevailing over condensation. This is why small droplets tend to evaporate. However, a concave interface $\left(\frac{1}{R_{1}}+\frac{1}{R_{2}}<0\right)$ results in condensation of saturated vapor prevailing over evaporation. Since the condensation prevails, a concave interface may be in thermodynamic equilibrium with undersaturated vapor. This is why concave menisci tend to condense even when the relative humidity is less than 100%.
+- Dipole Moment Averaging :: when the size of the chemical heterogeneities is very small (of atomic or molecular dimensions), the quantity that should be averaged is not the energy, but the dipole moment of a macromolecule. Cassie Equation
+     \(\cos\theta=f_{1}\cos\theta_{1}+f_{2}\cos\theta_{2}\) should be replaced by:
+     \[\boxed{(1+\cos\theta)^2=f_1(1+\cos\theta_1)^2+f_2(1+\cos\theta_2)^2}\]
+- Actual Contact Angle :: actual angle under which the liquid-air interface comes in contact with the solid surface at the micro- and nanoscale can be different from the apparent(macroscale) contact angle. Reason:
+  1. liquid molecules tend to form a thin layer upon the surfaces of many materials. This is because of a long-distance van der Waals adhesion force that creates the so-called =disjoining pressure=.
+  2. even carefully prepared atomically smooth surfaces exhibit a certain roughness and chemical heterogeneity. Liquid tends first to cover the liquiphilic spots with high surface energy and low contact angle.
+  3. the very concept of the static contact angle is not well defined.
+  4. for small droplets and curved triple lines, the effect of the contact line tension may be significant. This effect becomes important when the radius of curvature is comparable with the so-called Tolman’s length, normally of the molecular size.
+- Wetting at Differnt Scale Level ::
+     | Scale Level | Characteristic Length   | Parameters                               | Phenomena                         | Interface          |
+     |-------------+-------------------------+------------------------------------------+-----------------------------------+--------------------|
+     | Macroscale  | Droplet radius (mm)     | Contact Angle, Droplet Radius            | Contact Angle Hysteresis          | 2-D                |
+     | Microscale  | Roughness (um)          | Shape of the droplet,                    | Kinetic Effects                   | 3-D solid surface, |
+     |             |                         | Position of the liquid-air interface (h) |                                   | 2-D liquid surface |
+     | Nanoscale   | Molecular Heterogeneity | Molecular description                    | Thermodynamic and dynamic effects | 3-D                |
+- 3D Rough Surface :: rough surface z(x, y), the roughness factor can be defined as a function of the coordinates
+     \[r(x,y)=\sqrt{1+\left(\frac{dz}{dx}\right)^2+\left(\frac{dz}{dy}\right)^2}\]
+     for =non-uniformly rough surfaces=, the generalized Wenzel equation is formulated to determine the local contact angle (a function of x and y) with rough surfaces at the triple line
+     \[\boxed{\cos\theta=r(x,y)\cos\theta_0}\]
+- Cassie Equation for Composite Surface :: Generalized equation
+     \[\cos\theta_{composite}=f_{1}(x,y)\cos\theta_{1}+f_{2}(x,y)\cos\theta_{2}\]
+     where \(f_{1}+f_{2}=1\), and \theta_{1} and \theta_{2} are contact angles of the two components.
+     The values of \(r(x, y), f_{1}(x, y), f_{2}(x, y)\) are average values over an area (x, y) with a size larger than a typical roughness/heterogeneity detail size. Therefore, the generalized Wenzel and Cassie equations can be used at the scale at which the effect of the interface perturbations vanish, in other words, when the size of the solid surface roughness/heterogeneity details is small compared with the size of the liquid-air interface, which is of the same order as the size of the droplet
+- Contact Angle Hysteresis :: The contact angle at the front of the droplet (advancing contact angle) is greater than that at the back of the droplet (receding contact angle), resulting in contact angle hysteresis (CAH), which is the difference between the advancing and receding contact angles, representing two stable values. CAH reflects the irreversibility of the wetting/dewetting cycle. In a surface with high CAH, the receding contact angle is low and may pin the liquid and provide resistance to flow. CAH is a measure of =energy dissipation= during the flow of a droplet along a solid surface. At a low value of CAH, the droplets may roll, in addition to slide, and take contaminants from the surface with them, providing a self-cleaning ability known as the “lotus effect.” Surfaces with low CAH have a low liquid roll-off (tilt) angle, which denotes the angle to which a surface must be tilted for liquid drops to roll off. The tangent of the tilt angle is equal to the coefficient of friction of a droplet sliding/rolling on a surface. Therefore, surfaces with CAH or a tilting angle of =less than <10°= are self-cleaning surfaces and with low adhesion/drag and antifouling.
+- Contact Angle Hysteresis vs. Roughness :: The energy gained for surfaces during contact is greater than the work of adhesion for separating the surfaces, due to so called =adhesion hysteresis=.
+  - Adhesion Hysteresis :: adhesion hysteresis can be assumed to be proportional to the fractional solid-liquid area (1 − f_{LA}). The difference of cosines of the advancing and receding angles is related to the difference of those for a nominally smooth surface, \(\theta_{adv0}\) and \(\theta_{rec0}\) as:
+       \[\cos\theta_{adv}-\cos\theta_{rec}=\underbrace{R_f(1-f_{LA})(\cos\theta_{adv0}-\cos\theta_{rec0})}_{\text{inherent contact angle hysteresis of a smooth surface}}+\underbrace{H_{r}}_{\text{total perimeter of the asperity per unit area}}\]
+
+       For a homogeneous interface, increasing roughness (high R_{f}) leads to increasing the contact angle hysteresis (high values of θ_{adv} − θ_{rec}), while for the composite interface, an approach to unity of f_{LA} provides both high contact angle and small contact angle hysteresis. Therefore, the composite interface is desirable for low contact angle hysteresis.
+  - Case 0 - Limiting Case ::
+    - increasing f_{LA} → 1 results in increasing the contact angle (\(\cos\theta\rightarrow -1,\theta\rightarrow\pi\)) and decreasing the contact angle hysteresis (\(\cos\theta_{adv}-\cos\theta_{rec}\rightarrow 0\)).
+    - very small solid-liquid fractional contact area under the droplet, when the contact angle is large (\(\cos\theta\approx-1+\frac{(\pi-\theta)^{2}}{2},\sin\theta\approx\theta-\pi\)) and the contact angle hysteresis is small (θadv ≈ θ ≈ θrec),
+      \[\begin{align}
+         \pi-\theta &= \sqrt{2(1-f_{LA})(R_{f}\cos\theta_{0}+1)} \\
+         \theta_{adv}-\theta_{rec} &= (1-f_{LA}R_{f})\frac{\cos\theta_{adv0}-\cos\theta_{rec0}}{-\sin{\theta}} \\
+         &= (\sqrt{1-f_{LA}})R_f\frac{\cos\theta_{rec0}-\cos\theta_{adv0}}{\sqrt{2(R_{f}\cos\theta_{0}+1)}} \\
+        \end{align}
+      \]
+  - Case 1 - Homogeneous Interface :: f_{LA}=0, increasing roughness (high Rf) leads to increasing the contact angle hysteresis (high values of \(\theta_{adv}-\theta_{rec}\).
+  - Case 2 - Composite Interface :: approach to unity of f_{LA} provides both high contact angle and small contact angle hysteresis. Therefore, the composite interface is desirable for low contact angle hysteresis.
+  - Case 3 - Sharp edge :: A sharp edge can pin the line of contact of the solid, liquid, and air (or the “triple line”) at a position far from stable equilibrium, i.e., at contact angles different from \theta_{0}. At the edge point, the contact angle is not defined and can have any value between the values corresponding to contact with the horizontal and inclined surfaces. For a droplet moving from left to right, the triple line will be pinned at the edge point until it will be able to proceed to the inclined plane. The change of the surface slope (α) at the edge is the cause of the pinning.
+       #+NAME: fig:SharpEdgePinning
+       #+ATTR_LATEX: :width 5cm :placement [pos=htbp, align=center]
+       #+CAPTION: Sharp Edge Pinning
+       #+ATTR_RST: :alt alternate text :align center :scale 100%
+       [[file:_static/SharpEdgePinning.png]]
+- Factors affecting Adhesion Hysteresis ::
+  + Surface Heterogeneity
+  + Chemical Heterogeneity
+  + Surface Roughness
+  + Interaction at the contact line
+- Chemical heterogeneity and roughness :: Both factors can engender a contact angle hysteresis (H) between the water front advancing across a surface and receding from the surface. Generally, advancing contact angle ($\theta_A$) exceeds receding contact angle ($\theta_R$).  Young equation is valid for ideal, smooth, and homogeneous surfaces; water contact angle is measured at the equilibrium and it is unique.
+- Methods to measure contact angle hysteresis :: 
+  + Sessile Drop Method
+  + Sliding Method (self cleaning, usually sliding angle \(\alpha <10^\circ \))
+- Wetting of four different surfaces ::
+    #+ATTR_LATEX: :width 5cm :placement [pos=htbp]
+    #+CAPTION: Wetting of four different surfaces
+    #+NAME: Wetting of four different surfaces
+    #+ATTR_RST: :alt alternate text :align center :scale 100%
+     [[file:_static/WettingFourSurfaces.png]]	    
+** Roughness Parameters
+- ISO25178 :: Geometrical product specifications (GPS) - Surface texture: Areal-Part 2: Terms, definitions and surface texture parameters.
+- 2D parameters :: marked with the letter “R”.
+- 3D parameters :: marked with the letter “S”.
+- Table Summary :: 
+  [[file:_static/RoughnessTable.png]]
+- Interfacial and Projected Area :: The ratio between the interfacial and projected area \(S_{dr}\) gives the additional surface area contributed by the texture. This parameter is especially useful in wettability studies since it can be used to calculate the roughness ratio /r/, \(\boxed{r=1+\frac{S_{dr}}{100}}\)
+** Roughness Measurement
+- Atomic force microscopy (AFM)
+* Wetting Transition
+- A WT on a microscopically patterned rough surface is a rapid process occurring on a time scale of milliseconds.
+* Wettability vs. Temperature
+* Surface Composition vs. Wettability
+* Surface Patterns vs. Wettability
+** Analysis of Geometry
+* Surface Roughness Quantification
+** Statistical Analysis of Random Surface Roughness
+[[file:_static/RandomRoughnessChart.png]]
+** Procedure for characterization of laser-textured surfaces
+- Note taken on [2019-11-01 Fri 08:35]
+  [[file:_static/RoughnessCharacterization.png]]
+** Quantify Roughness
+**** The Multiscale Analyses of the Relevance of Surface Topography (MARST)
+- Step 0 :: Experimental Aspect, the Cold Rolling Process
+- Step 1 :: Roughness Measurement
+  - White light interferometer
+  - Mirau Objective
+  - Camera
+- Step 2 :: The Multiscale Decomposition
+  - Gaussian Filter according to ISO 11562-'96 and ASME B46.1-'95
+  - 3D roughness according to ISO 25178, EUR 15178N, Flatness according to ISO 12781
+    | Symbol                       | Name of Parameter                              | Standard    |
+    |------------------------------+------------------------------------------------+-------------|
+    | 3D Roughness Parameters      |                                                |             |
+    | Amplitude parameters         |                                                |             |
+    | S_{q} (um)                   | Root mean square height                        | ISO 25178   |
+    | S_{sk}                       | Skewness                                       | ISO 25178   |
+    | S_{ku}                       | Kurtosis                                       | ISO 25178   |
+    | S_{p} (um)                   | Maximum peak height                            | ISO 25178   |
+    | S_{v} (um)                   | Maximum pit height                             | ISO 25178   |
+    | S_{z} (um)                   | Maximum height                                 | ISO 25178   |
+    | S_{a} (um)                   | Arithmetic mean height                         | ISO 25178   |
+    | S_{t} (um)                   | Total height                                   | EUR 15178N  |
+    | Spatial parameters           |                                                |             |
+    | S_{al} (mm)                  | Auto-correlation length                        | ISO 25178   |
+    | S_{tr}                       | Texture-aspect ratio                           | ISO 25178   |
+    | S_{td} (°)                   | Texture direction                              | ISO 25178   |
+    | S_{al} (um)                  | Fastest decay autocorrelation length           | ISO 25178   |
+    | Hybrid parameters            |                                                |             |
+    | S_{dq}                       | Root mean square gradient                      | ISO 25178   |
+    | S_{dr} (%)                   | Developed interfacial area ratio               | ISO 25178   |
+    | S_{ds} (1/mm^2)              | Density of summits                             | EUR 15178N  |
+    | S_{sc} (1/mm)                | Arithmetic mean summit curvature               | EUR 15178N  |
+    | S_{fd}                       | Fractal dimension of the surface               | EUR 15178N  |
+    | Functional parameters        |                                                |             |
+    | S_{k} (um)                   | Core roughness depth                           | EUR 15178N  |
+    | S_{pk} (um)                  | Reduced summit height                          | EUR 15178N  |
+    | S_{vk} (um)                  | Reduced valley depth                           | EUR 15178N  |
+    | S_{r1} (%)                   | Upper bearing area                             | EUR 15178N  |
+    | S_{r2} (%)                   | Lower bearing area                             | EUR 15178N  |
+    | S_{pq}                       | Plateau root mean square roughness             | EUR 15178N  |
+    | S_{vq}                       | Valley root mean square roughness              | EUR 15178N  |
+    | S_{mq}                       | Material ratio at plateau-to-valley transition | EUR 15178N  |
+    | S_{mr} (%)                   | Areal material ratio                           | ISO 25178   |
+    | S_{mc} (mm)                  | Inverse areal material ratio                   | ISO 25178   |
+    | S_{xp} (mm)                  | Extreme peak height                            | ISO 25178   |
+    | S_{dc} (mm)                  | Areal height difference                        | ISO 25178   |
+    | Volume functional parameters |                                                |             |
+    | V_{m} (mm^{3}/mm^{2})        | Material volume                                | ISO 25178   |
+    | V_{v} (mm^{3}/mm^{2})        | Void volume                                    | ISO 25178   |
+    | V_{mp} (mm^{3}/mm^{2})       | Peak material volume                           | ISO 25178   |
+    | V_{mc} (mm^{3}/mm^{2})       | Core material volume                           | ISO 25178   |
+    | V_{vc}                       | Core void volume                               | ISO 25178   |
+    | V_{vv} (mm^{3}/mm^{2})       | Pit void volume                                | ISO 25178   |
+    | Functional indices           |                                                |             |
+    | S_{bi}                       | Surface bearing index                          | EUR 15178N  |
+    | S_{ci}                       | Core fluid retention index                     | EUR 15178N  |
+    | S_{vi}                       | Valley fluid retention index                   | EUR 15178N  |
+    | Feature parameters           |                                                |             |
+    | S_{pd} (1/mm^{2})            | Density of peaks                               | ISO 25178   |
+    | S_{pc} (1/mm)                | Arithmetic mean peak curvature                 | ISO 25178   |
+    | S_{10z} (mm)                 | Ten point height                               | ISO 25178   |
+    | S_{5p} (mm)                  | Five point peak height                         | ISO 25178   |
+    | S_{5v} (mm)                  | Five point pit height                          | ISO 25178   |
+    | S_{da} (mm^{2})              | Mean dale area                                 | ISO 25178   |
+    | S_{ha} (mm^{2})              | Mean hill area                                 | ISO 25178   |
+    | S_{dv} (mm^{3})              | Mean dale volume                               | ISO 25178   |
+    | S_{hv} (mm^{3})              | Mean hill volume                               | ISO 25178   |
+    | Other 3D parameters          |                                                |             |
+    | S_{mean} (mm)                | Mean height in absolute                        | No standard |
+    | S_{dar} (mm^{2})             | Developed area                                 | No standard |
+    | S_{par} (mm^{2})             | Projected area                                 | No standard |
+    | — (mm^{3})                   | Mean volume of islands                         | No standard |
+    | — (mm)                       | Mean height of islands                         | No standard |
+    | — (mm^{2})                   | Mean surface of islands                        | No standard |
+- Step 3 :: The Measure of Parameters Relevancy by Variance Analysis
+  - Relevancy :: Measure relevancy of the Roughness Parameters computed at a given Spatial Scale.
+  - Variance Analysis ::
+    - $p_i(\epsilon,k,n)=\alpha_{0}+\Sigma\alpha_{j}k_{j}(i,\epsilon)+\xi_{k,n}(i,\epsilon)$
+    - $p_i(\epsilon,k,n$ is the Roughness parameter of the /n/ th profile when the process parameters are taken at the /k/ th level, /k/ denotes the initial surface after 1,2,3,... /k/ process for an evaluation length \epsilon
+    - $\alpha_{j}k_{j}(i,\epsilon)$ represents the influence on the roughness parameter value of the /j/ th process parameter at the /k_{j}/ level
+    - $\xi_{k,n}(i,\epsilon)$ is a zero-mean Gaussian noise with standard deviation \sigma
+    - Between Group Variability (BGV) = Estimation Error of the roughness parameter between group
+    - Within Group Variability (WGV) = Estimation Error of the roughness parameter within group
+    - Result: $F(p_{i},\epsilon)=\frac{BGV}{WGV}$ compares the effect of each process parameter on the roughness parameter's value with its estimation error
+    - $F(p_{i},\epsilon)\approx 1$ suggests an /irrelevancy/ of the roughness parameter p_{i} estimated at the evaluation length \epsilon
+    - $F(p_{i},\epsilon)> 1$ or $F(p_{i},\epsilon)>> 1$ the more relevant the parameter p_{i} estimated at scale \epsilon becomes
+  - Flowchart :: shown below
+    #+begin_src plantuml :file _static/Flowchart_Roughness.png :results output raw :post attr_wrap(data=*this*) 
+@startuml
+skinparam backgroundColor #FFFFFA
+skinparam dpi 150
+(*) --> "Roughness Measurement"
+--> "Roughness Parameter"
+if "result (F)" then
+  --> [F ~ 1] "Irrelevance"
+else
+  --> [F >> 1] "Relevance"
+@enduml
+    #+end_src
+- Step 4 :: The Classification of Roughness Parameters
+  - Classifying the F-values in descending order to organize relevancies of all roughness parameters.
+  - Apply "Bootstrap" to estimate the error in the computation of the coefficients of statistical computing.
+- Step 5 :: Bootstrap and Probability Density Function of the Most Relevant Parameters
+  - Calculate the mean Probability Density Function (PDF) of the most relevant parameters.
+- Step 6 :: Physical Interpretations of Selected Parameters
+* Surface Roughness vs. Cleanability
+* Testing Methods
+
+* NOEXPORT :noexport:
+#+name: attr_wrap
+#+begin_src sh :var data="" :var width="\\textwidth" :results output
+  echo "#+ATTR_RST: :alt alternate text :align center :scale 90%"
+  echo "$data"
+#+end_src

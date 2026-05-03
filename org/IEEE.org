@@ -1,0 +1,58 @@
+#+LATEX_CLASS: IEEEphot
+#+LATEX_CLASS_OPTIONS: [a4paper, journal, twoside, onecolumn]
+#+OPTIONS: tags:nil toc:nil
+
+# #+LATEX_HEADER: \usepackage[utf8]{inputenc}
+# #+LATEX_HEADER: \usepackage[scaled=1.0]{newtxtext}
+# #+LATEX_HEADER: \usepackage{amsmath}
+# #+LATEX_HEADER: \usepackage[cmintegrals]{newtxmath}
+# #+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage[dvipsnames]{xcolor}
+# #+LATEX_HEADER: \usepackage{textcomp}
+# #+LaTeX_HEADER: \usepackage{marvosym}
+# #+LaTeX_HEADER: \usepackage{wasysym}
+# #+LaTeX_HEADER: \usepackage{latexsym}
+# #+LaTeX_HEADER: \usepackage{amssymb}
+
+#+BEGIN_EXPORT latex
+\jvol{xx}
+\jnum{xx}
+\jmonth{June}
+\pubyear{2009}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+
+\title{Volume Extreme Ultraviolet Holographic Imaging\\ With Numerical Optical Sectioning}
+
+\author{P.~W.~Wachulak,~\IEEEmembership{Member,~IEEE}, M.~C.~Marconi,~\IEEEmembership{Senior~Member,~IEEE},  
+R.~A.~Bartels,\\ 
+C.~S. Menoni,~\IEEEmembership{Fellow,~IEEE}, J.~J.~Rocca}
+
+\affil{NSF ERC for Extreme Ultraviolet Science \& Technology and
+Department of Electrical and Computer\\ Engineering, Colorado State
+University, Fort Collins 80521 USA}  
+
+\doiinfo{DOI: 10.1109/JPHOT.2009.XXXXXXX\\
+1943-0655/\$25.00 \copyright 2009 IEEE}%
+
+\maketitle
+
+\markboth{IEEE Photonics Journal}{Volume Extreme Ultraviolet Holographic Imaging}
+
+\begin{receivedinfo}%
+Manuscript received March 3, 2008; revised November 10, 2008. First published December 10, 2008. Current version published February 25, 2009. This research was sponsored by the National Science Foundation through the NSF ERC Center for Extreme Ultraviolet Science and Technology, NSF Award No. EEC-0310717. This paper was presented in part at the National Science Foundation.
+\end{receivedinfo}
+
+\begin{abstract}
+Three dimensional images were obtained using a single high numerical aperture hologram recorded in a high resolution photoresist with a table top $\alpha = 46.9$ nm laser. Gabor holograms numerically reconstructed over a range of image planes by sweeping the propagation distance allow numerical optical sectioning that results in a robust three dimension image of a test object with a resolution in depth of approximately and a lateral resolution of 164 nm. 
+\end{abstract}
+
+\begin{IEEEkeywords}
+Holography, image analysis.
+\end{IEEEkeywords}
+#+END_EXPORT
+
+#+INCLUDE: raw.org
+# #+INCLUDE: scoping.org
+# \long\def\title@myblue{\color[cmyk]{0.90 0.61 0 0}}%

@@ -1,0 +1,365 @@
+* Finding Text Patterns Without Regular Expressions
+#+BEGIN_SRC jupyter-python
+def is_phone_number(text):
+    """is_phone_number() to check whether a string matches this pattern and return either True or False"""
+    
+    # Phone numbers have exactly 12 characters.
+    if len(text) != 12:
+        return False
+
+    # The first 3 char must be num.
+    for i in range(0, 3):
+        if not text[i].isdecimal(): 
+            return False
+
+    # The fourth character must be a dash.
+    if text[3] != '-':
+        return False
+
+    # The next three characters must be numbers.
+    for i in range(4, 7):
+        if not text[i].isdecimal():
+            return False
+
+    # The eigth character must be a dash.
+    if text[7] != '-':
+        return False
+
+    # The next four characters must be numbers.
+    for i in range(8, 12):
+        if not text[i].isdecimal():
+            return False
+
+    return True
+
+message = 'Call me at 415-555-1011 tomorrow. 415-555-9999 is my office.'
+for i in range(len(message)):
+    segment = message[i:i+12]
+    if is_phone_number(segment):
+        print('Phone number found: ' + segment)
+print('Done')
+
+print('Is 415-555-4242 a phone number?', is_phone_number('415-555-4242'))
+print(is_phone_number('415-555-4242'))
+print('Is Moshi moshi a phone number?', is_phone_number('Moshi moshi'))
+print(is_phone_number('Moshi moshi'))
+#+END_SRC
+
+#+RESULTS:
+: Phone number found: 415-555-1011
+: Phone number found: 415-555-9999
+: Done
+: Is 415-555-4242 a phone number? True
+: True
+: Is Moshi moshi a phone number? False
+: False
+
+* Finding Text Patterns with Regular Expressions
+The general process of using regular expressions in Python involves four steps:
+
+1. Import the re module.
+2. Pass the regex string to re.compile() to get a Pattern object.
+3. Pass the text string to the Pattern object’s search() method to get a Match object.
+4. Call the Match object’s group() method to get the string of the matched text.
+
+#+BEGIN_SRC jupyter-python
+import re
+
+phone_num_pattern_obj = re.compile(r'\d{3}-\d{3}-\d{4}')
+match_obj = phone_num_pattern_obj.search('My number is 415-555-4242.')
+match_obj.group()
+#+END_SRC
+
+#+RESULTS:
+: 415-555-4242
+
+* Grouping with Parenthesis
+Adding parentheses will create groups in the regex string: r'(\d\d\d)-(\d\d\d-\d\d\d\d)'. Then, you can use the group() method of Match objects to grab the matching text from just one group.
+
+The first set of parentheses in a regex string will be group 1. The second set will be group 2. By passing the integer 1 or 2 to the group() method, you can grab different parts of the matched Text
+
+** group()
+#+BEGIN_SRC jupyter-python  
+import re
+
+phone_re = re.compile(r'(\d\d\d)-(\d\d\d-\d\d\d\d)')
+mo = phone_re.search('My number is 415-555-4242.')
+
+print(mo.group(1))
+print(mo.group(2))
+print(mo.group(0))
+print(mo.group())
+#+END_SRC
+
+#+RESULTS:
+: 415
+: 555-4242
+: 415-555-4242
+: 415-555-4242
+
+** groups()
+#+BEGIN_SRC jupyter-python  
+print(mo.groups())
+
+area_code, main_number = mo.groups()
+
+print(area_code)
+print(main_number)
+#+END_SRC
+
+#+RESULTS:
+: ('415', '555-4242')
+: 415
+: 555-4242
+
+* Escape Characters
+In regular expressions, the following characters have special meanings:
+
+$ () * + - . ? [\] ^ {|}
+
+If you want to detect these characters as part of your text pattern, you need to escape them with a backslash:
+
+\$ \(\) \* \+ \- \. \? \[\\ \] \^ \{\| \}
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile(r'(\(\d\d\d\)) (\d\d\d-\d\d\d\d)')
+mo = pattern.search('My phone number is (415) 555-4242.')
+
+print(mo.group(1))
+print(mo.group(2))
+#+END_SRC
+
+#+RESULTS:
+: (415)
+: 555-4242
+
+* Matching Characters from Alternate Groups
+The | character is called a pipe, and it’s used as the alternation operator in regular expressions. You can use it anywhere you want to match one of multiple expressions. For example, the regular expression r'Cat|Dog' will match either 'Cat' or 'Dog'.
+
+You can also use the pipe to match one of several patterns as part of your regex. For example, say you wanted to match any of the strings 'Caterpillar', 'Catastrophe', 'Catch', or 'Category'. Since all of these strings start with Cat, it would be nice if you could specify that prefix only once. You can do this by using the pipe within parentheses to separate the possible suffixes.
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile(r'Cat(erpillar|astrophe|ch|egory)')
+match = pattern.search('Catch me if you can.')
+print(match.group())
+print(match.group(1))
+#+END_SRC
+
+#+RESULTS:
+: Catch
+: Ch
+
+* Returning All Matches
+In addition to a /search/ () method, Pattern objects have a /findall/ () method. While /search/ () will return a Match object of the first matched text in the searched string, the findall() method will return the strings of every match in the searched string.
+
+There is one detail you need to keep in mind when using /findall/ (). The method returns a list of strings as long as there are no groups in the regular expression.
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile(r'\d{3}-\d{3}-\d{4}')  # This regex has no groups.
+
+print(pattern.findall('Cell: 415-555-9999 Work: 212-555-0000'))
+#+END_SRC
+
+#+RESULTS:
+: ['415-555-9999', '212-555-0000']
+
+If there are groups in the regular expression, then /findall/ () will return a list of tuples. Each tuple represents a single match, and the tuple has strings for each group in the regex.
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile(r'(\d{3})-(\d{3})-(\d{4})')  # This regex has groups.
+
+print(pattern.findall('Cell: 415-555-9999 Work: 212-555-0000'))
+#+END_SRC
+
+#+RESULTS:
+: [('415', '555', '9999'), ('212', '555', '0000')]
+
+Also keep in mind that findall() doesn’t overlap matches. For example, matching three numbers with the regex string r'\d{3}' matches the first three numbers in '1234' but not the last three.
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile(r'\d{3}')
+
+print(pattern.findall('1234'))
+print(pattern.findall('12345'))
+print(pattern.findall('123456'))
+#+END_SRC
+
+#+RESULTS:
+: ['123']
+: ['123']
+: ['123', '456']
+
+* Qualifier Syntax
+Regular expressions are split into two parts: the /qualifiers/ that dictate what characters you are trying to match followed by the /quantifiers/ that dictate how many characters you are trying to Match.
+
+* Using Character Classes and Negative Character Classes
+- Character Class :: define a set of characters to match inside square bracket
+- Hypen :: include ranges of numbers
+- Negative Character Class :: placing a caret character (^) just after the character class’s opening bracket
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+vowel_pattern = re.compile(r'[aeiouAEIOU]')
+print(vowel_pattern.findall('RoboCop eats BABY FOOD.'))
+#+END_SRC
+
+#+RESULTS:
+: ['o', 'o', 'o', 'e', 'a', 'A', 'O', 'O']
+
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+vowel_pattern = re.compile(r'[a-zA-Z0-9]')
+print(vowel_pattern.findall('RoboCop eats BABY FOOD.'))
+#+END_SRC
+
+#+RESULTS:
+: ['R', 'o', 'b', 'o', 'C', 'o', 'p', 'e', 'a', 't', 's', 'B', 'A', 'B', 'Y', 'F', 'O', 'O', 'D']
+
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+consonant_pattern = re.compile(r'[^aeiouAEIOU]')
+print(consonant_pattern.findall('RoboCop eats BABY FOOD.'))
+#+END_SRC
+
+#+RESULTS:
+: ['R', 'b', 'C', 'p', ' ', 't', 's', ' ', 'B', 'B', 'Y', ' ', 'F', 'D', '.']
+
+* Shorthand Character Classes
+
+|----+---------------------------------------------------------------|
+| \d | Any numeric digit from 0 to 9.                                |
+| \D | Any character that is not a numeric digit from 0 to 9.        |
+| \w | Any letter, numeric digit, or the underscore character.       |
+|    | (Think of this as matching “word” characters.)                |
+| \W | Any character that is not a letter, numeric digit,            |
+|    | or the underscore Character.                                  |
+| \s | Any space, tab, or newline character.                         |
+|    | (Think of this as matching “space” characters.)               |
+| \\S | Any character that is not a space, tab, or newline character. |
+|    |                                                               |
+|----+---------------------------------------------------------------|
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile(r'\d+\s\w+')
+print(pattern.findall('12 drummers, 11 pipers, 10 lords, 9 ladies, 8 maids,  7 swans, 6 geese, 5 rings, 4 birds, 3 hens, 2 doves, 1 partridge'))
+#+END_SRC
+
+#+RESULTS:
+: ['12 drummers', '11 pipers', '10 lords', '9 ladies', '8 maids', '7 swans', '6 geese', '5 rings', '4 birds', '3 hens', '2 doves', '1 Partridge']
+
+* Matching Everything with the Dot Character
+- Dot character :: matches any character except for a newline.
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+at_re = re.compile(r'.at')
+print(at_re.findall('The cat in the hat sat on the flat mat.'))
+#+END_SRC
+
+#+RESULTS:
+: ['cat', 'hat', 'sat', 'lat', 'Mat']
+
+* Matching an Optional Pattern
+- ? character :: flags the preceding qualifier as Optional.
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile(r'42!?')
+
+print(pattern.search('42!'))
+print(pattern.search('42'))
+print(pattern.search('4!'))
+print(pattern.search('42') == None)
+#+END_SRC
+
+#+RESULTS:
+: <re.Match object; span=(0, 3), match='42!'>
+: <re.Match object; span=(0, 2), match='42'>
+: None
+: False
+
+- To make multiple characters optional, place them in a group and put the ? after the group.
+
+#+BEGIN_SRC jupyter-python  
+pattern = re.compile(r'(\d{3}-)?\d{3}-\d{4}')
+match1 = pattern.search('My number is 415-555-4242')
+match1.group()
+#+END_SRC
+
+#+RESULTS:
+: 415-555-4242
+
+
+#+BEGIN_SRC jupyter-python  
+match2 = pattern.search('My number is 555-4242')
+match2.group()
+#+END_SRC
+
+#+RESULTS:
+: 555-4242
+
+* Matching Zero or More Qualifiers
+- Asterisk * :: match zero or More.
+- the qualifier that precedes the star can occur any number of times in the text.
+- It can be completely absent or repeated over and over again.
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile('Eggs[and spam]*')
+
+print(pattern.search('Eggs'))
+print(pattern.search('Eggs and spam'))
+print(pattern.search('Eggs and spam and spam'))
+print(pattern.search('Eggs and spam and spam and spam'))
+#+END_SRC
+
+#+RESULTS:
+: <re.Match object; span=(0, 4), match='Eggs'>
+: <re.Match object; span=(0, 13), match='Eggs and spam'>
+: <re.Match object; span=(0, 22), match='Eggs and spam and spam'>
+: <re.Match object; span=(0, 31), match='Eggs and spam and spam and spam'>
+
+* Matching One or More Qualifiers
+- Plus + :: match one or more.
+- The plus requires the qualifier preceding it to appear at least once. 
+
+#+BEGIN_SRC jupyter-python  
+import re
+
+pattern = re.compile('Eggs[and spam]+')
+
+print(pattern.search('Eggs and spam'))
+print(pattern.search('Eggs and spam and spam'))
+print(pattern.search('Eggs and spam and spam and spam'))
+#+END_SRC
+
+#+RESULTS:
+: <re.Match object; span=(0, 13), match='Eggs and spam'>
+: <re.Match object; span=(0, 22), match='Eggs and spam and spam'>
+: <re.Match object; span=(0, 31), match='Eggs and spam and spam and Spam'>
+
+* Matching a Specific Number of Qualifiers
+#+BEGIN_SRC jupyter-python  
+
+#+END_SRC
+

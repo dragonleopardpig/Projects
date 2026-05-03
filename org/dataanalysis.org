@@ -1,0 +1,15 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	Measurements and Data Analysis
+
+* Uncertainties in Measurement
+* Types of Experimental Uncertainties
+* Accuracy and Precision
+* Significant Figures
+* Absolute Fractional Percentage Uncertainties
+* Estimating Uncertainties using Statistics
+* Combining Uncertainties
+* Linear Least Squares Fits
+* Linearizing Data
+* Comparing Results
+* Scipy Curve Fitting Function

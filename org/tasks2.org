@@ -1,0 +1,241 @@
+#+STARTUP:		content latexpreview
+#+latex_class:		svjour
+#+latex_class_options:	[epj, nopacs]
+#+options:		tags:nil toc:nil
+
+#+LATEX_HEADER: \usepackage[top=0.5in, bottom=0.5in, left=0.5in, right=0.5in]{geometry}
+# #+LATEX_HEADER: \usepackage[utf8]{inputenc}
+#+LATEX_HEADER: \usepackage[T1]{fontenc}
+#+LATEX_HEADER: \usepackage{mathptmx}
+# #+LATEX_HEADER: \usepackage{fixltx2e}
+#+LATEX_HEADER: \usepackage{natbib}
+#+LATEX_HEADER: \usepackage{url}
+#+LATEX_HEADER: \usepackage{minted}  % for source code
+#+LATEX_HEADER: \usepackage{graphicx}
+#+LATEX_HEADER: \usepackage{textcomp}
+#+LATEX_HEADER: \usepackage{amsmath}
+#+LATEX_HEADER: \usepackage{pdfpages}
+# #+LATEX_HEADER: \usepackage[version=3]{mhchem}
+# #+LATEX_HEADER: \usepackage{setspace}
+#+LATEX_HEADER: \usepackage[linktocpage, pdfstartview=FitH, colorlinks, linkcolor=blue, anchorcolor=blue, citecolor=blue,  filecolor=blue,  menucolor=blue,  urlcolor=blue]{hyperref}
+# #+LATEX_HEADER: \usepackage{cancel}
+# #+LATEX_HEADER: \usepackage{xcolor,colortbl}
+# #+LaTeX_HEADER: \usepackage{CJK}
+# #+LaTeX_HEADER: \begin{CJK}{UTF8}{gbsn}
+
+#+AUTHOR:	Chu Pau Loong
+#+EMAIL:	chu_pau_loong@artc.a-star.edu.sg
+#+TITLE:	ARTC - FMCG - Laser Texturing
+#+DATE:       2019 July 07
+#+SUBTITLE:     Femtosecond Laser Texturing
+#+KEYWORDS:     hello
+#+DESCRIPTION:  Enhanced Surface Properties
+#+CREATOR:      CHU PAU LOONG
+#+LANGUAGE:     EN
+
+#+BEGIN_EXPORT latex
+\title{ARTC - FMCG - Laser Texturing}
+
+\subtitle{Overall Studies}
+
+\author{Chu PL\inst{1} \and Yap FL\inst{2}}
+
+\institute{ARTC, \email{chu\_pau\_loong@artc.a-star.edu.sg} \and ARTC, \email{yap\_fung\_ling@artc.a-star.edu.sg}}
+
+\date{Received: 10 July 2019 / Revised version: 10 July 2019}
+
+\abstract{
+Materials sticking to the inner walls of filling machines (e.g. tanks, mixers, augers) is a common problem in the FMCG industry. The problem is further aggravated by processing conditions (temperature, heat, duration, batch size), product characteristics (hygroscopicity of powder) and environmental conditions (temperature, humidity). There is a challenge of cross contamination, especially for batch one (or low MOQ) production, where cleaning after every recipe change is not feasible. The scope includes development of anti-sticking surfaces by micro/nano texturisation of metal parts (stainless steel). Nano texturisation on plastics have been commercialized for optics and medtech applications, but this is not achieved on steel surfaces for tooling yet. Preliminary research by EU Shark Project1 had demonstrated feasibility of laser texturising metals to improve hydrophobicity. 
+\keywords{Laser}
+}
+
+\maketitle
+#+END_EXPORT
+
+
+* Literatures Review :WhatWeHave:
+
+** Journal Review
+*** Recent advances in designing superhydrophobic surfaces
+**** Introduction    
+    #+ATTR_LATEX: :width 7cm 
+    #+CAPTION: Water Contact Angle Definition
+    #+NAME: fig:WaterContact
+    [[file:ContactAngle.png]]
+
+    #+ATTR_LATEX: :width 7cm  
+    #+CAPTION: Wenzel and Cassie-Bexter state 
+    #+NAME: fig:WenzelCassieBexter
+    [[file:WenzelCassieBexter.png]]
+
+     - Young Equation of Contact Angle [[fig:WaterContact]]: \(cos\:\theta=\frac{T_{sg} - T_{sl}}{T_{lg}}\)
+     - \(\theta \mapsto \begin{cases}
+	< 90^\circ, & \text{Hydrophilic} \\
+	90^\circ < \theta < 150^\circ, & \text{Hydrophobic} \\
+	 > 150^\circ, & \text{SuperHydrophobic}
+	\end{cases}\)
+ 
+     - Hydrophobic surface Model [[fig:WenzelCassieBexter]]:
+       - Wenzel State:
+	 If */r/* is the amplification factor of increased surface area, then:
+	 \(r=roughness \: factor=\frac{actual \: surface \: area}{planar \: area}\)
+	 therefore \(cos \: \theta\) is modified to become:
+	 \(cos \: \theta_{W} = r cos \: \theta\)
+       - Cassie-Bexter State:
+         \(cos \: \theta_{CB} = f_1 cos \: \theta_1 + f_2 cos \: \theta_2\) where
+         \(f_1\) = Surface Fraction of Phase 1 and
+         \(f_2\) = Surface Fraction of Phase 2
+       - If only one type of protrusion is present, given /f/ the fraction of asperities, (1 - /f/) is the air fraction. Water droplet has a \(180^\circ\) contact angle with air, so the equation becomes:
+         \(cos \: \theta_{CB} = f(1 + cos \: \theta_W) - 1\)
+       - Intermediate Wenzel-Cassie state:
+         \(cos \: \theta_{CW} = rf cos \: \theta + f - 1\)
+       - For many surfaces, a transition from Cassie-Baxter to Wenzel state was observed.
+     - Reason for Adhesion Hysteresis:
+       - Surface Heterogeneity
+       - Chemical Heterogeneity
+       - Roughness
+       - Interaction at the contact line
+     - chemical heterogeneity and roughness can engender a contact angle hysteresis (H) between the water front advancing across a surface and receding from the surface. Generally, advancing contact angle ($\theta_A$) exceeds receding contact angle ($\theta_R$).
+     - Young equation is valid for ideal, smooth, and homogeneous surfaces; water contact angle is measured at the equilibrium and it is unique.
+     - Methods to measure contact angle hysteresis:
+       - Sessile Drop Method
+       - Sliding Method (self cleaning, usually sliding angle \(\alpha < 10^\circ \)
+
+**** Methods to prepare superhydrophobic surfaces
+     - Top-down approach
+       - Lithography
+       - Template
+       - Plasma
+     - Bottom-up approach
+       - Chemical deposition
+       - Layer-by-Layer deposition
+       - Colloidal assemblies
+     - Combination of both approach
+       - Casting of polymer solution
+       - Phase seperation
+       - Electrospinning
+	 
+** Books Review: :Reading:
+   - Electromagnetic/Electrodynamics
+   - Optics [[file:optics.org]]
+   - Laser
+     
+** Patent Search :WhatWeHave:
+
+
+* Theory :BoringPart:
+
+** Superhydrophilic vs Superhydrophobic structure :Theory:
+
+*** Geometry analysis (variaties, effect)
+      
+*** Electrostatic force analysis (static charge, surface tension)
+
+*** Interaction with moving particles (flow of liquid, powder)
+
+*** TODO Theoretical foundation meeting
+
+
+* Simulation :TryItOut:OnPaper:
+
+
+
+* System Integration :SpendingSpree:
+
+
+* Questions to be answered
+   - correlation between surface morphology and wettability
+   - Fundamentals of ElectroMagnetism applied to the surface interaction
+     
+
+
+* Experiments :TryItOut:FunPart:
+
+** Experimental method
+*** Contributors (team members)
+*** Abstract, Hypothesis, Objective.
+*** Safety requirement (licence, POE, SOP, etc)
+*** Process Flow chart and Milestone (Duration for tasks)
+*** BOM list (Equipment, Material, Fixture, Chemical, Gas, etc)
+*** Pre-experiment setup and design (In-line Vision, motion control, etc)
+*** Algorithm (Techniques, DOE, etc)
+*** Physical Data Analysis (SEM, XRD, Contact Angle, etc)
+*** Statistical Data Analysis (Curve fitting, etc)
+*** Results and Discussion (Improvement method)
+
+
+* References
+bibliographystyle:<replace: style>
+bibliography:<replace: bibfile>
+
+
+* Tasks
+** DONE Meeting with SIMTech :interRI:Laser:
+CLOSED: [2019-06-27 Thu 07:46] SCHEDULED: <2019-06-26 Wed>
+   - Zhongke willing to provide FYP student to assist laser texturing study.
+   - Xincai has metal surface laser texturing experience, but mentioned that hard to apply on actual industrial use.
+
+** DONE Meeting with GF Machining :Industry:Laser:
+CLOSED: [2019-07-01 Mon 14:06] SCHEDULED: <2019-07-01 Mon>
+   - Pro:
+     - Looks promising on laser texturing capability: matching laser type, 5-axis capable.
+     - Confident on Switzerland + Germany quality.
+     - Williing to do FOC trial.
+   - Con:
+     - Discourage full customization: not cost effective.
+     - Price on high side.
+
+** DONE DOE meeting
+CLOSED: [2019-07-09 Tue 11:37] SCHEDULED: <2019-07-05 Fri>
+    - To install Minitab
+    - To perform actual Laser experiment run using Minitab
+** DONE Meeting with NUS :LocalU:Laser:
+CLOSED: [2019-07-09 Tue 11:38]
+    - To texture hydrophobic surface using Nanosecond laser - 1 month duration
+    - To provide student's thesis
+** TODO Meeting with Coventry :OverseaU:Laser:
+** TODO Tender Purchase :Tender:
+** TODO Meeting with Voestalpine
+** TODO Meeting of Collabration
+** TODO SIMTech inter-RI Collaboration :YapFungLing:
+*** TODO Background:
+         + Use Picosecond laser to texture food grade metal (stainless steel)
+	 + 
+*** TODO Complex curved surface texturing
+*** TODO 
+* Quick Reference :RuleOfThumb:
+** Gaussian Beam
+   - Spot Size: \(2 \omega_0= \frac{4}{\pi} \lambda \frac{f}{D} M^2\)
+   - Depth Of Focus: \(DOF = \frac{8}{\pi} \lambda \frac{f}{D}\)
+** Bessel Beam
+** Repetition Rate vs Speed vs Pulse Overlap
+** Fluence
+** Melting
+** Resolidification
+
+     
+* Brainstorming :Ideas:
+** TODO Low Surface Energy Coating :Technology:
+
+** TODO Air Cushion thinking direction :Technology:
+
+** TODO Spring effect thinking direction :Technology:
+
+** TODO Laser Metal Surface Hot Embosing
+** TODO Non-removal bump formation through temperature gradient
+
+
+* Scoping Pack
+
+
+* build :noexport:
+
+[[elisp:(org-open-file (org-latex-export-to-pdf))]]
+
+
+
+* Note :noexport:
+
+  - Must add shell-escape to org-preview-latex-process-alist (M-x customize-variable org-preview-latex-process-alist)
+  - ("latex -shell-escape -interaction nonstopmode -output-directory %o %f")
+

@@ -1,0 +1,39 @@
+* MIT Vision Lab
+- Color lighting, color imaging
+- Polarized lighting
+- Interferometric
+* Apps
+* Inspection Modules
+* Inspection Criteria
+- Defect size: 3x3 pixels with >60 gray level
+* MIT Machine Types
+
+|       |       | Output  |        |                |
+|-------+-------+---------+--------+----------------|
+|       |       | Wafer   | Tray   | Reel           |
+| Input | Wafer | MR3, OM | FS600  | C340           |
+|       | Tray  | -       | SF1002 | SF933i         |
+|       | Reel  | -       | -      | DTT800, RTR800 |
+
+* Process Map
+
+* RTR800 STSZ
+- Independent control of 4 bar lights
+
+* NXP Meeting
+** Page 2, nxp spec, change from 4um to 3.3um
+*** Chip must touch edge or border, Crack got elongation
+*** Crack ratio fail, 1:3, Width:Length
+** More detail on Chip and crack horiz.
+** Page 3, remove setting on left side.
+
+* NXP Meeting 06Aug2021
+** change green color for condition 2
+** Yield number projected
+** How we define saw mark number page 4.
+
+* Inari Meeting 16Aug2021
+** Use different image in the report, 6 wafer 6 pages.
+** Simulate on the machine, must see pepper pot light.
+** Measure sawline depth.
+* Vision BOM

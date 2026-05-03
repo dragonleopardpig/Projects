@@ -1,0 +1,42 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	Texture Fabrication
+
+* Mind Map
+#+begin_src plantuml :file _static/TextureFabrication.png :results output raw :post attr_wrap(data=*this*) 
+@startmindmap
+,* Texture Fabrication
+,** Controlled Wettability
+,*** Laser Texturing
+,***_ Lithography
+,***_ Particles
+,***_ Templating
+,***_ Phase Separation
+,***_ Etching
+,***_ Electrospinning
+,***_ Sol-gel
+,***_ Crystal Growth
+,***_ Textiles and Fibers
+,***_ Diffusion Limited Growth
+,***_ Layer-by-Layer (LBL)
+,***_ Chemical Vapor Deposition (CVD)
+,***_ Electroless Galvanic Deposition
+,***_ Anodic Oxidation
+,***_ Electrochemical Deposition
+,**_ Dry Adhesion
+,**_ Structural Colors
+,**_ Anti-Reflection
+,**_ Friction
+,** AntiFouling
+,*** Anti-BioFouling
+,*** Anti-Powder
+,****_ Anti-Icing
+@endmindmap
+#+end_src
+
+* NOEXPORT :noexport:
+#+name: attr_wrap
+#+begin_src sh :var data="" :var width="\\textwidth" :results output
+  echo "#+ATTR_RST: :alt alternate text :align center :scale 90%"
+  echo "$data"
+#+end_src

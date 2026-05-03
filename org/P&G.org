@@ -1,0 +1,174 @@
+* Bioinspired Texture Mindmap
+
+#+Name: Biomimetics
+#+begin_src plantuml :file _static/P&GBiomimetics.png :results output raw
+@startmindmap
+,* Nature
+,** Self-Cleaning
+,*** Superhydrophobic Surface
+,**** Lotus Leaf
+,*****_ Superhydrophobicity
+,*****_ Low adhesion
+,*****_ Low drag
+,**** Rose Petals
+,*****_ Superhydrophobicity
+,*****_ No roll-off effect
+,**** Rise Leaves
+,*****_ Superhydrophobicity
+,*****_ Directional and anisotropy
+,*****_ Low drag
+,****_ Cicada Wing
+,*****_ Superhydrophobicity
+,*****_ Anti-Reflection
+,****_ Butterfly Wing
+,*****_ Superhydrophobicity
+,*****_ Directional Adhesion
+,*****_ Low drag
+,***_ Hydrophilic and\nSuperoleophobic\n(in water) surface
+,****_ Snail Shell
+,*****_ Superoleophobicity
+,****_ Fish Scale
+,*****_ Superoleophobicity
+,****_ Shark Skin
+,*****_ Superoleophobicity
+,*****_ Low drag
+,*****_ Anti-fouling
+,***_ Superhydrophilic Surface
+,****_ Pitcher plant
+,*****_ low drag (slippery)
+,****_ Photosynthesis
+,*****_ Photocatalysis
+,*****_ Photo induced Superhydrophilicity
+,*****_ Self-sterilizing
+,*****_ Anti-fogging
+,**_ Dry Adhesion
+,***_ Gekco Feet
+,**_ Drag Reduction
+,***_ Shark Skin
+,**_ Tribology and Locomotion
+,***_ Snake Skin
+,**_ Antireflective Surfaces
+,***_ Moth Eye
+,**_ Photonic Structures and Iridescence
+,***_ Butterfly Wings
+,**_ Chemical Texturing
+,***_ Salvinia/Desert Beetle
+,**_ Adaptive Texturing
+,***_ Redundancy in Features
+,***_ Simplicity of design and choice of materials
+,***_ Regeneration Ability
+,***_ Calling (multi-) Functionality on demand
+,***_ Length scale dependent architectures
+,***_ Heterogeneous Integration of materials
+,***_ Complementary subsurface with or without sensory system
+@endmindmap
+#+end_src
+
+#+RESULTS: Biomimetics
+[[file:_static/P&GBiomimetics.png]]
+
+* 2019Nov18
+** Self Intro
+*** Sarah
+*** Xiao Fang
+** Objectives
+** Agenda
+** ARTC
+*** Manufacturing Remanufacturing
+*** Partners
+*** HPL
+*** IHL
+**** NUS
+*** Government agencies
+**** EDB
+*** Technology providers
+**** ABB
+**** Siemens
+*** End User
+**** P&G
+** WP
+*** WP1
+**** How do you define benchmark? Why reducing cleaning frequency to 50% is good enough? Success criteria.
+*** WP2
+*** WP3
+
+* Block Chain
+
+* Sarah Presentation
+** Personalization for future
+** Growing exponentially
+** Startup and competitor
+** Reason
+*** consumer willing to pay 20% more
+*** Every sector
+*** Beauty industry
+*** Curology
+**** Telemedicine
+*** Proven
+**** AI based
+*** Function of Beauty
+*** Prose
+*** Olay Labs
+**** 24 hours ship
+**** AI algorithm through feedback
+**** 3 - 5 days on consumer hand
+*** Enabling learning at market speed
+**** Formula creation
+**** Product Making
+**** Filing, Capping
+**** Product Release
+***** Controlled state manufacturing
+***** micro daily management
+**** Customization
+**** FDA regulation
+***** SPF products
+**** Birth Certificate - QR barcode
+*** Formula Creation for consumer delight - C2P2T - Consumer to Product to Technical
+**** Predictive Formula modeling to deliver the right formula to the right consumer at scale
+**** Leverage existing skin care BDT methods
+**** Go fast for TLE
+*** High rheology fluids
+*** Competitive benchmark
+**** Skinmade - Fraunhofer institute Germany
+*** Skincare products
+**** moisturizer, cream in a jar. serum. newtonion fluid, non-newtonion fluid, viscosity 
+**** Powder and liquid separation
+**** liquid slurry - powder mixed with liquids
+**** 5um to 30um
+**** Asymmetric powder
+**** 10 to 15% mixing powder
+*** Criteria
+**** Complex/high rheology flouds, high # of materials
+**** blind to bottle shape
+**** controlled state release
+**** micro daily management
+**** material utilization, change over, sustainability
+**** throughput
+**** affordability
+**** IP moat
+*** Micro daily management
+**** amount of contamination
+
+* Questions
+
+** Cleaning Frequency - Zero
+
+** Standard Compliance for the textured surface
+
+** Material
+
+** Benchmarking
+
+** Silicone
+
+** Temperature
+
+** Color, Smell
+
+** No coating allowed
+
+** Stainless steel 316L
+
+** Passivation before use
+
+** Ra 0.2um, 400 grit

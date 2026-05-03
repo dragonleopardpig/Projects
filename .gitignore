@@ -3,6 +3,12 @@
 # scratch workspaces that will get their own repo later.
 /*/
 !/NixOS/
+!/emacs/
+!/org/
+
+# Within org/, ignore generated assets / large data dumps.
+/org/data/
+/org/ltximg/
 
 # Generated / cache files (anywhere in the tree)
 .aider*

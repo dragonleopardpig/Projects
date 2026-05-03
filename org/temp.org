@@ -1,0 +1,138 @@
+#+STARTUP: content
+#+PROPERTY: header-args:jupyter-python :session mysession
+* Symbolic Computing
+** Definition
+- In symbolic computing software, also known as computer algebra systems (CASs), representations of mathematical objects and expressions are manipulated and transformed analytically.
+
+#+BEGIN_SRC jupyter-python
+import sympy
+from sympy import I, pi, oo
+sympy.init_printing(use_latex='svg', scale=1.1)
+
+x, y, z = sympy.symbols("x, y, z")
+#+END_SRC
+
+#+RESULTS:
+
+** Symbols
+#+BEGIN_SRC jupyter-python 
+x = sympy.Symbol("x")
+y = sympy.Symbol("y", real=True, positive=True)
+z= sympy.Symbol("z", imaginary=True)
+
+print(sympy.sqrt(x ** 2))
+display(sympy.sqrt(x ** 2))
+display(sympy.sqrt(y ** 2))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: sqrt(x**2)
+
+
+
+[[file:./.ob-jupyter/5e9beccf2e2fa70c1f4f5f3dda7a545f88fb48e6.svg]]
+[[file:./.ob-jupyter/2c0cb17298096fb53cdb904c8170504c9ada93bc.svg]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+import numpy as np
+
+A = np.array([[[ 0,  1],
+               [ 2,  3],
+               [ 4,  5],
+               [ 6,  7]],
+              [[ 8,  9],
+               [10, 11],
+               [12, 13],
+               [14, 15]],
+              [[16, 17],
+               [18, 19],
+               [20, 21],
+               [22, 23]]])
+
+Flattened_X = A.flatten()
+print(Flattened_X)
+
+print(A.flatten(order="C"))
+print(A.flatten(order="F"))
+print(A.flatten(order="A"))
+#+END_SRC
+
+#+RESULTS:
+: [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23]
+: [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23]
+: [ 0  8 16  2 10 18  4 12 20  6 14 22  1  9 17  3 11 19  5 13 21  7 15 23]
+: [ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23]
+
+
+#+BEGIN_SRC jupyter-python  
+x = sympy.Symbol("x")
+y = sympy.Symbol("y", real=True, positive=True)
+z= sympy.Symbol("z", imaginary=True)
+
+# print(sympy.sqrt(x ** 2))
+display(sympy.sqrt(x ** 2))
+display(sympy.sqrt(y ** 2))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/5e9beccf2e2fa70c1f4f5f3dda7a545f88fb48e6.svg]]
+[[file:./.ob-jupyter/2c0cb17298096fb53cdb904c8170504c9ada93bc.svg]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+from sympy import symbols
+
+x, y = symbols('x y')
+
+expr = x + 2*y
+
+display(expr)
+display(expr + 1)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/6694947b0621abfe2ea28ba70bd826af574e6686.svg]]
+[[file:./.ob-jupyter/c9288c96dccbdb39b732d4568864de9a79bb003e.svg]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+import pandas
+
+mydataset = {
+  'cars': ["BMW", "Volvo", "Ford"],
+  'passings': [3, 7, 2]
+}
+
+myvar = pandas.DataFrame(mydataset)
+
+print(myvar) 
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+    cars  passings
+0    BMW         3
+1  Volvo         7
+2   Ford         2
+/tmp/ipykernel_14790/2673842222.py:1: DeprecationWarning: 
+Pyarrow will become a required dependency of pandas in the next major release of pandas (pandas 3.0),
+(to allow more performant data types, such as the Arrow string type, and better interoperability with other libraries)
+but was not found to be installed on your system.
+If this would cause problems for you,
+please provide us feedback at https://github.com/pandas-dev/pandas/issues/54466
+        
+  import pandas
+#+end_example
+
+
+#+BEGIN_SRC jupyter-python  
+
+#+END_SRC
+

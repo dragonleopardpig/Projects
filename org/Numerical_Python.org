@@ -1,0 +1,1447 @@
+#+STARTUP: content
+#+PROPERTY: header-args:jupyter-python :session mysession
+* Vectors, Matrices and Multidimensional Array
+** Definition
+- Represent data as /arrays/, computations in terms of /array operations/.
+- Vectorized computing :: batch operation on the array data.
+- Numpy arrays :: Homogeneous and fixed size.
+- Homogeneous :: all elements in the array have the same data type.
+- Fixed size :: array cannot be resized.
+
+#+BEGIN_SRC jupyter-python
+import numpy as np
+#+END_SRC
+
+#+RESULTS:
+
+** Data Types
+#+BEGIN_SRC jupyter-python
+import numpy as np
+array_int = np.array([1, 2, 3], dtype=int)
+array_float = np.array([1, 2, 3], dtype=float)
+array_complex = np.array([1, 2, 3], dtype=complex)
+
+print(array_int)
+print(array_float)
+print(array_complex)
+#+END_SRC
+#+RESULTS:
+: [1 2 3]
+: [1. 2. 3.]
+: [1.+0.j 2.+0.j 3.+0.j]
+
+
+#+BEGIN_SRC jupyter-python  
+# data type might get promoted
+d1 = np.array([1, 2, 3], dtype=float)
+d2 = np.array([1, 2, 3], dtype=complex)
+print(d1 + d2)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[2.+0.j 4.+0.j 6.+0.j]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# Only when the data type of the array is complex is the square root of –1 resulting in the imaginary unit
+np.sqrt(np.array([-1, 0, 1], dtype=complex))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+array([0.+1.j, 0.+0.j, 1.+0.j])
+:END:
+
+** Order of Array Data in Memory
+- Row-major format :: store the rows after each other in memory segment.
+  - Keyword argument order= 'C'
+- Column-major format :: store the columns one after another in memory segment.
+  - Keyword argument order= 'F'
+** Arrays Creation
+- There is no guarantee that the elements generated from np.empty have any particular values, and the actual values will vary from time to time. For this reason it is important that all values are explicitly assigned before the array is used; otherwise unpredictable errors are likely to arise. Often the np.zeros function is a safer alternative to np.empty, and if the performance gain is not essential, it is better to use np.zeros, to minimize the likelihood of subtle and hard-to-reproduce bugs due to uninitialized values in the array returned by np.empty.
+#+BEGIN_SRC jupyter-python  
+x1 = np.empty(5)
+x1.fill(3.0)
+
+x2 = 3.0 * np.ones(5)
+
+x3 = np.full(5, 3.0)
+
+print(x1)
+print(x2)
+print(x3)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[3. 3. 3. 3. 3.]
+[3. 3. 3. 3. 3.]
+[3. 3. 3. 3. 3.]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+y0 = np.arange(0.0, 10, 1)
+y1 = np.linspace(0, 10, 11) # it is generally recommended to use np.linspace whenever the increment is a noninteger.
+
+print(y0)
+print(y1)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[0. 1. 2. 3. 4. 5. 6. 7. 8. 9.]
+[ 0.  1.  2.  3.  4.  5.  6.  7.  8.  9. 10.]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+np.logspace(0, 2, 5) # 5 data points between 10**0=1 to 10**2=100
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+array([  1.        ,   3.16227766,  10.        ,  31.6227766 ,
+       100.        ])
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+"""
+A common use-case of the two-dimensional coordinate arrays, like X and Y in this example, is to evaluate functions over two variables x and y. This can be used when plotting functions over two variables, as colormap plots and contour plots.
+"""
+x = np.array([-1, 0, 1])
+y = np.array([-2, 0, 2])
+X, Y = np.meshgrid(x, y)
+
+# Create Z-coordinate from X and Y
+Z = (X + Y) ** 2
+
+print(X)
+print(Y)
+print(Z)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[-1  0  1]
+ [-1  0  1]
+ [-1  0  1]]
+[[-2 -2 -2]
+ [ 0  0  0]
+ [ 2  2  2]]
+[[9 4 1]
+ [1 0 1]
+ [1 4 9]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# a new array y is created using np.ones_like, which results in an array of the same size and data type as x, and filled with ones.
+def f(x):
+    y = np.ones_like(x)
+    # compute with x and y
+    return y
+#+END_SRC
+
+** Creating Matrix Arrays
+#+BEGIN_SRC jupyter-python
+print(np.identity(4))
+print(np.eye(3, k=1))
+print(np.eye(3, k=-1))
+print(np.diag(np.arange(0, 20, 5)))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[1. 0. 0. 0.]
+ [0. 1. 0. 0.]
+ [0. 0. 1. 0.]
+ [0. 0. 0. 1.]]
+[[0. 1. 0.]
+ [0. 0. 1.]
+ [0. 0. 0.]]
+[[0. 0. 0.]
+ [1. 0. 0.]
+ [0. 1. 0.]]
+[[ 0  0  0  0]
+ [ 0  5  0  0]
+ [ 0  0 10  0]
+ [ 0  0  0 15]]
+:END:
+
+** Indexing and Slicing
+*** One-Dimensional Arrays
+- Positive integers are used to index elements from the beginning of the array (index starts at 0), and negative integers are used to index elements from the end of the array, where the last element is indexed with –1, the second to last element with –2, and so on.
+- a range of elements can be selected using an expression like m:n, which selects elements starting with m and ending with n − 1 (note that the nth element is not included).
+- To select every second element between m and n, use m : n : 2, and to select every p elements, use m : n : p, and so on. If p is negative, elements are returned in reversed order starting from m to n+1 (which implies that m has to be larger than n in this case).
+
+| Expression       | Description                                                                                                                                                            |
+|------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| a[m]             | Select element at index m, where m is an integer (start counting form 0).                                                                                              |
+| a[-m]            | Select the n th element from the end of the list, where n is an integer. The last element in the list is addressed as –1, the second to last element as –2, and so on. |
+| a[m:n]           | Select elements with index starting at m and ending at n − 1 (m and n are integers).                                                                                   |
+| a[:] or a[0:-1]  | Select all elements in the given axis.                                                                                                                                 |
+| a[:n]            | Select elements starting with index 0 and going up to index n − 1 (integer).                                                                                           |
+| a[m:] or a[m:-1] | Select elements starting with index m (integer) and going up to the last element in the array                                                                          |
+| a[m:n:p]         | Select elements with index m through n (exclusive), with increment p.                                                                                                  |
+| a[::-1]          | Select all the elements, in reverse order.                                                                                                                             |
+
+#+BEGIN_SRC jupyter-python  
+a = np.arange(0, 11)
+print(a)
+print(a[0])
+print(a[-1])
+print(a[4])
+print(a[1:-1])
+print(a[1:-1:2])
+print(a[:5]) # m is omited, default to the beginning
+print(a[-5:]) # n is omitted, default to the end
+print(a[::-2]) # m, n are omitted, step -2
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[ 0  1  2  3  4  5  6  7  8  9 10]
+0
+10
+4
+[1 2 3 4 5 6 7 8 9]
+[1 3 5 7 9]
+[0 1 2 3 4]
+[ 6  7  8  9 10]
+[10  8  6  4  2  0]
+:END:
+
+*** Multidimensional Arrays
+#+BEGIN_SRC jupyter-python  
+f = lambda m, n: n + 10 * m
+A = np.fromfunction(f, (6, 6), dtype=int)
+print(A)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[ 0  1  2  3  4  5]
+ [10 11 12 13 14 15]
+ [20 21 22 23 24 25]
+ [30 31 32 33 34 35]
+ [40 41 42 43 44 45]
+ [50 51 52 53 54 55]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+print(A[:, 1]) # the second column
+print(A[1, :]) # the second row
+print(A[:3, :3]) # upper half diagonal block matrix
+print(A[3:, :3]) # lower left off-diagonal block matrix
+print(A[::2, ::2]) # every second element starting from 0, 0
+print(A[1::2, 1::3]) # every second and third element starting from 1, 1
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[ 1 11 21 31 41 51]
+[10 11 12 13 14 15]
+[[ 0  1  2]
+ [10 11 12]
+ [20 21 22]]
+[[30 31 32]
+ [40 41 42]
+ [50 51 52]]
+[[ 0  2  4]
+ [20 22 24]
+ [40 42 44]]
+[[11 14]
+ [31 34]
+ [51 54]]
+:END:
+
+*** Views and Copy
+- Subarrays that are extracted from arrays using slice operations are alternative views of the same underlying array data. That is, they are arrays that refer to the same data in the memory as the original array, but with a different strides configuration. When elements in a view are assigned new values, the values of the original array are therefore also updated.
+- When a copy rather than a view is needed, the view can be copied explicitly by using the copy method of the ndarray instance.
+#+BEGIN_SRC jupyter-python  
+B = A[1:5, 1:5]
+print(B)
+
+B[:, :] = 0
+print(A)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[11 12 13 14]
+ [21 22 23 24]
+ [31 32 33 34]
+ [41 42 43 44]]
+[[ 0  1  2  3  4  5]
+ [10  0  0  0  0 15]
+ [20  0  0  0  0 25]
+ [30  0  0  0  0 35]
+ [40  0  0  0  0 45]
+ [50 51 52 53 54 55]]
+:END:
+
+#+BEGIN_SRC jupyter-python  
+C = B[1:3, 1:3].copy()
+print(C)
+
+C[:, :] = 1 # this does not affect B since C is a copy of the view B[1:3, 1:3]
+print(C)
+print(B)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[0 0]
+ [0 0]]
+[[1 1]
+ [1 1]]
+[[0 0 0 0]
+ [0 0 0 0]
+ [0 0 0 0]
+ [0 0 0 0]]
+:END:
+
+*** Fancy Indexing and Boolean-Valued Indexing
+- With fancy indexing, an array can be indexed with another NumPy array, a Python list, or a sequence of integers, whose values select elements in the indexed array.
+
+#+BEGIN_SRC jupyter-python  
+A = np.linspace(0, 1, 11)
+print(A)
+print(A[np.array([0, 2, 4])])
+print(A[[0, 2, 4]])
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[0.  0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1. ]
+[0.  0.2 0.4]
+[0.  0.2 0.4]
+:END:
+
+- Boolean-valued index arrays :: each element (with values True or False) indicates whether or not to select the element from the list with the corresponding index.
+- This index method is handy when filtering out elements from an array.
+- The arrays returned using fancy indexing and Boolean-valued indexing are not views but rather new independent arrays.
+
+#+BEGIN_SRC jupyter-python  
+# select all the elements from the array A that exceed the value 0.5
+print(A > 0.5)
+print(A[A>0.5])
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[False False False False False False  True  True  True  True  True]
+[0.6 0.7 0.8 0.9 1. ]
+:END:
+
+** Reshaping and Resizing
+#+BEGIN_SRC jupyter-python  
+data = np.array([[1, 2], [3, 4]])
+print(data)
+print(np.reshape(data, (1, 4)))
+print(data.reshape(4))
+print(data.flatten())
+print(data.flatten().shape)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[1 2]
+ [3 4]]
+[[1 2 3 4]]
+[1 2 3 4]
+[1 2 3 4]
+(4,)
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+data = np.arange(0, 5)
+column = data[:, np.newaxis]
+row = data[np.newaxis, :]
+
+print(data)
+print(column)
+print(row)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[0]
+ [1]
+ [2]
+ [3]
+ [4]]
+[[0 1 2 3 4]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+data = np.arange(5)
+
+print(data)
+print(np.vstack((data, data, data)))
+print(np.hstack((data, data, data)))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[0 1 2 3 4]
+[[0 1 2 3 4]
+ [0 1 2 3 4]
+ [0 1 2 3 4]]
+[0 1 2 3 4 0 1 2 3 4 0 1 2 3 4]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+data = data[:, np.newaxis]
+
+print(data)
+print(np.hstack((data, data, data)))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[0]
+ [1]
+ [2]
+ [3]
+ [4]]
+[[0 0 0]
+ [1 1 1]
+ [2 2 2]
+ [3 3 3]
+ [4 4 4]]
+:END:
+
+** Vectorized Expressions
+*** Arithmetic Operations
+#+BEGIN_SRC jupyter-python  
+x = np.array([[1, 2], [3, 4]])
+y = np.array([[5, 6], [7, 8]])
+
+print(x)
+print(y)
+print(x+y)
+print(y-x)
+print(x*y)
+print(y/x)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[1 2]
+ [3 4]]
+[[5 6]
+ [7 8]]
+[[ 6  8]
+ [10 12]]
+[[4 4]
+ [4 4]]
+[[ 5 12]
+ [21 32]]
+[[5.         3.        ]
+ [2.33333333 2.        ]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+x = np.linspace(-1, 1, 11)
+print(x)
+y = np.sin(np.pi * x)
+print(y)
+print(np.round(y, decimals=4))
+print(np.add(np.sin(x) ** 2, np.cos(x) ** 2))
+print(np.sin(x) ** 2 + np.cos(x) ** 2)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[-1.  -0.8 -0.6 -0.4 -0.2  0.   0.2  0.4  0.6  0.8  1. ]
+[-1.22464680e-16 -5.87785252e-01 -9.51056516e-01 -9.51056516e-01
+ -5.87785252e-01  0.00000000e+00  5.87785252e-01  9.51056516e-01
+  9.51056516e-01  5.87785252e-01  1.22464680e-16]
+[-0.     -0.5878 -0.9511 -0.9511 -0.5878  0.      0.5878  0.9511  0.9511
+  0.5878  0.    ]
+[1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+[1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1.]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+def heaviside(x):
+    return 1 if x > 0 else 0
+
+print(heaviside(-1))
+print(heaviside(1.5))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+0
+1
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+heaviside = np.vectorize(heaviside)
+print(heaviside(x))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[0 0 0 0 0 0 1 1 1 1 1]
+:END:
+
+*** Aggregate Functions
+- Aggregate ::  take an array as input and by default return a scalar as output.
+- For example, statistics such as averages, standard deviations, and variances of the values in the input array, and functions for calculating the sum and the product of elements in an array, are all aggregate functions.
+#+BEGIN_SRC jupyter-python  
+data = np.random.normal(size=(15,15))
+print(np.mean(data))
+print(data.mean())
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+0.07587795201366343
+0.07587795201366343
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+data = np.arange(1,10).reshape(3,3)
+print(data)
+print(data.sum(axis=0))
+print(data.sum(axis=0).shape)
+print(data.sum(axis=1))
+print(data.sum(axis=1).shape)
+print(data.sum())
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[1 2 3]
+ [4 5 6]
+ [7 8 9]]
+[12 15 18]
+(3,)
+[ 6 15 24]
+(3,)
+45
+:END:
+
+*** Boolean Arrays and Conditional Expressions
+#+BEGIN_SRC jupyter-python  
+a = np.array([1, 2, 3, 4])
+b = np.array([4, 3, 2, 1])
+print(a<b)
+print(np.all(a < b))
+print(np.any(a < b))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[ True  True False False]
+False
+True
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+x = np.array([-2, -1, 0, 1, 2])
+print(x > 0)
+print(1 * (x > 0))
+print(x * (x > 0))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[False False False  True  True]
+[0 0 0 1 1]
+[0 0 0 1 2]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+#  defining piecewise functions.
+def pulse(x, position, height, width):
+    return height * (x >= position) * (x <= (position + width))
+
+x = np.linspace(-5, 5, 11)
+print(pulse(x, position=-2, height=1, width=5))
+print(pulse(x, position=1, height=1, width=5))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[0 0 0 1 1 1 1 1 1 0 0]
+[0 0 0 0 0 0 1 1 1 1 1]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# The function pulse could also be implemented using NumPy’s function for elementwise AND operations, np.logical_and:
+def pulse(x, position, height, width):
+    return height * np.logical_and(x >= position, x <= (position + width))
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python  
+x = np.linspace(-4, 4, 9)
+print(np.where(x < 0, x**2, x**3))
+print(np.select([x < -1, x < 2, x >= 2], [x**2 , x**3 , x**4]))
+print(np.choose([0, 0, 0, 1, 1, 1, 2, 2, 2], [x**2, x**3, x**4]))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[16.  9.  4.  1.  0.  1.  8. 27. 64.]
+[ 16.   9.   4.  -1.   0.   1.  16.  81. 256.]
+[ 16.   9.   4.  -1.   0.   1.  16.  81. 256.]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+print(np.nonzero(abs(x) > 2))
+print(x[np.nonzero(abs(x) > 2)])
+print(x[abs(x) > 2])
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+(array([0, 1, 7, 8]),)
+[-4. -3.  3.  4.]
+[-4. -3.  3.  4.]
+:END:
+
+*** Set Operations
+#+BEGIN_SRC jupyter-python  
+a = np.unique([1, 2, 3, 3])
+b = np.unique([2, 3, 4, 4, 5, 6, 5])
+print(np.in1d(a, b))
+print(1 in a)
+print(1 in b)
+print(np.all(np.in1d(a, b)))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[False  True  True]
+True
+False
+False
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+print(np.union1d(a, b))
+print(np.intersect1d(a, b))
+print(np.setdiff1d(a, b))
+print(np.setdiff1d(b, a))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[1 2 3 4 5 6]
+[2 3]
+[1]
+[4 5 6]
+:END:
+
+*** Operations on Arrays
+#+BEGIN_SRC jupyter-python  
+data = np.arange(9).reshape(3, 3)
+print(data)
+print(np.transpose(data))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[0 1 2]
+ [3 4 5]
+ [6 7 8]]
+[[0 3 6]
+ [1 4 7]
+ [2 5 8]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+data = np.random.randn(1, 2, 3, 4, 5)
+print(data.shape)
+print(data.T.shape)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+(1, 2, 3, 4, 5)
+(5, 4, 3, 2, 1)
+:END:
+
+** Matrix and Vector Operations
+*** Inner Product
+- In NumPy, the * operator is used for elementwise multiplication.
+- Python recently adopted the @ symbol for denoting matrix multiplication.
+- The main difference is that np.inner expects two input arguments with the same dimension, while np.dot can take input vectors of shape 1 × N and N × 1, respectively.
+
+#+BEGIN_SRC jupyter-python  
+# Matrix-Matrix Multiplication
+A = np.arange(1, 7).reshape(2, 3)
+print(A)
+
+B = np.arange(1, 7).reshape(3, 2)
+print(B)
+
+print(np.dot(A, B))
+print(np.dot(B, A))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[1 2 3]
+ [4 5 6]]
+[[1 2]
+ [3 4]
+ [5 6]]
+[[22 28]
+ [49 64]]
+[[ 9 12 15]
+ [19 26 33]
+ [29 40 51]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# Matrix-Vector Multiplication
+A = np.arange(9).reshape(3, 3)
+print(A)
+
+x = np.arange(3)
+print(X)
+
+print(np.dot(A, x))
+print(A.dot(x))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[0 1 2]
+ [3 4 5]
+ [6 7 8]]
+[0 1 2]
+[ 5 14 23]
+[ 5 14 23]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# explicitly cast arrays to matrices before the computation and explicitly cast the result back to the ndarray type
+A = np.random.rand(3,3)
+B = np.random.rand(3,3)
+A = np.asmatrix(A)
+B = np.asmatrix(B)
+Ap = B * A * B.I
+Ap = np.asarray(Ap)
+print(Ap)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[ 0.67527175  0.08682343  0.45739837]
+ [-0.18436848  0.97946252  0.49474665]
+ [-0.4368678   1.85388058  0.36787438]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+#  inner product (scalar product) between two arrays representing vectors
+# The main difference is that np.inner expects two input arguments with the same dimension, while np.dot can take input vectors of shape 1 × N and N × 1, 
+print(np.inner(x, x))
+print(np.dot(x, x))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+5
+5
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+y = x[:, np.newaxis]
+print(y)
+print(np.dot(y.T, y))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[0]
+ [1]
+ [2]]
+[[5]]
+:END:
+
+*** Outer Product
+- Kronecker product using the function np.kron, which, however, in contrast to np.outer, produces an output array of shape (M*P, N*Q) if the input arrays have shapes (M, N) and (P, Q), respectively.
+- The np.kron function can be used for computing tensor products of arrays of arbitrary dimension (but both inputs must have the same number of axes). 
+
+#+BEGIN_SRC jupyter-python  
+x = np.array([1, 2, 3])
+print(x)
+print(np.outer(x, x))
+print(np.kron(x, x))
+print(np.kron(x[:, np.newaxis], x[np.newaxis, :]))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[1 2 3]
+[[1 2 3]
+ [2 4 6]
+ [3 6 9]]
+[1 2 3 2 4 6 3 6 9]
+[[1 2 3]
+ [2 4 6]
+ [3 6 9]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# tensor product of two 2 × 2 matrices
+print(np.kron(np.ones((2,2)), np.identity(2)))
+print(np.kron(np.identity(2), np.ones((2,2))))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[1. 0. 1. 0.]
+ [0. 1. 0. 1.]
+ [1. 0. 1. 0.]
+ [0. 1. 0. 1.]]
+[[1. 1. 0. 0.]
+ [1. 1. 0. 0.]
+ [0. 0. 1. 1.]
+ [0. 0. 1. 1.]]
+:END:
+
+*** Einstein’s summation convention
+- Einstein’s summation convention :: an implicit summation is assumed over each index that occurs multiple times in an expression.
+- the scalar product between two vectors x and y is compactly expressed as $x_{n}y_{n}$, and the matrix multiplication of two matrices A and B is expressed as $A_{mk}B_{kn}$.
+- The Einstein summation convention can be particularly convenient when dealing with multidimensional arrays, since the index expression that defines the operation makes it explicit which operation is carried out and along which axes it is performed.
+
+#+BEGIN_SRC jupyter-python  
+#  Einstein’s summation
+x = np.array([1, 2, 3, 4])
+y = np.array([5, 6, 7, 8])
+
+print(np.einsum("n,n", x, y))
+print(np.inner(x, y))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+70
+70
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+A = np.arange(9).reshape(3, 3)
+B = A.T
+
+print(np.einsum("mk,kn", A, B))
+print(np.alltrue(np.einsum("mk,kn", A, B) == np.dot(A, B)))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[  5  14  23]
+ [ 14  50  86]
+ [ 23  86 149]]
+True
+:END:
+
+* Symbolic Computing
+** Definition
+- In symbolic computing software, also known as computer algebra systems (CASs), representations of mathematical objects and expressions are manipulated and transformed analytically.
+
+#+BEGIN_SRC jupyter-python
+import sympy
+from sympy import I, pi, oo
+sympy.init_printing(use_latex='svg', scale=1.5)
+
+x, y, z = sympy.symbols("x, y, z")
+#+END_SRC
+
+#+RESULTS:
+
+** Symbols
+#+BEGIN_SRC jupyter-python 
+x = sympy.Symbol("x")
+y = sympy.Symbol("y", real=True, positive=True)
+z= sympy.Symbol("z", imaginary=True)
+
+print(sympy.sqrt(x ** 2))
+display(sympy.sqrt(x ** 2))
+display(sympy.sqrt(y ** 2))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: sqrt(x**2)
+[[./.ob-jupyter/674663c2f0b17f920b40d71e52a4bceb4458f161.svg]]
+[[./.ob-jupyter/610c17df8642180ff0426c248d13ade05c20b711.svg]]
+:END:
+
+#+BEGIN_SRC jupyter-python  
+n1 = sympy.Symbol("n")
+n2 = sympy.Symbol("n", integer=True)
+n3 = sympy.Symbol("n", odd=True)
+
+display(sympy.cos(n1 * pi))
+display(sympy.cos(n2 * pi))
+display(sympy.cos(n3 * pi))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/0678f109ff3c3f67961b725c1bbb6bd4d0e1f62a.png]]
+[[file:./.ob-jupyter/4c4f06c3c4186192da8a9fe7605f906f80b0af7a.png]]
+[[file:./.ob-jupyter/47150b3e1349f55dd84545c35aae80c150f27427.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+a, b, c = sympy.symbols("a, b, c", negative=True)
+d, e, f = sympy.symbols("d, e, f", positive=True)
+#+END_SRC
+
+** Numbers
+#+BEGIN_SRC jupyter-python
+i = sympy.Integer(19)
+print(type(i))
+print(i.is_Integer, i.is_real, i.is_odd)
+
+f = sympy.Float(2.3)
+print(type(f))
+print(f.is_Integer, f.is_real, f.is_odd)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+<class 'sympy.core.numbers.Integer'>
+True True True
+<class 'sympy.core.numbers.Float'>
+False True False
+:END:
+
+#+BEGIN_SRC jupyter-python  
+i, f = sympy.sympify(19), sympy.sympify(2.3)
+print(type(i), type(f))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+<class 'sympy.core.numbers.Integer'> <class 'sympy.core.numbers.Float'>
+:END:
+
+*** Integers
+#+BEGIN_SRC jupyter-python  
+n = sympy.Symbol("n", integer=True)
+print(n.is_integer, n.is_Integer, n.is_positive, n.is_Symbol)
+
+i = sympy.Integer(19)
+print( i.is_integer, i.is_Integer, i.is_positive, i.is_Symbol)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+True False None True
+True True True False
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+print(i ** 50)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+8663234049605954426644038200675212212900743262211018069459689001
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+print(sympy.factorial(100))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000
+:END:
+
+*** Float
+#+BEGIN_SRC jupyter-python  
+print("%.25f" % 0.3)
+print(sympy.Float(0.3, 25))
+print(sympy.Float('0.3', 25))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+0.2999999999999999888977698
+0.2999999999999999888977698
+0.3000000000000000000000000
+:END:
+
+*** Rational
+#+BEGIN_SRC jupyter-python  
+print(sympy.Rational(11, 13))
+sympy.Rational(11, 13)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+11/13
+[[file:./.ob-jupyter/00b6deb8219526d83670b8d3bdcbe7fe107ff3c2.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+r1 = sympy.Rational(2, 3)
+r2 = sympy.Rational(4, 5)
+
+display(r1 * r2)
+display(r1 / r2)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/ce74900a6831915b3cac95c014ded138ce2c33c9.png]]
+[[file:./.ob-jupyter/94a3a4e5d899b399b37ddca4b063c2551cc70da4.png]]
+:END:
+
+*** Functions
+- SymPy distinguishes between defined and undefined functions, as well as between applied and unapplied functions.
+#+BEGIN_SRC jupyter-python  
+x, y, z = sympy.symbols("x, y, z")
+f = sympy.Function("f")
+print(type(f))
+display(f(x))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+<class 'sympy.core.function.UndefinedFunction'>
+[[file:./.ob-jupyter/5451a83bda86ea2ec55b3ed3e4f28cdbe71bbb38.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+g = sympy.Function("g")(x, y, z)
+display(g)
+display(g.free_symbols)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/ce67162a86cbfc4fcbc6041748e3278c160cdc14.png]]
+[[file:./.ob-jupyter/246f6fbc89296aeb863afac844f58b3323b35cc0.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+print(sympy.sin)
+display(sympy.sin(x))
+display(sympy.sin(pi * 1.5))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+sin
+[[file:./.ob-jupyter/3054c1adb652027de9bca90a20b5e44e84c7641f.png]]
+[[file:./.ob-jupyter/47150b3e1349f55dd84545c35aae80c150f27427.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+n = sympy.Symbol("n", integer=True)
+display(sympy.sin(pi * n))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/6be7dd2b0af6c7602d5930f632489ff8762e4070.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+h = sympy.Lambda(x, x**2)
+display(h)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/aeddf72d91e24f9a0afcccf33c1a9201f59ec58d.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+display(h(5))
+display(h(1 + x))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/29d9ae75ced2af880a54e43084a894071761edb3.png]]
+[[file:./.ob-jupyter/f66e93d2cf5f55f7dd78e1e3428334624b1b556e.png]]
+:END:
+
+** Expressions
+#+BEGIN_SRC jupyter-python  
+x = sympy.Symbol("x")
+expr = 1 + 2 * x**2 + 3 * x**3
+display(expr)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/09d0a37d340ce1104ac3638f676a65807ece6361.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+display(expr.args)
+display(expr.args[0])
+display(expr.args[1])
+display(expr.args[2])
+display(expr.args[1].args[1])
+display(expr.args[1].args[1].args[0])
+display(expr.args[1].args[1].args[0].args)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/ed9f08bea0799634276aa7cbf0cffd3e69b5f162.png]]
+[[file:./.ob-jupyter/fab936c6616b67f33cdf57f1b07ef8cdf598a877.png]]
+[[file:./.ob-jupyter/2ab550c67a93c5883b8c3dda90ee55d1c75a66f2.png]]
+[[file:./.ob-jupyter/f614a9770af1a32d93e93d31b13dadf3e35bfb7a.png]]
+[[file:./.ob-jupyter/111735a8e6b0fde99591206c35381313238255d3.png]]
+[[file:./.ob-jupyter/743dbd8000a6547db1c07fa95e153a3d0d579d1a.png]]
+[[file:./.ob-jupyter/dee9170778a0a3ec5804d20d48c86a7a23c08936.png]]
+:END:
+
+** Manipulating Expressions
+*** Simplification
+#+BEGIN_SRC jupyter-python  
+expr = 2 * (x**2 - x) - x * (x + 1)
+display(expr)
+display(sympy.simplify(expr))
+display(expr.simplify())
+display(expr)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/8379341e8aacf3f9ddcd9e3bbe1693aa7219ba53.png]]
+[[file:./.ob-jupyter/b9caf1ac9fa0d5411852962ce741b2b1781c084a.png]]
+[[file:./.ob-jupyter/b9caf1ac9fa0d5411852962ce741b2b1781c084a.png]]
+[[file:./.ob-jupyter/8379341e8aacf3f9ddcd9e3bbe1693aa7219ba53.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = 2 * sympy.cos(x) * sympy.sin(x)
+display(expr)
+display(sympy.simplify(expr))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/f140d023227fb019a590b623848f82fd0bb8c36c.png]]
+[[file:./.ob-jupyter/c67815aa38ff1701611d54abb169a221d19785db.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = sympy.exp(x) * sympy.exp(y)
+display(expr)
+display(sympy.simplify(expr))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/6d3f6ad606daaf7d2073f7cfd2d1df5a711ca53d.png]]
+[[file:./.ob-jupyter/6855bf34493e765602f4e631e95c165a33b44c06.png]]
+:END:
+
+*** Expand
+#+BEGIN_SRC jupyter-python  
+expr = (x + 1) * (x + 2)
+display(sympy.expand(expr))
+display(sympy.sin(x + y).expand(trig=True))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/94f951671819c12cdf479768564d364d370dbf30.png]]
+[[file:./.ob-jupyter/6b2d83e9213be6cd725894ff24b4df18fbf35f3b.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+a, b = sympy.symbols("a, b", positive=True)
+display(sympy.log(a * b).expand(log=True))
+display(sympy.exp(I*a + b).expand(complex=True))
+display(sympy.expand((a * b)**x, power_base=True))
+display(sympy.exp((a-b)*x).expand(power_exp=True))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/75f63ef962be171773f1d6164e37e52786edd5e8.png]]
+[[file:./.ob-jupyter/aca54caf896386f469f94c4f91a9d9b15f016f73.png]]
+[[file:./.ob-jupyter/53dd398d122f7156fa4fc1b07098d2278cc5c32c.png]]
+[[file:./.ob-jupyter/d0bf3492af592e6c3ecaf21c1b3fd5a59b753d1d.png]]
+:END:
+
+*** Factor, Collect, and Combine
+#+BEGIN_SRC jupyter-python  
+display(sympy.factor(x**2 - 1))
+display(sympy.factor(x * sympy.cos(y) + sympy.sin(z) * x))
+display(sympy.logcombine(sympy.log(a) - sympy.log(b)))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/04ac36f1c587537fdc51cad9ad7e45cd622e5e79.png]]
+[[file:./.ob-jupyter/10b458d5baee120a52cfea9706bb404514f4a8d7.png]]
+[[file:./.ob-jupyter/d4e288cd4acd746245ea40cb33d10ac722f684bd.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = x + y + x * y * z
+display(expr.collect(x))
+display(expr.collect(y))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/88778e3cdfedb2b8851775f9d4ad0721f7d6c3e3.png]]
+[[file:./.ob-jupyter/05e0103059040527b5e1b390428192cd32247795.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = sympy.cos(x + y) + sympy.sin(x - y)
+display(expr)
+display(expr.expand(trig=True).collect([sympy.cos(x),
+                                        sympy.sin(x)]).collect(sympy.cos(y)
+                                        - sympy.sin(y)))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/b533e78049af53022096ca0825339abdd5ec098a.png]]
+[[file:./.ob-jupyter/326b921b0033932bbe911616f04dc4dfa60db226.png]]
+:END:
+
+*** Apart, Together, and Cancel
+#+BEGIN_SRC jupyter-python  
+display(sympy.apart(1/(x**2 + 3*x + 2), x))
+display(sympy.together(1 / (y * x + y) + 1 / (1+x)))
+display(sympy.cancel(y / (y * x + y)))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/426750b899a883dd439992c06f2e08959b001366.png]]
+[[file:./.ob-jupyter/b7e6ebc21c1099817bfc30c8c7e67b6f4c7f4d66.png]]
+[[file:./.ob-jupyter/dab6637c58581f19d62151fc0c2f2021b2c1d7e5.png]]
+:END:
+
+*** Substitutions
+#+BEGIN_SRC jupyter-python  
+display((x + y).subs(x, y))
+display(sympy.sin(x * sympy.exp(x)).subs(x, y))
+display(sympy.sin(x * z).subs({z: sympy.exp(y), x: y, sympy.sin: sympy.cos}))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/c7490fe7af04f8834a9209c4afe402efe25b51b9.png]]
+[[file:./.ob-jupyter/24027078ad6734ab6eb79a7643142a62ed97853f.png]]
+[[file:./.ob-jupyter/1e4ca4b1917780a8679c1cd7891c082486d61d12.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = x * y + z**2 *x
+values = {x: 1.25, y: 0.4, z: 3.2}
+display(expr.subs(values))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/44abccd99d6ea1bc976d7110d64e6298ad33475d.png]]
+:END:
+
+*** Numerical Evaluation
+#+BEGIN_SRC jupyter-python  
+print(sympy.N(1 + pi))
+print(sympy.N(pi, 50))
+print((x + 1/pi).evalf(10))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+4.14159265358979
+3.1415926535897932384626433832795028841971693993751
+x + 0.3183098862
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = sympy.sin(pi * x * sympy.exp(x))
+print([expr.subs(x, xx).evalf(3) for xx in range(0, 10)])
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[0, 0.774, 0.642, 0.722, 0.944, 0.205, 0.974, 0.977, -0.870, -0.695]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# The expr_func created in the previous example is a scalar function and is not directly compatible with vectorized input in the form of NumPy arrays
+expr_func = sympy.lambdify(x, expr)
+print(expr_func(1.0))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+0.773942685266709
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# generate functions that are NumPy-array aware. Creates a vectorized function that accepts NumPy arrays as input
+expr_func = sympy.lambdify(x, expr, 'numpy')
+import numpy as np
+xvalues = np.arange(0, 10)
+print(expr_func(xvalues))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[ 0.          0.77394269  0.64198244  0.72163867  0.94361635  0.20523391
+  0.97398794  0.97734066 -0.87034418 -0.69512687]
+:END:
+
+* Calculus
+** Derivatives
+#+BEGIN_SRC jupyter-python  
+f = sympy.Function('f')(x)
+display(sympy.diff(f, x))
+display(sympy.diff(f, x, x))
+display(sympy.diff(f, x, 3))
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python  
+g = sympy.Function('g')(x, y)
+display(g.diff(x, y))
+display(g.diff(x, 3, y, 2))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/7c6b9b4a7cda19c1f04056241ce50f4983828324.png]]
+[[file:./.ob-jupyter/c4c535d3c014fa80cd70803d9db4d6ecba2cd48a.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = x**4 + x**3 + x**2 + x + 1
+display(expr)
+display(expr.diff(x))
+display(expr.diff(x, x))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/7e9ec9bc37a754c0d32e28383bcf41c9ea92f164.png]]
+[[file:./.ob-jupyter/0543eea4d9167cc9b1d42d7fbd4d98d0ecdec253.png]]
+[[file:./.ob-jupyter/ab3c16e55c3e88cf8773305cc6480da196588e56.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = (x + 1)**3 * y ** 2 * (z - 1)
+display(expr)
+display(expr.diff(x, y, z))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/8bf9b04eb1810e399eb5ad94cea0684643d26ff7.png]]
+[[file:./.ob-jupyter/14f5d49e7f75b42f0bf7c362b0a8629466748152.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = sympy.sin(x * y) * sympy.cos(x / 2)
+display(expr)
+display(expr.diff(x))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/afdce6c698ba942035079815a15107ecf8ce112d.png]]
+[[file:./.ob-jupyter/bbdded256f7aff89eaf23fdb20b457103c9433b7.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+expr = sympy.functions.special.polynomials.hermite(x, 0)
+display(expr)
+display(expr.diff(x).doit())
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/a1381382a47fcd60db5b3a62bfa875703663df79.png]]
+[[file:./.ob-jupyter/0e2ac4db378a5ebf68b603dda6b0677e1b14bf60.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python  
+# create an instance of the class sympy.Derivative
+d = sympy.Derivative(sympy.exp(sympy.cos(x)), x)
+display(d)
+display(d.doit())
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/f54bc9e79a625b241357fb40afd9a3c9e9fc762a.png]]
+[[file:./.ob-jupyter/fc6373c3a0b31a9caba4e25aeb24df335ae117c6.png]]
+:END:
+
+** Integrals
+#+BEGIN_SRC jupyter-python  
+
+#+END_SRC
+

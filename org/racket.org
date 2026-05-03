@@ -1,0 +1,40 @@
+#+BEGIN_SRC racket :lang slideshow
+(define c (circle 10))
+(define r (rectangle 10 20))
+c
+#+END_SRC
+#+RESULTS:
+: Gtk-Message: 11:38:51.773: Failed to load module "appmenu-gtk-module"
+: #<pict>
+
+#+BEGIN_SRC racket  :lang slideshow
+(require 2htdp/image)
+(circle 30 "outline" "red")
+#+END_SRC
+#+RESULTS:
+: /tmp/babel-I1J1sY/org-babel-qVEeqO.rkt:5:0: require: not at module level or top level
+:   in: (require 2htdp/image)
+:   location...:
+:    /tmp/babel-I1J1sY/org-babel-qVEeqO.rkt:5:0
+
+#+BEGIN_SRC racket
+(require 2htdp/image)
+#+END_SRC
+#+RESULTS:
+: /tmp/babel-I1J1sY/org-babel-uviI7y.rkt:5:0: require: not at module level or top level
+:   in: (require 2htdp/image)
+:   location...:
+:    /tmp/babel-I1J1sY/org-babel-uviI7y.rkt:5:0
+
+#+BEGIN_SRC racket  
+(circle 30 "outline" "red")
+#+END_SRC
+#+RESULTS:
+: /tmp/babel-I1J1sY/org-babel-ZpaDgK.rkt:5:1: circle: unbound identifier
+:   in: circle
+:   location...:
+:    /tmp/babel-I1J1sY/org-babel-ZpaDgK.rkt:5:1
+
+#+BEGIN_SRC racket  
+
+#+END_SRC

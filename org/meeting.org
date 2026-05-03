@@ -1,0 +1,29 @@
+* 2020Feb05
+** Hyper-Personalisation Line Program Update
+- Tender
+- KPI
+- HPL displays
+- BTM
+* 2020Feb12
+** BTM customer input
+- Tribology requirement by Nabtesco (Tomotsugu_Kato@nabtesco.com)
+- Mechanical abrasion concern on the laser textured surface.
+- Other low surface tension liquids superwetting properties.
+- Powder anti-stiction properties on laser textured surface.
+- Surface composition concern of the laser textured surface.
+- Inner tube laser texturing capability.
+* 2020Feb17
+** SIMTech Skype meeting
+- Skype Meeting for WP1.3 with SIMTech and ARTC
+- Attended by: Wang Xincai (SIMTech), Chu Pau Loong (ARTC), Fung Ling (ARTC)
+- Time: 17th Feb 2020, 9.30am – 10am
+- Notes:
+  + Fung Ling had sent the Project Agreement to SIMTech and is now pending SIMTech’s input. Xincai to inform SIMTech RLO that the 3 party PA is under preparation. ARTC will finalize the T&C with NUS.
+  + Fung Ling update that the official project start date should be in Feb 2020 instead of April 2020. The Feb-March period will be cover directly under the IAF-PP HPL or there could be a separate Project Agreement. Fung Ling to update again. 
+  + Biweekly meeting with SIMTech will begin once SIMTech has started on experimental work, probably around March. There will also be combined meeting with NUS every 1-2 months.
+  + Fung Ling had requested oil fragrance samples from P&G. If there is delay from P&G, SIMTech should use cooking oil to test first. 
+  + SIMTech will do proof of concept work using their current equipment to get oleophobic surface. SIMTech to assess if there are any optical components that needs to be purchased. This should be discussed when we have the first biweekly meeting in March. 
+
+* Note
+** TODO EDX
+DEADLINE: <2020-02-12 Wed>
