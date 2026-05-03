@@ -384,7 +384,7 @@
     pciutils                   # PCI device info (lspci)
     usbutils                   # USB device info (lsusb)
     lshw                       # Detailed hardware listing
-    gpustat                    # GPU usage monitor (NVIDIA)
+    python3Packages.gpustat    # GPU usage monitor (NVIDIA) — CLI/JSON, used by HyprPanel's GPU widget. (nixpkgs's bare `gpustat` is the unrelated Rust GUI tool.)
     upower                     # Battery and power device info
     mission-center             # GUI system monitor (CPU, RAM, disk, network)
     resources                  # Lightweight GUI resource monitor

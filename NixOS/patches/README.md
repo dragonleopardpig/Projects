@@ -25,30 +25,28 @@ Upstream PRs (all open, no traction yet):
 - <https://github.com/meganz/MEGAsync/pull/1125>
 - <https://github.com/meganz/MEGAsync/pull/1126>
 
-## ProtonVPN tray fix — mostly removed
+### `upstream/0004-reregister-tray-item-when-host-restarts.patch`
 
-The previous `protonvpn-systray.patch` is gone. Equivalent fixes have
-landed upstream in `proton-vpn` v4.15.x / v4.16.1:
+Re-register the StatusNotifierItem when the tray host (HyprPanel)
+restarts. Without this, the ProtonVPN tray icon disappears after every
+HyprPanel reload and never comes back. Applied to `proton-vpn` via the
+`localOverlay` in `../flake.nix`.
 
-- SNI/DBusMenu typing fixes: `tray_icon.py` now returns properly typed
-  `dbus.Int32 / Dictionary("sv") / Array("(ia{sv}av)")` from `GetLayout`,
-  and `dbus.String("")` for unknown SNI properties.
-- Tray host detection: upstream `TrayAvailabilityDetection` queries
-  `org.kde.StatusNotifierWatcher` directly via `NameHasOwner`
-  (commits `0f351813`, `7feca9d5`, `bf654667`).
-- Menu state vs window visibility: upstream commit
-  `0d6aa810` keeps `Show` / `Hide` aligned with the window state, with
-  follow-up `2151ab40 [VPNLINUX-1638]`.
+Upstream PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>
+(open against `stable`, no traction yet). Drop the override and this
+patch as soon as the PR lands and the new `proton-vpn` reaches nixpkgs.
 
-Once nixpkgs ships a `proton-vpn` package with these fixes (it does at
-v4.15.3+), no override is needed.
+The other ProtonVPN fixes that used to live in this directory
+(`protonvpn-systray.patch` and split patches `0001`–`0003`) have landed
+upstream in `proton-vpn` v4.15.x / v4.16.1 and were deleted:
 
-The one fix that has **not** landed upstream yet is re-registering the
-SNI item when the tray host (HyprPanel) restarts. The split patch for
-that lives in `upstream/0004-reregister-tray-item-when-host-restarts.patch`
-and is tracked in <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>.
-If that PR is merged or the bug stops happening in practice, the file
-can be deleted too.
+- SNI/DBusMenu typing fixes in `tray_icon.py` (`dbus.Int32`,
+  `Dictionary("sv")`, `Array("(ia{sv}av)")`, `dbus.String("")`).
+- Tray host detection via `NameHasOwner` on
+  `org.kde.StatusNotifierWatcher` (commits `0f351813`, `7feca9d5`,
+  `bf654667`).
+- Menu state aligned with window visibility (commit `0d6aa810`,
+  follow-up `2151ab40 [VPNLINUX-1638]`).
 
 ## Rebuilding
 
