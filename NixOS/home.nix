@@ -574,7 +574,7 @@ in
         exit 0
       fi
 
-      swww img "$wallpaper" \
+      awww img "$wallpaper" \
         --transition-type any \
         --transition-step 90 \
         --transition-angle 0 \
@@ -958,6 +958,9 @@ in
       };
       bar.launcher.autoDetectIcon = true;
       bar.workspaces.show_icons = true;
+      # Hide Hyprland special workspaces (negative IDs like -98 S-term, -97 S-notepad, -96 S-volume)
+      # from the panel, otherwise they render as extra empty buttons.
+      bar.workspaces.ignored = "^-";
       menus.clock.weather.unit = "metric";
       menus.clock.weather.location = "Singapore";
       menus.clock.weather.key = "/home/thinky/.config/secrets/weather-api-key.json";
