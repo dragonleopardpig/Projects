@@ -17,6 +17,12 @@ Still tracked:
     re-registers the SNI item when the tray host comes back. Recovers
     the ProtonVPN tray icon after HyprPanel restarts.
   - PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>
+- `0008-dbusmenu-children-as-variants.patch`
+  - Makes `_DBusMenuService.GetLayout` send children as the
+    spec-conformant `av` (array of variants) rather than
+    `a(ia{sv}av)` (array of structs). The struct-array form crashes
+    strict hosts (HyprPanel/astal-tray) on the first menu read.
+  - No PR yet — submit alongside #157.
 
 ## MEGAsync — `meganz/MEGAsync`
 

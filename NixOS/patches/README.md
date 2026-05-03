@@ -36,6 +36,23 @@ Upstream PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>
 (open against `stable`, no traction yet). Drop the override and this
 patch as soon as the PR lands and the new `proton-vpn` reaches nixpkgs.
 
+### `upstream/0008-dbusmenu-children-as-variants.patch`
+
+Make ProtonVPN's `_DBusMenuService.GetLayout` send children as the
+spec-conformant `av` (array of variants) instead of `a(ia{sv}av)`
+(array of structs). The struct-array form is silently accepted by
+permissive tray hosts (KDE, waybar) but trips the strict GVariant
+format `(i@a{sv}@av)` used by HyprPanel's astal-tray, segfaulting the
+panel the moment ProtonVPN's tray menu is read.
+
+Fix is a 5-line change in `tray_icon.py`: empty children arrays use
+`signature="v"`, and each child `dbus.Struct` carries `variant_level=1`
+so dbus-python wraps it as a variant on the wire. Same shape that the
+method's own `out_signature="u(ia{sv}av)"` already declares.
+
+No upstream PR yet — submitting alongside #157. Drop this and the
+override entry above once both fixes land in nixpkgs's `proton-vpn`.
+
 The other ProtonVPN fixes that used to live in this directory
 (`protonvpn-systray.patch` and split patches `0001`–`0003`) have landed
 upstream in `proton-vpn` v4.15.x / v4.16.1 and were deleted:

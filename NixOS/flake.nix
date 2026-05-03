@@ -39,14 +39,19 @@
           ];
         });
 
-        # Re-register the StatusNotifierItem when the tray host (HyprPanel)
-        # restarts. Without this the ProtonVPN tray icon disappears whenever
-        # HyprPanel is reloaded and never comes back. Tracked upstream in
-        # <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>; drop
-        # this override once that PR lands in nixpkgs's proton-vpn.
+        # Two ProtonVPN tray fixes, both targeted at upstream:
+        #   * 0004 re-registers the SNI item when the tray host (HyprPanel)
+        #     restarts. Without it the icon disappears on every panel reload.
+        #     Tracked at <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>.
+        #   * 0008 makes the DBusMenu GetLayout children spec-conformant
+        #     (`av` of variants). The current upstream form is `a(ia{sv}av)`,
+        #     which crashes strict tray hosts like HyprPanel's astal-tray with
+        #     a GVariant assertion the moment the menu is read.
+        # Drop both as soon as the equivalent PRs land in nixpkgs's proton-vpn.
         proton-vpn = prev.proton-vpn.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/upstream/0004-reregister-tray-item-when-host-restarts.patch
+            ./patches/upstream/0008-dbusmenu-children-as-variants.patch
           ];
         });
 

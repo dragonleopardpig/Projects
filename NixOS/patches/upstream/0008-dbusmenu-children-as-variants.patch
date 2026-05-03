@@ -1,0 +1,55 @@
+Make DBusMenu GetLayout children spec-conformant (av of variants).
+
+The DBusMenu protocol declares menu children as `av` (array of
+variants), and the GetLayout out_signature on this very class already
+says `u(ia{sv}av)`. The current code, however, builds the children
+container with `dbus.Array(signature="(ia{sv}av)")`, which marshals
+as `a(ia{sv}av)` (array of structs) on the wire. dbus-python does
+not auto-rewrap, so non-conformant clients (e.g. HyprPanel's
+astal-tray, which uses the strict `(i@a{sv}@av)` GVariant format)
+crash with:
+
+    GLib-CRITICAL: the GVariant format string '(i@a{sv}@av)' has a
+    type of '(ia{sv}av)' but the given value has a type of
+    '(ia{sv}a(ia{sv}av))'
+
+Fix by changing the children array signature to `v` and tagging each
+child Struct with `variant_level=1` so dbus-python emits the
+spec-conformant `av` shape. Hosts that previously accepted the
+struct-array form still accept the variant form (it's the documented
+shape).
+
+diff --git a/proton/vpn/app/gtk/widgets/main/tray_icon.py b/proton/vpn/app/gtk/widgets/main/tray_icon.py
+index caeb91b..f00f00f 100644
+--- a/proton/vpn/app/gtk/widgets/main/tray_icon.py
++++ b/proton/vpn/app/gtk/widgets/main/tray_icon.py
+@@ -151,12 +151,12 @@ class _DBusMenuService(dbus.service.Object):
+             return (
+                 dbus.Int32(parent_id),
+                 dbus.Dictionary({}, signature="sv"),
+-                dbus.Array([], signature="(ia{sv}av)")
++                dbus.Array([], signature="v")
+             )
+
+         item: dbus.Dictionary = menu[parent_id]
+
+-        children = dbus.Array([], signature="(ia{sv}av)")
++        children = dbus.Array([], signature="v")
+         if "children" in item:
+             for child_id in item["children"]:
+                 child_layout = self._build_layout(child_id, properties, menu)
+@@ -164,11 +164,12 @@ class _DBusMenuService(dbus.service.Object):
+                 child_props = child_layout[1] \
+                     if child_layout[1] else dbus.Dictionary({}, signature="sv")
+                 child_children = child_layout[2] \
+-                    if child_layout[2] else dbus.Array([], signature="(ia{sv}av)")
++                    if child_layout[2] else dbus.Array([], signature="v")
+                 children.append(
+                     dbus.Struct(
+                         (child_id_dbus, child_props, child_children),
+-                        signature="(ia{sv}av)"
++                        signature="(ia{sv}av)",
++                        variant_level=1
+                     )
+                 )
+
