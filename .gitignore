@@ -1,30 +1,11 @@
-# Third-party cloned repos (have their own .git)
-/scimax/
-/lsp-bridge/
-/flymake-bridge/
-/Kraken-Optical-Simulator/
-/optiland/
-/pagmo2/
-/pyvista/
-/pyvtk/
-/vtk/
-/DeepLens/
-/zmxtools/
-/SeaRay/
-/beamshapy/
-/lightpipes/
-/pyLaserPulse/
-/rezonator2/
-/simcav/
-/RayTracing/
-/LensAI/
+# Ignore every top-level directory except those allow-listed below.
+# Other dirs are either third-party clones with their own .git or
+# scratch workspaces that will get their own repo later.
+/*/
+!/NixOS/
 
-# Generated/cache files
+# Generated / cache files (anywhere in the tree)
 .aider*
-.codex/
-sessions/
-/org/ltximg/
-/org/data/
 **/.devenv.flake.nix
 **/.devenv/
 **/.direnv/
@@ -33,13 +14,9 @@ sessions/
 **/__pycache__/
 *.pyc
 
-# Backup files
-/backup/
-
-# Journal (private)
-/journal/
-
-# Tool runtime data / state (do not commit)
+# Tool runtime state at top level (do not commit)
+/.codex
+/codex_resume.txt
 /auth.json
 /installation_id
 /.personality_migration
@@ -49,7 +26,6 @@ sessions/
 /models_cache.json
 /logs_*.sqlite*
 /state_*.sqlite*
-/laser/
 
 # Lock files (top-level scratch devenv — intentionally untracked)
 /devenv.lock

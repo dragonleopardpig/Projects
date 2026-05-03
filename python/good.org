@@ -1,3 +1,0 @@
-#+BEGIN_SRC jupyter-python
-
-#+END_SRC

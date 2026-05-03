@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-
-set -euo pipefail
-
-cd /home/thinky/Projects/rust
-export DIRENV_LOG_FORMAT=
-exec direnv exec /home/thinky/Projects/rust rust-analyzer "$@"
