@@ -20,6 +20,45 @@
 ;; * Dired
 (add-hook 'dired-mode-hook 'dired-hide-details-mode)
 
+;; * Dirvish — Yazi-style miller-columns file manager built on Dired.
+;; Layout numbers are (parent-width-cells current-ratio preview-ratio).
+;; The leftmost pane is the parent directory (read-only context, like Yazi);
+;; navigate inside the middle pane and use <left>/<right> to traverse.
+(use-package dirvish
+  :ensure t
+  :init
+  (dirvish-override-dired-mode)
+  :bind
+  (("C-c d" . dirvish)
+   ("C-c D" . dirvish-side)
+   :map dirvish-mode-map
+   ("a"        . dirvish-quick-access)
+   ("f"        . dirvish-file-info-menu)
+   ("y"        . dirvish-yank-menu)
+   ("N"        . dirvish-narrow)
+   ("h"        . dired-up-directory)
+   ("l"        . dired-find-file)
+   ("<left>"   . dired-up-directory)
+   ("<right>"  . dired-find-file)
+   ("TAB"      . dirvish-toggle-subtree)
+   ("M-l"      . dirvish-ls-switches-menu)
+   ("M-t"      . dirvish-layout-toggle))
+  :custom
+  ;; ls flags: -l long, -a hidden, -h human sizes, -v natural sort, dirs first.
+  (dired-listing-switches "-lahv --group-directories-first")
+  (dirvish-default-layout '(1 0.11 0.5))
+  (dirvish-attributes '(file-size vc-state subtree-state collapse))
+  (dirvish-mode-line-format
+   '(:left (sort symlink) :right (omit yank index)))
+  (dirvish-preview-dispatchers
+   '(image gif video audio epub pdf archive))
+  (dirvish-use-header-line 'global))
+
+;; Same arrow keys when Dirvish isn't overriding (plain Dired buffers).
+(with-eval-after-load 'dired
+  (define-key dired-mode-map (kbd "<left>")  'dired-up-directory)
+  (define-key dired-mode-map (kbd "<right>") 'dired-find-file))
+
 ;; * ripgrep
 (require 'rg)
 (rg-enable-default-bindings)

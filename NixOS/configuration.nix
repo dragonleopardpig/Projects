@@ -440,6 +440,9 @@
     # ── Image & Media Tools ──
     imagemagick                # Image conversion and manipulation (CLI)
     ffmpeg                     # Audio/video converter and streamer
+    ffmpegthumbnailer          # Video thumbnails (used by Emacs Dirvish preview)
+    mediainfo                  # Media metadata (used by Emacs Dirvish preview)
+    vips                       # Fast image thumbnailing — Dirvish image dispatcher
     guvcview                   # GUI webcam viewer/recorder
     v4l-utils                  # V4L2 utilities (includes qv4l2)
     gimp                       # GNU image editor (Photoshop alternative)
@@ -482,6 +485,7 @@
 	      pdf-tools
 	      async
         neotree
+        dirvish                # Yazi-like miller-columns Dired with previews
         all-the-icons
         rainbow-delimiters
         yaml-mode
