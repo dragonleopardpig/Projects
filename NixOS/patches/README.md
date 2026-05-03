@@ -1,94 +1,57 @@
-# ProtonVPN systray patch
+# Local package patches
 
-This directory contains the local patch that makes `protonvpn-gui` work
-reliably in the Hyprland + HyprPanel setup used by this NixOS config.
+This directory contains source patches applied via the `localOverlay` in
+`../flake.nix`.
 
-## Problem
+## Active patches
 
-With upstream `protonvpn-gui 4.15.0`, the tray icon behavior was broken on
-the newer Hyprland/HyprPanel stack:
+### `swappy-multi-mime-clipboard.patch`
 
-- the tray icon could fail to appear
-- HyprPanel could crash/restart when ProtonVPN registered its tray item
-- right-click menu rendering was inconsistent
-- `Show` / `Hide` state could drift from the actual window visibility
+Makes `swappy` offer the screenshot in multiple image MIME types via the GTK
+clipboard (PNG, BMP, TIFF, JPEG) so that other apps and Wayland-side
+clipboard consumers can paste it without conversion.
 
-The issue was not just missing tray libraries. The main breakage came from
-ProtonVPN's StatusNotifierItem / DBusMenu implementation interacting badly
-with HyprPanel's tray backend.
+Upstream PR: <https://github.com/jtheoof/swappy/pull/221> (open, no traction).
 
-## How this config fixes it
+### `megasync-hyprland.patch` and `megasync-sync-header-labels.patch`
 
-`../flake.nix` overrides `pkgs.protonvpn-gui` and applies
-`protonvpn-systray.patch` during the normal package build.
+Make MEGAsync usable on Hyprland/Wayland and improve sync/backup table
+contrast. Built on top of a local fork of MEGAsync (see the `megasync`
+override in `../flake.nix`).
 
-`../home.nix` then launches plain `protonvpn-app` directly. There is no
-runtime wrapper, local monkeypatch script, or custom tray launcher anymore.
+Upstream PRs (all open, no traction yet):
 
-## What the patch changes
+- <https://github.com/meganz/MEGAsync/pull/1124>
+- <https://github.com/meganz/MEGAsync/pull/1125>
+- <https://github.com/meganz/MEGAsync/pull/1126>
 
-The patch modifies ProtonVPN's Python source in these areas:
+## ProtonVPN tray fix — mostly removed
 
-- `tray_icon.py`
-  - fixes StatusNotifierItem property typing
-  - fixes DBusMenu `GetLayout()` structure typing
-  - cleans separator item DBus export
-- `tray_indicator.py`
-  - adds `StatusNotifierWatcher` detection fallback
-  - handles tray setup failures more cleanly
-  - avoids emitting hidden connect/disconnect entries
-  - reduces bogus separators
-  - keeps tray `Show` / `Hide` menu state aligned with window visibility
-- `tray_icon.py`
-  - re-registers the tray item when the tray host disappears and comes back
-  - fixes ProtonVPN tray recovery after HyprPanel restarts
+The previous `protonvpn-systray.patch` is gone. Equivalent fixes have
+landed upstream in `proton-vpn` v4.15.x / v4.16.1:
 
-## Files involved
+- SNI/DBusMenu typing fixes: `tray_icon.py` now returns properly typed
+  `dbus.Int32 / Dictionary("sv") / Array("(ia{sv}av)")` from `GetLayout`,
+  and `dbus.String("")` for unknown SNI properties.
+- Tray host detection: upstream `TrayAvailabilityDetection` queries
+  `org.kde.StatusNotifierWatcher` directly via `NameHasOwner`
+  (commits `0f351813`, `7feca9d5`, `bf654667`).
+- Menu state vs window visibility: upstream commit
+  `0d6aa810` keeps `Show` / `Hide` aligned with the window state, with
+  follow-up `2151ab40 [VPNLINUX-1638]`.
 
-- `protonvpn-systray.patch`
-- `../flake.nix`
-- `../home.nix`
+Once nixpkgs ships a `proton-vpn` package with these fixes (it does at
+v4.15.3+), no override is needed.
+
+The one fix that has **not** landed upstream yet is re-registering the
+SNI item when the tray host (HyprPanel) restarts. The split patch for
+that lives in `upstream/0004-reregister-tray-item-when-host-restarts.patch`
+and is tracked in <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>.
+If that PR is merged or the bug stops happening in practice, the file
+can be deleted too.
 
 ## Rebuilding
-
-On a host that uses this repo:
 
 ```bash
 sudo nixos-rebuild switch --flake /home/thinky/Projects/NixOS#M90aPro
 ```
-
-or:
-
-```bash
-sudo nixos-rebuild switch --flake /home/thinky/Projects/NixOS#X299
-```
-
-## If ProtonVPN updates upstream
-
-If `protonvpn-gui` changes version in nixpkgs, the patch may stop applying.
-
-When that happens:
-
-1. inspect the new upstream `tray_icon.py` and `tray_indicator.py`
-2. rebase or regenerate `protonvpn-systray.patch`
-3. rebuild the target host
-
-If upstream eventually merges equivalent fixes, this patch can be removed and
-the overlay in `../flake.nix` can be dropped.
-
-## When this patch can be removed
-
-An upstream merge is not enough by itself. This NixOS config builds
-`protonvpn-gui` from nixpkgs, so the patch is only removable when nixpkgs is
-packaging a ProtonVPN source version that already includes equivalent fixes.
-
-Practical checklist:
-
-1. confirm ProtonVPN merged the relevant upstream fixes
-2. confirm your nixpkgs `protonvpn-gui` package has updated to a version that
-   includes them
-3. remove the overlay and local patch temporarily
-4. rebuild
-5. verify the tray still works correctly without the local patch
-
-Only after that should this patch and the overlay in `../flake.nix` be deleted.

@@ -170,11 +170,6 @@
     enable = true;
     withUWSM = true; # recommended for most users
     xwayland.enable = true; # Xwayland can be disabled.
-    # set the flake package
-    package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
-    # make sure to also set the portal package, so that they are in sync
-    portalPackage = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
-
   };
 
   xdg.portal = {
@@ -325,7 +320,7 @@
         "megasync"
         "nvidia-settings"
         "nvidia-x11"
-        "protonvpn-gui"
+        "proton-vpn"
       ]
       || lib.hasPrefix "brscan4" name
       || hasCudaEula;
@@ -375,7 +370,7 @@
     python3Packages.pygobject3
     gtk3
     spice-protocol             # Needed for some clipboard sync features
-    protonvpn-gui              # ProtonVPN graphical client
+    proton-vpn                 # ProtonVPN graphical client
     onlyoffice-desktopeditors  # ONLYOFFICE desktop editors
 
     # ── System Monitoring & Debugging ──

@@ -5,7 +5,6 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     grub2-themes.url = "github:vinceliuice/grub2-themes";
-    hyprland.url = "github:hyprwm/Hyprland";
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -27,18 +26,18 @@
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
     let
-      protonvpnOverlay = final: prev: {
+      localOverlay = final: prev: {
+        # Drop yt-dlp's deno (=> rusty-v8) dependency. The JS runtime is only
+        # needed for full YouTube extractor support since 2025.11.12; without
+        # it yt-dlp still works for everything we use it for, and we avoid
+        # building rusty-v8 from source when cache.nixos.org doesn't have it.
+        yt-dlp = prev.yt-dlp.override { javascriptSupport = false; };
+
         swappy = prev.swappy.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/swappy-multi-mime-clipboard.patch
           ];
         });
-
-        # proton-vpn = prev.proton-vpn.overrideAttrs (old: {
-        #   patches = (old.patches or [ ]) ++ [
-        #     ./patches/protonvpn-systray.patch
-        #   ];
-        # });
 
         filen-desktop = prev.filen-desktop.overrideAttrs (old: {
           postFixup = (old.postFixup or "") + ''
@@ -175,7 +174,7 @@
         specialArgs = { inherit inputs; };
         modules = [
           {
-            nixpkgs.overlays = [ protonvpnOverlay ];
+            nixpkgs.overlays = [ localOverlay ];
           }
           ./configuration.nix
           hostModule

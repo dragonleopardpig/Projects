@@ -21,6 +21,7 @@ in
   xdg.userDirs = {
     enable = true;
     createDirectories = true;
+    setSessionVariables = false;
   };
 
   xdg.desktopEntries.euresys-studio = {
@@ -148,19 +149,6 @@ in
       StartupWMClass = "nz.co.mega.megasync";
     };
   };
-
-  home.file.".local/share/applications/megasync.desktop".text = ''
-    [Desktop Entry]
-    Type=Application
-    Version=1.5
-    Name=MEGAsync
-    Comment=MEGA Desktop App (Wayland)
-    Exec=/home/thinky/.local/bin/megasync
-    Icon=megasync
-    Terminal=false
-    Categories=Network;FileTransfer;Utility;
-    StartupWMClass=nz.co.mega.megasync
-  '';
 
   home.file.".local/share/icons/hicolor/256x256/apps/megasync.png".source = megasyncWalkerIcon;
   home.file.".local/share/icons/hicolor/256x256/apps/MEGAsync.png".source = megasyncWalkerIcon;
@@ -701,6 +689,7 @@ in
   gtk = {
     enable = true;
     theme = { name = "Orchis-Dark"; package = pkgs.orchis-theme; };
+    gtk4.theme = null;
     iconTheme = { name = "Tela-circle"; package = pkgs.tela-circle-icon-theme; };
     cursorTheme = { name = "Adwaita"; package = pkgs.adwaita-icon-theme; };
   };
@@ -1324,6 +1313,7 @@ in
 
   # Install firefox.
   programs.firefox.enable = true;
+  programs.firefox.configPath = "${config.xdg.configHome}/mozilla/firefox";
 
   programs.btop = {
     enable = true;
