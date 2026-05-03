@@ -38,20 +38,27 @@ patch as soon as the PR lands and the new `proton-vpn` reaches nixpkgs.
 
 ### `upstream/0008-dbusmenu-children-as-variants.patch`
 
-Make ProtonVPN's `_DBusMenuService.GetLayout` send children as the
-spec-conformant `av` (array of variants) instead of `a(ia{sv}av)`
-(array of structs). The struct-array form is silently accepted by
-permissive tray hosts (KDE, waybar) but trips the strict GVariant
-format `(i@a{sv}@av)` used by HyprPanel's astal-tray, segfaulting the
-panel the moment ProtonVPN's tray menu is read.
+Full diff of upstream PR #152
+(<https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/152>), rebased
+on `stable` at proton-vpn v4.16.1. Three correctness fixes in
+`tray_icon.py`:
 
-Fix is a 5-line change in `tray_icon.py`: empty children arrays use
-`signature="v"`, and each child `dbus.Struct` carries `variant_level=1`
-so dbus-python wraps it as a variant on the wire. Same shape that the
-method's own `out_signature="u(ia{sv}av)"` already declares.
+1. **DBusMenu children become spec-conformant `av`.** `GetLayout`
+   previously returned children as `a(ia{sv}av)` (array of structs),
+   which permissive hosts (KDE, waybar) accept silently but strict
+   hosts (HyprPanel's astal-tray) reject with a GVariant assertion,
+   segfaulting the panel on the first menu read.
+2. **Separator entries no longer carry `label`/`enabled` keys.** Some
+   hosts (HyprPanel) draw separators with a thicker style when those
+   fields are present in the dict — this is also why the tray menu
+   used to show fat dividers between Connect / Show / Quit.
+3. **Full SNI property table via shared `_get_sni_properties`.** `Get`
+   and `GetAll` now return the standard SNI properties (`IconPixmap`,
+   `OverlayIconName`, `ToolTip`, `WindowId`, …) with correct types,
+   instead of returning `None`/raw strings for unknown probes.
 
-No upstream PR yet — submitting alongside #157. Drop this and the
-override entry above once both fixes land in nixpkgs's `proton-vpn`.
+Drop this patch + the proton-vpn override once #152 lands and the
+new package reaches nixpkgs.
 
 The other ProtonVPN fixes that used to live in this directory
 (`protonvpn-systray.patch` and split patches `0001`–`0003`) have landed

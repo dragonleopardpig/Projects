@@ -18,11 +18,13 @@ Still tracked:
     the ProtonVPN tray icon after HyprPanel restarts.
   - PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>
 - `0008-dbusmenu-children-as-variants.patch`
-  - Makes `_DBusMenuService.GetLayout` send children as the
-    spec-conformant `av` (array of variants) rather than
-    `a(ia{sv}av)` (array of structs). The struct-array form crashes
-    strict hosts (HyprPanel/astal-tray) on the first menu read.
-  - No PR yet — submit alongside #157.
+  - Spec-conformant DBusMenu children (`av` of variants), separator
+    dict cleanup (no `label`/`enabled` for separators — fixes the fat
+    divider rendering on HyprPanel), and full SNI property table via
+    shared helper. Without this, strict hosts (HyprPanel/astal-tray)
+    crash on the first menu read.
+  - PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/152>
+    (rebased on `stable` at v4.16.1 to clear merge conflicts).
 
 ## MEGAsync — `meganz/MEGAsync`
 
