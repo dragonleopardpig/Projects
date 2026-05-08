@@ -1,0 +1,41 @@
+From: dragonleopardpig <dragonleopardpig@gmail.com>
+Subject: [PATCH] hyprland: stop re-arming socket reader after EOF
+
+`watch_socket` re-arms `read_line_async` unconditionally after each
+read, even when the previous read returned `null` (EOF / closed stream).
+The generated C wrapper for `handle_event(string line)` adds a
+`g_return_if_fail(line != NULL)` at function entry, so the null line is
+caught -- but only after the warning is logged, and the outer reader
+has already scheduled itself again on the dead stream. The result is a
+hot loop emitting
+
+  astal_hyprland_hyprland_handle_event: assertion 'line != NULL' failed
+
+at line-rate (observed: 37k/s), which floods the journal and starves
+the gjs main loop. Side effects in HyprPanel include every
+StatusNotifierItem's right-click context menu becoming unresponsive
+until the panel is restarted.
+
+Triggered in practice when a chatty Hyprland client (e.g. an app with
+several short-lived sub-windows) shuts down and the event socket
+transiently returns EOF.
+
+Bail out on the null read. A backoff/reconnect loop would be a nicer
+follow-up.
+---
+diff --git a/src/hyprland.vala b/src/hyprland.vala
+--- a/src/hyprland.vala
++++ b/src/hyprland.vala
+@@ -138,6 +138,12 @@ public class Hyprland : Object {
+         stream.read_line_async.begin(Priority.DEFAULT, null, (_, res) => {
+                 try {
+                     var line = stream.read_line_async.end(res);
++                    if (line == null) {
++                        // EOF / closed stream: don't re-arm or we hot-loop,
++                        // tripping g_return_if_fail in handle_event forever.
++                        critical("Hyprland event socket closed");
++                        return;
++                    }
+                     handle_event.begin(line, (_, res) => {
+                         try {
+                             handle_event.end(res);

@@ -414,6 +414,22 @@ in
     terminal = false;
   };
 
+  # Hide system .desktop entries that duplicate our wrappers in Walker.
+  # Each override shadows the system entry by sharing the same desktop ID.
+  xdg.desktopEntries."org.freecad.FreeCAD"    = { name = "FreeCAD";  exec = "true"; noDisplay = true; };
+  xdg.desktopEntries.sioyek                   = { name = "Sioyek";   exec = "true"; noDisplay = true; };
+  xdg.desktopEntries.mayo                     = { name = "Mayo";     exec = "true"; noDisplay = true; };
+  xdg.desktopEntries.gmsh                     = { name = "Gmsh";     exec = "true"; noDisplay = true; };
+  xdg.desktopEntries.f3d                      = { name = "F3D";      exec = "true"; noDisplay = true; };
+  xdg.desktopEntries."f3d-plugin-assimp"      = { name = "F3D";      exec = "true"; noDisplay = true; };
+  xdg.desktopEntries."f3d-plugin-hdf"         = { name = "F3D";      exec = "true"; noDisplay = true; };
+  xdg.desktopEntries."f3d-plugin-native"      = { name = "F3D";      exec = "true"; noDisplay = true; };
+  xdg.desktopEntries."f3d-plugin-occt"        = { name = "F3D";      exec = "true"; noDisplay = true; };
+  xdg.desktopEntries."f3d-plugin-usd"         = { name = "F3D";      exec = "true"; noDisplay = true; };
+  xdg.desktopEntries."org.paraview.ParaView"  = { name = "ParaView"; exec = "true"; noDisplay = true; };
+  xdg.desktopEntries.nemo                     = { name = "Files";    exec = "true"; noDisplay = true; };
+  xdg.desktopEntries."org.nomacs.ImageLounge" = { name = "nomacs";   exec = "true"; noDisplay = true; };
+
 
   # Gmsh wrapper: force XWayland + software GL
   home.file.".local/bin/gmsh-xcb" = {
@@ -483,7 +499,10 @@ in
       export QSG_RHI_BACKEND=software
       export GDK_BACKEND=x11
       export NO_AT_BRIDGE=1
-      exec FreeCAD "$@"
+      # Force NVIDIA EGL/GLX so f3d thumbnailer doesn't try Mesa on the NVIDIA GPU
+      export __EGL_VENDOR_LIBRARY_FILENAMES=/run/opengl-driver/share/glvnd/egl_vendor.d/10_nvidia.json
+      export __GLX_VENDOR_LIBRARY_NAME=nvidia
+      exec ${pkgs.freecad}/bin/FreeCAD "$@"
     '';
   };
 
@@ -1230,6 +1249,21 @@ in
     # TODO add your custom bashrc here
     bashrcExtra = ''
       export PATH="$HOME/.local/bin:$HOME/bin:$HOME/go/bin:$PATH"
+
+      # ble.sh: fish-like autosuggestions, syntax highlighting, menu completion.
+      # Source --noattach early; attach on first prompt so starship / direnv /
+      # kitty integration (all appended later in bashrc) finish setup first.
+      if [[ $- == *i* ]]; then
+        source ${pkgs.blesh}/share/blesh/ble.sh --noattach
+        _ble_attach_once() {
+          [[ ''${BLE_VERSION-} ]] && ble-attach
+          PROMPT_COMMAND=''${PROMPT_COMMAND//_ble_attach_once;/}
+          PROMPT_COMMAND=''${PROMPT_COMMAND//;_ble_attach_once/}
+          PROMPT_COMMAND=''${PROMPT_COMMAND//_ble_attach_once/}
+          unset -f _ble_attach_once
+        }
+        PROMPT_COMMAND="_ble_attach_once;''${PROMPT_COMMAND-}"
+      fi
     '';
 
     # set some aliases, feel free to add more or remove some
@@ -1350,6 +1384,12 @@ in
   programs.ripgrep = {
     enable = true;
     arguments = [ "--smart-case" "--hidden" "--glob=!.git" ];
+  };
+
+  programs.fd = {
+    enable = true;
+    hidden = true;
+    ignores = [ ".git/" ];
   };
 
   programs.direnv = {

@@ -54,6 +54,16 @@
    '(image gif video audio epub pdf archive))
   (dirvish-use-header-line 'global))
 
+;; Live refresh for Dired/Dirvish: watch dirs via inotify and re-read the
+;; listing when the filesystem changes. Without this, dired-buffers (which
+;; back Dirvish) only refresh on manual `g' / revert.
+(setq global-auto-revert-non-file-buffers t
+      auto-revert-verbose nil
+      auto-revert-use-notify t
+      ;; Re-list on each visit too — covers cases where the watcher missed an event.
+      dired-auto-revert-buffer t)
+(global-auto-revert-mode 1)
+
 ;; Same arrow keys when Dirvish isn't overriding (plain Dired buffers).
 (with-eval-after-load 'dired
   (define-key dired-mode-map (kbd "<left>")  'dired-up-directory)

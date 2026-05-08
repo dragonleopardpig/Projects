@@ -39,6 +39,23 @@
           ];
         });
 
+        # astal-hyprland's `watch_socket` re-arms the event-socket reader
+        # unconditionally, even when `read_line_async.end()` returns null
+        # on EOF. The result is a hot loop spamming
+        # `astal_hyprland_hyprland_handle_event: assertion 'line != NULL'
+        # failed` (observed: 37k/s) which freezes HyprPanel's gjs main
+        # loop and silently kills every tray icon's right-click context
+        # menu until the panel is restarted. Triggered by clients with
+        # several short-lived sub-windows (MEGAsync) on shutdown.
+        # Drop once the equivalent fix lands in nixpkgs's astal.
+        astal = prev.astal // {
+          hyprland = prev.astal.hyprland.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [
+              ./patches/upstream/0009-astal-hyprland-eof-guard.patch
+            ];
+          });
+        };
+
         # Two ProtonVPN tray fixes, both targeted at upstream:
         #   * 0004 re-registers the SNI item when the tray host (HyprPanel)
         #     restarts. Without it the icon disappears on every panel reload.

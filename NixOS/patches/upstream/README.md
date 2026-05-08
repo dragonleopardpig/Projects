@@ -26,6 +26,21 @@ Still tracked:
   - PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/152>
     (rebased on `stable` at v4.16.1 to clear merge conflicts).
 
+## astal — `Aylur/astal`
+
+- `0009-astal-hyprland-eof-guard.patch`
+  - `Hyprland.watch_socket` re-arms the event-socket reader
+    unconditionally; on EOF (`read_line_async.end()` returns `null`)
+    `handle_event`'s generated `g_return_if_fail` keeps tripping in
+    a hot loop and floods `journalctl` (~37k/s). The flood freezes
+    HyprPanel's gjs main thread and silently kills every tray icon's
+    right-click context menu until the panel is restarted. Triggered
+    by chatty Hyprland clients (e.g. MEGAsync) on shutdown.
+  - Applied against `pkgs.astal.hyprland` via `flake.nix` overlay.
+    Source root inside the unpacked tarball is `lib/hyprland`, so
+    the patch targets `src/hyprland.vala` (not `lib/hyprland/src/...`).
+  - Issue / PR: not filed yet (TODO upstream).
+
 ## MEGAsync — `meganz/MEGAsync`
 
 Three open PRs against MEGAsync, no comments yet:
