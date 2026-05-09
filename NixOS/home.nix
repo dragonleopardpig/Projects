@@ -1255,6 +1255,16 @@ in
       # kitty integration (all appended later in bashrc) finish setup first.
       if [[ $- == *i* ]]; then
         source ${pkgs.blesh}/share/blesh/ble.sh --noattach
+
+        # Autosuggestion keys (only fire while a ghost suggestion is shown):
+        #   Enter -> accept the suggestion and execute the line
+        #   Tab   -> accept up to the next "/" (path-segment at a time)
+        bleopt complete_auto_wordbreaks=/
+        ble-bind -m auto_complete -f RET auto_complete/accept-line
+        ble-bind -m auto_complete -f C-m auto_complete/accept-line
+        ble-bind -m auto_complete -f TAB auto_complete/insert-word
+        ble-bind -m auto_complete -f C-i auto_complete/insert-word
+
         _ble_attach_once() {
           [[ ''${BLE_VERSION-} ]] && ble-attach
           PROMPT_COMMAND=''${PROMPT_COMMAND//_ble_attach_once;/}
