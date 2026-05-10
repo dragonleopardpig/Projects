@@ -56,6 +56,11 @@
     ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="046d", ATTR{idProduct}=="c099", TAG+="systemd", ENV{SYSTEMD_WANTS}="logitech-g502x-reset.service"
   '';
 
+  # Group-writable backlight devices so waybar's backlight/slider (which writes
+  # /sys/class/backlight/<dev>/brightness directly) works without root.
+  # Covers intel_backlight on M90aPro and ddcciN on X299 hosts.
+  services.udev.packages = [ pkgs.brightnessctl ];
+
   # Console font configuration
   console.font = "${pkgs.terminus_font}/share/consolefonts/ter-i20n.psf.gz";
   console.packages = with pkgs; [ terminus_font ];
@@ -281,7 +286,7 @@
   users.users.thinky = {
     isNormalUser = true;
     description = "thinky";
-    extraGroups = [ "networkmanager" "wheel" "i2c" "scanner" "lp"];
+    extraGroups = [ "networkmanager" "wheel" "i2c" "scanner" "lp" "video" ];
     subGidRanges = [
       {
         count = 65536;

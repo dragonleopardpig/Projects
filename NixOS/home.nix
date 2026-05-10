@@ -632,6 +632,37 @@ in
     '';
   };
 
+  home.file.".local/bin/toggle-app" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      # Toggle a window by Hyprland window class. Class match is case-insensitive
+      # substring, so app-set classes like "Blueman-manager" or
+      # ".blueman-manager-wrapped" all hit a single short class string.
+      #
+      # Usage:
+      #   toggle-app <class> <command> [args...]          # wraps in kitty (terminal apps)
+      #   toggle-app --gui <class> <command> [args...]    # runs <command> directly (GUI apps)
+      set -e
+      gui=0
+      if [ "$1" = "--gui" ]; then gui=1; shift; fi
+      class="$1"; shift || true
+      if [ -z "$class" ] || [ $# -eq 0 ]; then
+        echo "Usage: toggle-app [--gui] <class> <command> [args...]" >&2
+        exit 2
+      fi
+      if hyprctl clients -j 2>/dev/null | grep -qi "\"class\":[[:space:]]*\"[^\"]*$class[^\"]*\""; then
+        hyprctl dispatch closewindow "class:(?i).*$class.*" >/dev/null
+      else
+        if [ "$gui" = 1 ]; then
+          exec "$@"
+        else
+          exec kitty --class="$class" -e "$@"
+        fi
+      fi
+    '';
+  };
+
   home.file.".local/bin/random-wallpaper" = {
     executable = true;
     text = ''
@@ -1126,12 +1157,18 @@ in
       margin-top = 0;
       margin-left = 0;
       margin-right = 0;
-      modules-left = [ "custom/launcher" "hyprland/workspaces" "mpris" ];
+      modules-left = [
+        "custom/launcher" "hyprland/workspaces"
+        "cpu" "memory" "disk" "temperature"
+        "mpris"
+      ];
       modules-center = [ "hyprland/window" ];
       modules-right = [
-        "cpu" "memory" "disk" "temperature"
-        "network" "wireplumber" "battery" "tray"
-        "custom/weather" "clock" "custom/notification" "custom/power"
+        "privacy" "systemd-failed-units"
+        "backlight/slider" "bluetooth"
+        "network" "wireplumber" "pulseaudio/slider" "battery"
+        "idle_inhibitor" "keyboard-state" "hyprland/language"
+        "tray" "custom/weather" "clock" "custom/notification" "custom/power"
       ];
 
       "custom/launcher" = {
@@ -1159,10 +1196,10 @@ in
         format-paused = "{status_icon} <i>{dynamic}</i>";
         player-icons = {
           default = "▶";
-          mpv = "";
-          firefox = "";
-          spotify = "";
-          chromium = "";
+          mpv = "";
+          firefox = "";
+          spotify = "";
+          chromium = "";
         };
         status-icons = { paused = "⏸"; };
         dynamic-len = 40;
@@ -1173,41 +1210,80 @@ in
       };
 
       cpu = {
-        format = " {usage}%";
+        format = " {usage}%";
         interval = 5;
-        on-click = "kitty -e btop";
+        on-click = "~/.local/bin/toggle-app btop btop";
+        tooltip-format = "Left: toggle btop";
       };
       memory = {
-        format = " {percentage}%";
+        format = "󰍛 {percentage}%";
         interval = 10;
-        on-click = "kitty -e btop";
+        on-click = "~/.local/bin/toggle-app btop btop";
+        on-click-right = "~/.local/bin/toggle-app meminfo bash -c 'free -h; echo; ps aux --sort=-%mem | head -20; echo; read -n1 -p \"press any key…\"'";
+        tooltip-format = "Left: toggle btop  ·  Right: top memory consumers";
       };
       disk = {
-        format = " {percentage_used}%";
+        format = " {percentage_used}%";
         path = "/";
         interval = 60;
+        on-click = "~/.local/bin/toggle-app yazi yazi /";
+        on-click-right = "~/.local/bin/toggle-app diskinfo bash -c 'df -hT -x tmpfs -x devtmpfs; echo; read -n1 -p \"press any key…\"'";
+        tooltip-format = "Left: toggle yazi  ·  Right: df -h";
       };
       temperature = {
         thermal-zone = 7;  # x86_pkg_temp — zone 0 (INT3400) is a stub
-        format = " {temperatureC}°C";
+        format = " {temperatureC}°C";
         critical-threshold = 85;
         interval = 10;
+        on-click = "~/.local/bin/toggle-app sensors bash -c 'watch -n1 sensors'";
+        on-click-right = "~/.local/bin/toggle-app btop btop";
+        tooltip-format = "Left: toggle sensors  ·  Right: toggle btop";
+      };
+
+      "backlight/slider" = {
+        min = 0;
+        max = 100;
+        orientation = "horizontal";
+        # device omitted → waybar auto-picks first /sys/class/backlight entry
+        # (intel_backlight on laptops, ddcci on desktops with DDC monitors)
+      };
+
+      "pulseaudio/slider" = {
+        min = 0;
+        max = 100;
+        orientation = "horizontal";
+      };
+
+      bluetooth = {
+        format = " {status}";
+        format-disabled = "󰂲";
+        format-off = "󰂲";
+        format-on = "";
+        format-connected = " {device_alias}";
+        format-connected-battery = " {device_alias} {device_battery_percentage}%";
+        tooltip-format = "Left: toggle blueman-manager  ·  Right: toggle bluetoothctl\n\n{controller_alias}\t{controller_address}\n{num_connections} connected";
+        tooltip-format-connected = "Left: toggle blueman-manager  ·  Right: toggle bluetoothctl\n\n{controller_alias}\t{controller_address}\n{num_connections} connected\n\n{device_enumerate}";
+        tooltip-format-enumerate-connected = "{device_alias}\t{device_address}";
+        tooltip-format-enumerate-connected-battery = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
+        on-click = "~/.local/bin/toggle-app --gui blueman blueman-manager";
+        on-click-right = "~/.local/bin/toggle-app btctl bluetoothctl";
       };
 
       network = {
-        format-wifi = " {essid}";
-        format-ethernet = " {ipaddr}";
+        format-wifi = " {essid}";
+        format-ethernet = "󰈀 {ipaddr}";
         format-disconnected = "󰤭 off";
-        tooltip-format-wifi = "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}\n {bandwidthDownBits}  {bandwidthUpBits}";
-        tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}\n {bandwidthDownBits}  {bandwidthUpBits}";
-        on-click = "kitty -e nmtui";
+        tooltip-format-wifi = "Left: nmtui  ·  Right: ip info\n\n{essid} ({signalStrength}%)\n{ipaddr}/{cidr}\n↓ {bandwidthDownBits}  ↑ {bandwidthUpBits}";
+        tooltip-format-ethernet = "Left: nmtui  ·  Right: ip info\n\n{ifname}\n{ipaddr}/{cidr}\n↓ {bandwidthDownBits}  ↑ {bandwidthUpBits}";
+        on-click = "~/.local/bin/toggle-app nmtui nmtui";
+        on-click-right = "~/.local/bin/toggle-app netinfo bash -c 'ip -c a; echo; ip r; echo; read -n1 -p \"press any key…\"'";
         interval = 5;
       };
 
       wireplumber = {
         format = "{icon} {volume}%";
         format-muted = "󰖁";
-        format-icons = [ "" "" "" ];
+        format-icons = [ "" "" "" ];
         on-click = "pavucontrol";
         on-click-right = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle";
         on-scroll-up = "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+";
@@ -1221,7 +1297,48 @@ in
         format-plugged = "󰚥 {capacity}%";
         format-icons = [ "󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹" ];
         states = { good = 90; warning = 30; critical = 15; };
-        tooltip-format = "{timeTo}\n{power}W";
+        on-click = "~/.local/bin/toggle-app battinfo bash -c 'upower -i $(upower -e | grep -m1 BAT) 2>/dev/null || echo no battery; echo; read -n1 -p \"press any key…\"'";
+        tooltip-format = "Left: battery details\n\n{timeTo}\n{power}W";
+      };
+
+      idle_inhibitor = {
+        format = "{icon}";
+        format-icons = {
+          activated = "";    # coffee — caffeine on
+          deactivated = "";  # zzz — caffeine off
+        };
+        tooltip-format-activated = "Idle inhibitor active (screen won't blank)";
+        tooltip-format-deactivated = "Idle inhibitor inactive";
+      };
+
+      keyboard-state = {
+        numlock = true;
+        capslock = true;
+        format = "{name} {icon}";
+        format-icons = { locked = ""; unlocked = ""; };
+      };
+
+      "hyprland/language" = {
+        format = " {short}";
+        on-click = "hyprctl switchxkblayout current next";
+        tooltip-format = "Keyboard layout: {long}";
+      };
+
+      "systemd-failed-units" = {
+        hide-on-ok = true;
+        format = "✗ {nr_failed}";
+        system = true;
+        user = true;
+      };
+
+      privacy = {
+        icon-spacing = 4;
+        icon-size = 14;
+        transition-duration = 250;
+        modules = [
+          { type = "screenshare"; tooltip = true; tooltip-icon-size = 24; }
+          { type = "audio-in";    tooltip = true; tooltip-icon-size = 24; }
+        ];
       };
 
       tray = {
@@ -1235,12 +1352,13 @@ in
         interval = 1800;
         tooltip = true;
         format = "{}";
-        on-click = "kitty -e bash -c '${pkgs.curl}/bin/curl -s wttr.in/Singapore; echo; read -n1 -p \"press any key…\"'";
+        on-click = "~/.local/bin/toggle-app wttr bash -c '${pkgs.curl}/bin/curl -s wttr.in/Singapore; echo; read -n1 -p \"press any key…\"'";
+        on-click-right = "~/.local/bin/toggle-app wttr-fc bash -c '${pkgs.curl}/bin/curl -s wttr.in/Singapore?2 | less -R'";
       };
 
       clock = {
-        format = " {:%a %d %b  %H:%M}";
-        format-alt = " {:%Y-%m-%d %H:%M:%S}";
+        format = " {:%a %d %b  %H:%M}";
+        format-alt = " {:%Y-%m-%d %H:%M:%S}";
         tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
         calendar = {
           mode = "year";

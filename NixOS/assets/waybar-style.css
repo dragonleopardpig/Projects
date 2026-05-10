@@ -77,6 +77,39 @@ tooltip label { color: #ffd700; padding: 4px; }
 #battery.charging { color: #00ffff; }
 #tray             { padding: 0 8px; }
 #tray > .needs-attention { background: #ff4500; border-radius: 6px; }
+
+#bluetooth        { color: #00ffff; padding: 0 8px; }
+#bluetooth.disabled,
+#bluetooth.off,
+#bluetooth.no-controller { color: #585858; }
+#bluetooth.connected { color: #32cd32; }
+
+#backlight-slider,
+#pulseaudio-slider { padding: 2px 8px; min-width: 90px; }
+#backlight-slider trough,
+#pulseaudio-slider trough {
+  background: #1a1a1a;
+  min-height: 8px;
+  border-radius: 4px;
+  border: 1px solid #2a2a2a;
+}
+#backlight-slider highlight { background: #ffd700; border-radius: 4px; }
+#pulseaudio-slider highlight { background: #ff4500; border-radius: 4px; }
+
+#idle_inhibitor   { color: #585858; padding: 0 8px; font-size: 14px; }
+#idle_inhibitor.activated { color: #00ffff; }
+
+#keyboard-state   { padding: 0 6px; color: #585858; font-size: 12px; }
+#keyboard-state label.locked { color: #ffd700; }
+
+#language         { color: #00ffff; padding: 0 8px; }
+
+#systemd-failed-units { color: #ff4500; padding: 0 8px; }
+
+#privacy          { padding: 0 6px; }
+#privacy-item-screenshare { color: #ff4500; padding: 0 4px; }
+#privacy-item-audio-in    { color: #ff69b4; padding: 0 4px; }
+#privacy-item-audio-out   { color: #ffd700; padding: 0 4px; }
 #custom-weather   { color: #00ffff; padding: 0 8px; }
 #clock            { color: #ffd700; padding: 0 10px; }
 #custom-notification { color: #ffd700; padding: 0 8px; }
