@@ -9,10 +9,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    hyprpanel = {
-      url = "github:Jas-SinghFSU/HyprPanel";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -39,31 +35,14 @@
           ];
         });
 
-        # astal-hyprland's `watch_socket` re-arms the event-socket reader
-        # unconditionally, even when `read_line_async.end()` returns null
-        # on EOF. The result is a hot loop spamming
-        # `astal_hyprland_hyprland_handle_event: assertion 'line != NULL'
-        # failed` (observed: 37k/s) which freezes HyprPanel's gjs main
-        # loop and silently kills every tray icon's right-click context
-        # menu until the panel is restarted. Triggered by clients with
-        # several short-lived sub-windows (MEGAsync) on shutdown.
-        # Drop once the equivalent fix lands in nixpkgs's astal.
-        astal = prev.astal // {
-          hyprland = prev.astal.hyprland.overrideAttrs (old: {
-            patches = (old.patches or [ ]) ++ [
-              ./patches/upstream/0009-astal-hyprland-eof-guard.patch
-            ];
-          });
-        };
-
         # Two ProtonVPN tray fixes, both targeted at upstream:
-        #   * 0004 re-registers the SNI item when the tray host (HyprPanel)
-        #     restarts. Without it the icon disappears on every panel reload.
+        #   * 0004 re-registers the SNI item when the tray host restarts.
+        #     Without it the icon disappears whenever the bar reloads.
         #     Tracked at <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>.
         #   * 0008 makes the DBusMenu GetLayout children spec-conformant
         #     (`av` of variants). The current upstream form is `a(ia{sv}av)`,
-        #     which crashes strict tray hosts like HyprPanel's astal-tray with
-        #     a GVariant assertion the moment the menu is read.
+        #     which crashes strict DBusMenu readers with a GVariant assertion
+        #     the moment the menu is read.
         # Drop both as soon as the equivalent PRs land in nixpkgs's proton-vpn.
         proton-vpn = prev.proton-vpn.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [

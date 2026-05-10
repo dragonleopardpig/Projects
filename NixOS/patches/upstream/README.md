@@ -15,31 +15,15 @@ Still tracked:
 - `0004-reregister-tray-item-when-host-restarts.patch`
   - Watches `org.kde.StatusNotifierWatcher` owner changes and
     re-registers the SNI item when the tray host comes back. Recovers
-    the ProtonVPN tray icon after HyprPanel restarts.
+    the ProtonVPN tray icon after the bar reloads.
   - PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>
 - `0008-dbusmenu-children-as-variants.patch`
   - Spec-conformant DBusMenu children (`av` of variants), separator
-    dict cleanup (no `label`/`enabled` for separators — fixes the fat
-    divider rendering on HyprPanel), and full SNI property table via
-    shared helper. Without this, strict hosts (HyprPanel/astal-tray)
-    crash on the first menu read.
+    dict cleanup (no `label`/`enabled` for separators), and full SNI
+    property table via shared helper. Without this, strict DBusMenu
+    readers crash on the first menu read.
   - PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/152>
     (rebased on `stable` at v4.16.1 to clear merge conflicts).
-
-## astal — `Aylur/astal`
-
-- `0009-astal-hyprland-eof-guard.patch`
-  - `Hyprland.watch_socket` re-arms the event-socket reader
-    unconditionally; on EOF (`read_line_async.end()` returns `null`)
-    `handle_event`'s generated `g_return_if_fail` keeps tripping in
-    a hot loop and floods `journalctl` (~37k/s). The flood freezes
-    HyprPanel's gjs main thread and silently kills every tray icon's
-    right-click context menu until the panel is restarted. Triggered
-    by chatty Hyprland clients (e.g. MEGAsync) on shutdown.
-  - Applied against `pkgs.astal.hyprland` via `flake.nix` overlay.
-    Source root inside the unpacked tarball is `lib/hyprland`, so
-    the patch targets `src/hyprland.vala` (not `lib/hyprland/src/...`).
-  - Issue / PR: not filed yet (TODO upstream).
 
 ## MEGAsync — `meganz/MEGAsync`
 
@@ -82,6 +66,6 @@ python3 -m py_compile \
   proton/vpn/app/gtk/widgets/main/tray_indicator.py
 ```
 
-Behavioral check (ProtonVPN): start `protonvpn-app`, restart HyprPanel
-(or your tray host), confirm the tray item reappears without restarting
-the app.
+Behavioral check (ProtonVPN): start `protonvpn-app`, reload the tray
+host (e.g. `pkill -SIGUSR2 waybar`), confirm the tray item reappears
+without restarting the app.

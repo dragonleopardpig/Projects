@@ -45,7 +45,6 @@ NixOS/
 | `nixpkgs` | nixos-unstable channel |
 | `home-manager` | User environment management (as NixOS module) |
 | `hyprland` | Wayland compositor |
-| `hyprpanel` | AGS-based panel for Hyprland |
 | `grub2-themes` | GRUB bootloader theming |
 | `disko` | Declarative disk partitioning |
 | `walker` | Application launcher |
@@ -98,7 +97,7 @@ NixOS/
 
 **Hyprland autostart**: pyprland, ProtonVPN, swww wallpaper daemon, Solaar, HyprPolkitAgent
 
-**HyprPanel**: Dashboard with shortcuts, clock/weather (Singapore, metric), systray. Weather API key injected from `~/.config/secrets/weather-api-key` at activation time. GPU stats disabled (causes NVIDIA freeze).
+**Waybar**: Cyberpunk-themed bar with workspaces, system monitors (cpu/mem/disk/temp), backlight & volume sliders, bluetooth, network, battery, idle inhibitor, keyboard state, language, tray, weather (wttr.in/Singapore), clock, swaync notification toggle, and wlogout power menu. Click handlers use `~/.local/bin/toggle-app` so a second click closes the spawned window.
 
 **Services**:
 - hypridle: Auto-lock at 15min, DPMS off at 20min

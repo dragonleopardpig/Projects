@@ -1,69 +1,5 @@
 { lib, config, inputs, pkgs, ... }:
 let
-  hyprpanelTheme =
-    builtins.fromJSON
-      (builtins.readFile ./assets/hyprpanel-cyberpunk.json);
-  hyprpanelPackage =
-    inputs.hyprpanel.packages.${pkgs.stdenv.hostPlatform.system}.default;
-  # Full hyprpanel config preserved so `hyprpanel` (kept on PATH as a fallback bar)
-  # still launches with the cyberpunk theme, dashboard shortcuts, and weather menu —
-  # even though the home-manager module is disabled (swaync now owns notifications,
-  # and home-manager forbids two notification daemons).
-  hyprpanelConfig = hyprpanelTheme // {
-    bar.layouts = {
-      "*" = {
-        left = [ "dashboard" "workspaces" "media" ];
-        middle = [ "windowtitle" ];
-        right = [ "network" "volume" "battery" "systray" "clock" "notifications" ];
-      };
-    };
-    bar.launcher.autoDetectIcon = true;
-    bar.workspaces.show_icons = true;
-    bar.workspaces.ignored = "^-";
-    menus.clock.weather.unit = "metric";
-    menus.clock.weather.location = "Singapore";
-    menus.clock.weather.key = "/home/thinky/.config/secrets/weather-api-key.json";
-    menus.dashboard.directories.enabled = true;
-    menus.dashboard.directories.left.directory1.command =
-      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Downloads";
-    menus.dashboard.directories.left.directory2.command =
-      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Videos";
-    menus.dashboard.directories.left.directory3.command =
-      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Projects";
-    menus.dashboard.directories.right.directory1.command =
-      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Documents";
-    menus.dashboard.directories.right.directory2.command =
-      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Pictures";
-    menus.dashboard.directories.right.directory3.command =
-      "/home/thinky/.local/bin/nemo-x11 /home/thinky";
-    menus.dashboard.shortcuts.left.shortcut1 = {
-      icon = "󰈹"; tooltip = "Firefox"; command = "firefox";
-    };
-    menus.dashboard.shortcuts.left.shortcut2 = {
-      icon = ""; tooltip = "Terminal"; command = "kitty";
-    };
-    menus.dashboard.shortcuts.left.shortcut3 = {
-      icon = ""; tooltip = "Emacs"; command = "emacs";
-    };
-    menus.dashboard.shortcuts.right.shortcut3 = {
-      icon = "󰄀"; tooltip = "Screenshot"; command = "~/.local/bin/screenshot";
-    };
-    menus.dashboard.shortcuts.left.shortcut4 = {
-      icon = ""; tooltip = "Search Apps"; command = "walker";
-    };
-    theme = {
-      bar.transparent = true;
-      bar.outer_spacing = "0.9em";
-      bar.scaling = 92;
-      bar.buttons.enableBorders = true;
-      bar.buttons.monochrome = false;
-      bar.buttons.style = "default";
-      bar.buttons.workspaces.pill.radius = "0.9em";
-      bar.buttons.workspaces.pill.active_width = "3.2em";
-      bar.buttons.workspaces.fontSize = "1.05em";
-      font = { name = "CaskaydiaCove Nerd Font"; size = "13px"; };
-    };
-  };
   nemoMegaLibraryPath = lib.makeLibraryPath [
     pkgs.nemo
     pkgs.glib
@@ -1059,93 +995,9 @@ in
     };
   };
 
-  # Hyprpanel — module DISABLED (swaync now owns notifications and home-manager
-  # forbids two notification daemons). The binary is still installed via
-  # home.packages and xdg.configFile preserves the cyberpunk config below, so
-  # `hyprpanel` can still be launched manually as a fallback bar.
-  programs.hyprpanel.enable = false;
-  xdg.configFile."hyprpanel/config.json".text = builtins.toJSON hyprpanelConfig;
-
-  # Disabled-block reference kept commented for context only:
-  /* programs.hyprpanel = {
-    package = hyprpanelPackage;
-    enable = true;
-    settings = hyprpanelTheme // {
-      bar.layouts = {
-        "*" = {
-          left = [ "dashboard" "workspaces" "media"];
-          middle = [ "windowtitle" ];
-          right = [ "network" "volume"
-                    "battery" "systray" "clock" "notifications" ];
-        };
-      };
-      bar.launcher.autoDetectIcon = true;
-      bar.workspaces.show_icons = true;
-      # Hide Hyprland special workspaces (negative IDs like -98 S-term, -97 S-notepad, -96 S-volume)
-      # from the panel, otherwise they render as extra empty buttons.
-      bar.workspaces.ignored = "^-";
-      menus.clock.weather.unit = "metric";
-      menus.clock.weather.location = "Singapore";
-      menus.clock.weather.key = "/home/thinky/.config/secrets/weather-api-key.json";
-      menus.dashboard.directories.enabled = true;
-      menus.dashboard.directories.left.directory1.command =
-        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Downloads";
-      menus.dashboard.directories.left.directory2.command =
-        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Videos";
-      menus.dashboard.directories.left.directory3.command =
-        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Projects";
-      menus.dashboard.directories.right.directory1.command =
-        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Documents";
-      menus.dashboard.directories.right.directory2.command =
-        "/home/thinky/.local/bin/nemo-x11 /home/thinky/Pictures";
-      menus.dashboard.directories.right.directory3.command =
-        "/home/thinky/.local/bin/nemo-x11 /home/thinky";
-      menus.dashboard.shortcuts.left.shortcut1 = {
-        icon = "󰈹";
-        tooltip = "Firefox";
-        command = "firefox";
-      };
-      menus.dashboard.shortcuts.left.shortcut2 = {
-        icon = "";
-        tooltip = "Terminal";
-        command = "kitty";
-      };
-      menus.dashboard.shortcuts.left.shortcut3 = {
-        icon = "";
-        tooltip = "Emacs";
-        command = "emacs";
-      };
-      menus.dashboard.shortcuts.right.shortcut3 = {
-        icon = "󰄀";
-        tooltip = "Screenshot";
-        command = "~/.local/bin/screenshot";
-      };
-      menus.dashboard.shortcuts.left.shortcut4 = {
-        icon = "";
-        tooltip = "Search Apps";
-        command = "walker";
-      };
-      #menus.dashboard.stats.enable_gpu = true;  # Causes system freeze on NVIDIA
-      theme = {
-        bar.transparent = true;
-        bar.outer_spacing = "0.9em";
-        bar.scaling = 92;
-        bar.buttons.enableBorders = true;
-        bar.buttons.monochrome = false;
-        bar.buttons.style = "default";
-        bar.buttons.workspaces.pill.radius = "0.9em";
-        bar.buttons.workspaces.pill.active_width = "3.2em";
-        bar.buttons.workspaces.fontSize = "1.05em";
-        font = {
-          name = "CaskaydiaCove Nerd Font";
-          size = "13px";
-        };
-      };
-    };
-  }; */
 
   # ── Waybar (active bar) ──────────────────────────────────────────────
-  # Replaces hyprpanel. Started via uwsm exec-once in the hyprland block above.
+  # Started via uwsm exec-once in the hyprland block above.
   programs.waybar = {
     enable = true;
     systemd.enable = false;
@@ -1181,7 +1033,7 @@ in
         format = "{name}";
         on-click = "activate";
         all-outputs = true;
-        # Mirror hyprpanel's bar.workspaces.ignored = "^-" (Hyprland special workspaces)
+        # Hide Hyprland special workspaces (negative IDs like -98, -97 …)
         ignore-workspaces = [ "^-" ];
       };
 
@@ -1516,7 +1368,6 @@ in
     cliphist
     copyq
     playerctl
-    hyprpanelPackage  # binary on PATH for manual launch; module disabled above
     nomacs
     gthumb
     pyprland
@@ -1900,23 +1751,6 @@ in
     enable = true;
     runAsService = true;
   };
-
-  home.activation.syncHyprpanelWeatherKey = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    secrets_dir="$HOME/.config/secrets"
-    raw_key_file="$secrets_dir/weather-api-key"
-    json_key_file="$secrets_dir/weather-api-key.json"
-
-    mkdir -p "$secrets_dir"
-
-    if [ -f "$raw_key_file" ]; then
-      api_key="$(${pkgs.coreutils}/bin/tr -d '\n\r' < "$raw_key_file")"
-      ${pkgs.jq}/bin/jq -n --arg weather_api_key "$api_key" \
-        '{ weather_api_key: $weather_api_key }' > "$json_key_file"
-      chmod 600 "$json_key_file"
-    else
-      rm -f "$json_key_file"
-    fi
-  '';
 
   home.activation.createProjectsDir = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     mkdir -p "$HOME/Projects"

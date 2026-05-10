@@ -27,10 +27,10 @@ Upstream PRs (all open, no traction yet):
 
 ### `upstream/0004-reregister-tray-item-when-host-restarts.patch`
 
-Re-register the StatusNotifierItem when the tray host (HyprPanel)
-restarts. Without this, the ProtonVPN tray icon disappears after every
-HyprPanel reload and never comes back. Applied to `proton-vpn` via the
-`localOverlay` in `../flake.nix`.
+Re-register the StatusNotifierItem when the tray host restarts. Without
+this, the ProtonVPN tray icon disappears whenever the bar reloads and
+never comes back. Applied to `proton-vpn` via the `localOverlay` in
+`../flake.nix`.
 
 Upstream PR: <https://github.com/ProtonVPN/proton-vpn-gtk-app/pull/157>
 (open against `stable`, no traction yet). Drop the override and this
@@ -46,12 +46,12 @@ on `stable` at proton-vpn v4.16.1. Three correctness fixes in
 1. **DBusMenu children become spec-conformant `av`.** `GetLayout`
    previously returned children as `a(ia{sv}av)` (array of structs),
    which permissive hosts (KDE, waybar) accept silently but strict
-   hosts (HyprPanel's astal-tray) reject with a GVariant assertion,
-   segfaulting the panel on the first menu read.
+   readers reject with a GVariant assertion, segfaulting the host on
+   the first menu read.
 2. **Separator entries no longer carry `label`/`enabled` keys.** Some
-   hosts (HyprPanel) draw separators with a thicker style when those
-   fields are present in the dict — this is also why the tray menu
-   used to show fat dividers between Connect / Show / Quit.
+   hosts draw separators with a thicker style when those fields are
+   present in the dict — this is also why the tray menu used to show
+   fat dividers between Connect / Show / Quit.
 3. **Full SNI property table via shared `_get_sni_properties`.** `Get`
    and `GetAll` now return the standard SNI properties (`IconPixmap`,
    `OverlayIconName`, `ToolTip`, `WindowId`, …) with correct types,
