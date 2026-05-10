@@ -12,10 +12,10 @@
 }
 
 window#waybar {
-  background: rgba(10, 10, 10, 0.78);
+  background: rgba(10, 10, 10, 0.45);
   color: #ffd700;
   border-radius: 14px;
-  border: 1px solid #2a2a2a;
+  border: 1px solid rgba(42, 42, 42, 0.6);
 }
 
 tooltip {

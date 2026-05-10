@@ -1135,7 +1135,7 @@ in
       ];
 
       "custom/launcher" = {
-        format = "";
+        format = "";  # NixOS logo
         on-click = "walker";
         tooltip-format = "Launch app (walker)";
       };
@@ -1188,6 +1188,7 @@ in
         interval = 60;
       };
       temperature = {
+        thermal-zone = 7;  # x86_pkg_temp — zone 0 (INT3400) is a stub
         format = " {temperatureC}°C";
         critical-threshold = 85;
         interval = 10;
@@ -1262,16 +1263,16 @@ in
 
       "custom/notification" = {
         tooltip = false;
-        format = "{icon} {}";
+        format = "{icon}{text}";
         format-icons = {
-          notification = "<span foreground='#ff4500'><sup></sup></span>";
-          none = "";
-          dnd-notification = "<span foreground='#ff4500'><sup></sup></span>";
-          dnd-none = "";
-          inhibited-notification = "<span foreground='#ff4500'><sup></sup></span>";
-          inhibited-none = "";
-          dnd-inhibited-notification = "<span foreground='#ff4500'><sup></sup></span>";
-          dnd-inhibited-none = "";
+          notification = " ";
+          none = "";
+          dnd-notification = " ";
+          dnd-none = "";
+          inhibited-notification = " ";
+          inhibited-none = "";
+          dnd-inhibited-notification = " ";
+          dnd-inhibited-none = "";
         };
         return-type = "json";
         exec-if = "which swaync-client";
