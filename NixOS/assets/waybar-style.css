@@ -78,12 +78,6 @@ tooltip label { color: #ffd700; padding: 4px; }
 #tray             { padding: 0 8px; }
 #tray > .needs-attention { background: #ff4500; border-radius: 6px; }
 
-#bluetooth        { color: #00ffff; padding: 0 8px; }
-#bluetooth.disabled,
-#bluetooth.off,
-#bluetooth.no-controller { color: #585858; }
-#bluetooth.connected { color: #32cd32; }
-
 #backlight-slider,
 #pulseaudio-slider { padding: 2px 8px; min-width: 90px; }
 #backlight-slider trough,
@@ -101,8 +95,6 @@ tooltip label { color: #ffd700; padding: 4px; }
 
 #keyboard-state   { padding: 0 6px; color: #585858; font-size: 12px; }
 #keyboard-state label.locked { color: #ffd700; }
-
-#language         { color: #00ffff; padding: 0 8px; }
 
 #systemd-failed-units { color: #ff4500; padding: 0 8px; }
 

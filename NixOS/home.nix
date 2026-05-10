@@ -977,7 +977,8 @@ in
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
                     "uwsm app -- waybar"
-                    "uwsm app -- swaync"
+                    # swaync is launched by services.swaync (home-manager systemd unit);
+                    # do not duplicate here or the unit fails with "instance already running".
                     # awww-daemon must be running before random-wallpaper can talk to it
                     "uwsm app -- awww-daemon"
                     "env GDK_BACKEND=x11 copyq --daemon"
@@ -1011,15 +1012,15 @@ in
       margin-right = 0;
       modules-left = [
         "custom/launcher" "hyprland/workspaces"
-        "cpu" "memory" "disk" "temperature"
+        "cpu" "memory" "disk" "temperature" "systemd-failed-units"
         "mpris"
       ];
       modules-center = [ "hyprland/window" ];
       modules-right = [
-        "privacy" "systemd-failed-units"
-        "backlight/slider" "bluetooth"
+        "privacy"
+        "backlight/slider"
         "network" "wireplumber" "pulseaudio/slider" "battery"
-        "idle_inhibitor" "keyboard-state" "hyprland/language"
+        "idle_inhibitor" "keyboard-state"
         "tray" "custom/weather" "clock" "custom/notification" "custom/power"
       ];
 
@@ -1106,20 +1107,9 @@ in
         orientation = "horizontal";
       };
 
-      bluetooth = {
-        format = " {status}";
-        format-disabled = "󰂲";
-        format-off = "󰂲";
-        format-on = "";
-        format-connected = " {device_alias}";
-        format-connected-battery = " {device_alias} {device_battery_percentage}%";
-        tooltip-format = "Left: toggle blueman-manager  ·  Right: toggle bluetoothctl\n\n{controller_alias}\t{controller_address}\n{num_connections} connected";
-        tooltip-format-connected = "Left: toggle blueman-manager  ·  Right: toggle bluetoothctl\n\n{controller_alias}\t{controller_address}\n{num_connections} connected\n\n{device_enumerate}";
-        tooltip-format-enumerate-connected = "{device_alias}\t{device_address}";
-        tooltip-format-enumerate-connected-battery = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
-        on-click = "~/.local/bin/toggle-app --gui blueman blueman-manager";
-        on-click-right = "~/.local/bin/toggle-app btctl bluetoothctl";
-      };
+      # Bluetooth is handled by blueman-applet in the systray
+      # (services.blueman.enable). Left-click opens blueman-manager,
+      # right-click gives the full Bluetooth action menu.
 
       network = {
         format-wifi = " {essid}";
@@ -1170,17 +1160,16 @@ in
         format-icons = { locked = ""; unlocked = ""; };
       };
 
-      "hyprland/language" = {
-        format = " {short}";
-        on-click = "hyprctl switchxkblayout current next";
-        tooltip-format = "Keyboard layout: {long}";
-      };
+      # Keyboard layout / input method is handled by fcitx5's systray icon.
 
       "systemd-failed-units" = {
         hide-on-ok = true;
         format = "✗ {nr_failed}";
         system = true;
         user = true;
+        on-click = "~/.local/bin/toggle-app failed-units bash -lc 'echo === user ===; systemctl --user --failed; echo; echo === system ===; systemctl --failed; echo; exec bash'";
+        on-click-right = "systemctl --user reset-failed; pkexec systemctl reset-failed";
+        tooltip-format = "{nr_failed} failed units — left-click: list, right-click: reset";
       };
 
       privacy = {
