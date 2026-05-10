@@ -1,0 +1,57 @@
+/* swaync — cyberpunk palette to match waybar */
+
+* {
+  font-family: "CaskaydiaCove Nerd Font", sans-serif;
+  font-size: 13px;
+}
+
+.control-center,
+.notification-row,
+.floating-notifications.background .notification-background {
+  background: rgba(10, 10, 10, 0.92);
+  color: #ffd700;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  margin: 6px;
+}
+
+.notification {
+  background: #1a1a1a;
+  border-radius: 10px;
+  margin: 4px;
+}
+
+.notification-content { padding: 8px; }
+.summary { color: #00ffff; font-weight: bold; }
+.body    { color: #ffd700; }
+.time    { color: #ff69b4; }
+.app-name { color: #ff69b4; }
+
+.close-button {
+  background: #ff4500;
+  color: #0a0a0a;
+  border-radius: 8px;
+  padding: 2px 6px;
+}
+.close-button:hover { background: #ff69b4; }
+
+.control-center .widget-title { color: #ff69b4; font-weight: bold; padding: 4px; }
+.control-center .widget-title button {
+  background: #1a1a1a; color: #ffd700; border-radius: 8px;
+  border: 1px solid #2a2a2a; padding: 2px 8px;
+}
+.control-center .widget-buttons-grid > flowboxchild > button {
+  background: #1a1a1a; color: #00ffff;
+  border-radius: 8px; border: 1px solid #2a2a2a;
+  margin: 2px; padding: 6px 10px;
+}
+.control-center .widget-buttons-grid > flowboxchild > button.toggle:checked {
+  background: #ffd700; color: #0a0a0a;
+}
+
+.control-center .widget-mpris {
+  background: #1a1a1a; border-radius: 10px; padding: 6px;
+}
+
+trough { background: #1a1a1a; border-radius: 6px; }
+slider { background: #ffd700; border-radius: 6px; }

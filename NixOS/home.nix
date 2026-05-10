@@ -3,6 +3,67 @@ let
   hyprpanelTheme =
     builtins.fromJSON
       (builtins.readFile ./assets/hyprpanel-cyberpunk.json);
+  hyprpanelPackage =
+    inputs.hyprpanel.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  # Full hyprpanel config preserved so `hyprpanel` (kept on PATH as a fallback bar)
+  # still launches with the cyberpunk theme, dashboard shortcuts, and weather menu —
+  # even though the home-manager module is disabled (swaync now owns notifications,
+  # and home-manager forbids two notification daemons).
+  hyprpanelConfig = hyprpanelTheme // {
+    bar.layouts = {
+      "*" = {
+        left = [ "dashboard" "workspaces" "media" ];
+        middle = [ "windowtitle" ];
+        right = [ "network" "volume" "battery" "systray" "clock" "notifications" ];
+      };
+    };
+    bar.launcher.autoDetectIcon = true;
+    bar.workspaces.show_icons = true;
+    bar.workspaces.ignored = "^-";
+    menus.clock.weather.unit = "metric";
+    menus.clock.weather.location = "Singapore";
+    menus.clock.weather.key = "/home/thinky/.config/secrets/weather-api-key.json";
+    menus.dashboard.directories.enabled = true;
+    menus.dashboard.directories.left.directory1.command =
+      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Downloads";
+    menus.dashboard.directories.left.directory2.command =
+      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Videos";
+    menus.dashboard.directories.left.directory3.command =
+      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Projects";
+    menus.dashboard.directories.right.directory1.command =
+      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Documents";
+    menus.dashboard.directories.right.directory2.command =
+      "/home/thinky/.local/bin/nemo-x11 /home/thinky/Pictures";
+    menus.dashboard.directories.right.directory3.command =
+      "/home/thinky/.local/bin/nemo-x11 /home/thinky";
+    menus.dashboard.shortcuts.left.shortcut1 = {
+      icon = "󰈹"; tooltip = "Firefox"; command = "firefox";
+    };
+    menus.dashboard.shortcuts.left.shortcut2 = {
+      icon = ""; tooltip = "Terminal"; command = "kitty";
+    };
+    menus.dashboard.shortcuts.left.shortcut3 = {
+      icon = ""; tooltip = "Emacs"; command = "emacs";
+    };
+    menus.dashboard.shortcuts.right.shortcut3 = {
+      icon = "󰄀"; tooltip = "Screenshot"; command = "~/.local/bin/screenshot";
+    };
+    menus.dashboard.shortcuts.left.shortcut4 = {
+      icon = ""; tooltip = "Search Apps"; command = "walker";
+    };
+    theme = {
+      bar.transparent = true;
+      bar.outer_spacing = "0.9em";
+      bar.scaling = 92;
+      bar.buttons.enableBorders = true;
+      bar.buttons.monochrome = false;
+      bar.buttons.style = "default";
+      bar.buttons.workspaces.pill.radius = "0.9em";
+      bar.buttons.workspaces.pill.active_width = "3.2em";
+      bar.buttons.workspaces.fontSize = "1.05em";
+      font = { name = "CaskaydiaCove Nerd Font"; size = "13px"; };
+    };
+  };
   nemoMegaLibraryPath = lib.makeLibraryPath [
     pkgs.nemo
     pkgs.glib
@@ -948,6 +1009,10 @@ in
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
+                    "uwsm app -- waybar"
+                    "uwsm app -- swaync"
+                    # awww-daemon must be running before random-wallpaper can talk to it
+                    "uwsm app -- awww-daemon"
                     "env GDK_BACKEND=x11 copyq --daemon"
                     "protonvpn-app"
                     "~/.local/bin/random-wallpaper"
@@ -963,8 +1028,16 @@ in
     };
   };
 
-  programs.hyprpanel = {
-    package = inputs.hyprpanel.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  # Hyprpanel — module DISABLED (swaync now owns notifications and home-manager
+  # forbids two notification daemons). The binary is still installed via
+  # home.packages and xdg.configFile preserves the cyberpunk config below, so
+  # `hyprpanel` can still be launched manually as a fallback bar.
+  programs.hyprpanel.enable = false;
+  xdg.configFile."hyprpanel/config.json".text = builtins.toJSON hyprpanelConfig;
+
+  # Disabled-block reference kept commented for context only:
+  /* programs.hyprpanel = {
+    package = hyprpanelPackage;
     enable = true;
     settings = hyprpanelTheme // {
       bar.layouts = {
@@ -1038,6 +1111,229 @@ in
         };
       };
     };
+  }; */
+
+  # ── Waybar (active bar) ──────────────────────────────────────────────
+  # Replaces hyprpanel. Started via uwsm exec-once in the hyprland block above.
+  programs.waybar = {
+    enable = true;
+    systemd.enable = false;
+    settings.mainBar = {
+      layer = "top";
+      position = "top";
+      height = 34;
+      spacing = 6;
+      margin-top = 4;
+      margin-left = 8;
+      margin-right = 8;
+      modules-left = [ "custom/launcher" "hyprland/workspaces" "mpris" ];
+      modules-center = [ "hyprland/window" ];
+      modules-right = [
+        "cpu" "memory" "disk" "temperature"
+        "network" "wireplumber" "battery" "tray"
+        "custom/weather" "clock" "custom/notification" "custom/power"
+      ];
+
+      "custom/launcher" = {
+        format = "";
+        on-click = "walker";
+        tooltip-format = "Launch app (walker)";
+      };
+
+      "hyprland/workspaces" = {
+        format = "{name}";
+        on-click = "activate";
+        all-outputs = true;
+        # Mirror hyprpanel's bar.workspaces.ignored = "^-" (Hyprland special workspaces)
+        ignore-workspaces = [ "^-" ];
+      };
+
+      "hyprland/window" = {
+        format = "{title}";
+        max-length = 90;
+        separate-outputs = true;
+      };
+
+      mpris = {
+        format = "{player_icon} {dynamic}";
+        format-paused = "{status_icon} <i>{dynamic}</i>";
+        player-icons = {
+          default = "▶";
+          mpv = "";
+          firefox = "";
+          spotify = "";
+          chromium = "";
+        };
+        status-icons = { paused = "⏸"; };
+        dynamic-len = 40;
+        on-click = "playerctl play-pause";
+        on-click-right = "playerctl stop";
+        on-scroll-up = "playerctl next";
+        on-scroll-down = "playerctl previous";
+      };
+
+      cpu = {
+        format = " {usage}%";
+        interval = 5;
+        on-click = "kitty -e btop";
+      };
+      memory = {
+        format = " {percentage}%";
+        interval = 10;
+        on-click = "kitty -e btop";
+      };
+      disk = {
+        format = " {percentage_used}%";
+        path = "/";
+        interval = 60;
+      };
+      temperature = {
+        format = " {temperatureC}°C";
+        critical-threshold = 85;
+        interval = 10;
+      };
+
+      network = {
+        format-wifi = " {essid}";
+        format-ethernet = " {ipaddr}";
+        format-disconnected = "󰤭 off";
+        tooltip-format-wifi = "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}\n {bandwidthDownBits}  {bandwidthUpBits}";
+        tooltip-format-ethernet = "{ifname}\n{ipaddr}/{cidr}\n {bandwidthDownBits}  {bandwidthUpBits}";
+        on-click = "kitty -e nmtui";
+        interval = 5;
+      };
+
+      wireplumber = {
+        format = "{icon} {volume}%";
+        format-muted = "󰖁";
+        format-icons = [ "" "" "" ];
+        on-click = "pavucontrol";
+        on-click-right = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle";
+        on-scroll-up = "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+";
+        on-scroll-down = "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-";
+        scroll-step = 5;
+      };
+
+      battery = {
+        format = "{icon} {capacity}%";
+        format-charging = "󰂄 {capacity}%";
+        format-plugged = "󰚥 {capacity}%";
+        format-icons = [ "󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹" ];
+        states = { good = 90; warning = 30; critical = 15; };
+        tooltip-format = "{timeTo}\n{power}W";
+      };
+
+      tray = {
+        icon-size = 18;
+        spacing = 8;
+      };
+
+      "custom/weather" = {
+        # wttr.in: %c=condition icon, %t=temperature
+        exec = "${pkgs.curl}/bin/curl -sf 'https://wttr.in/Singapore?format=%c+%t' || echo ''";
+        interval = 1800;
+        tooltip = true;
+        format = "{}";
+        on-click = "kitty -e bash -c '${pkgs.curl}/bin/curl -s wttr.in/Singapore; echo; read -n1 -p \"press any key…\"'";
+      };
+
+      clock = {
+        format = " {:%a %d %b  %H:%M}";
+        format-alt = " {:%Y-%m-%d %H:%M:%S}";
+        tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
+        calendar = {
+          mode = "year";
+          mode-mon-col = 3;
+          weeks-pos = "right";
+          on-scroll = 1;
+          format = {
+            months   = "<span color='#ff69b4'><b>{}</b></span>";
+            days     = "<span color='#ffd700'><b>{}</b></span>";
+            weekdays = "<span color='#00ffff'><b>{}</b></span>";
+            today    = "<span color='#ff4500'><b>{}</b></span>";
+          };
+        };
+        actions = {
+          on-click-right = "mode";
+          on-scroll-up = "shift_up";
+          on-scroll-down = "shift_down";
+        };
+      };
+
+      "custom/notification" = {
+        tooltip = false;
+        format = "{icon} {}";
+        format-icons = {
+          notification = "<span foreground='#ff4500'><sup></sup></span>";
+          none = "";
+          dnd-notification = "<span foreground='#ff4500'><sup></sup></span>";
+          dnd-none = "";
+          inhibited-notification = "<span foreground='#ff4500'><sup></sup></span>";
+          inhibited-none = "";
+          dnd-inhibited-notification = "<span foreground='#ff4500'><sup></sup></span>";
+          dnd-inhibited-none = "";
+        };
+        return-type = "json";
+        exec-if = "which swaync-client";
+        exec = "swaync-client -swb";
+        on-click = "swaync-client -t -sw";
+        on-click-right = "swaync-client -d -sw";
+        escape = true;
+      };
+
+      "custom/power" = {
+        format = "⏻";
+        tooltip-format = "Power menu (wlogout)";
+        on-click = "wlogout";
+      };
+    };
+
+    style = builtins.readFile ./assets/waybar-style.css;
+  };
+
+  # ── swaync (notification daemon + center) ────────────────────────────
+  services.swaync = {
+    enable = true;
+    settings = {
+      positionX = "right";
+      positionY = "top";
+      control-center-margin-top = 6;
+      control-center-margin-bottom = 6;
+      control-center-margin-right = 6;
+      control-center-margin-left = 0;
+      notification-2fa-action = true;
+      notification-inline-replies = true;
+      timeout = 8;
+      timeout-low = 4;
+      timeout-critical = 0;
+      transition-time = 200;
+      hide-on-clear = false;
+      hide-on-action = true;
+      widgets = [ "title" "dnd" "mpris" "notifications" ];
+      widget-config = {
+        title = {
+          text = "Notifications";
+          clear-all-button = true;
+          button-text = "Clear all";
+        };
+        dnd = { text = "Do Not Disturb"; };
+        mpris = { image-size = 64; image-radius = 8; };
+      };
+    };
+    style = builtins.readFile ./assets/swaync-style.css;
+  };
+
+  # ── wlogout (power menu) ─────────────────────────────────────────────
+  programs.wlogout = {
+    enable = true;
+    layout = [
+      { label = "lock";     action = "hyprlock";              text = "Lock";     keybind = "l"; }
+      { label = "logout";   action = "hyprctl dispatch exit"; text = "Logout";   keybind = "e"; }
+      { label = "suspend";  action = "systemctl suspend";     text = "Suspend";  keybind = "s"; }
+      { label = "reboot";   action = "systemctl reboot";      text = "Reboot";   keybind = "r"; }
+      { label = "shutdown"; action = "systemctl poweroff";    text = "Shutdown"; keybind = "p"; }
+    ];
+    style = builtins.readFile ./assets/wlogout-style.css;
   };
 
   services.udiskie = {
@@ -1088,6 +1384,8 @@ in
     swappy
     cliphist
     copyq
+    playerctl
+    hyprpanelPackage  # binary on PATH for manual launch; module disabled above
     nomacs
     gthumb
     pyprland

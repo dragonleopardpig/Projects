@@ -1,0 +1,84 @@
+/* Cyberpunk palette translated from hyprpanel-cyberpunk.json
+   bg #0a0a0a   card #1a1a1a   border #2a2a2a
+   yellow #ffd700   cyan #00ffff   pink #ff69b4
+   orange #ff4500   green #32cd32   muted #585858 */
+
+* {
+  font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font", sans-serif;
+  font-size: 13px;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+
+window#waybar {
+  background: rgba(10, 10, 10, 0.78);
+  color: #ffd700;
+  border-radius: 14px;
+  border: 1px solid #2a2a2a;
+}
+
+tooltip {
+  background: #0a0a0a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #ffd700;
+}
+tooltip label { color: #ffd700; padding: 4px; }
+
+#custom-launcher {
+  font-size: 18px;
+  padding: 0 12px;
+  color: #ff69b4;
+}
+#custom-launcher:hover { color: #ffd700; }
+
+#workspaces { padding: 2px 4px; }
+#workspaces button {
+  padding: 0 9px;
+  margin: 4px 2px;
+  background: transparent;
+  color: #585858;
+  border-radius: 9px;
+  border: 1px solid transparent;
+}
+#workspaces button.active {
+  background: #1a1a1a;
+  color: #00ffff;
+  border: 1px solid #00ffff;
+  min-width: 28px;
+}
+#workspaces button.urgent {
+  background: #1a1a1a;
+  color: #ff4500;
+  border: 1px solid #ff4500;
+}
+#workspaces button:hover {
+  background: #1a1a1a;
+  color: #ffd700;
+  border: 1px solid #ffd700;
+}
+
+#window { color: #ff69b4; padding: 0 10px; }
+
+#mpris            { color: #ff69b4; padding: 0 8px; }
+#cpu              { color: #ff4500; padding: 0 6px; }
+#memory           { color: #ffd700; padding: 0 6px; }
+#disk             { color: #ff69b4; padding: 0 6px; }
+#temperature      { color: #ffd700; padding: 0 6px; }
+#temperature.critical { color: #ff4500; }
+#network          { color: #ff69b4; padding: 0 8px; }
+#network.disconnected { color: #585858; }
+#wireplumber      { color: #ff4500; padding: 0 8px; }
+#wireplumber.muted { color: #585858; }
+#battery          { color: #32cd32; padding: 0 8px; }
+#battery.warning  { color: #ffd700; }
+#battery.critical { color: #ff4500; }
+#battery.charging { color: #00ffff; }
+#tray             { padding: 0 8px; }
+#tray > .needs-attention { background: #ff4500; border-radius: 6px; }
+#custom-weather   { color: #00ffff; padding: 0 8px; }
+#clock            { color: #ffd700; padding: 0 10px; }
+#custom-notification { color: #ffd700; padding: 0 8px; }
+#custom-power     { color: #ff4500; padding: 0 12px; font-size: 14px; }
+#custom-power:hover { color: #ff69b4; }
