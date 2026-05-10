@@ -2,6 +2,15 @@
 
 { inputs, lib, config,  pkgs, ... }:
 
+let
+  # SDDM login theme. metadata.desktop's ConfigFile= is rewritten at boot
+  # by systemd.services.sddm-random-theme to pick a random variant, so
+  # `embeddedTheme` here is only the fallback if the picker doesn't run.
+  astronautPkg = pkgs.sddm-astronaut.override {
+    embeddedTheme = "pixel_sakura";
+    themeConfig = { FormPosition = "left"; };
+  };
+in
 {
   imports = [];
 
@@ -156,8 +165,48 @@
       };
       Theme = {
         Current = "sddm-astronaut-theme";
+        # Picked-up by sddm-random-theme.service: a writable mirror of the
+        # astronaut theme dir lives here, with metadata.desktop rewritten
+        # to point at a random Themes/<variant>.conf each boot.
+        ThemeDir = "/var/lib/sddm/themes";
       };
     };
+  };
+
+  # Pick a random sddm-astronaut variant before SDDM starts. Mirrors the
+  # upstream theme dir into /var/lib/sddm/themes/sddm-astronaut-theme/ as
+  # symlinks, then writes a fresh metadata.desktop pointing at a random
+  # *.conf from Themes/.
+  systemd.services.sddm-random-theme = {
+    description = "Pick a random sddm-astronaut variant for the login screen";
+    wantedBy = [ "display-manager.service" ];
+    before = [ "display-manager.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    path = [ pkgs.coreutils pkgs.gnused pkgs.gnugrep ];
+    script = ''
+      set -eu
+      src=${astronautPkg}/share/sddm/themes/sddm-astronaut-theme
+      dst=/var/lib/sddm/themes/sddm-astronaut-theme
+      mkdir -p "$dst"
+      # Mirror everything from upstream as symlinks, except metadata.desktop
+      # which we generate.
+      for f in "$src"/* "$src"/.[!.]*; do
+        [ -e "$f" ] || continue
+        name=$(basename "$f")
+        [ "$name" = metadata.desktop ] && continue
+        ln -sfn "$f" "$dst/$name"
+      done
+      # Pick a random *.conf (the *.conf.user override files are excluded
+      # by the .conf$ anchor).
+      mapfile -t variants < <(ls "$src/Themes/" | grep '\.conf$')
+      pick=''${variants[RANDOM % ''${#variants[@]}]}
+      sed "s|^ConfigFile=.*|ConfigFile=Themes/$pick|" \
+        "$src/metadata.desktop" > "$dst/metadata.desktop"
+      echo "sddm-random-theme: picked $pick" >&2
+    '';
   };
 
   programs.uwsm = {
@@ -428,12 +477,7 @@
     fluent-icon-theme          # Fluent Design icon theme
     adwaita-icon-theme         # GNOME default icon theme
     sassc                      # SASS/SCSS CSS compiler (for theme building)
-    (pkgs.sddm-astronaut.override {  # SDDM login screen theme
-      embeddedTheme = "pixel_sakura";
-      themeConfig = {
-        FormPosition = "left";
-      };
-    })
+    astronautPkg               # SDDM login screen theme (random variant per boot)
 
     # ── File Managers ──
     nemo-with-extensions       # Cinnamon file manager with plugins

@@ -55,7 +55,7 @@ NixOS/
 
 **Boot**: Latest kernel, GRUB with grub2-themes (stylish), Plymouth splash screen (rainbow Nix snowflake)
 
-**Desktop**: Hyprland compositor with UWSM session manager, SDDM login screen (sddm-astronaut-theme, pixel_sakura variant), Xwayland enabled
+**Desktop**: Hyprland compositor with UWSM session manager, SDDM login screen (`sddm-astronaut-theme`, random variant per boot via `sddm-random-theme.service` — pulls one of the 10 bundled `Themes/*.conf` and rewrites `metadata.desktop` in `/var/lib/sddm/themes/` before SDDM starts), Xwayland enabled
 
 **Audio**: PipeWire (ALSA + PulseAudio compatible)
 
