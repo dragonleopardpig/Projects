@@ -1683,16 +1683,20 @@ in
       logo = {
         source = "nixos";
         padding.top = 1;
+        # Cyberpunk palette matching waybar (one distinct hue per logo
+        # stroke). The fastfetch nixos logo only consumes slots 1-6;
+        # 7-9 are kept as fallbacks for any other distro logo we might
+        # render.
         color = {
-          "1" = "#ff8bd1";
-          "2" = "#8ed8ff";
-          "3" = "#f06ccf";
-          "4" = "#77c7ff";
-          "5" = "#d95fe6";
-          "6" = "#a990ff";
-          "7" = "#b57cff";
-          "8" = "#c68cff";
-          "9" = "#d59bff";
+          "1" = "#ff69b4";   # pink
+          "2" = "#00ffff";   # cyan
+          "3" = "#ffd700";   # gold
+          "4" = "#ff4500";   # orange
+          "5" = "#32cd32";   # green
+          "6" = "#ff1493";   # deep magenta
+          "7" = "#00ffff";
+          "8" = "#ff69b4";
+          "9" = "#ffd700";
         };
       };
       display.separator = " 󰑃  ";
