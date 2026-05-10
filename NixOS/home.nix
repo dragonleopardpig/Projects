@@ -1123,9 +1123,9 @@ in
       position = "top";
       height = 34;
       spacing = 6;
-      margin-top = 4;
-      margin-left = 8;
-      margin-right = 8;
+      margin-top = 0;
+      margin-left = 0;
+      margin-right = 0;
       modules-left = [ "custom/launcher" "hyprland/workspaces" "mpris" ];
       modules-center = [ "hyprland/window" ];
       modules-right = [
@@ -1329,12 +1329,24 @@ in
     enable = true;
     layout = [
       { label = "lock";     action = "hyprlock";              text = "Lock";     keybind = "l"; }
-      { label = "logout";   action = "hyprctl dispatch exit"; text = "Logout";   keybind = "e"; }
-      { label = "suspend";  action = "systemctl suspend";     text = "Suspend";  keybind = "s"; }
-      { label = "reboot";   action = "systemctl reboot";      text = "Reboot";   keybind = "r"; }
-      { label = "shutdown"; action = "systemctl poweroff";    text = "Shutdown"; keybind = "p"; }
+      { label = "logout";   action = "hyprctl dispatch exit"; text = "Logout";     keybind = "e"; }
+      { label = "suspend";  action = "systemctl suspend";     text = "Suspend";     keybind = "s"; }
+      { label = "reboot";   action = "systemctl reboot";      text = "Reboot";     keybind = "r"; }
+      { label = "shutdown"; action = "systemctl poweroff";    text = "Shutdown";     keybind = "p"; }
+      { label = "hibernate"; action = "systemctl hibernate";    text = "Hibernate"; keybind = "h"; }
     ];
-    style = builtins.readFile ./assets/wlogout-style.css;
+    style = let
+      icons = "${pkgs.wlogout}/share/wlogout/icons";
+    in ''
+      ${builtins.readFile ./assets/wlogout-style.css}
+
+      #lock      { background-image: url("${icons}/lock.png"); }
+      #logout    { background-image: url("${icons}/logout.png"); }
+      #suspend   { background-image: url("${icons}/suspend.png"); }
+      #reboot    { background-image: url("${icons}/reboot.png"); }
+      #shutdown  { background-image: url("${icons}/shutdown.png"); }
+      #hibernate { background-image: url("${icons}/hibernate.png"); }
+    '';
   };
 
   services.udiskie = {
