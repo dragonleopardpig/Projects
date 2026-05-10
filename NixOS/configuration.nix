@@ -3,39 +3,13 @@
 { inputs, lib, config,  pkgs, ... }:
 
 let
-  # SDDM login theme. metadata.desktop's ConfigFile= is rewritten before
-  # every greeter spawn by systemd.services.sddm-random-theme (triggered
-  # by sddmGreeterCompositor below), so `embeddedTheme` here is only the
-  # fallback if the picker fails.
+  # SDDM login theme. metadata.desktop's ConfigFile= is rewritten at boot
+  # by systemd.services.sddm-random-theme to pick a random variant, so
+  # `embeddedTheme` here is only the fallback if the picker doesn't run.
   astronautPkg = pkgs.sddm-astronaut.override {
     embeddedTheme = "pixel_sakura";
     themeConfig = { FormPosition = "left"; };
   };
-
-  # Minimal weston config for SDDM's greeter compositor. NixOS would
-  # auto-generate this, but we have to hand-roll it since we override
-  # CompositorCommand with our own wrapper. Mirrors the keymap from
-  # services.xserver.xkb (us / pc104 below).
-  sddmWestonIni = pkgs.writeText "sddm-weston.ini" ''
-    [keyboard]
-    keymap_layout=us
-    keymap_model=pc104
-    keymap_options=terminate:ctrl_alt_bksp
-    keymap_variant=
-
-    [libinput]
-    enable-tap=true
-    left-handed=false
-  '';
-
-  # SDDM invokes this every time it spawns weston for a new greeter
-  # (boot, post-logout, post-lock-back). We block on the randomizer so
-  # metadata.desktop is rewritten before the greeter reads it, then
-  # exec weston as if nothing happened.
-  sddmGreeterCompositor = pkgs.writeShellScript "sddm-greeter-compositor" ''
-    /run/current-system/sw/bin/systemctl start sddm-random-theme.service || true
-    exec ${pkgs.weston}/bin/weston --shell=kiosk -c ${sddmWestonIni}
-  '';
 in
 {
   imports = [];
@@ -193,25 +167,24 @@ in
         Current = "sddm-astronaut-theme";
         # Picked-up by sddm-random-theme.service: a writable mirror of the
         # astronaut theme dir lives here, with metadata.desktop rewritten
-        # to point at a random Themes/<variant>.conf each greeter spawn.
+        # to point at a random Themes/<variant>.conf each boot.
         ThemeDir = "/var/lib/sddm/themes";
-      };
-      Wayland = {
-        # Replace the auto-generated CompositorCommand with our wrapper
-        # so the randomizer fires per greeter spawn (not just per boot).
-        CompositorCommand = toString sddmGreeterCompositor;
       };
     };
   };
 
-  # Pick a random sddm-astronaut variant. Triggered synchronously from
-  # sddmGreeterCompositor before each weston spawn, so metadata.desktop
-  # is fresh whenever the greeter reads it. Mirrors the upstream theme
-  # dir into /var/lib/sddm/themes/sddm-astronaut-theme/ as symlinks,
-  # then writes a fresh metadata.desktop pointing at a random *.conf.
+  # Pick a random sddm-astronaut variant before SDDM starts. Mirrors the
+  # upstream theme dir into /var/lib/sddm/themes/sddm-astronaut-theme/ as
+  # symlinks, then writes a fresh metadata.desktop pointing at a random
+  # *.conf from Themes/.
   systemd.services.sddm-random-theme = {
     description = "Pick a random sddm-astronaut variant for the login screen";
-    serviceConfig.Type = "oneshot";
+    wantedBy = [ "display-manager.service" ];
+    before = [ "display-manager.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
     path = [ pkgs.coreutils pkgs.gnused pkgs.gnugrep ];
     script = ''
       set -eu
