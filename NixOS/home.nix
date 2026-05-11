@@ -1240,7 +1240,11 @@ in
       privacy = {
         icon-spacing = 4;
         icon-size = 14;
-        transition-duration = 250;
+        # transition-duration=0: a non-zero fade triggers a glibmm NULL
+        # deref (`segfault at 4c` in libglibmm-2.4) when a PipeWire
+        # audio-in node disappears mid-transition — reproducibly hit
+        # when Remmina toggles its mic stream.
+        transition-duration = 0;
         modules = [
           { type = "screenshare"; tooltip = true; tooltip-icon-size = 24; }
           { type = "audio-in";    tooltip = true; tooltip-icon-size = 24; }
