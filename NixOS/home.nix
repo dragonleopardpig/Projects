@@ -615,6 +615,46 @@ in
     '';
   };
 
+  home.file.".local/bin/remmina-dnd-watcher" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      # Auto-toggle swaync Do Not Disturb based on focused window class.
+      # When org.remmina.Remmina is focused, enable DnD so notification
+      # pop-ups don't appear over the remote desktop; restore on focus
+      # change. State file prevents clobbering DnD enabled manually
+      # outside of a Remmina session.
+      SOCK="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+      STATE="$XDG_RUNTIME_DIR/remmina-dnd.lock"
+      [ -S "$SOCK" ] || exit 0
+
+      enable_dnd() {
+        [ -e "$STATE" ] && return
+        swaync-client --dnd-on >/dev/null 2>&1 && touch "$STATE"
+      }
+      disable_dnd() {
+        [ -e "$STATE" ] || return
+        swaync-client --dnd-off >/dev/null 2>&1 && rm -f "$STATE"
+      }
+
+      # Seed initial state: if Remmina is already active at startup.
+      if hyprctl activewindow -j 2>/dev/null \
+           | grep -q '"class": "org.remmina.Remmina"'; then
+        enable_dnd
+      fi
+
+      while true; do
+        socat -U - "UNIX-CONNECT:$SOCK" 2>/dev/null | while IFS= read -r line; do
+          case "$line" in
+            activewindow\>\>org.remmina.Remmina,*) enable_dnd ;;
+            activewindow\>\>*)                     disable_dnd ;;
+          esac
+        done
+        sleep 1
+      done
+    '';
+  };
+
   home.file.".local/bin/toggle-app" = {
     executable = true;
     text = ''
@@ -1034,6 +1074,7 @@ in
                     "while true; do sleep 60; ~/.local/bin/random-wallpaper; done"
                     "systemctl --user start hyprpolkitagent"
                     "solaar --window=hide"
+                    "~/.local/bin/remmina-dnd-watcher"
                   ];
       misc = {
         mouse_move_enables_dpms = true;
