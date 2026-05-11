@@ -90,6 +90,9 @@ tooltip label { color: #ffd700; padding: 4px; }
 #backlight-slider highlight { background: #ffd700; border-radius: 4px; }
 #pulseaudio-slider highlight { background: #ff4500; border-radius: 4px; }
 
+#custom-brightness          { color: #ffd700; padding: 0 8px; }
+#custom-brightness.err      { color: #ff4500; }
+
 #idle_inhibitor   { color: #585858; padding: 0 8px; font-size: 14px; }
 #idle_inhibitor.activated { color: #00ffff; }
 

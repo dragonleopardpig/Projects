@@ -1,5 +1,16 @@
-{ lib, config, inputs, pkgs, ... }:
+{ lib, config, osConfig, inputs, pkgs, ... }:
 let
+  # On X299 / X299-SSD the monitor uses DDC/CI. ddcci_backlight does bind
+  # (see boot.extraModprobeConfig), but every i2c transaction to the
+  # monitor's MCU is ~75 ms — too slow for waybar's draggable slider,
+  # which fires many value-changed events per drag and queues writes
+  # faster than they drain. So those hosts use a custom indicator
+  # + scroll/click instead of `backlight/slider`. Everything else
+  # (M90aPro's intel_backlight, PortableSSD's whatever it boots on)
+  # keeps the real slider.
+  useScrollIndicator =
+    osConfig.networking.hostName == "X299"
+    || osConfig.networking.hostName == "X299-SSD";
   nemoMegaLibraryPath = lib.makeLibraryPath [
     pkgs.nemo
     pkgs.glib
@@ -553,17 +564,53 @@ in
     executable = true;
     text = ''
       #!/bin/sh
-      # Pick the right backlight device: prefer intel_backlight (laptop), fall back to ddcci (desktop)
-      if [ -d /sys/class/backlight/intel_backlight ]; then
-        DEV=intel_backlight
-      else
-        DEV=$(ls /sys/class/backlight/ | grep -m1 ddcci)
-      fi
+      # Backlight backend selection (preferred order):
+      #   1. intel_backlight (laptop panel, microsecond writes)
+      #   2. ddcci* (X299 hosts via ddcci_backlight, ~75 ms per write)
+      #   3. ddcutil setvcp 10 (last-ditch; only if neither sysfs entry exists)
+      pick_dev() {
+        if [ -d /sys/class/backlight/intel_backlight ]; then echo intel_backlight
+        else ls /sys/class/backlight/ 2>/dev/null | grep -m1 ddcci || true; fi
+      }
 
-      case "$1" in
-        up)   brightnessctl -d "$DEV" set +10% ;;
-        down) brightnessctl -d "$DEV" set 10%- ;;
-        *)    echo "Usage: brightness-ctl {up|down}"; exit 0 ;;
+      case "''${1:-}" in
+        up|down)
+          DEV=$(pick_dev)
+          if [ -n "$DEV" ]; then
+            [ "$1" = up ] && brightnessctl -d "$DEV" set +10% \
+                          || brightnessctl -d "$DEV" set 10%-
+          else
+            [ "$1" = up ] && ddcutil setvcp 10 + 10 \
+                          || ddcutil setvcp 10 - 10
+          fi
+          pkill -RTMIN+8 waybar 2>/dev/null || true
+          ;;
+        status)
+          DEV=$(pick_dev)
+          if [ -n "$DEV" ]; then
+            cur=$(cat "/sys/class/backlight/$DEV/actual_brightness")
+            max=$(cat "/sys/class/backlight/$DEV/max_brightness")
+          else
+            line=$(ddcutil --terse getvcp 10 2>/dev/null || true)
+            if [ -z "$line" ]; then
+              printf '{"text":"󰃟 ?","tooltip":"no backlight","class":"err"}\n'
+              exit 0
+            fi
+            cur=$(echo "$line" | awk '{print $4}')
+            max=$(echo "$line" | awk '{print $5}')
+          fi
+          [ "$max" -gt 0 ] || max=100
+          pct=$(( cur * 100 / max ))
+          filled=$(( pct / 10 ))
+          bar=""
+          i=0
+          while [ "$i" -lt 10 ]; do
+            if [ "$i" -lt "$filled" ]; then bar="''${bar}█"; else bar="''${bar}░"; fi
+            i=$(( i + 1 ))
+          done
+          printf '{"text":"󰃟 %s %d","tooltip":"Brightness: %d%%\\nScroll to adjust  ·  F5/F6","percentage":%d,"class":"ok"}\n' "$bar" "$pct" "$pct" "$pct"
+          ;;
+        *) echo "Usage: brightness-ctl {up|down|status}" >&2; exit 1 ;;
       esac
     '';
   };
@@ -1014,11 +1061,11 @@ in
         "custom/launcher" "hyprland/workspaces"
         "cpu" "memory" "disk" "temperature" "systemd-failed-units"
         "mpris"
+        (if useScrollIndicator then "custom/brightness" else "backlight/slider")
       ];
       modules-center = [ "hyprland/window" ];
       modules-right = [
         "privacy"
-        "backlight/slider"
         "network" "wireplumber" "pulseaudio/slider" "battery"
         "idle_inhibitor" "keyboard-state"
         "tray" "custom/weather" "clock" "custom/notification" "custom/power"
@@ -1097,8 +1144,26 @@ in
         min = 0;
         max = 100;
         orientation = "horizontal";
-        # device omitted → waybar auto-picks first /sys/class/backlight entry
-        # (intel_backlight on laptops, ddcci on desktops with DDC monitors)
+        # Used on M90aPro (intel_backlight, microsecond writes). X299 hosts
+        # use the custom indicator below instead — DDC/CI's ~75 ms per
+        # transaction makes drag-to-set queue faster than it drains.
+      };
+
+      # X299-host fallback: indicator (10-cell unicode bar) + scroll/click.
+      # exec reads /sys/class/backlight/ddcci5/actual_brightness, so refresh
+      # is fast even with kernel module delay back at 0. Each scroll/click
+      # invokes brightness-ctl, which writes sysfs → one i2c transaction.
+      # Keyboard control is via F5/F6 (Hyprland binds, independent of focus).
+      "custom/brightness" = {
+        exec = "~/.local/bin/brightness-ctl status";
+        return-type = "json";
+        interval = 30;
+        signal = 8;
+        on-scroll-up = "~/.local/bin/brightness-ctl up";
+        on-scroll-down = "~/.local/bin/brightness-ctl down";
+        on-click = "~/.local/bin/brightness-ctl up";
+        on-click-right = "~/.local/bin/brightness-ctl down";
+        tooltip = true;
       };
 
       "pulseaudio/slider" = {
