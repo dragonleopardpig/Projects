@@ -1636,11 +1636,22 @@ in
         source ${pkgs.blesh}/share/blesh/ble.sh --noattach
 
         # Autosuggestion keys (only fire while a ghost suggestion is shown):
-        #   Enter -> accept the suggestion and execute the line
-        #   Tab   -> accept up to the next "/" (path-segment at a time)
+        #   Tab   -> accept one word of the suggestion (up to next "/")
+        #   Enter -> if the previous keystroke was TAB, drop the remaining
+        #            ghost and execute only what's typed; otherwise accept the
+        #            whole ghost and execute (the usual fish-style behaviour).
+        #            Branch on $LASTWIDGET, which ble.sh sets to the prior
+        #            widget's name before invoking ours.
         bleopt complete_auto_wordbreaks=/
-        ble-bind -m auto_complete -f RET auto_complete/accept-line
-        ble-bind -m auto_complete -f C-m auto_complete/accept-line
+        function ble/widget/my/auto_complete/smart-accept {
+          if [[ $LASTWIDGET == ble/widget/auto_complete/insert-word ]]; then
+            ble/widget/auto_complete/cancel-default
+          else
+            ble/widget/auto_complete/accept-line
+          fi
+        }
+        ble-bind -m auto_complete -f RET my/auto_complete/smart-accept
+        ble-bind -m auto_complete -f C-m my/auto_complete/smart-accept
         ble-bind -m auto_complete -f TAB auto_complete/insert-word
         ble-bind -m auto_complete -f C-i auto_complete/insert-word
 
@@ -1720,6 +1731,13 @@ in
     Service = {
       Type = "oneshot";
       ExecStart = "%h/.local/bin/wallpaper-of-the-day";
+      # Persistent=true (below) fires this catch-up run at boot, before the
+      # login shell has set PATH — without an explicit PATH the script's
+      # first external (`date`) returns 127. Pin enough of the env for
+      # curl/jq/yt-dlp/date to resolve regardless of when we run.
+      Environment = [
+        "PATH=/run/wrappers/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+      ];
     };
   };
 
