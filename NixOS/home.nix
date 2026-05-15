@@ -615,6 +615,44 @@ in
     '';
   };
 
+  # jinx-mod.so rebuild helper with rpath baked in.
+  # The Emacs ELPA `jinx' package ships a precompiled jinx-mod.so that
+  # dlopens libenchant-2.so.2 via LD_LIBRARY_PATH. On NixOS, envrc /
+  # devenv buffers replace LD_LIBRARY_PATH and dlopen fails, so we
+  # need libenchant pinned into the .so's DT_RPATH. ELPA upgrades
+  # periodically replace our patched .so with a fresh prebuilt one.
+  # This helper rebuilds with rpath whenever the .so is missing or
+  # lacks our marker. All nix-store paths are inlined at build time
+  # so the script is self-contained and runnable from any environment
+  # (GUI launcher, terminal, anywhere).
+  home.file.".local/bin/jinx-rebuild-mod" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -e
+      JINX_DIR=$(ls -d ~/.emacs.d/elpa/jinx-* 2>/dev/null | head -1)
+      [ -d "$JINX_DIR" ] || exit 0
+      cd "$JINX_DIR"
+
+      # Skip if the .so already carries our rpath marker.
+      if [ -f jinx-mod.so ] && \
+         grep -qa '/run/current-system/sw/lib' jinx-mod.so; then
+        exit 0
+      fi
+
+      rm -f jinx-mod.so
+      ${pkgs.gcc}/bin/gcc \
+        -I. \
+        -I${pkgs.enchant.dev}/include/enchant-2 \
+        -O2 -Wall -Wextra -fPIC -shared \
+        -Wl,-rpath,/run/current-system/sw/lib \
+        -Wl,-rpath,${pkgs.enchant}/lib \
+        -o jinx-mod.so jinx-mod.c \
+        -L${pkgs.enchant}/lib -lenchant-2
+      echo "jinx-rebuild-mod: rebuilt $JINX_DIR/jinx-mod.so" >&2
+    '';
+  };
+
   home.file.".local/bin/remmina-dnd-watcher" = {
     executable = true;
     text = ''
