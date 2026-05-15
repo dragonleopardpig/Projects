@@ -2,6 +2,35 @@
 (setq warning-minimum-level :emergency)
 (setq package-enable-at-startup nil)
 
+;; * Dynamic module dlopen on NixOS
+;; Precompiled .so files from ELPA (jinx-mod.so, pdf-tools, vterm-module,
+;; tree-sitter shared libs…) call dlopen() at module-load time and look
+;; up libraries via LD_LIBRARY_PATH. nix-ld only intercepts execve, not
+;; in-process dlopen, so we still need the path explicitly. Prepend the
+;; system profile lib dir before anything that might (require 'jinx).
+(let* ((sys-lib "/run/current-system/sw/lib")
+       (existing (or (getenv "LD_LIBRARY_PATH") "")))
+  (when (file-directory-p sys-lib)
+    (unless (string-match-p (regexp-quote sys-lib) existing)
+      (setenv "LD_LIBRARY_PATH"
+              (if (string-empty-p existing)
+                  sys-lib
+                (concat sys-lib ":" existing))))))
+
+;; Bake an rpath into jinx-mod.so on (re)compile so it always finds
+;; libenchant-2.so.2 regardless of LD_LIBRARY_PATH.  ELPA ships a
+;; prebuilt jinx-mod.so without an rpath; envrc/devenv buffers replace
+;; LD_LIBRARY_PATH, so dlopen() then fails.  When the prebuilt is
+;; missing (e.g. after `rm jinx-mod.so' or an ELPA upgrade), jinx
+;; falls back to compiling from jinx-mod.c with these flags.  The
+;; existing custom-compiled .so survives ELPA upgrades unless ELPA
+;; itself overwrites it; if you see the libenchant error again after
+;; an upgrade, `rm ~/.emacs.d/elpa/jinx-*/jinx-mod.so' and restart.
+(with-eval-after-load 'jinx
+  (setq jinx--compile-flags
+        '("-I." "-O2" "-Wall" "-Wextra" "-fPIC" "-shared"
+          "-Wl,-rpath,/run/current-system/sw/lib")))
+
 ;; * Scimax
 (setq scimax-journal-root-dir "~/Projects/journal/"
       nb-notebook-directory "~/Projects/")
@@ -88,8 +117,12 @@
 (package-install-selected-packages)
 
 ;; * Pyvenv
+;; envrc-global-mode (in language.el) sets up per-buffer PATH/VIRTUAL_ENV
+;; from each project's .envrc, so we no longer hard-pin a single venv
+;; here.  The previous activate'd ~/Projects/python/.devenv/state/venv/
+;; which no longer exists.  Just load the package; activation happens
+;; per-buffer via envrc.
 (require 'pyvenv)
-(pyvenv-activate "~/Projects/python/.devenv/state/venv/")
 
 (setq global-jinx-mode nil)
 

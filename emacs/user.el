@@ -158,6 +158,63 @@
 (add-hook 'org-mode-hook 'follow-mode)
 (setq org-babel-min-lines-for-block-output 1000)
 
+;; * Org LaTeX SVG preview — honour buffer face background
+;; org--make-preview-overlay builds the image spec without :background,
+;; so the SVG canvas is painted with the frame background rather than
+;; the buffer face at the fragment. On a buffer whose effective face
+;; differs from the frame (themes, face-remap, org-modern), the result
+;; is a visible halo around the formula. Advise the overlay-builder to
+;; inject :background = buffer face background and bake the same fill
+;; into the SVG file itself, so the preview blends in regardless of
+;; how Emacs's image layer composites alpha.
+(defvar my/org-svg-preview-debug nil
+  "When non-nil, log my/org-svg-preview-fix-bg activations to *Messages*.")
+
+(defun my/org-svg-preview--buffer-bg ()
+  "Best-effort color string for the buffer's effective background."
+  (let ((bg (or (face-background 'default nil 'default)
+                (frame-parameter nil 'background-color))))
+    (and (stringp bg) bg)))
+
+(defun my/org-svg-preview--bake-bg-into-file (svg-file color)
+  "Insert a background <rect> with COLOR right after <svg ...> in SVG-FILE.
+Idempotent: skips files that already carry the marker class."
+  (when (and svg-file color (file-writable-p svg-file))
+    (with-temp-buffer
+      (insert-file-contents svg-file)
+      (goto-char (point-min))
+      (unless (re-search-forward "class=\"my-bg-bake\"" nil t)
+        (goto-char (point-min))
+        (when (re-search-forward "<svg\\b[^>]*>" nil t)
+          (insert (format
+                   "<rect class=\"my-bg-bake\" x=\"-50%%\" y=\"-50%%\" width=\"200%%\" height=\"200%%\" fill=\"%s\"/>"
+                   color))
+          (write-region (point-min) (point-max) svg-file nil 'silent))))))
+
+(defun my/org-svg-preview-fix-bg (beg _end image &optional imagetype)
+  "Set :background on the just-created Org LaTeX preview overlay at BEG.
+Also bake the background fill into the SVG file so the result is
+self-contained and survives whatever the Emacs image layer does."
+  (when (and imagetype (member imagetype '("svg" svg)))
+    (let ((bg (my/org-svg-preview--buffer-bg))
+          (count 0))
+      (when bg
+        (my/org-svg-preview--bake-bg-into-file image bg)
+        (dolist (ov (overlays-at beg))
+          (when (eq (overlay-get ov 'org-overlay-type) 'org-latex-overlay)
+            (let ((disp (overlay-get ov 'display)))
+              (when (and (consp disp) (eq (car disp) 'image))
+                (overlay-put ov 'display
+                             `(image ,@(plist-put (cdr disp)
+                                                  :background bg)))
+                (cl-incf count)))))
+        (when my/org-svg-preview-debug
+          (message "[org-svg-preview] beg=%s file=%s bg=%s overlays=%d"
+                   beg image bg count))))))
+
+(with-eval-after-load 'org
+  (advice-add 'org--make-preview-overlay :after #'my/org-svg-preview-fix-bg))
+
 ;; * Org Pandoc Import
 (use-package org-pandoc-import
   :vc (:url "https://github.com/tecosaur/org-pandoc-import"

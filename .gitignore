@@ -19,6 +19,7 @@
 **/target/
 **/__pycache__/
 *.pyc
+*.elc
 
 # Tool runtime state at top level (do not commit)
 /.codex

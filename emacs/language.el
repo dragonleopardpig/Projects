@@ -16,15 +16,71 @@
 (add-to-list 'load-path "~/Projects/lsp-bridge")
 (add-to-list 'load-path "~/Projects/flymake-bridge")
 
-;; Set Python path for lsp-bridge - use the python devenv
-(setq lsp-bridge-python-command "~/Projects/python/.devenv/state/venv/bin/python")
+;; ** Dynamic devenv discovery
+;; Previous setup hardcoded ~/Projects/python/.devenv/state/venv/bin/python
+;; for lsp-bridge / jupyter / pyvenv. That directory no longer exists, and
+;; the right interpreter depends on which project the buffer is in anyway.
+;; These helpers walk up from the current buffer to the nearest devenv.
+(defun my/devenv-python-near (&optional dir)
+  "Return abs path of devenv venv python at or above DIR, or nil.
+DIR defaults to the current buffer's directory.  Walks up looking for
+`.devenv/state/venv/bin/python'."
+  (let* ((start (or dir
+                    (and (buffer-file-name)
+                         (file-name-directory (buffer-file-name)))
+                    default-directory))
+         (root (and start
+                    (locate-dominating-file
+                     start
+                     (lambda (d)
+                       (file-executable-p
+                        (expand-file-name ".devenv/state/venv/bin/python" d)))))))
+    (and root (expand-file-name ".devenv/state/venv/bin/python" root))))
+
+(defun my/devenv-bin-near (executable &optional dir)
+  "Return path to EXECUTABLE inside the nearest devenv venv, or nil."
+  (when-let* ((py (my/devenv-python-near dir))
+              (bindir (file-name-directory py))
+              (cand (expand-file-name executable bindir)))
+    (and (file-executable-p cand) cand)))
+
+;; Initial lsp-bridge backend python: try a known-good devenv at load time,
+;; otherwise fall back to PATH python3.  The buffer-specific hook below
+;; updates this as the user moves between projects.
+(setq lsp-bridge-python-command
+      (or (my/devenv-python-near "~/Projects/Kraken-Optical-Simulator/")
+          (my/devenv-python-near "~/Projects/org/")
+          (executable-find "python3")))
+
+(defun my/lsp-bridge-refresh-python ()
+  "Point `lsp-bridge-python-command' at the buffer's devenv python.
+lsp-bridge runs a single backend process per session; if the resolved
+python changes (e.g. you switched projects), restart the backend so the
+new interpreter is picked up."
+  (when (boundp 'lsp-bridge-python-command)
+    (let* ((py (or (my/devenv-python-near)
+                   (executable-find "python3")))
+           (changed (and py (not (string= py lsp-bridge-python-command)))))
+      (when py (setq lsp-bridge-python-command py))
+      (when (and changed
+                 (fboundp 'lsp-bridge-restart-process)
+                 (bound-and-true-p lsp-bridge-mode))
+        (lsp-bridge-restart-process)))))
+
+(add-hook 'python-base-mode-hook #'my/lsp-bridge-refresh-python)
+(add-hook 'lsp-bridge-mode-hook  #'my/lsp-bridge-refresh-python)
 
 ;; Add devenv profile bins to PATH so lsp-bridge can find LSP servers
-;; (clangd, rust-analyzer, basedpyright, etc.)
+;; (clangd, rust-analyzer, basedpyright, etc.)  Each entry is conditional
+;; on the directory existing — missing siblings are silently skipped.
 (dolist (dir '("~/Projects/cpp/.devenv/profile/bin"
               "~/Projects/rust/.devenv/profile/bin"
               "~/Projects/python/.devenv/profile/bin"
-              "~/Projects/python/.devenv/state/venv/bin"))
+              "~/Projects/python/.devenv/state/venv/bin"
+              "~/Projects/Kraken-Optical-Simulator/.devenv/profile/bin"
+              "~/Projects/Kraken-Optical-Simulator/.devenv/state/venv/bin"
+              "~/Projects/org/.devenv/profile/bin"
+              "~/Projects/org/.devenv/state/venv/bin"))
   (let ((expanded (expand-file-name dir)))
     (when (file-directory-p expanded)
       (add-to-list 'exec-path expanded)
@@ -33,19 +89,9 @@
 ;; Keep emacs-jupyter on the project-local venv so the python3 kernelspec
 ;; resolves `python` to the interpreter that actually has ipykernel installed.
 (defun my/jupyter-project-executable ()
-  "Return the preferred Jupyter executable for the current project."
-  (let* ((dir default-directory)
-         (kraken-root (expand-file-name "~/Projects/Kraken-Optical-Simulator/"))
-         (kraken-jupyter (expand-file-name ".devenv/state/venv/bin/jupyter" kraken-root))
-         (default-jupyter (expand-file-name "~/Projects/python/.devenv/state/venv/bin/jupyter")))
-    (cond
-     ((and dir
-           (string-prefix-p kraken-root (expand-file-name dir))
-           (file-exists-p kraken-jupyter))
-      kraken-jupyter)
-     ((file-exists-p default-jupyter)
-      default-jupyter)
-     (t nil))))
+  "Return the Jupyter executable from the buffer's nearest devenv, or nil."
+  (or (my/devenv-bin-near "jupyter")
+      (executable-find "jupyter")))
 
 (defun my/jupyter-project-kernel ()
   "Return the preferred Jupyter kernel name for the current project."
@@ -151,6 +197,20 @@
 
 (require 'flymake-bridge)
 (add-hook 'lsp-bridge-mode-hook #'flymake-bridge-setup)
+
+;; ** Disable flycheck's built-in org-lint checker
+;; flycheck (pulled in via the nix-managed elpa) registers a generic
+;; checker named `org-lint' that destructures each org-lint report and
+;; passes the first vector element straight to `flycheck-error-new-at'.
+;; That element is a *propertized string* (e.g. #("140" ... org-lint-marker
+;; <marker>)), not an integer, so flycheck downstream blows up with
+;;   (Wrong type argument: number-or-marker-p, #("140" ...)).
+;; We use flymake-bridge for diagnostics anyway, so disable the broken
+;; checker rather than wrapping it.
+(with-eval-after-load 'flycheck
+  (setq-default flycheck-disabled-checkers
+                (cons 'org-lint
+                      (default-value 'flycheck-disabled-checkers))))
 
 ;; * Rust
 (require 'lsp-bridge-rust)
