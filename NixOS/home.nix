@@ -1710,6 +1710,7 @@ in
       gc = "git commit -m";
       rebuild = "~/Projects/NixOS/rebuild.sh";
       btop = "btop";
+      direnv-fix = "rm -f .devenv/nix-eval-cache.db && direnv reload";
     };
     initExtra = ''
       fastfetch
