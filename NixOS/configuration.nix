@@ -655,6 +655,7 @@ in
 
     # ── Git & Version Control ──
     git-credential-manager     # Cross-platform Git credential storage
+    gh                         # GitHub CLI
 
     # ── PDF & Document Viewers ──
     # Sioyek wrapped to use XWayland (native Wayland has issues with NVIDIA)
