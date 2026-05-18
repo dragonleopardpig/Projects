@@ -1,0 +1,122 @@
+diff --git a/README.md b/README.md
+index 01bddde..0aac745 100644
+--- a/README.md
++++ b/README.md
+@@ -107,6 +107,7 @@ transparency=50
+ - `Ctrl+z`: Undo
+ - `Ctrl+Shift+z` or `Ctrl+y`: Redo
+ - `Ctrl+s`: Save to file (see man page)
++- `Ctrl+Shift+s`: Save to file with a "Save As" dialog
+ - `Ctrl+c`: Copy to clipboard
+ - `Escape` or `q` or `Ctrl+w`: Quit swappy
+ 
+diff --git a/res/swappy.glade b/res/swappy.glade
+index e12a14f..2ca63da 100644
+--- a/res/swappy.glade
++++ b/res/swappy.glade
+@@ -27,6 +27,11 @@
+     <property name="can_focus">False</property>
+     <property name="icon_name">document-save-symbolic</property>
+   </object>
++  <object class="GtkImage" id="img-save-as-surface">
++    <property name="visible">True</property>
++    <property name="can_focus">False</property>
++    <property name="icon_name">document-save-as-symbolic</property>
++  </object>
+   <object class="GtkImage" id="img-toggle-panel">
+     <property name="visible">True</property>
+     <property name="can_focus">False</property>
+@@ -879,6 +884,22 @@
+                 <property name="position">2</property>
+               </packing>
+             </child>
++            <child>
++              <object class="GtkButton" id="save-as">
++                <property name="visible">True</property>
++                <property name="can_focus">False</property>
++                <property name="receives_default">True</property>
++                <property name="tooltip_text" translatable="yes">Save Surface As...</property>
++                <property name="image">img-save-as-surface</property>
++                <property name="always_show_image">True</property>
++                <signal name="clicked" handler="save_as_clicked_handler" swapped="no"/>
++              </object>
++              <packing>
++                <property name="expand">False</property>
++                <property name="fill">True</property>
++                <property name="position">3</property>
++              </packing>
++            </child>
+           </object>
+           <packing>
+             <property name="pack_type">end</property>
+diff --git a/src/application.c b/src/application.c
+index 975e572..22a5ea8 100644
+--- a/src/application.c
++++ b/src/application.c
+@@ -377,6 +377,44 @@ void save_clicked_handler(GtkWidget *widget, struct swappy_state *state) {
+   save_state_to_file_or_folder(state, NULL);
+ }
+ 
++void save_as_clicked_handler(GtkWidget *widget, struct swappy_state *state) {
++  // Commit a potential paint (e.g. text being written)
++  commit_state(state);
++
++  GtkFileChooserNative *dialog = gtk_file_chooser_native_new(
++      "Save Screenshot As", state->ui->window, GTK_FILE_CHOOSER_ACTION_SAVE,
++      "_Save", "_Cancel");
++  GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
++
++  gtk_file_chooser_set_do_overwrite_confirmation(chooser, TRUE);
++
++  if (state->config->save_dir) {
++    gtk_file_chooser_set_current_folder(chooser, state->config->save_dir);
++  }
++
++  if (state->config->save_filename_format) {
++    char filename[255];
++    time_t current_time = time(NULL);
++    size_t bytes =
++        strftime(filename, sizeof(filename),
++                 state->config->save_filename_format, localtime(&current_time));
++    if (bytes > 0) {
++      gtk_file_chooser_set_current_name(chooser, filename);
++    }
++  }
++
++  gint response = gtk_native_dialog_run(GTK_NATIVE_DIALOG(dialog));
++  if (response == GTK_RESPONSE_ACCEPT) {
++    char *path = gtk_file_chooser_get_filename(chooser);
++    if (path) {
++      save_state_to_file_or_folder(state, path);
++      g_free(path);
++    }
++  }
++
++  g_object_unref(dialog);
++}
++
+ void clear_clicked_handler(GtkWidget *widget, struct swappy_state *state) {
+   action_clear(state);
+ }
+@@ -442,6 +480,9 @@ void window_keypress_handler(GtkWidget *widget, GdkEventKey *event,
+       case GDK_KEY_s:
+         save_state_to_file_or_folder(state, NULL);
+         break;
++      case GDK_KEY_S:
++        save_as_clicked_handler(NULL, state);
++        break;
+       case GDK_KEY_b:
+         action_toggle_painting_panel(state, NULL);
+         break;
+diff --git a/swappy.1.scd b/swappy.1.scd
+index 2d3c37c..42e8203 100644
+--- a/swappy.1.scd
++++ b/swappy.1.scd
+@@ -123,6 +123,7 @@ formats are: standard name (one of: https://github.com/rgb-x/system/blob/master/
+ - *Ctrl+z*: Undo
+ - *Ctrl+Shift+z* or *Ctrl+y*: Redo
+ - *Ctrl+s*: Save to file (see man page)
++- *Ctrl+Shift+s*: Save to file with a "Save As" dialog
+ - *Ctrl+c*: Copy to clipboard
+ - *Escape* or *q* or *Ctrl+w*: Quit swappy
+ 

@@ -13,6 +13,16 @@ clipboard consumers can paste it without conversion.
 
 Upstream PR: <https://github.com/jtheoof/swappy/pull/221> (open, no traction).
 
+### `swappy-save-as-dialog.patch`
+
+Adds a `Save As...` toolbar button and `Ctrl+Shift+S` keybind to `swappy`.
+Opens a `GtkFileChooserNative` pre-filled with the configured `save_dir` and
+`save_filename_format` (strftime-expanded), so the default action matches the
+existing quick-save while still allowing rename/relocate.
+
+Sourced from the `save-as` branch of the local fork
+(`git@github.com:dragonleopardpig/swappy.git`), commit `22e39a6`.
+
 ### `megasync-hyprland.patch` and `megasync-sync-header-labels.patch`
 
 Make MEGAsync usable on Hyprland/Wayland and improve sync/backup table

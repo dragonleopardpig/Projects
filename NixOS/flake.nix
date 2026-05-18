@@ -32,6 +32,7 @@
         swappy = prev.swappy.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/swappy-multi-mime-clipboard.patch
+            ./patches/swappy-save-as-dialog.patch
           ];
         });
 
