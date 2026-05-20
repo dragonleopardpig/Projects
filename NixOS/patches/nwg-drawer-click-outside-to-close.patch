@@ -1,0 +1,24 @@
+--- a/main.go
++++ b/main.go
+@@ -605,10 +605,20 @@
+ 		beenScrolled = true
+ 	})
+ 
++	// A press on the empty background arms a potential click-to-close; a
++	// scroll before the matching release cancels it. Mirrors the per-app
++	// button logic so a touch drag-to-scroll never dismisses the drawer.
++	resultWindow.Connect("button-press-event", func() {
++		beenScrolled = false
++	})
++
+ 	resultWindow.Connect("button-release-event", func(_ *gtk.ScrolledWindow, event *gdk.Event) bool {
+ 		//btnEvent := gdk.EventButtonNewFromEvent(event)
+ 		btnEvent := event.AsButton()
+-		if btnEvent.Button() == 3 {
++		// Close on right-click anywhere, or on a plain left-click that lands
++		// on empty background (macOS Launchpad style). Clicks on an app icon
++		// are consumed by the icon's own handler and never reach this point.
++		if btnEvent.Button() == 3 || (btnEvent.Button() == 1 && !beenScrolled) {
+ 			if !*resident {
+ 				gtk.MainQuit()
+ 			} else {

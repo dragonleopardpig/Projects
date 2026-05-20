@@ -23,6 +23,18 @@ existing quick-save while still allowing rename/relocate.
 Sourced from the `save-as` branch of the local fork
 (`git@github.com:dragonleopardpig/swappy.git`), commit `22e39a6`.
 
+### `nwg-drawer-click-outside-to-close.patch`
+
+Makes a plain left-click on the empty background of `nwg-drawer` dismiss the
+drawer (macOS Launchpad style). Upstream only closes on right-click or
+`Escape`. A `button-press-event` handler on `resultWindow` arms the gesture
+and reuses the existing `beenScrolled` flag, so a touch drag-to-scroll that
+ends over empty space does not dismiss the drawer. Clicks on an app icon are
+consumed by the icon's own handler and never reach this path.
+
+Local feature patch (no upstream PR yet). Patches only `main.go`, so the
+`buildGoModule` `vendorHash` is unaffected.
+
 ### `megasync-hyprland.patch` and `megasync-sync-header-labels.patch`
 
 Make MEGAsync usable on Hyprland/Wayland and improve sync/backup table

@@ -41,7 +41,14 @@
         # Makefile copies all three. Without img/{lock,sleep,reboot,exit,
         # poweroff}.svg, the power-bar icons fall back to a "?" placeholder.
         # Drop once upstreamed.
+        #
+        # The patch makes a plain left-click on empty background dismiss the
+        # drawer (macOS Launchpad style); upstream only closes on right-click
+        # or Escape. Patches only main.go, so the vendorHash is unaffected.
         nwg-drawer = prev.nwg-drawer.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ./patches/nwg-drawer-click-outside-to-close.patch
+          ];
           preInstall = (old.preInstall or "") + ''
             cp -r img $out/share/nwg-drawer/
           '';

@@ -423,12 +423,14 @@ in
       border-bottom: 1px solid #2a2a2a;
     }
 
-    /* File search results box */
+    /* File search results box — nwg-drawer always reserves this widget (grid
+       width x 1px) even when empty, so giving it a border/background paints a
+       centered bar across the drawer. Keep it chromeless; the result buttons
+       below carry their own styling from the button rules above. */
     #files-box {
-      padding: 6px;
-      border: 1px solid #2a2a2a;
-      border-radius: 12px;
-      background-color: rgba(26, 26, 26, 0.6);
+      padding: 0;
+      border: none;
+      background: none;
     }
 
     #math-label {
