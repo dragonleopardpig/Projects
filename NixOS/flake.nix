@@ -36,6 +36,17 @@
           ];
         });
 
+        # nixpkgs nwg-drawer (0.7.5) preInstall copies desktop-directories +
+        # drawer.css to $out/share/nwg-drawer but forgets img/ — the upstream
+        # Makefile copies all three. Without img/{lock,sleep,reboot,exit,
+        # poweroff}.svg, the power-bar icons fall back to a "?" placeholder.
+        # Drop once upstreamed.
+        nwg-drawer = prev.nwg-drawer.overrideAttrs (old: {
+          preInstall = (old.preInstall or "") + ''
+            cp -r img $out/share/nwg-drawer/
+          '';
+        });
+
         # Two ProtonVPN tray fixes, both targeted at upstream:
         #   * 0004 re-registers the SNI item when the tray host restarts.
         #     Without it the icon disappears whenever the bar reloads.

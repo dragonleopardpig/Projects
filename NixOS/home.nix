@@ -358,6 +358,93 @@ in
     zen_mode = False
   '';
 
+  # nwg-drawer (fullscreen Unity/GNOME-Activities-style app grid) — cyberpunk
+  # palette matching waybar. Auto-loaded from $XDG_CONFIG_HOME/nwg-drawer/.
+  xdg.configFile."nwg-drawer/drawer.css".text = ''
+    /* Palette: bg #0a0a0a   card #1a1a1a   border #2a2a2a
+       yellow #ffd700   cyan #00ffff   pink #ff69b4
+       orange #ff4500   green #32cd32   muted #585858 */
+
+    * {
+      font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font", sans-serif;
+      font-size: 13px;
+      color: #ffd700;
+    }
+
+    window {
+      background-color: rgba(10, 10, 10, 0.92);
+    }
+
+    /* Search box at the top of the drawer */
+    entry {
+      background-color: #1a1a1a;
+      color: #ffd700;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 8px 14px;
+      caret-color: #00ffff;
+    }
+    entry:focus {
+      border: 1px solid #00ffff;
+    }
+    entry selection {
+      background-color: #ff69b4;
+      color: #0a0a0a;
+    }
+
+    /* App icons + category buttons */
+    button, image {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 6px;
+    }
+    button:hover {
+      background-color: #1a1a1a;
+      border: 1px solid #ff69b4;
+    }
+    button:focus,
+    button:active {
+      background-color: #1a1a1a;
+      border: 1px solid #00ffff;
+      color: #00ffff;
+    }
+    label { color: #ffd700; }
+
+    #category-button {
+      margin: 0 8px;
+      color: #585858;
+    }
+    #category-button:hover { color: #ffd700; }
+
+    /* Pinned strip across the top */
+    #pinned-box {
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    /* File search results box */
+    #files-box {
+      padding: 6px;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      background-color: rgba(26, 26, 26, 0.6);
+    }
+
+    #math-label {
+      font-weight: bold;
+      font-size: 16px;
+      color: #32cd32;
+    }
+
+    tooltip {
+      background-color: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+    }
+    tooltip label { color: #ffd700; padding: 4px; }
+  '';
+
   home.file.".face.icon".source = ./assets/face.png;
 
   # Sioyek wrapper: force XWayland to avoid NVIDIA Wayland window mapping issues
@@ -721,6 +808,31 @@ in
           exec kitty --class="$class" -e "$@"
         fi
       fi
+    '';
+  };
+
+  home.file.".local/bin/launch-app-drawer" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      # Toggle nwg-drawer, a fullscreen Unity/GNOME-Activities-style app grid.
+      # -ovl uses the overlay layer so it covers waybar; -k enables keyboard
+      # input for the search box. Powers commands are tuned for Hyprland.
+      if ${pkgs.procps}/bin/pgrep -x nwg-drawer >/dev/null; then
+        exec ${pkgs.nwg-drawer}/bin/nwg-drawer -close
+      fi
+      exec ${pkgs.nwg-drawer}/bin/nwg-drawer \
+        -wm hyprland \
+        -ovl -k \
+        -c 8 -is 64 -spacing 20 \
+        -term kitty \
+        -fm "$HOME/.local/bin/nemo-x11" \
+        -closebtn right \
+        -pblock hyprlock \
+        -pbexit "hyprctl dispatch exit" \
+        -pbsleep "systemctl suspend" \
+        -pbreboot "systemctl reboot" \
+        -pbpoweroff "systemctl poweroff"
     '';
   };
 
@@ -1152,8 +1264,8 @@ in
 
       "custom/launcher" = {
         format = "";  # NixOS logo
-        on-click = "walker";
-        tooltip-format = "Launch app (walker)";
+        on-click = "/home/thinky/.local/bin/launch-app-drawer";
+        tooltip-format = "Application drawer (fullscreen)";
       };
 
       "hyprland/workspaces" = {
@@ -1519,6 +1631,7 @@ in
     mpvpaper
     gnome-disk-utility
     xdg-desktop-portal-gtk
+    nwg-drawer
   ];
 
   # basic configuration of git, please change to your own
