@@ -9,7 +9,7 @@ index 01bddde..0aac745 100644
 +- `Ctrl+Shift+s`: Save to file with a "Save As" dialog
  - `Ctrl+c`: Copy to clipboard
  - `Escape` or `q` or `Ctrl+w`: Quit swappy
- 
+
 diff --git a/res/swappy.glade b/res/swappy.glade
 index e12a14f..2ca63da 100644
 --- a/res/swappy.glade
@@ -53,10 +53,10 @@ diff --git a/src/application.c b/src/application.c
 index 975e572..22a5ea8 100644
 --- a/src/application.c
 +++ b/src/application.c
-@@ -377,6 +377,44 @@ void save_clicked_handler(GtkWidget *widget, struct swappy_state *state) {
+@@ -377,6 +377,67 @@ void save_clicked_handler(GtkWidget *widget, struct swappy_state *state) {
    save_state_to_file_or_folder(state, NULL);
  }
- 
+
 +void save_as_clicked_handler(GtkWidget *widget, struct swappy_state *state) {
 +  // Commit a potential paint (e.g. text being written)
 +  commit_state(state);
@@ -68,9 +68,23 @@ index 975e572..22a5ea8 100644
 +
 +  gtk_file_chooser_set_do_overwrite_confirmation(chooser, TRUE);
 +
-+  if (state->config->save_dir) {
++  // Remember the most-recently-used Save As directory across runs by
++  // persisting it under $XDG_STATE_HOME/swappy/last_save_dir. Falls back
++  // to the configured save_dir when the state file is missing or stale.
++  char *state_path = g_build_filename(g_get_user_state_dir(), "swappy",
++                                      "last_save_dir", NULL);
++  char *last_dir = NULL;
++  if (g_file_get_contents(state_path, &last_dir, NULL, NULL)) {
++    g_strstrip(last_dir);
++  }
++
++  if (last_dir && *last_dir &&
++      g_file_test(last_dir, G_FILE_TEST_IS_DIR)) {
++    gtk_file_chooser_set_current_folder(chooser, last_dir);
++  } else if (state->config->save_dir) {
 +    gtk_file_chooser_set_current_folder(chooser, state->config->save_dir);
 +  }
++  g_clear_pointer(&last_dir, g_free);
 +
 +  if (state->config->save_filename_format) {
 +    char filename[255];
@@ -88,10 +102,19 @@ index 975e572..22a5ea8 100644
 +    char *path = gtk_file_chooser_get_filename(chooser);
 +    if (path) {
 +      save_state_to_file_or_folder(state, path);
++
++      char *chosen_dir = g_path_get_dirname(path);
++      char *state_dir = g_path_get_dirname(state_path);
++      if (g_mkdir_with_parents(state_dir, 0700) == 0) {
++        g_file_set_contents(state_path, chosen_dir, -1, NULL);
++      }
++      g_free(state_dir);
++      g_free(chosen_dir);
 +      g_free(path);
 +    }
 +  }
 +
++  g_free(state_path);
 +  g_object_unref(dialog);
 +}
 +
@@ -119,4 +142,4 @@ index 2d3c37c..42e8203 100644
 +- *Ctrl+Shift+s*: Save to file with a "Save As" dialog
  - *Ctrl+c*: Copy to clipboard
  - *Escape* or *q* or *Ctrl+w*: Quit swappy
- 
+
