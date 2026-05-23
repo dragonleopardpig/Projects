@@ -299,6 +299,17 @@ in
       dependencies.astal = "${pkgs.astal.gjs}/share/astal/gjs";
     }}
     JSON
+    # Nix-store absolute paths for the existing Python widgets, baked in at
+    # build time so the TSX widgets can poll them without hardcoding paths.
+    mkdir -p $out/lib
+    cat > $out/lib/paths.ts <<'TS'
+    export const WEATHER_CMD =
+        "${pkgs.curl}/bin/curl -sf 'https://wttr.in/Singapore?format=%c+%t'";
+    export const HOLIDAY_CMD =
+        "${pkgs.python3}/bin/python3 ${./assets/waybar-sg-holidays.py} ${./assets/calendars}";
+    export const LUNAR_CMD =
+        "${pythonLunar}/bin/python3 ${./assets/waybar-lunar.py}";
+    TS
   '';
 
 
@@ -1660,7 +1671,16 @@ in
     gobject-introspection
     # AGS v2 runner; uses astal libraries from nixpkgs. Config lives in
     # ~/.config/ags (symlinked from the NixOS repo via xdg.configFile below).
-    ags
+    # extraPackages puts the astal GIR typelibs on GI_TYPELIB_PATH so the
+    # JSX widgets can `import "gi://AstalBattery"` etc. at runtime.
+    (ags.override {
+      extraPackages = (with pkgs.astal; [
+        battery hyprland mpris network notifd powerprofiles tray wireplumber
+      ]) ++ [
+        # astal.network wraps libnm — its GIR (NM-1.0) ships with networkmanager.
+        pkgs.networkmanager
+      ];
+    })
     libnotify
     megasync
 
