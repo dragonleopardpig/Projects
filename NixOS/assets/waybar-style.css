@@ -107,6 +107,7 @@ tooltip label { color: #ffd700; padding: 4px; }
 #privacy-item-audio-out   { color: #ffd700; padding: 0 4px; }
 #custom-weather   { color: #00ffff; padding: 0 8px; }
 #clock            { color: #ffd700; padding: 0 10px; }
+#custom-lunar     { color: #ff7f50; padding: 0 8px; }
 #custom-holiday   { color: #ff69b4; padding: 0 8px; }
 #custom-holiday.today { color: #ff4500; font-weight: bold; }
 #custom-holiday.school-upcoming { color: #00ffff; }

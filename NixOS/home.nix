@@ -19,6 +19,8 @@ let
     { nativeBuildInputs = [ pkgs.imagemagick ]; } ''
     magick "${pkgs.megasync.src}/src/MEGAUpdater/app_ico.ico[0]" -resize 256x256 "PNG32:$out"
   '';
+  # Python with lunarcalendar for the custom/lunar waybar module.
+  pythonLunar = pkgs.python3.withPackages (ps: [ ps.lunarcalendar ]);
 in
 {
   home.username = "thinky";
@@ -1261,7 +1263,7 @@ in
         "privacy"
         "network" "wireplumber" "pulseaudio/slider" "battery"
         "idle_inhibitor" "keyboard-state"
-        "tray" "custom/weather" "clock" "custom/holiday" "custom/notification" "custom/power"
+        "tray" "custom/weather" "clock" "custom/lunar" "custom/holiday" "custom/notification" "custom/power"
       ];
 
       "custom/launcher" = {
@@ -1469,6 +1471,14 @@ in
         tooltip = true;
       };
 
+      "custom/lunar" = {
+        exec = "${pythonLunar}/bin/python3 ${./assets/waybar-lunar.py}";
+        return-type = "json";
+        interval = 3600;
+        format = "{}";
+        tooltip = true;
+      };
+
       clock = {
         format = " {:%a %d %b  %H:%M}";
         format-alt = " {:%Y-%m-%d %H:%M:%S}";
@@ -1483,6 +1493,8 @@ in
             days     = "<span color='#ffd700'><b>{}</b></span>";
             weekdays = "<span color='#00ffff'><b>{}</b></span>";
             today    = "<span color='#ff4500'><b>{}</b></span>";
+            # Week numbers: dim grey + italic, no bold, so they don't read as dates.
+            weeks    = "<span color='#7a7a7a' style='italic' size='smaller'>W{}</span>";
           };
         };
         actions = {
