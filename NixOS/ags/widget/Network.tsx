@@ -1,5 +1,6 @@
 import { bind } from "astal"
 import AstalNetwork from "gi://AstalNetwork"
+import { ICON } from "../lib/icons"
 
 export default function Network() {
     const net = AstalNetwork.get_default()
@@ -8,10 +9,12 @@ export default function Network() {
 
     if (wifi) {
         return <box className="Network">
-            <label label={bind(wifi, "ssid").as(s => ` ${s ?? "—"}`)} />
+            <label label={bind(wifi, "ssid").as(s =>
+                s ? `${ICON.wifi}  ${s}` : `${ICON.nowifi}  —`
+            )} />
         </box>
     }
     return <box className="Network">
-        <label label={bind(wired, "state").as(s => ` ${s}`)} />
+        <label label={bind(wired, "state").as(s => `${ICON.ethernet}  ${s}`)} />
     </box>
 }

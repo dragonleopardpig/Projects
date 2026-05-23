@@ -1,7 +1,7 @@
 window.Bar {
     background: transparent;
     color: #ffd700;
-    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font Mono", monospace;
     font-weight: bold;
     font-size: 13px;
 
@@ -13,40 +13,72 @@ window.Bar {
 
     label { padding: 0 4px; }
 
-    .Workspaces {
-        button {
-            background: transparent;
-            border: none;
-            color: #555;
-            padding: 0 6px;
-            min-width: 18px;
+    button {
+        background: transparent;
+        border: none;
+        padding: 0 6px;
 
-            &.focused {
-                color: #00ffff;
-                text-shadow: 0 0 4px #00ffff;
-            }
-
-            &:hover { color: #ff69b4; }
-        }
+        &:hover { background: rgba(255, 105, 180, 0.15); }
     }
 
-    .Window  { color: #ff69b4; padding: 0 8px; }
-    .Clock   { color: #ffd700; padding: 0 8px; }
-    .Battery { color: #ffd700; }
-    .Network { color: #00ffff; }
-    .Audio   { color: #ffd700; }
-    .Weather { color: #00ffff; padding: 0 8px; }
-    .Lunar   { color: #ff7f50; padding: 0 8px; }
-    .Holiday { color: #ff69b4; padding: 0 8px; }
-    .Holiday.today { color: #ff4500; font-weight: bold; }
+    .Workspaces button {
+        color: #555;
+        min-width: 18px;
+
+        &.focused {
+            color: #00ffff;
+            text-shadow: 0 0 4px #00ffff;
+        }
+
+        &:hover { color: #ff69b4; }
+    }
+
+    .Window         { color: #ff69b4; padding: 0 8px; }
+    .Clock          { color: #ffd700; padding: 0 8px; }
+    .Battery        { color: #ffd700; }
+    .Network        { color: #00ffff; }
+    .AudioSlider    { color: #ffd700; }
+    .Weather        { color: #00ffff; padding: 0 8px; }
+    .Lunar          { color: #ff7f50; padding: 0 8px; }
+    .Holiday        { color: #ff69b4; padding: 0 8px; }
+    .Holiday.today  { color: #ff4500; font-weight: bold; }
     .Holiday.school-upcoming { color: #00ffff; }
     .Holiday.school-today    { color: #ffd700; font-weight: bold; }
 
-    .SysTray {
-        menubutton {
-            background: transparent;
-            border: none;
-            padding: 0 4px;
-        }
+    .Cpu            { color: #ff69b4; }
+    .Memory         { color: #ffd700; }
+    .Disk           { color: #00ffff; }
+    .Temperature    { color: #ff4500; }
+    .SystemdFailed  { color: #ff4500; font-weight: bold; }
+
+    .Mpris          { color: #ff69b4; }
+    .Notification   { color: #ffd700; }
+    .Power          { color: #ff4500; font-size: 14px; padding: 0 8px; }
+    .Power:hover    { color: #ff69b4; }
+
+    .KeyboardState .led.on  { color: #ffd700; }
+    .KeyboardState .led.off { color: #444; }
+
+    .SysTray menubutton {
+        background: transparent;
+        border: none;
+        padding: 0 4px;
+    }
+
+    /* AudioSlider widgets */
+    .AudioSlider trough {
+        min-height: 6px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 3px;
+    }
+    .AudioSlider trough highlight {
+        background: #ffd700;
+        border-radius: 3px;
+    }
+    .AudioSlider slider {
+        background: #ff69b4;
+        border-radius: 50%;
+        min-width: 12px;
+        min-height: 12px;
     }
 }

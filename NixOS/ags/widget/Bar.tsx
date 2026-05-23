@@ -4,11 +4,20 @@ import Window from "./Window"
 import Clock from "./Clock"
 import Battery from "./Battery"
 import Network from "./Network"
-import Audio from "./Audio"
+import AudioSlider from "./AudioSlider"
 import SysTray from "./SysTray"
 import Weather from "./Weather"
 import Holiday from "./Holiday"
 import Lunar from "./Lunar"
+import Cpu from "./Cpu"
+import Memory from "./Memory"
+import Disk from "./Disk"
+import Temperature from "./Temperature"
+import SystemdFailed from "./SystemdFailed"
+import KeyboardState from "./KeyboardState"
+import Mpris from "./Mpris"
+import Power from "./Power"
+import Notification from "./Notification"
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
     const { BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
@@ -22,17 +31,26 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
         <centerbox>
             <box halign={Gtk.Align.START} spacing={6}>
                 <Workspaces />
+                <Cpu />
+                <Memory />
+                <Disk />
+                <Temperature />
+                <SystemdFailed />
+                <Mpris />
             </box>
             <Window />
             <box halign={Gtk.Align.END} spacing={6}>
-                <SysTray />
-                <Audio />
                 <Network />
+                <AudioSlider />
                 <Battery />
+                <KeyboardState />
+                <SysTray />
                 <Weather />
                 <Clock />
                 <Lunar />
                 <Holiday />
+                <Notification />
+                <Power />
             </box>
         </centerbox>
     </window>

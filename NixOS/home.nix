@@ -293,6 +293,7 @@ in
   xdg.configFile."ags".source = pkgs.runCommand "ags-config" { } ''
     mkdir -p $out
     cp -r ${./ags}/. $out/
+    chmod -R u+w $out
     cat > $out/package.json <<'JSON'
     ${builtins.toJSON {
       name = "astal-shell";
@@ -303,12 +304,17 @@ in
     # build time so the TSX widgets can poll them without hardcoding paths.
     mkdir -p $out/lib
     cat > $out/lib/paths.ts <<'TS'
+    export const HOST = "${osConfig.networking.hostName}";
     export const WEATHER_CMD =
         "${pkgs.curl}/bin/curl -sf 'https://wttr.in/Singapore?format=%c+%t'";
     export const HOLIDAY_CMD =
         "${pkgs.python3}/bin/python3 ${./assets/waybar-sg-holidays.py} ${./assets/calendars}";
     export const LUNAR_CMD =
         "${pythonLunar}/bin/python3 ${./assets/waybar-lunar.py}";
+    export const SWAYNC_WATCH = ["swaync-client", "-swb"];
+    export const SWAYNC_TOGGLE = "swaync-client -t -sw";
+    export const SWAYNC_DND = "swaync-client -d -sw";
+    export const WLOGOUT_CMD = "wlogout";
     TS
   '';
 

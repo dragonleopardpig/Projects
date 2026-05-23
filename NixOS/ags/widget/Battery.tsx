@@ -1,5 +1,6 @@
 import { bind } from "astal"
 import AstalBattery from "gi://AstalBattery"
+import { ICON } from "../lib/icons"
 
 export default function Battery() {
     const bat = AstalBattery.get_default()
@@ -10,7 +11,7 @@ export default function Battery() {
         visible={bind(bat, "isPresent")}>
         <label
             label={bind(bat, "percentage").as(p =>
-                ` ${Math.round((p ?? 0) * 100)}%`
+                `${ICON.battery}  ${Math.round((p ?? 0) * 100)}%`
             )}
         />
     </box>
