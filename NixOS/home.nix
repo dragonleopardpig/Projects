@@ -282,6 +282,26 @@ in
   };
   
   xdg.configFile."uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
+
+  # ── AGS v2 (Astal) config ────────────────────────────────────────────
+  # Source files live in NixOS/ags/. We assemble the dir as a single
+  # derivation so sibling imports (./widget/Bar, ./style.scss) resolve
+  # under the same store path — esbuild follows symlink targets, so
+  # per-file xdg.configFile entries each land in their own store path
+  # and break relative imports. package.json is generated here because
+  # it pins astal-gjs to a nix store path that varies by revision.
+  xdg.configFile."ags".source = pkgs.runCommand "ags-config" { } ''
+    mkdir -p $out
+    cp -r ${./ags}/. $out/
+    cat > $out/package.json <<'JSON'
+    ${builtins.toJSON {
+      name = "astal-shell";
+      dependencies.astal = "${pkgs.astal.gjs}/share/astal/gjs";
+    }}
+    JSON
+  '';
+
+
   xdg.configFile."swappy/config".text = ''
     [Default]
     save_dir=$HOME/Pictures/Screenshots
@@ -1218,6 +1238,10 @@ in
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
                     "uwsm app -- waybar"
+                    # AGS v2 (Astal) — placeholder bar on the bottom edge while
+                    # we iteratively port waybar modules. Remove waybar exec
+                    # once parity is reached.
+                    "uwsm app -- ags run"
                     # swaync is launched by services.swaync (home-manager systemd unit);
                     # do not duplicate here or the unit fails with "instance already running".
                     # awww-daemon must be running before random-wallpaper can talk to it
@@ -1634,6 +1658,9 @@ in
     (python3.withPackages (ps: with ps; [ pygobject3 ]))
     gtk3
     gobject-introspection
+    # AGS v2 runner; uses astal libraries from nixpkgs. Config lives in
+    # ~/.config/ags (symlinked from the NixOS repo via xdg.configFile below).
+    ags
     libnotify
     megasync
 
