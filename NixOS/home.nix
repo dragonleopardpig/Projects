@@ -1261,7 +1261,7 @@ in
         "privacy"
         "network" "wireplumber" "pulseaudio/slider" "battery"
         "idle_inhibitor" "keyboard-state"
-        "tray" "custom/weather" "clock" "custom/notification" "custom/power"
+        "tray" "custom/weather" "clock" "custom/holiday" "custom/notification" "custom/power"
       ];
 
       "custom/launcher" = {
@@ -1457,6 +1457,16 @@ in
         format = "{}";
         on-click = "~/.local/bin/toggle-app wttr bash -c '${pkgs.curl}/bin/curl -s wttr.in/Singapore; echo; read -n1 -p \"press any key…\"'";
         on-click-right = "~/.local/bin/toggle-app wttr-fc bash -c '${pkgs.curl}/bin/curl -s wttr.in/Singapore?2 | less -R'";
+      };
+
+      "custom/holiday" = {
+        # Reads every *.ics in assets/calendars/. Drop in next year's file
+        # (e.g. sg-holidays-2027.ics) and rebuild — no code change needed.
+        exec = "${pkgs.python3}/bin/python3 ${./assets/waybar-sg-holidays.py} ${./assets/calendars}";
+        return-type = "json";
+        interval = 3600;
+        format = "{}";
+        tooltip = true;
       };
 
       clock = {

@@ -107,6 +107,10 @@ tooltip label { color: #ffd700; padding: 4px; }
 #privacy-item-audio-out   { color: #ffd700; padding: 0 4px; }
 #custom-weather   { color: #00ffff; padding: 0 8px; }
 #clock            { color: #ffd700; padding: 0 10px; }
+#custom-holiday   { color: #ff69b4; padding: 0 8px; }
+#custom-holiday.today { color: #ff4500; font-weight: bold; }
+#custom-holiday.school-upcoming { color: #00ffff; }
+#custom-holiday.school-today    { color: #ffd700; font-weight: bold; }
 #custom-notification { color: #ffd700; padding: 0 8px; }
 #custom-power     { color: #ff4500; padding: 0 12px; font-size: 14px; }
 #custom-power:hover { color: #ff69b4; }
