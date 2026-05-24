@@ -18,5 +18,8 @@ export const ICON = {
     power:      "\u{f0425}", // nf-md-power
     play:       "\u{f04b}",  // nf-fa-play
     pause:      "\u{f04c}",  // nf-fa-pause
+    prev:       "\u{f04a}",  // nf-fa-backward
+    next:       "\u{f04e}",  // nf-fa-forward
+    music:      "\u{f001}",  // nf-fa-music
     caps:       "\u{f11c}",  // nf-fa-keyboard_o
 }

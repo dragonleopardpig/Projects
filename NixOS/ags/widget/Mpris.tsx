@@ -1,5 +1,5 @@
 import { bind } from "astal"
-import { Gtk } from "astal/gtk3"
+import { App, Gtk } from "astal/gtk3"
 import Mpris from "gi://AstalMpris"
 import { ICON } from "../lib/icons"
 
@@ -13,16 +13,24 @@ export default function MprisWidget() {
             const p = players[0]
             if (!p) return <box />
             return <box spacing={4}>
-                <button onClicked={() => p.play_pause()}>
+                <button
+                    className="MprisPlay"
+                    tooltipText="Play/Pause"
+                    onClicked={() => p.play_pause()}>
                     <label label={bind(p, "playbackStatus").as(s =>
                         s === Mpris.PlaybackStatus.PLAYING ? ICON.pause : ICON.play
                     )} />
                 </button>
-                <label
-                    label={bind(p, "title").as(t => t ?? "")}
-                    maxWidthChars={28}
-                    ellipsize={Gtk.PangoEllipsizeMode?.END ?? 3}
-                />
+                <button
+                    className="MprisTitle"
+                    tooltipText="Open Now Playing"
+                    onClicked={() => App.toggle_window("now-playing")}>
+                    <label
+                        label={bind(p, "title").as(t => t ?? "")}
+                        maxWidthChars={28}
+                        ellipsize={Gtk.PangoEllipsizeMode?.END ?? 3}
+                    />
+                </button>
             </box>
         })}
     </box>
