@@ -89,7 +89,8 @@ export default function AppDrawer() {
         application={App}
         visible={false}
         keymode={Astal.Keymode.EXCLUSIVE}
-        exclusivity={Astal.Exclusivity.IGNORE}
+        // NORMAL keeps the bar visible & clickable; Bar handles dismiss.
+        exclusivity={Astal.Exclusivity.NORMAL}
         anchor={TOP | BOTTOM | LEFT | RIGHT}
         layer={Astal.Layer.OVERLAY}
         onShow={() => {

@@ -164,7 +164,7 @@ function WeatherCard() {
 
 // ── Panel ─────────────────────────────────────────────────────────
 export default function ControlCenter() {
-    const { BOTTOM, RIGHT } = Astal.WindowAnchor
+    const { TOP, BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
 
     return <window
         name="control-center"
@@ -172,23 +172,38 @@ export default function ControlCenter() {
         application={App}
         visible={false}
         keymode={Astal.Keymode.ON_DEMAND}
-        anchor={BOTTOM | RIGHT}
+        // NORMAL respects the bar's reserved zone, so the panel sits above
+        // the bar rather than covering it. Bar clicks dismiss via Bar.tsx.
+        exclusivity={Astal.Exclusivity.NORMAL}
+        anchor={TOP | BOTTOM | LEFT | RIGHT}
         layer={Astal.Layer.OVERLAY}
-        widthRequest={360}
         onKeyPressEvent={(self, ev) => {
             if (ev.get_keyval()[1] === 0xff1b) self.hide()
         }}>
-        <box className="ControlCenter" vertical spacing={10}>
-            <AudioCard />
-            <BrightnessCard />
-            <box homogeneous spacing={10}>
-                <WifiCard />
-                <BluetoothCard />
+        <eventbox
+            hexpand vexpand
+            onButtonPressEvent={(self) => {
+                const w = self.get_ancestor(Astal.Window.$gtype) as Astal.Window
+                w?.hide()
+                return true
+            }}>
+            <box halign={Gtk.Align.END} valign={Gtk.Align.END}>
+                <eventbox onButtonPressEvent={() => true}>
+                    <box className="ControlCenter" vertical spacing={10}
+                        widthRequest={360}>
+                        <AudioCard />
+                        <BrightnessCard />
+                        <box homogeneous spacing={10}>
+                            <WifiCard />
+                            <BluetoothCard />
+                        </box>
+                        <box homogeneous spacing={10}>
+                            <PowerProfileCard />
+                            <WeatherCard />
+                        </box>
+                    </box>
+                </eventbox>
             </box>
-            <box homogeneous spacing={10}>
-                <PowerProfileCard />
-                <WeatherCard />
-            </box>
-        </box>
+        </eventbox>
     </window>
 }

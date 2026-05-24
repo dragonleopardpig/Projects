@@ -258,7 +258,8 @@ export default function NowPlaying() {
         application={App}
         visible={false}
         keymode={Astal.Keymode.ON_DEMAND}
-        exclusivity={Astal.Exclusivity.IGNORE}
+        // NORMAL keeps the bar visible & clickable; Bar handles dismiss.
+        exclusivity={Astal.Exclusivity.NORMAL}
         anchor={TOP | BOTTOM | LEFT | RIGHT}
         layer={Astal.Layer.OVERLAY}
         onShow={() => {

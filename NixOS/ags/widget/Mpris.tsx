@@ -1,7 +1,8 @@
 import { bind } from "astal"
-import { App, Gtk } from "astal/gtk3"
+import { Gtk } from "astal/gtk3"
 import Mpris from "gi://AstalMpris"
 import { ICON } from "../lib/icons"
+import { bindToggleButton } from "../lib/drawers"
 
 export default function MprisWidget() {
     const mpris = Mpris.get_default()
@@ -24,7 +25,7 @@ export default function MprisWidget() {
                 <button
                     className="MprisTitle"
                     tooltipText="Open Now Playing"
-                    onClicked={() => App.toggle_window("now-playing")}>
+                    setup={(self) => bindToggleButton(self, "now-playing")}>
                     <label
                         label={bind(p, "title").as(t => t ?? "")}
                         maxWidthChars={28}

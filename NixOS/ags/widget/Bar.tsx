@@ -18,6 +18,7 @@ import Power from "./Power"
 import Notification from "./Notification"
 import ControlButton from "./ControlButton"
 import AppDrawerButton from "./AppDrawerButton"
+import { dismissDrawers } from "../lib/drawers"
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
     const { BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
@@ -28,6 +29,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
         exclusivity={Astal.Exclusivity.EXCLUSIVE}
         anchor={BOTTOM | LEFT | RIGHT}
         application={App}>
+        <eventbox
+            // Press anywhere on the bar (including widgets) dismisses any
+            // open drawer. Drawer-toggle buttons handle the open-vs-close
+            // toggle themselves via bindToggleButton.
+            onButtonPressEvent={() => { dismissDrawers(); return false }}>
         <centerbox>
             <box halign={Gtk.Align.START} spacing={6}>
                 <AppDrawerButton />
@@ -53,5 +59,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
                 <Power />
             </box>
         </centerbox>
+        </eventbox>
     </window>
 }
