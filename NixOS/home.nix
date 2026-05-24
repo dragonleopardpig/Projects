@@ -1681,7 +1681,7 @@ in
     # JSX widgets can `import "gi://AstalBattery"` etc. at runtime.
     (ags.override {
       extraPackages = (with pkgs.astal; [
-        battery hyprland mpris network notifd powerprofiles tray wireplumber
+        battery bluetooth hyprland mpris network notifd powerprofiles tray wireplumber
       ]) ++ [
         # astal.network wraps libnm — its GIR (NM-1.0) ships with networkmanager.
         pkgs.networkmanager

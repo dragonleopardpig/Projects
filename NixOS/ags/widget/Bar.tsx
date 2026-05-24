@@ -18,6 +18,7 @@ import KeyboardState from "./KeyboardState"
 import Mpris from "./Mpris"
 import Power from "./Power"
 import Notification from "./Notification"
+import ControlButton from "./ControlButton"
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
     const { BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
@@ -50,6 +51,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
                 <Lunar />
                 <Holiday />
                 <Notification />
+                <ControlButton />
                 <Power />
             </box>
         </centerbox>

@@ -137,3 +137,69 @@ window.CalendarPopupWindow {
     }
 }
 
+/* ── Control Center ─────────────────────────────────────────────── */
+window.ControlCenterWindow {
+    background: transparent;
+}
+
+.ControlCenter {
+    background: rgba(20, 20, 30, 0.95);
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 14px;
+    margin: 8px 16px;
+    font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font Mono", monospace;
+    color: #eee;
+
+    .Card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 10px 12px;
+        min-height: 32px;
+    }
+    .Card.Tile { min-height: 56px; }
+
+    .CardTitle {
+        font-weight: bold;
+        color: #ffd700;
+        font-size: 12px;
+    }
+
+    .Subtle { color: #888; font-size: 11px; }
+
+    .On  { color: #00ffff; font-weight: bold; }
+    .Off { color: #555; }
+
+    button.Card.Tile:hover { background: rgba(255, 105, 180, 0.12); }
+
+    trough {
+        min-height: 6px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 3px;
+    }
+    trough highlight {
+        background: #ffd700;
+        border-radius: 3px;
+    }
+    slider {
+        background: #ff69b4;
+        border-radius: 50%;
+        min-width: 14px;
+        min-height: 14px;
+    }
+
+    button {
+        background: transparent;
+        border: none;
+        padding: 0 6px;
+        color: #ffd700;
+    }
+    button:hover { color: #ff69b4; }
+}
+
+window.Bar .ControlButton {
+    color: #ffd700;
+    padding: 0 8px;
+}
+window.Bar .ControlButton:hover { color: #ff69b4; }
+
