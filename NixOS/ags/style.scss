@@ -148,11 +148,21 @@ window.CalendarPopupWindow {
         background: rgba(255, 255, 255, 0.06);
         border-color: rgba(255, 255, 255, 0.12);
     }
+    /* Default / weekend day-number colors */
+    .CalCell.Weekend  .DayNum { color: #ff7f50; }
+
+    /* Event-driven day-number tint (priority: solarterm < school < festival < public) */
+    .CalCell.HasSolarterm .DayNum { color: #ffd700; }
+    .CalCell.HasSchool    .DayNum { color: #00ffff; }
+    .CalCell.HasFestival  .DayNum { color: #ff69b4; font-weight: bold; }
+    .CalCell.HasPublic    .DayNum { color: #ff4500; font-weight: bold; }
+
+    /* Out-of-month dims everything regardless of event */
     .CalCell.OutOfMonth .DayNum,
     .CalCell.OutOfMonth .Lunar { color: #555; }
-    .CalCell.Weekend  .DayNum { color: #ff7f50; }
     .CalCell.OutOfMonth.Weekend .DayNum { color: #6b3f30; }
 
+    /* Today wins over event tint */
     .CalCell.Today {
         background: rgba(0, 255, 255, 0.10);
         border-color: #00ffff;

@@ -1,4 +1,4 @@
-import { App, Astal, Gtk } from "astal/gtk3"
+import { App, Astal, Gtk, Gdk } from "astal/gtk3"
 import { Variable, bind, execAsync } from "astal"
 import { CALENDAR_BIN, CALENDAR_SCRIPT, CALENDAR_ICS_DIR } from "../lib/paths"
 
@@ -47,11 +47,18 @@ function cellClasses(c: Cell, col: number): string {
     if (!c.in_month) parts.push("OutOfMonth")
     if (c.is_today) parts.push("Today")
     if (c.events.length) parts.push("HasEvent")
+    if (c.events.some(e => e.category === "public")) parts.push("HasPublic")
+    if (c.events.some(e => e.category === "school")) parts.push("HasSchool")
     if (c.festival) parts.push("HasFestival")
     if (c.solarterm) parts.push("HasSolarterm")
     if (col === 5 || col === 6) parts.push("Weekend")
     return parts.join(" ")
 }
+
+const CELL_STATE_CLASSES = [
+    "OutOfMonth","Today","HasEvent","HasPublic","HasSchool",
+    "HasFestival","HasSolarterm","Weekend",
+]
 
 export default function CalendarPopup() {
     const { BOTTOM, RIGHT } = Astal.WindowAnchor
@@ -98,8 +105,7 @@ export default function CalendarPopup() {
             r.lunar.set_label(c.lunar_compact)
             // Reset and re-apply class list on the button.
             const ctx = r.button.get_style_context()
-            for (const cl of ["OutOfMonth","Today","HasEvent","HasFestival","HasSolarterm","Weekend"])
-                ctx.remove_class(cl)
+            for (const cl of CELL_STATE_CLASSES) ctx.remove_class(cl)
             for (const cl of cellClasses(c, i % 7).split(" "))
                 if (cl !== "CalCell") ctx.add_class(cl)
             // Lunar accent on month-rollover days.
@@ -122,10 +128,16 @@ export default function CalendarPopup() {
         }
     }
 
-    // Hook clicks: set the selected cell.
+    // Hook clicks + hover: both set the selected cell.
     for (const r of cellRefs) {
         r.button.connect("clicked", (self: any) => {
             if (self._cell) selected.set(self._cell as Cell)
+        })
+        // Enter-notify needs the mask explicitly on the button.
+        r.button.add_events(Gdk.EventMask.ENTER_NOTIFY_MASK)
+        r.button.connect("enter-notify-event", (self: any) => {
+            if (self._cell) selected.set(self._cell as Cell)
+            return false
         })
     }
 
