@@ -2,9 +2,10 @@ import { App, Astal, Gtk, Gdk } from "astal/gtk3"
 import { Variable } from "astal"
 import Apps from "gi://AstalApps"
 
-// macOS Launchpad-style app drawer: full-screen overlay with a search
-// box and a FlowBox of icon tiles. Click outside or press Esc to close.
-const COLS = 7
+// macOS Launchpad-style app drawer: a true full-screen overlay with a
+// search box and a FlowBox of icon tiles. Click outside any icon or
+// press Esc to close.
+const COLS = 8
 
 export default function AppDrawer() {
     const { TOP, BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
@@ -19,24 +20,24 @@ export default function AppDrawer() {
         selection_mode: Gtk.SelectionMode.NONE,
         min_children_per_line: COLS,
         max_children_per_line: COLS,
-        column_spacing: 12,
-        row_spacing: 12,
+        column_spacing: 24,
+        row_spacing: 24,
     })
 
     function makeTile(app: Apps.Application): Gtk.Widget {
         const icon = new Gtk.Image({
             icon_name: app.iconName || "application-x-executable",
-            pixel_size: 56,
+            pixel_size: 72,
         })
         const name = new Gtk.Label({
             label: app.name,
-            max_width_chars: 12,
+            max_width_chars: 14,
             ellipsize: 3,             // Pango.EllipsizeMode.END
             justify: Gtk.Justification.CENTER,
             xalign: 0.5,
         })
         name.get_style_context().add_class("AppName")
-        const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+        const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
         inner.add(icon); inner.add(name)
         const btn = new Gtk.Button()
         btn.add(inner)
@@ -60,18 +61,21 @@ export default function AppDrawer() {
     query.subscribe(repopulate)
     repopulate("")
 
-    // Scrollable wrapper for the grid.
+    // Scrollable wrapper for the grid — fills the available vertical space.
     const scroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        min_content_height: 480,
-        propagate_natural_width: true,
+        hexpand: true,
+        vexpand: true,
     })
     scroll.add(grid)
     scroll.show_all()
 
     // Search entry — focus on show, type to filter, Enter launches first hit.
-    const searchEntry = new Gtk.SearchEntry({ placeholder_text: "Search apps…" })
+    const searchEntry = new Gtk.SearchEntry({
+        placeholder_text: "Search apps…",
+        width_request: 400,
+    })
     searchEntry.get_style_context().add_class("AppSearch")
     searchEntry.connect("search-changed", () => query.set(searchEntry.get_text()))
     searchEntry.connect("activate", () => {
@@ -99,30 +103,25 @@ export default function AppDrawer() {
             searchEntry.grab_focus()
         }}
         onKeyPressEvent={(self, ev) => {
-            if (ev.get_keyval()[1] === 0xff1b /* Esc */) self.hide()
+            if (ev.get_keyval()[1] === 0xff1b) self.hide()
         }}>
-        <eventbox
-            hexpand vexpand
+        <eventbox hexpand vexpand
+            // Click anywhere outside an app tile dismisses (including empty
+            // areas of the grid, the gap above search, the sides).
             onButtonPressEvent={(self) => {
                 const w = self.get_ancestor(Astal.Window.$gtype) as Astal.Window
-                w?.hide()
-                return true
+                w?.hide(); return true
             }}>
-            <centerbox vertical hexpand vexpand>
-                <box />
-                <centerbox hexpand>
-                    <box />
+            <box vertical hexpand vexpand>
+                <box halign={Gtk.Align.CENTER} marginTop={40} marginBottom={20}>
                     <eventbox onButtonPressEvent={() => true}>
-                        <box className="AppDrawerPanel" vertical spacing={12}
-                            widthRequest={760} heightRequest={620}>
-                            {searchEntry}
-                            {scroll}
-                        </box>
+                        {searchEntry}
                     </eventbox>
-                    <box />
-                </centerbox>
-                <box />
-            </centerbox>
+                </box>
+                <box hexpand vexpand marginStart={60} marginEnd={60} marginBottom={40}>
+                    {scroll}
+                </box>
+            </box>
         </eventbox>
     </window>
 }

@@ -1,5 +1,5 @@
 import { App, Astal, Gtk, Gdk } from "astal/gtk3"
-import { Variable, timeout } from "astal"
+import { Variable, timeout, interval, exec } from "astal"
 import Apps from "gi://AstalApps"
 import Hyprland from "gi://AstalHyprland"
 
@@ -37,7 +37,7 @@ function findApp(apps: Apps.Apps, q: string): Apps.Application | null {
 }
 
 export default function Dock() {
-    const { BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
+    const { TOP, BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
     const apps = new Apps.Apps()
     const hypr = Hyprland.get_default()
 
@@ -86,6 +86,7 @@ export default function Dock() {
         } else {
             try { pin.app.launch() } catch (e) { console.error(e) }
         }
+        App.get_window("dock")?.hide()
     }
 
     function rightClickMenu(pin: Pin) {
@@ -196,20 +197,44 @@ export default function Dock() {
     syncNonPinned(runningClasses.get())
 
     // ── Auto-hide state ──────────────────────────────────────────────
-    let hideTimer: any = null
-    const showDock = () => {
-        if (hideTimer) { hideTimer.cancel(); hideTimer = null }
-        App.get_window("dock")?.show()
+    // Layer-shell leave-notify across surfaces is unreliable, so we poll
+    // the cursor via hyprctl while the dock is shown. As soon as the
+    // cursor moves further than DOCK_HEIGHT_PX above the bottom edge, we
+    // hide. Polls stop when the dock is hidden.
+    const DOCK_HEIGHT_PX = 120
+
+    function monitorHeight(): number {
+        try {
+            const out = exec(["hyprctl", "monitors", "-j"])
+            const mons = JSON.parse(out)
+            const focused = mons.find((m: any) => m.focused) ?? mons[0]
+            return focused?.height ?? 1440
+        } catch { return 1440 }
     }
-    const cancelHide = () => {
-        if (hideTimer) { hideTimer.cancel(); hideTimer = null }
-    }
-    const scheduleHide = () => {
-        if (hideTimer) hideTimer.cancel()
-        hideTimer = timeout(HIDE_DELAY, () => {
-            App.get_window("dock")?.hide()
-            hideTimer = null
+    const SCREEN_H = monitorHeight()
+
+    let pollTimer: any = null
+    const startPoll = () => {
+        if (pollTimer) return
+        pollTimer = interval(150, () => {
+            const w = App.get_window("dock")
+            if (!w?.visible) { stopPoll(); return }
+            try {
+                const out = exec(["hyprctl", "cursorpos", "-j"])
+                const { y } = JSON.parse(out)
+                if (typeof y === "number" && y < SCREEN_H - DOCK_HEIGHT_PX) {
+                    w.hide()
+                }
+            } catch { /* swallow */ }
         })
+    }
+    const stopPoll = () => {
+        if (pollTimer) { pollTimer.cancel(); pollTimer = null }
+    }
+
+    const showDock = () => {
+        App.get_window("dock")?.show()
+        startPoll()
     }
 
     // ── Hot zone window (always present, transparent) ────────────────
@@ -238,22 +263,13 @@ export default function Dock() {
         visible={false}
         exclusivity={Astal.Exclusivity.IGNORE}
         anchor={BOTTOM | LEFT | RIGHT}
-        marginBottom={BAR_HEIGHT}
         layer={Astal.Layer.OVERLAY}
-        onShow={cancelHide}>
-        <eventbox
-            onEnterNotifyEvent={() => { cancelHide(); return false }}
-            onLeaveNotifyEvent={(_self: any, ev: any) => {
-                // Ignore crossings into child widgets (buttons etc.).
-                if (ev.get_detail()[1] === Gdk.NotifyType.INFERIOR) return false
-                scheduleHide()
-                return false
-            }}>
-            <box halign={Gtk.Align.CENTER}>
-                <box className="DockPanel">
-                    {dockBox}
-                </box>
+        onShow={() => startPoll()}
+        onHide={() => stopPoll()}>
+        <box halign={Gtk.Align.CENTER}>
+            <box className="DockPanel">
+                {dockBox}
             </box>
-        </eventbox>
+        </box>
     </window>
 }

@@ -290,50 +290,42 @@ window.Bar .AppDrawerButton {
 }
 window.Bar .AppDrawerButton:hover { color: #ff69b4; }
 
-/* ── App Drawer (Launchpad-style overlay) ───────────────────────── */
+/* ── App Drawer (full-screen Launchpad) ─────────────────────────── */
 window.AppDrawerWindow {
-    background: rgba(0, 0, 0, 0.55);    /* dim the whole screen */
-}
-
-.AppDrawerPanel {
-    background: rgba(20, 20, 30, 0.95);
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 18px;
-    margin: 24px;
+    background: rgba(0, 0, 0, 0.72);    /* dim the whole screen, macOS-like */
     font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font Mono", monospace;
     color: #eee;
+}
 
-    entry.AppSearch {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.10);
-        border-radius: 10px;
-        padding: 6px 10px;
-        color: #eee;
-        font-size: 14px;
-    }
-    entry.AppSearch:focus {
-        border-color: #ff69b4;
-    }
+window.AppDrawerWindow entry.AppSearch {
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 8px 14px;
+    color: #eee;
+    font-size: 15px;
+}
+window.AppDrawerWindow entry.AppSearch:focus {
+    border-color: #ff69b4;
+}
 
-    scrolledwindow { background: transparent; }
+window.AppDrawerWindow scrolledwindow { background: transparent; }
 
-    .AppTile {
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: 12px;
-        padding: 10px 6px;
-        min-width: 88px;
-        min-height: 96px;
-    }
-    .AppTile:hover {
-        background: rgba(255, 255, 255, 0.06);
-        border-color: rgba(255, 105, 180, 0.30);
-    }
-    .AppName {
-        color: #eee;
-        font-size: 11px;
-    }
+window.AppDrawerWindow .AppTile {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    padding: 12px 8px;
+    min-width: 112px;
+    min-height: 120px;
+}
+window.AppDrawerWindow .AppTile:hover {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 105, 180, 0.30);
+}
+window.AppDrawerWindow .AppName {
+    color: #eee;
+    font-size: 12px;
 }
 
 /* ── Dock (macOS-style pinned apps strip) ───────────────────────── */
