@@ -134,32 +134,33 @@ function BluetoothCard() {
 }
 
 // ── Power Profile card ────────────────────────────────────────────
-function PowerProfileCard() {
-    const pp = AstalPowerProfiles.get_default()
-    if (!pp) return <box />
+// Drive via `powerprofilesctl` directly — the AstalPowerProfiles binding
+// races with late D-Bus activation when power-profiles-daemon wasn't
+// running at AGS startup. CLI is dbus-activated each call and always works.
+const POWER_PROFILES = ["power-saver", "balanced", "performance"] as const
+const power = Variable("balanced").poll(2000, "powerprofilesctl get")
 
+function PowerProfileCard() {
     function next() {
-        const profiles = (pp.profiles ?? []).map((p: any) => p.profile)
-        if (!profiles.length) return
-        const idx = profiles.indexOf(pp.activeProfile)
-        pp.set_active_profile(profiles[(idx + 1) % profiles.length])
+        const cur = power.get().trim()
+        const idx = POWER_PROFILES.indexOf(cur as any)
+        const nxt = POWER_PROFILES[(idx + 1) % POWER_PROFILES.length]
+        execAsync(["powerprofilesctl", "set", nxt])
+            .then(() => power.set(nxt))
+            .catch(e => console.error("set power profile:", e))
     }
 
     return <button
         className="Card Tile"
         onClicked={next}
-        tooltipText="Click to cycle power profile">
+        tooltipText="Click to cycle: power-saver → balanced → performance">
         <box vertical spacing={2}>
             <box spacing={6}>
                 <label label={"\u{f0335}"} />
                 <label className="CardTitle" label="Power" xalign={0} hexpand />
             </box>
-            <label
-                className="Subtle"
-                xalign={0}
-                label={bind(pp, "activeProfile").as(p =>
-                    String(p ?? "balanced").replaceAll("-", " ")
-                )}
+            <label className="Subtle" xalign={0}
+                label={power().as(p => p.trim().replaceAll("-", " "))}
             />
         </box>
     </button>
