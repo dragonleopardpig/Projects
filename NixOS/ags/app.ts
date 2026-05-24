@@ -5,6 +5,7 @@ import CalendarPopup from "./widget/CalendarPopup"
 import ControlCenter from "./widget/ControlCenter"
 import AppDrawer from "./widget/AppDrawer"
 import Dock from "./widget/Dock"
+import WeatherPopup from "./widget/WeatherPopup"
 
 // GTK3's CSS parser doesn't understand `@charset` and bails on the whole
 // stylesheet if it sees one. Sass emits it automatically when the SCSS source
@@ -20,5 +21,6 @@ App.start({
         ControlCenter()
         AppDrawer()
         Dock()
+        WeatherPopup()
     },
 })

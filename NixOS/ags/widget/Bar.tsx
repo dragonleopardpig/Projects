@@ -3,6 +3,7 @@ import Workspaces from "./Workspaces"
 import Window from "./Window"
 import Clock from "./Clock"
 import Battery from "./Battery"
+import Network from "./Network"
 import SysTray from "./SysTray"
 import Weather from "./Weather"
 import Cpu from "./Cpu"
@@ -47,6 +48,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
             </box>
             <Window />
             <box halign={Gtk.Align.END} spacing={6}>
+                <Network />
                 <Battery />
                 <KeyboardState />
                 <SysTray />

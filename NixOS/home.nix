@@ -307,6 +307,10 @@ in
     export const HOST = "${osConfig.networking.hostName}";
     export const WEATHER_CMD =
         "${pkgs.curl}/bin/curl -sf 'https://wttr.in/Singapore?format=%c+%t'";
+    // Detailed forecast fetcher for the Weather popup; emits slim JSON.
+    export const WEATHER_FETCH_BIN = "${pkgs.python3}/bin/python3";
+    export const WEATHER_FETCH_SCRIPT = "${./assets/weather-fetch.py}";
+    export const WEATHER_CITY = "Singapore";
     // Calendar month dump: ${pythonLunar}/bin/python3 calendar-month.py YYYY-MM <ics-dir>
     // (The bar's old standalone Lunar/Holiday widgets were replaced by the
     //  calendar popup, which exposes both lunar and event data per-cell.)

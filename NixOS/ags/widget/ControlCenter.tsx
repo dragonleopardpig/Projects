@@ -1,5 +1,5 @@
 import { App, Astal, Gtk } from "astal/gtk3"
-import { Variable, bind, exec, execAsync } from "astal"
+import { Variable, bind, derive, exec, execAsync } from "astal"
 import Wp from "gi://AstalWp"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalBluetooth from "gi://AstalBluetooth"
@@ -60,29 +60,45 @@ function BrightnessCard() {
     </box>
 }
 
-// ── Wi-Fi card ────────────────────────────────────────────────────
-function WifiCard() {
+// ── Network (Wi-Fi / Ethernet) card ───────────────────────────────
+function NetworkCard() {
     const net = AstalNetwork.get_default()
     const wifi = net.wifi
-    if (!wifi) return <box />
+    const wired = net.wired
+
+    const inputs: any[] = [bind(net, "primary"), bind(net, "connectivity")]
+    if (wifi) inputs.push(bind(wifi, "ssid"), bind(wifi, "enabled"))
+    if (wired) inputs.push(bind(wired, "state"))
+
+    const summary = derive(inputs, () => {
+        const primary = net.primary
+        if (primary === AstalNetwork.Primary.WIRED) {
+            return { glyph: ICON.ethernet, title: "Ethernet",
+                     sub: "Wired connection", on: true }
+        }
+        if (primary === AstalNetwork.Primary.WIFI) {
+            return { glyph: ICON.wifi, title: "Wi-Fi",
+                     sub: wifi?.ssid ?? "(connecting…)", on: true }
+        }
+        return { glyph: ICON.nowifi, title: "Network",
+                 sub: "Not connected", on: false }
+    })
 
     return <button
         className="Card Tile"
-        onClicked={() => wifi.set_enabled(!wifi.enabled)}
-        tooltipText="Click: toggle Wi-Fi · Use nm-connection-editor to pick networks">
+        onClicked={() => { if (wifi) wifi.set_enabled(!wifi.enabled) }}
+        tooltipText="Click: toggle Wi-Fi · Use nm-connection-editor for networks">
         <box vertical spacing={2}>
             <box spacing={6}>
-                <label label={ICON.wifi} />
-                <label className="CardTitle" label="Wi-Fi" xalign={0} hexpand />
+                <label label={summary().as(s => s.glyph)} />
+                <label className="CardTitle" label={summary().as(s => s.title)} xalign={0} hexpand />
                 <label
-                    className={bind(wifi, "enabled").as(e => e ? "On" : "Off")}
-                    label={bind(wifi, "enabled").as(e => e ? "ON" : "OFF")}
+                    className={summary().as(s => s.on ? "On" : "Off")}
+                    label={summary().as(s => s.on ? "ON" : "OFF")}
                 />
             </box>
-            <label
-                className="Subtle"
-                xalign={0}
-                label={bind(wifi, "ssid").as(s => s ?? "(not connected)")}
+            <label className="Subtle" xalign={0}
+                label={summary().as(s => s.sub)}
             />
         </box>
     </button>
@@ -290,11 +306,11 @@ export default function ControlCenter() {
             <box halign={Gtk.Align.END} valign={Gtk.Align.START}>
                 <eventbox onButtonPressEvent={() => true}>
                     <box className="ControlCenter" vertical spacing={10}
-                        widthRequest={360}>
+                        widthRequest={420}>
                         <AudioCard />
                         <BrightnessCard />
                         <box homogeneous spacing={10}>
-                            <WifiCard />
+                            <NetworkCard />
                             <BluetoothCard />
                         </box>
                         <box homogeneous spacing={10}>

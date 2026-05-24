@@ -217,6 +217,35 @@ window.CalendarPopupWindow {
     .DetailEmpty      { color: #555;    font-size: 12px; font-style: italic; }
 }
 
+/* ── Weather popup ──────────────────────────────────────────────── */
+window.WeatherPopupWindow { background: transparent; }
+
+.WeatherPanel {
+    background: rgba(20, 20, 30, 0.95);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px;
+    margin: 8px 16px;
+    font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font Mono", monospace;
+    color: #eee;
+
+    .WeatherLocation  { color: #ffd700; font-weight: bold; font-size: 14px; }
+    .WeatherGlyphBig  { color: #00ffff; font-size: 48px; padding: 0 6px;
+                        text-shadow: 0 0 6px rgba(0,255,255,0.5); }
+    .WeatherTemp      { color: #ff69b4; font-size: 26px; font-weight: bold; }
+    .WeatherDesc      { color: #eee; font-size: 13px; }
+    .WeatherSubtle    { color: #888; font-size: 11px; }
+    .WeatherTempRange { color: #ffd700; font-size: 12px; font-weight: bold; }
+    .WeatherDayName   { color: #ff69b4; font-size: 12px; font-weight: bold; }
+    .WeatherGlyph     { color: #00ffff; font-size: 22px; padding: 4px 0; }
+
+    .WeatherDay {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 10px;
+        padding: 8px 6px;
+    }
+}
+
 /* ── Control Center ─────────────────────────────────────────────── */
 window.ControlCenterWindow {
     background: transparent;
@@ -252,20 +281,29 @@ window.ControlCenterWindow {
 
     button.Card.Tile:hover { background: rgba(255, 105, 180, 0.12); }
 
-    trough {
-        min-height: 6px;
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 3px;
+    /* Slim, macOS-style sliders — flat with a tiny thumb. */
+    scale trough {
+        min-height: 4px;
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 2px;
     }
-    trough highlight {
+    scale trough highlight {
         background: #ffd700;
-        border-radius: 3px;
+        border-radius: 2px;
     }
-    slider {
-        background: #ff69b4;
+    scale slider {
+        background: transparent;
+        box-shadow: none;
+        min-width: 0;
+        min-height: 0;
+        margin: -7px;
+    }
+    scale:hover slider {
+        background: #ffffff;
         border-radius: 50%;
-        min-width: 14px;
-        min-height: 14px;
+        min-width: 12px;
+        min-height: 12px;
+        margin: -4px;
     }
 
     button {

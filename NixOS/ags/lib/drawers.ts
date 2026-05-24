@@ -6,6 +6,7 @@ export const DRAWER_NAMES = [
     "control-center",
     "calendar",
     "app-drawer",
+    "weather",
 ] as const
 
 export function dismissDrawers(except?: string) {
@@ -21,15 +22,13 @@ export function dismissDrawers(except?: string) {
 // to do its own open-vs-close logic. We capture visibility at press
 // time so the answer is stable even if something else changes it.
 export function bindToggleButton(button: any, name: string) {
-    let wasOpenOnPress = false
-    button.connect("button-press-event", () => {
-        wasOpenOnPress = App.get_window(name)?.visible ?? false
-        return false
-    })
+    // Simpler: just check current visibility at click time. Works whether
+    // or not Gtk.Button consumed the press event before it could reach
+    // the bar wrapper.
     button.connect("clicked", () => {
         const w = App.get_window(name)
         if (!w) return
-        if (wasOpenOnPress) {
+        if (w.visible) {
             w.hide()
         } else {
             dismissDrawers(name)
