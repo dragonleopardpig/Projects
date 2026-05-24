@@ -367,6 +367,20 @@ window.DockWindow {
     text-shadow: 0 0 4px #00ffff;
 }
 
+.DockSep {
+    background: rgba(255, 255, 255, 0.10);
+    min-width: 1px;
+}
+
+.DockTile.Unpinned {
+    /* slight tint so non-pinned running apps read differently */
+    background: rgba(255, 255, 255, 0.03);
+}
+
+window.DockHot {
+    background: transparent;
+}
+
 /* ── Now Playing popup ──────────────────────────────────────────── */
 window.NowPlayingWindow {
     background: transparent;

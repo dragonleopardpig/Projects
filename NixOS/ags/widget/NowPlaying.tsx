@@ -1,6 +1,7 @@
 import { App, Astal, Gtk, Gdk } from "astal/gtk3"
 import { Variable, interval } from "astal"
 import Mpris from "gi://AstalMpris"
+import Apps from "gi://AstalApps"
 import { ICON } from "../lib/icons"
 
 // macOS-style "Now Playing" popup: tabs for each MPRIS player, large
@@ -19,6 +20,23 @@ function fmtTime(sec: number): string {
 export default function NowPlaying() {
     const { TOP, BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
     const mpris = Mpris.get_default()
+    const apps = new Apps.Apps()
+
+    // Best-effort lookup so the player tab can show its real app icon.
+    function appForPlayer(p: Mpris.Player): Apps.Application | null {
+        const entry = (p as any).entry as string | undefined
+        if (entry) {
+            const list = apps.get_list()
+            const hit = list.find(a => {
+                const id = (a as any).id ?? (a as any).entry ?? ""
+                return id === entry || id === `${entry}.desktop`
+            })
+            if (hit) return hit
+        }
+        const ident = p.identity
+        if (ident) return apps.fuzzy_query(ident)[0] ?? null
+        return null
+    }
 
     // ── Tabs row (one button per MPRIS player) ───────────────────────
     const tabsBox = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START })
@@ -216,13 +234,16 @@ export default function NowPlaying() {
             const cur = selected.get()
             for (const p of players) {
                 const btn = new Gtk.Button()
-                const inner = new Gtk.Box({ spacing: 4 })
-                const glyph = new Gtk.Label({ label: ICON.music })
+                const inner = new Gtk.Box({ spacing: 6 })
+                const app = appForPlayer(p)
+                const icon: Gtk.Widget = app?.iconName
+                    ? new Gtk.Image({ icon_name: app.iconName, pixel_size: 16 })
+                    : new Gtk.Label({ label: ICON.music })
                 const name = new Gtk.Label({
                     label: p.identity || p.busName || "player",
                     max_width_chars: 14, ellipsize: 3,
                 })
-                inner.add(glyph); inner.add(name)
+                inner.add(icon); inner.add(name)
                 btn.add(inner)
                 btn.get_style_context().add_class("NPTab")
                 if (p === cur) btn.get_style_context().add_class("Selected")
