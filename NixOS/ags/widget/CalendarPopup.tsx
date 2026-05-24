@@ -239,6 +239,10 @@ export default function CalendarPopup() {
         application={App}
         visible={false}
         keymode={Astal.Keymode.EXCLUSIVE}
+        // IGNORE means we overlap the bar's reserved zone instead of being
+        // clipped to it — so the backdrop covers the entire screen and
+        // clicks on the bar area also dismiss the popup.
+        exclusivity={Astal.Exclusivity.IGNORE}
         anchor={TOP | BOTTOM | LEFT | RIGHT}
         layer={Astal.Layer.OVERLAY}
         onKeyPressEvent={(self, ev) => {
