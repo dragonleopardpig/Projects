@@ -336,6 +336,37 @@ window.AppDrawerWindow {
     }
 }
 
+/* ── Dock (macOS-style pinned apps strip) ───────────────────────── */
+window.DockWindow {
+    background: transparent;
+}
+
+.DockPanel {
+    background: rgba(20, 20, 30, 0.85);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 6px 8px;
+    margin: 0 0 6px 0;
+}
+
+.DockTile {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 4px 6px;
+}
+.DockTile:hover {
+    background: rgba(255, 105, 180, 0.18);
+}
+
+.DockDot {
+    color: #00ffff;
+    font-size: 10px;
+    padding: 0;
+    margin: 0;
+    text-shadow: 0 0 4px #00ffff;
+}
+
 /* ── Now Playing popup ──────────────────────────────────────────── */
 window.NowPlayingWindow {
     background: transparent;
