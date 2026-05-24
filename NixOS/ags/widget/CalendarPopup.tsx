@@ -255,7 +255,7 @@ export default function CalendarPopup() {
                 w?.hide()
                 return true
             }}>
-            <box halign={Gtk.Align.END} valign={Gtk.Align.END}>
+            <box halign={Gtk.Align.END} valign={Gtk.Align.START}>
                 <eventbox
                     // Swallow clicks so the backdrop handler doesn't fire.
                     onButtonPressEvent={() => true}>

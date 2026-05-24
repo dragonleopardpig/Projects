@@ -24,8 +24,8 @@ export default function MprisWidget() {
                 </button>
                 <button
                     className="MprisTitle"
-                    tooltipText="Open Now Playing"
-                    setup={(self) => bindToggleButton(self, "now-playing")}>
+                    tooltipText="Open Control Center"
+                    setup={(self) => bindToggleButton(self, "control-center")}>
                     <label
                         label={bind(p, "title").as(t => t ?? "")}
                         maxWidthChars={28}

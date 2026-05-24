@@ -4,6 +4,7 @@ import Wp from "gi://AstalWp"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalBluetooth from "gi://AstalBluetooth"
 import AstalPowerProfiles from "gi://AstalPowerProfiles"
+import Mpris from "gi://AstalMpris"
 import { ICON } from "../lib/icons"
 import { WEATHER_CMD } from "../lib/paths"
 
@@ -149,6 +150,105 @@ function PowerProfileCard() {
     </button>
 }
 
+// ── Now Playing card (compact, embedded in CC) ────────────────────
+function NowPlayingCard(): Gtk.Widget {
+    const mpris = Mpris.get_default()
+
+    const art = new Gtk.Image({ pixel_size: 64 })
+    art.get_style_context().add_class("NPCardArt")
+    art.set_from_icon_name("audio-x-generic", Gtk.IconSize.DIALOG)
+
+    const title = new Gtk.Label({
+        xalign: 0, halign: Gtk.Align.START,
+        max_width_chars: 24, ellipsize: 3,
+    })
+    title.get_style_context().add_class("NPCardTitle")
+
+    const artist = new Gtk.Label({
+        xalign: 0, halign: Gtk.Align.START,
+        max_width_chars: 28, ellipsize: 3,
+    })
+    artist.get_style_context().add_class("NPCardArtist")
+
+    const mkBtn = (glyph: string) => {
+        const b = new Gtk.Button()
+        const l = new Gtk.Label({ label: glyph })
+        b.add(l)
+        b.get_style_context().add_class("NPCardXport")
+        return [b, l] as const
+    }
+    const [prevBtn] = mkBtn(ICON.prev)
+    const [playBtn, playLbl] = mkBtn(ICON.play)
+    const [nextBtn] = mkBtn(ICON.next)
+
+    let cur: Mpris.Player | null = null
+    const signals: number[] = []
+    function detach() {
+        if (cur) for (const id of signals) cur.disconnect(id)
+        signals.length = 0
+        cur = null
+    }
+    function refresh() {
+        if (!cur) {
+            title.label = "Nothing playing"
+            artist.label = ""
+            art.set_from_icon_name("audio-x-generic", Gtk.IconSize.DIALOG)
+            playLbl.label = ICON.play
+            prevBtn.set_sensitive(false)
+            nextBtn.set_sensitive(false)
+            playBtn.set_sensitive(false)
+            return
+        }
+        title.label = cur.title || "Unknown"
+        artist.label = cur.artist || ""
+        const cover = cur.coverArt
+        if (cover) art.set_from_file(cover)
+        else art.set_from_icon_name("audio-x-generic", Gtk.IconSize.DIALOG)
+        playLbl.label = cur.playbackStatus === Mpris.PlaybackStatus.PLAYING
+            ? ICON.pause : ICON.play
+        prevBtn.set_sensitive(cur.canGoPrevious)
+        nextBtn.set_sensitive(cur.canGoNext)
+        playBtn.set_sensitive(cur.canControl)
+    }
+    function attach(p: Mpris.Player | null) {
+        detach()
+        cur = p
+        if (p) {
+            for (const prop of ["title","artist","cover-art","playback-status",
+                                "can-go-previous","can-go-next","can-control"]) {
+                signals.push(p.connect(`notify::${prop}`, refresh))
+            }
+        }
+        refresh()
+    }
+    const pickFirst = () => attach(mpris.players[0] ?? null)
+    mpris.connect("notify::players", pickFirst)
+    pickFirst()
+
+    prevBtn.connect("clicked", () => cur?.previous())
+    playBtn.connect("clicked", () => cur?.play_pause())
+    nextBtn.connect("clicked", () => cur?.next())
+
+    const xport = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START })
+    xport.add(prevBtn); xport.add(playBtn); xport.add(nextBtn)
+
+    const info = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true,
+        valign: Gtk.Align.CENTER,
+    })
+    info.add(title); info.add(artist); info.add(xport)
+
+    const row = new Gtk.Box({ spacing: 10 })
+    row.add(art); row.add(info)
+
+    const card = new Gtk.Box()
+    card.get_style_context().add_class("Card")
+    card.get_style_context().add_class("NPCard")
+    card.add(row)
+    card.show_all()
+    return card
+}
+
 // ── Weather card ──────────────────────────────────────────────────
 const weather = Variable("").poll(30 * 60 * 1000, WEATHER_CMD)
 
@@ -187,7 +287,7 @@ export default function ControlCenter() {
                 w?.hide()
                 return true
             }}>
-            <box halign={Gtk.Align.END} valign={Gtk.Align.END}>
+            <box halign={Gtk.Align.END} valign={Gtk.Align.START}>
                 <eventbox onButtonPressEvent={() => true}>
                     <box className="ControlCenter" vertical spacing={10}
                         widthRequest={360}>
@@ -201,6 +301,7 @@ export default function ControlCenter() {
                             <PowerProfileCard />
                             <WeatherCard />
                         </box>
+                        {NowPlayingCard()}
                     </box>
                 </eventbox>
             </box>

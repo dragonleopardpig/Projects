@@ -6,7 +6,6 @@ export const DRAWER_NAMES = [
     "control-center",
     "calendar",
     "app-drawer",
-    "now-playing",
 ] as const
 
 export function dismissDrawers(except?: string) {

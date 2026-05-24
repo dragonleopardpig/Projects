@@ -19,7 +19,7 @@ const PINS = [
 ] as const
 
 const ICON_SIZE = 48
-const BAR_HEIGHT = 40    // matches Hyprland's reserved zone for our bar
+const BAR_HEIGHT = 0     // bar lives at the top now; dock pins to bottom edge
 const HIDE_DELAY = 350   // ms after pointer leaves the dock
 const HOT_HEIGHT = 6     // px of trigger strip just above the bar
 

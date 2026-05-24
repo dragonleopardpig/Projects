@@ -4,7 +4,6 @@ import Bar from "./widget/Bar"
 import CalendarPopup from "./widget/CalendarPopup"
 import ControlCenter from "./widget/ControlCenter"
 import AppDrawer from "./widget/AppDrawer"
-import NowPlaying from "./widget/NowPlaying"
 import Dock from "./widget/Dock"
 
 // GTK3's CSS parser doesn't understand `@charset` and bails on the whole
@@ -20,7 +19,6 @@ App.start({
         CalendarPopup()
         ControlCenter()
         AppDrawer()
-        NowPlaying()
         Dock()
     },
 })

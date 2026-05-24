@@ -21,13 +21,13 @@ import Privacy from "./Privacy"
 import { dismissDrawers } from "../lib/drawers"
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
-    const { BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
+    const { TOP, LEFT, RIGHT } = Astal.WindowAnchor
 
     return <window
         className="Bar"
         gdkmonitor={gdkmonitor}
         exclusivity={Astal.Exclusivity.EXCLUSIVE}
-        anchor={BOTTOM | LEFT | RIGHT}
+        anchor={TOP | LEFT | RIGHT}
         application={App}>
         <eventbox
             // Press anywhere on the bar (including widgets) dismisses any

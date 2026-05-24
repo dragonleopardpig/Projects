@@ -2,7 +2,7 @@ import { Variable } from "astal"
 import { bindToggleButton } from "../lib/drawers"
 
 // `date` is cheap; polling once a second is fine.
-const time = Variable("").poll(1000, "date +' %a %d %b  %H:%M'")
+const time = Variable("").poll(1000, "date +'%b %d  %H:%M'")
 
 export default function Clock() {
     return <button
