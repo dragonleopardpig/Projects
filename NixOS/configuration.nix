@@ -96,6 +96,10 @@ in
   services.gvfs.enable = true;
   services.udisks2.enable = true;
 
+  # power-profiles-daemon: lets AGS Control Center cycle balanced /
+  # performance / power-saver via AstalPowerProfiles (DBus).
+  services.power-profiles-daemon.enable = true;
+
 
   # USB reset for Logitech G502X (triggered by udev when device appears)
   systemd.services.logitech-g502x-reset = {

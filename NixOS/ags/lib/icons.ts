@@ -14,7 +14,7 @@ export const ICON = {
     mute:       "\u{f026}",  // nf-fa-volume_off
     bell:       "\u{f0f3}",  // nf-fa-bell
     bell_slash: "\u{f1f6}",  // nf-fa-bell_slash
-    bell_dnd:   "\u{f9a1}",  // nf-mdi-bell_sleep
+    bell_dnd:   "\u{f0588}", // nf-md-bell_sleep  (5-digit; old 4-digit f9a1 collides with CJK)
     power:      "\u{f0425}", // nf-md-power
     play:       "\u{f04b}",  // nf-fa-play
     pause:      "\u{f04c}",  // nf-fa-pause

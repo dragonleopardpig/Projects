@@ -411,7 +411,7 @@ window.DockHot {
     background: transparent;
 }
 
-/* ── Now Playing card (embedded in Control Center) ──────────────── */
+/* ── Mpris bar widget ───────────────────────────────────────────── */
 window.Bar .MprisTitle {
     color: #ff69b4;
     padding: 0 6px;
@@ -419,109 +419,4 @@ window.Bar .MprisTitle {
 window.Bar .MprisTitle:hover { color: #ffd700; }
 window.Bar .MprisPlay { color: #ffd700; padding: 0 4px; }
 window.Bar .MprisPlay:hover { color: #ff69b4; }
-
-.ControlCenter .Card.NPCard {
-    background: rgba(255, 105, 180, 0.10);
-    border: 1px solid rgba(255, 105, 180, 0.20);
-    padding: 8px 10px;
-}
-.NPCardArt {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    min-width: 64px;
-    min-height: 64px;
-}
-.NPCardTitle  { color: #ffd700; font-weight: bold; font-size: 13px; }
-.NPCardArtist { color: #ff69b4; font-size: 11px; }
-.NPCardXport {
-    background: rgba(255, 255, 255, 0.05);
-    border: none;
-    border-radius: 50%;
-    min-width: 28px;
-    min-height: 28px;
-    color: #ffd700;
-    padding: 0;
-}
-.NPCardXport:hover    { background: rgba(255, 105, 180, 0.25); color: #ffffff; }
-.NPCardXport:disabled { color: #555; background: transparent; }
-
-/* ── Old standalone Now Playing popup (deprecated) ──────────────── */
-.NowPlayingPanel {
-    background: rgba(20, 20, 30, 0.96);
-    border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 16px;
-    margin: 8px 16px;
-    font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font Mono", monospace;
-    color: #eee;
-
-    .NPArt {
-        background: rgba(255, 255, 255, 0.04);
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        padding: 4px;
-        min-width: 180px;
-        min-height: 180px;
-    }
-
-    .NPTitle  { color: #ffd700; font-weight: bold; font-size: 16px; }
-    .NPArtist { color: #ff69b4; font-size: 13px; }
-    .NPAlbum  { color: #888;    font-size: 12px; }
-    .NPTime   { color: #aaa;    font-size: 11px; }
-
-    .NPTab {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid transparent;
-        border-radius: 8px;
-        padding: 4px 10px;
-        color: #aaa;
-    }
-    .NPTab:hover { background: rgba(255, 105, 180, 0.15); color: #ff69b4; }
-    .NPTab.Selected {
-        background: rgba(0, 255, 255, 0.12);
-        border-color: #00ffff;
-        color: #00ffff;
-    }
-    .NPTabEmpty { color: #888; font-style: italic; padding: 4px 6px; }
-
-    .NPXport {
-        background: rgba(255, 255, 255, 0.05);
-        border: none;
-        border-radius: 50%;
-        min-width: 40px;
-        min-height: 40px;
-        color: #ffd700;
-        font-size: 14px;
-    }
-    .NPXport:hover { background: rgba(255, 105, 180, 0.18); color: #ff69b4; }
-    .NPXport:disabled { color: #444; background: transparent; }
-    .NPXport.Play {
-        background: rgba(0, 255, 255, 0.15);
-        min-width: 52px;
-        min-height: 52px;
-        color: #00ffff;
-        font-size: 16px;
-    }
-    .NPXport.Play:hover {
-        background: rgba(0, 255, 255, 0.30);
-        color: #ffffff;
-    }
-
-    .NPSeek trough, .NPVol trough {
-        min-height: 5px;
-        background: rgba(255, 255, 255, 0.12);
-        border-radius: 3px;
-    }
-    .NPSeek trough highlight, .NPVol trough highlight {
-        background: #ffd700;
-        border-radius: 3px;
-    }
-    .NPSeek slider, .NPVol slider {
-        background: #ff69b4;
-        border-radius: 50%;
-        min-width: 12px;
-        min-height: 12px;
-    }
-    .NPVolIcon { color: #ffd700; padding: 0 4px; }
-}
 
