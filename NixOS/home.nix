@@ -311,6 +311,13 @@ in
         "${pkgs.python3}/bin/python3 ${./assets/waybar-sg-holidays.py} ${./assets/calendars}";
     export const LUNAR_CMD =
         "${pythonLunar}/bin/python3 ${./assets/waybar-lunar.py}";
+    // Calendar month dump: ${pythonLunar}/bin/python3 calendar-month.py YYYY-MM <ics-dir>
+    export const CALENDAR_BIN =
+        "${pythonLunar}/bin/python3";
+    export const CALENDAR_SCRIPT =
+        "${./assets/calendar-month.py}";
+    export const CALENDAR_ICS_DIR =
+        "${./assets/calendars}";
     export const SWAYNC_WATCH = ["swaync-client", "-swb"];
     export const SWAYNC_TOGGLE = "swaync-client -t -sw";
     export const SWAYNC_DND = "swaync-client -d -sw";

@@ -92,7 +92,7 @@ window.Bar {
     }
 }
 
-/* ── Calendar popup ─────────────────────────────────────────────── */
+/* ── Calendar popup (custom grid: gregorian + lunar + event dot) ── */
 window.CalendarPopupWindow {
     background: transparent;
 }
@@ -104,37 +104,91 @@ window.CalendarPopupWindow {
     padding: 14px;
     margin: 8px 16px;
     font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font Mono", monospace;
-    color: #ffd700;
+    color: #eee;
 
-    calendar {
-        background: transparent;
+    /* Header (prev / title / today / next) */
+    .CalHeader {
+        padding: 0 2px 4px 2px;
+    }
+    .CalTitle {
         color: #ffd700;
-        padding: 4px;
-        font-size: 14px;
-    }
-
-    calendar.header {
-        color: #ff69b4;
         font-weight: bold;
-        padding: 4px 0 8px 0;
+        font-size: 15px;
+    }
+    .NavBtn, .TodayBtn {
+        background: rgba(255, 255, 255, 0.05);
+        border: none;
+        border-radius: 8px;
+        padding: 4px 10px;
+        color: #ffd700;
+    }
+    .NavBtn:hover, .TodayBtn:hover {
+        background: rgba(255, 105, 180, 0.18);
+        color: #ff69b4;
     }
 
-    calendar:selected {
-        background: #ff69b4;
-        color: #fff;
-        border-radius: 6px;
+    /* Weekday header row */
+    .Weekday {
+        color: #888;
+        font-size: 11px;
+        padding: 2px 0;
     }
+    .Weekday.Weekend { color: #ff7f50; }
 
-    calendar.day-number.today {
+    /* Cell button */
+    .CalCell {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 4px 6px;
+        min-width: 52px;
+        min-height: 44px;
+    }
+    .CalCell:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.12);
+    }
+    .CalCell.OutOfMonth .DayNum,
+    .CalCell.OutOfMonth .Lunar { color: #555; }
+    .CalCell.Weekend  .DayNum { color: #ff7f50; }
+    .CalCell.OutOfMonth.Weekend .DayNum { color: #6b3f30; }
+
+    .CalCell.Today {
+        background: rgba(0, 255, 255, 0.10);
+        border-color: #00ffff;
+    }
+    .CalCell.Today .DayNum {
         color: #00ffff;
         font-weight: bold;
         text-shadow: 0 0 4px #00ffff;
     }
 
-    calendar.day-name {
-        color: #888;
-        font-size: 11px;
+    .DayNum  { color: #eee;  font-size: 14px; }
+    .Lunar   { color: #888;  font-size: 10px; }
+    .Lunar.LunarFirst { color: #ff69b4; font-weight: bold; }
+
+    /* Event indicator dot — color encodes category */
+    .Dot          { font-size: 10px; padding: 0; }
+    .Dot.Public   { color: #ff4500; }
+    .Dot.School   { color: #00ffff; }
+    .Dot.Festival { color: #ff69b4; }
+    .Dot.Solarterm{ color: #ffd700; }
+
+    /* Detail footer for selected cell */
+    .Detail {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin-top: 4px;
+        min-height: 60px;
     }
+    .DetailHead       { color: #ffd700; font-weight: bold; font-size: 13px; }
+    .DetailLunar      { color: #ff7f50; font-size: 13px; }
+    .DetailSolarterm  { color: #ffd700; font-size: 12px; }
+    .DetailFestival   { color: #ff69b4; font-size: 12px; }
+    .DetailPublic     { color: #ff4500; font-size: 12px; }
+    .DetailSchool     { color: #00ffff; font-size: 12px; }
+    .DetailEmpty      { color: #555;    font-size: 12px; font-style: italic; }
 }
 
 /* ── Control Center ─────────────────────────────────────────────── */
