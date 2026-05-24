@@ -7,8 +7,6 @@ import Network from "./Network"
 import AudioSlider from "./AudioSlider"
 import SysTray from "./SysTray"
 import Weather from "./Weather"
-import Holiday from "./Holiday"
-import Lunar from "./Lunar"
 import Cpu from "./Cpu"
 import Memory from "./Memory"
 import Disk from "./Disk"
@@ -48,8 +46,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
                 <SysTray />
                 <Weather />
                 <Clock />
-                <Lunar />
-                <Holiday />
                 <Notification />
                 <ControlButton />
                 <Power />

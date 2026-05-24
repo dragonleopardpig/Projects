@@ -61,7 +61,7 @@ const CELL_STATE_CLASSES = [
 ]
 
 export default function CalendarPopup() {
-    const { BOTTOM, RIGHT } = Astal.WindowAnchor
+    const { TOP, BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
     const today = new Date()
 
     const cursor = Variable({ y: today.getFullYear(), m: today.getMonth() + 1 })
@@ -229,35 +229,53 @@ export default function CalendarPopup() {
     gridBox.show_all()
     detailBox.show_all()
 
+    // Full-screen anchor with a transparent backdrop that closes the popup
+    // on click. The panel itself sits in the bottom-right via halign/valign,
+    // wrapped in an EventBox that swallows clicks so they don't reach the
+    // backdrop. Esc still closes.
     return <window
         name="calendar"
         className="CalendarPopupWindow"
         application={App}
         visible={false}
-        keymode={Astal.Keymode.ON_DEMAND}
-        anchor={BOTTOM | RIGHT}
+        keymode={Astal.Keymode.EXCLUSIVE}
+        anchor={TOP | BOTTOM | LEFT | RIGHT}
         layer={Astal.Layer.OVERLAY}
-        widthRequest={460}
         onKeyPressEvent={(self, ev) => {
             if (ev.get_keyval()[1] === 0xff1b /* GDK_KEY_Escape */) self.hide()
         }}>
-        <box className="CalendarPanel" vertical spacing={8}>
-            <box className="CalHeader" spacing={6}>
-                <button className="NavBtn" onClicked={() => shiftMonth(-1)}>
-                    <label label={"\u{f0141}"} />
-                </button>
-                <label className="CalTitle" hexpand
-                    label={bind(title)} />
-                <button className="TodayBtn" onClicked={gotoToday}>
-                    <label label="Today" />
-                </button>
-                <button className="NavBtn" onClicked={() => shiftMonth(1)}>
-                    <label label={"\u{f0142}"} />
-                </button>
+        <eventbox
+            hexpand vexpand
+            onButtonPressEvent={(self) => {
+                const w = self.get_ancestor(Astal.Window.$gtype) as Astal.Window
+                w?.hide()
+                return true
+            }}>
+            <box halign={Gtk.Align.END} valign={Gtk.Align.END}>
+                <eventbox
+                    // Swallow clicks so the backdrop handler doesn't fire.
+                    onButtonPressEvent={() => true}>
+                    <box className="CalendarPanel" vertical spacing={8}
+                        widthRequest={460}>
+                        <box className="CalHeader" spacing={6}>
+                            <button className="NavBtn" onClicked={() => shiftMonth(-1)}>
+                                <label label={"\u{f0141}"} />
+                            </button>
+                            <label className="CalTitle" hexpand
+                                label={bind(title)} />
+                            <button className="TodayBtn" onClicked={gotoToday}>
+                                <label label="Today" />
+                            </button>
+                            <button className="NavBtn" onClicked={() => shiftMonth(1)}>
+                                <label label={"\u{f0142}"} />
+                            </button>
+                        </box>
+                        {weekdayBox}
+                        {gridBox}
+                        {detailBox}
+                    </box>
+                </eventbox>
             </box>
-            {weekdayBox}
-            {gridBox}
-            {detailBox}
-        </box>
+        </eventbox>
     </window>
 }

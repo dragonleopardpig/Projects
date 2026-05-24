@@ -307,11 +307,9 @@ in
     export const HOST = "${osConfig.networking.hostName}";
     export const WEATHER_CMD =
         "${pkgs.curl}/bin/curl -sf 'https://wttr.in/Singapore?format=%c+%t'";
-    export const HOLIDAY_CMD =
-        "${pkgs.python3}/bin/python3 ${./assets/waybar-sg-holidays.py} ${./assets/calendars}";
-    export const LUNAR_CMD =
-        "${pythonLunar}/bin/python3 ${./assets/waybar-lunar.py}";
     // Calendar month dump: ${pythonLunar}/bin/python3 calendar-month.py YYYY-MM <ics-dir>
+    // (The bar's old standalone Lunar/Holiday widgets were replaced by the
+    //  calendar popup, which exposes both lunar and event data per-cell.)
     export const CALENDAR_BIN =
         "${pythonLunar}/bin/python3";
     export const CALENDAR_SCRIPT =
