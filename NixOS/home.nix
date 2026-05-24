@@ -1259,10 +1259,7 @@ in
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
-                    "uwsm app -- waybar"
-                    # AGS v2 (Astal) — placeholder bar on the bottom edge while
-                    # we iteratively port waybar modules. Remove waybar exec
-                    # once parity is reached.
+                    # AGS v2 (Astal) is now the only bar (waybar retired).
                     "uwsm app -- ags run"
                     # swaync is launched by services.swaync (home-manager systemd unit);
                     # do not duplicate here or the unit fails with "instance already running".
@@ -1285,10 +1282,12 @@ in
   };
 
 
-  # ── Waybar (active bar) ──────────────────────────────────────────────
-  # Started via uwsm exec-once in the hyprland block above.
+  # ── Waybar (retired — kept disabled for reference) ──────────────────
+  # The active bar is now AGS/Astal (see ags/widget/Bar.tsx). The
+  # waybar config below remains as documentation of the modules we
+  # ported and isn't started by Hyprland exec-once anymore.
   programs.waybar = {
-    enable = true;
+    enable = false;
     systemd.enable = false;
     settings.mainBar = {
       layer = "top";
