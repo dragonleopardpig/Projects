@@ -56,6 +56,10 @@ window.Bar {
     .Power          { color: #ff4500; font-size: 14px; padding: 0 8px; }
     .Power:hover    { color: #ff69b4; }
 
+    .IdleInhibitor           { color: #888; padding: 0 6px; font-size: 14px; }
+    .IdleInhibitor:hover     { color: #ffd700; }
+    .IdleInhibitor.Inhibited { color: #ffd700; text-shadow: 0 0 4px #ffd700; }
+
     .KeyboardState .led.on  { color: #ffd700; }
     .KeyboardState .led.off { color: #444; }
 

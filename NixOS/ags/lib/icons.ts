@@ -21,5 +21,7 @@ export const ICON = {
     prev:       "\u{f04a}",  // nf-fa-backward
     next:       "\u{f04e}",  // nf-fa-forward
     music:      "\u{f001}",  // nf-fa-music
+    caffeine:   "\u{f0f4}",  // nf-fa-coffee  (idle inhibitor on)
+    sleep:      "\u{f04b8}", // nf-md-sleep   (idle inhibitor off)
     caps:       "\u{f11c}",  // nf-fa-keyboard_o
 }
