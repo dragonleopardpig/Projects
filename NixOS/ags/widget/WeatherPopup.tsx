@@ -118,26 +118,15 @@ export default function WeatherPopup() {
         visible={false}
         keymode={Astal.Keymode.ON_DEMAND}
         exclusivity={Astal.Exclusivity.NORMAL}
-        anchor={TOP | BOTTOM | LEFT | RIGHT}
+        anchor={TOP | RIGHT}
         layer={Astal.Layer.OVERLAY}
         onShow={() => { refresh() }}
         onKeyPressEvent={(self, ev) => {
             if (ev.get_keyval()[1] === 0xff1b) self.hide()
         }}>
-        <eventbox
-            onButtonPressEvent={(self) => {
-                const w = self.get_ancestor(Astal.Window.$gtype) as Astal.Window
-                w?.hide()
-                return true
-            }}>
-            <box halign={Gtk.Align.END} valign={Gtk.Align.START}>
-                <eventbox onButtonPressEvent={() => true}>
-                    <box className="WeatherPanel" vertical spacing={10}
-                        widthRequest={420}>
-                        {body}
-                    </box>
-                </eventbox>
-            </box>
-        </eventbox>
+        <box className="WeatherPanel" vertical spacing={10}
+            widthRequest={420}>
+            {body}
+        </box>
     </window>
 }

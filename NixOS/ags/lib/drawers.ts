@@ -22,23 +22,16 @@ export function dismissDrawers(except?: string) {
 // to do its own open-vs-close logic. We capture visibility at press
 // time so the answer is stable even if something else changes it.
 export function bindToggleButton(button: any, name: string) {
-    // Snapshot visibility at press time, before the bar's outer event-box
-    // dismiss handler runs. Otherwise the press dismisses our drawer and
-    // the subsequent click sees visible=false and re-opens it.
     let wasOpenOnPress = false
     button.connect("button-press-event", () => {
         wasOpenOnPress = App.get_window(name)?.visible ?? false
-        return false   // propagate so bar wrapper still dismisses others
+        return false
     })
     button.connect("clicked", () => {
         const w = App.get_window(name)
         if (!w) return
-        if (wasOpenOnPress) {
-            w.hide()   // explicit; safe even if bar wrapper already hid it
-        } else {
-            dismissDrawers(name)
-            w.show()
-        }
+        if (wasOpenOnPress) w.hide()
+        else { dismissDrawers(name); w.show() }
     })
 }
 

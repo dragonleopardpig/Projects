@@ -233,53 +233,42 @@ export default function CalendarPopup() {
     // on click. The panel itself sits in the bottom-right via halign/valign,
     // wrapped in an EventBox that swallows clicks so they don't reach the
     // backdrop. Esc still closes.
+    // Small panel anchored top-right — NOT full screen. The full-screen
+    // backdrop approach caused a "dead zone" on the bar: with NORMAL
+    // exclusivity the layer-shell surface still covered the bar area but
+    // the inner eventbox couldn't be allocated there, so clicks on the
+    // bar got swallowed. Dismiss is via the Clock toggle button, the bar
+    // wrapper's dismissDrawers handler, or Esc.
     return <window
         name="calendar"
         className="CalendarPopupWindow"
         application={App}
         visible={false}
-        keymode={Astal.Keymode.EXCLUSIVE}
-        // NORMAL respects the bar's reserved zone, so the panel sits above
-        // the bar rather than covering it. Bar clicks are dismissed by the
-        // Bar's own button-press-event handler (see widget/Bar.tsx).
+        keymode={Astal.Keymode.ON_DEMAND}
         exclusivity={Astal.Exclusivity.NORMAL}
-        anchor={TOP | BOTTOM | LEFT | RIGHT}
+        anchor={TOP | RIGHT}
         layer={Astal.Layer.OVERLAY}
         onKeyPressEvent={(self, ev) => {
             if (ev.get_keyval()[1] === 0xff1b /* GDK_KEY_Escape */) self.hide()
         }}>
-        <eventbox
-            hexpand vexpand
-            onButtonPressEvent={(self) => {
-                const w = self.get_ancestor(Astal.Window.$gtype) as Astal.Window
-                w?.hide()
-                return true
-            }}>
-            <box halign={Gtk.Align.END} valign={Gtk.Align.START}>
-                <eventbox
-                    // Swallow clicks so the backdrop handler doesn't fire.
-                    onButtonPressEvent={() => true}>
-                    <box className="CalendarPanel" vertical spacing={8}
-                        widthRequest={460}>
-                        <box className="CalHeader" spacing={6}>
-                            <button className="NavBtn" onClicked={() => shiftMonth(-1)}>
-                                <label label={"\u{f0141}"} />
-                            </button>
-                            <label className="CalTitle" hexpand
-                                label={bind(title)} />
-                            <button className="TodayBtn" onClicked={gotoToday}>
-                                <label label="Today" />
-                            </button>
-                            <button className="NavBtn" onClicked={() => shiftMonth(1)}>
-                                <label label={"\u{f0142}"} />
-                            </button>
-                        </box>
-                        {weekdayBox}
-                        {gridBox}
-                        {detailBox}
-                    </box>
-                </eventbox>
+        <box className="CalendarPanel" vertical spacing={8}
+            widthRequest={460}>
+            <box className="CalHeader" spacing={6}>
+                <button className="NavBtn" onClicked={() => shiftMonth(-1)}>
+                    <label label={"\u{f0141}"} />
+                </button>
+                <label className="CalTitle" hexpand
+                    label={bind(title)} />
+                <button className="TodayBtn" onClicked={gotoToday}>
+                    <label label="Today" />
+                </button>
+                <button className="NavBtn" onClicked={() => shiftMonth(1)}>
+                    <label label={"\u{f0142}"} />
+                </button>
             </box>
-        </eventbox>
+            {weekdayBox}
+            {gridBox}
+            {detailBox}
+        </box>
     </window>
 }
