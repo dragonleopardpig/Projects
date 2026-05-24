@@ -267,3 +267,56 @@ window.Bar .ControlButton {
 }
 window.Bar .ControlButton:hover { color: #ff69b4; }
 
+window.Bar .AppDrawerButton {
+    color: #00ffff;
+    padding: 0 8px;
+    font-size: 15px;
+}
+window.Bar .AppDrawerButton:hover { color: #ff69b4; }
+
+/* ── App Drawer (Launchpad-style overlay) ───────────────────────── */
+window.AppDrawerWindow {
+    background: rgba(0, 0, 0, 0.55);    /* dim the whole screen */
+}
+
+.AppDrawerPanel {
+    background: rgba(20, 20, 30, 0.95);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 18px;
+    margin: 24px;
+    font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font Mono", monospace;
+    color: #eee;
+
+    entry.AppSearch {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 10px;
+        padding: 6px 10px;
+        color: #eee;
+        font-size: 14px;
+    }
+    entry.AppSearch:focus {
+        border-color: #ff69b4;
+    }
+
+    scrolledwindow { background: transparent; }
+
+    .AppTile {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        padding: 10px 6px;
+        min-width: 88px;
+        min-height: 96px;
+    }
+    .AppTile:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 105, 180, 0.30);
+    }
+    .AppName {
+        color: #eee;
+        font-size: 11px;
+    }
+}
+

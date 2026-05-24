@@ -3,6 +3,7 @@ import style from "./style.scss"
 import Bar from "./widget/Bar"
 import CalendarPopup from "./widget/CalendarPopup"
 import ControlCenter from "./widget/ControlCenter"
+import AppDrawer from "./widget/AppDrawer"
 
 // GTK3's CSS parser doesn't understand `@charset` and bails on the whole
 // stylesheet if it sees one. Sass emits it automatically when the SCSS source
@@ -16,5 +17,6 @@ App.start({
         // Shared popups; bars on any monitor toggle them by name.
         CalendarPopup()
         ControlCenter()
+        AppDrawer()
     },
 })

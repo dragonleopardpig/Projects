@@ -17,6 +17,7 @@ import Mpris from "./Mpris"
 import Power from "./Power"
 import Notification from "./Notification"
 import ControlButton from "./ControlButton"
+import AppDrawerButton from "./AppDrawerButton"
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
     const { BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
@@ -29,6 +30,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
         application={App}>
         <centerbox>
             <box halign={Gtk.Align.START} spacing={6}>
+                <AppDrawerButton />
                 <Workspaces />
                 <Cpu />
                 <Memory />
