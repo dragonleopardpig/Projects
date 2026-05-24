@@ -2,7 +2,7 @@ import { bind } from "astal"
 import { Gtk } from "astal/gtk3"
 import Mpris from "gi://AstalMpris"
 import { ICON } from "../lib/icons"
-import { bindToggleButton } from "../lib/drawers"
+import { bindToggleButton, dismissDrawers } from "../lib/drawers"
 
 export default function MprisWidget() {
     const mpris = Mpris.get_default()
@@ -17,7 +17,7 @@ export default function MprisWidget() {
                 <button
                     className="MprisPlay"
                     tooltipText="Play/Pause"
-                    onClicked={() => p.play_pause()}>
+                    onClicked={() => { dismissDrawers(); p.play_pause() }}>
                     <label label={bind(p, "playbackStatus").as(s =>
                         s === Mpris.PlaybackStatus.PLAYING ? ICON.pause : ICON.play
                     )} />

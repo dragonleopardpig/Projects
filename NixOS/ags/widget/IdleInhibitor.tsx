@@ -1,5 +1,6 @@
 import { Variable, execAsync } from "astal"
 import { ICON } from "../lib/icons"
+import { dismissDrawers } from "../lib/drawers"
 
 // "Active" inverts the usual sense: when hypridle is RUNNING, the system
 // will sleep/dim/lock idly. When hypridle is STOPPED, idle is inhibited.
@@ -26,6 +27,7 @@ refresh()
 setInterval(refresh, 5000)
 
 async function toggle() {
+    dismissDrawers()
     const running = idleRunning.get()
     try {
         await execAsync(["systemctl", "--user", running ? "stop" : "start", SVC])

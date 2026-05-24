@@ -1,5 +1,6 @@
 import { bind } from "astal"
 import AstalHyprland from "gi://AstalHyprland"
+import { dismissDrawers } from "../lib/drawers"
 
 export default function Workspaces() {
     const hypr = AstalHyprland.get_default()
@@ -14,7 +15,7 @@ export default function Workspaces() {
                         className={bind(hypr, "focusedWorkspace").as(fw =>
                             fw && fw.id === ws.id ? "focused" : ""
                         )}
-                        onClicked={() => ws.focus()}
+                        onClicked={() => { dismissDrawers(); ws.focus() }}
                     >
                         <label label={String(ws.id)} />
                     </button>

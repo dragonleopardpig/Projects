@@ -17,25 +17,29 @@ export function dismissDrawers(except?: string) {
     }
 }
 
-// Toggle button helper that plays well with the bar's "any click dismisses
-// drawers" handler. Bar's press handler runs *after* the inner button's
-// press handler (events bubble inner→outer), so we capture the drawer's
-// pre-press visibility on press and apply it on click — letting us tell
-// "user wants to close this" apart from "user wants to open this".
+// Toggle button helper. Gtk.Button consumes button-press-event so the
+// bar's outer event-box never sees presses on a button; the toggle has
+// to do its own open-vs-close logic. We capture visibility at press
+// time so the answer is stable even if something else changes it.
 export function bindToggleButton(button: any, name: string) {
     let wasOpenOnPress = false
     button.connect("button-press-event", () => {
         wasOpenOnPress = App.get_window(name)?.visible ?? false
-        return false   // let event keep bubbling so siblings dismiss too
+        return false
     })
     button.connect("clicked", () => {
         const w = App.get_window(name)
         if (!w) return
         if (wasOpenOnPress) {
-            // The bar wrapper's press handler already hid it. Leave it hidden.
-            return
+            w.hide()
+        } else {
+            dismissDrawers(name)
+            w.show()
         }
-        dismissDrawers(name)
-        w.show()
     })
 }
+
+// Non-toggle bar widgets that aren't drawers themselves but should also
+// dismiss whichever drawer is open. Wire each one's primary signal up
+// with this. Returns no value — fire and forget.
+export function dismissOnClick() { dismissDrawers() }
