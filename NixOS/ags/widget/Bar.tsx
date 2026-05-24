@@ -19,6 +19,7 @@ import Notification from "./Notification"
 import ControlButton from "./ControlButton"
 import AppDrawerButton from "./AppDrawerButton"
 import IdleInhibitor from "./IdleInhibitor"
+import Privacy from "./Privacy"
 import { dismissDrawers } from "../lib/drawers"
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -55,6 +56,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
                 <SysTray />
                 <Weather />
                 <Clock />
+                <Privacy />
                 <Notification />
                 <IdleInhibitor />
                 <ControlButton />

@@ -60,6 +60,18 @@ window.Bar {
     .IdleInhibitor:hover     { color: #ffd700; }
     .IdleInhibitor.Inhibited { color: #ffd700; text-shadow: 0 0 4px #ffd700; }
 
+    .Privacy { padding: 0 4px; }
+    .Privacy .MicActive {
+        color: #ff4500;
+        text-shadow: 0 0 4px #ff4500;
+        padding: 0 4px;
+    }
+    .Privacy .CamActive {
+        color: #ff69b4;
+        text-shadow: 0 0 4px #ff69b4;
+        padding: 0 4px;
+    }
+
     .KeyboardState .led.on  { color: #ffd700; }
     .KeyboardState .led.off { color: #444; }
 
