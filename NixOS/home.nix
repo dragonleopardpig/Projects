@@ -1203,6 +1203,7 @@ in
           "$mod, up, movefocus, u"
           "$mod, down, movefocus, d"
           "$mod SHIFT, F, fullscreen, 1"
+          "$mod SHIFT, B, exec, ags request togglebar"
           '', Print, exec, ~/.local/bin/screenshot''
           ", XF86AudioRaiseVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
           ", XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"

@@ -21,10 +21,11 @@ import IdleInhibitor from "./IdleInhibitor"
 import Privacy from "./Privacy"
 import { dismissDrawers } from "../lib/drawers"
 
-export default function Bar(gdkmonitor: Gdk.Monitor) {
+export default function Bar(gdkmonitor: Gdk.Monitor, index: number) {
     const { TOP, LEFT, RIGHT } = Astal.WindowAnchor
 
     return <window
+        name={`bar-${index}`}
         className="Bar"
         gdkmonitor={gdkmonitor}
         exclusivity={Astal.Exclusivity.EXCLUSIVE}
