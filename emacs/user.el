@@ -47,7 +47,7 @@
   ;; ls flags: -l long, -a hidden, -h human sizes, -v natural sort, dirs first.
   (dired-listing-switches "-lahv --group-directories-first")
   (dirvish-default-layout '(1 0.11 0.5))
-  (dirvish-attributes '(file-size vc-state subtree-state collapse))
+  (dirvish-attributes '(file-size file-time vc-state subtree-state collapse))
   (dirvish-mode-line-format
    '(:left (sort symlink) :right (omit yank index)))
   (dirvish-preview-dispatchers
@@ -63,6 +63,113 @@
       ;; Re-list on each visit too — covers cases where the watcher missed an event.
       dired-auto-revert-buffer t)
 (global-auto-revert-mode 1)
+
+;; Built-in autorevert ignores in-place content changes in Dired buffers:
+;; the notify handler filters out 'changed' actions for non-file buffers, and
+;; `dired-buffer-stale-p' only looks at directory mtime (which doesn't bump
+;; when a file inside is overwritten). Add a parallel per-buffer watcher that
+;; reverts on any directory event (with debounce). `revert-buffer t t' passes
+;; ignore-auto=t so Dirvish also drops its `dirvish--dir-data' cache and
+;; recomputes size/time/vc attributes.
+(require 'filenotify)
+(require 'cl-lib)
+
+(defvar my/dired-fn-debug nil
+  "When non-nil, log every filesystem event handled by `my/dired-fn-handler'.")
+
+(defvar my/dired-fn-table (make-hash-table :test 'equal)
+  "Map of file-notify descriptor to its owning dired buffer.")
+
+(defvar-local my/dired-fn-watch nil)
+(defvar-local my/dired-fn-dir nil)
+(defvar-local my/dired-fn-timer nil)
+
+(defun my/dired-fn--invalidate-thumb (file)
+  "Delete any cached Dirvish thumbnails for FILE and clear image memoization."
+  (when (and (boundp 'dirvish-cache-dir) (stringp file))
+    (let* ((thumb-dir (expand-file-name "thumbnails" dirvish-cache-dir))
+           (md5 (secure-hash 'md5 (concat "file://" (expand-file-name file)))))
+      (when (file-directory-p thumb-dir)
+        (dolist (sub (ignore-errors
+                       (directory-files thumb-dir t directory-files-no-dot-files-regexp)))
+          (when (file-directory-p sub)
+            (dolist (f (ignore-errors
+                         (directory-files sub t (concat "\\`" (regexp-quote md5)))))
+              (ignore-errors (delete-file f))))))))
+  (clear-image-cache))
+
+(defun my/dired-fn--do-revert (buf)
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (when (derived-mode-p 'dired-mode)
+        (let ((inhibit-message t))
+          (ignore-errors (revert-buffer t t)))
+        (when (fboundp 'dirvish--redisplay)
+          (ignore-errors (dirvish--redisplay)))
+        ;; If a preview is showing for a file we just invalidated, force it
+        ;; to repaint now (otherwise the old image overlay can linger).
+        (when (fboundp 'dirvish--preview-update)
+          (let ((dv (and (fboundp 'dirvish-curr) (dirvish-curr))))
+            (when dv (ignore-errors (dirvish--preview-update dv)))))
+        (force-mode-line-update t)))))
+
+(defun my/dired-fn-handler (event)
+  (let* ((descr (car event))
+         (action (nth 1 event))
+         (file (nth 2 event))
+         (target (gethash descr my/dired-fn-table)))
+    (when my/dired-fn-debug
+      (message "[dired-fn] %S → buf=%S live=%S" event target (buffer-live-p target)))
+    ;; Drop the thumbnail synchronously so the regenerate kicks off on the
+    ;; very next preview pass.
+    (when (memq action '(changed attribute-changed created renamed-to renamed))
+      (my/dired-fn--invalidate-thumb file))
+    (when (buffer-live-p target)
+      (with-current-buffer target
+        (when (timerp my/dired-fn-timer) (cancel-timer my/dired-fn-timer))
+        (setq my/dired-fn-timer
+              (run-with-timer 0.2 nil #'my/dired-fn--do-revert target))))))
+
+(defun my/dired-fn-teardown ()
+  (when (timerp my/dired-fn-timer) (cancel-timer my/dired-fn-timer))
+  (when my/dired-fn-watch
+    (remhash my/dired-fn-watch my/dired-fn-table)
+    (ignore-errors (file-notify-rm-watch my/dired-fn-watch))
+    (setq my/dired-fn-watch nil
+          my/dired-fn-dir nil)))
+
+(defun my/dired-fn-setup ()
+  "Attach an inotify watcher to the current dired buffer's directory."
+  (interactive)
+  (let ((dir (and default-directory
+                  (not (file-remote-p default-directory))
+                  (file-directory-p default-directory)
+                  (expand-file-name default-directory))))
+    ;; Re-attach if the buffer's directory changed (e.g. dired-up-directory).
+    (when (and my/dired-fn-watch
+               (not (equal my/dired-fn-dir dir)))
+      (my/dired-fn-teardown))
+    (when (and dir (not my/dired-fn-watch))
+      (let ((descr (ignore-errors
+                     (file-notify-add-watch
+                      dir '(change) #'my/dired-fn-handler))))
+        (when descr
+          (setq my/dired-fn-dir dir
+                my/dired-fn-watch descr)
+          (puthash descr (current-buffer) my/dired-fn-table)
+          (add-hook 'kill-buffer-hook #'my/dired-fn-teardown nil t))))))
+
+(add-hook 'dired-mode-hook #'my/dired-fn-setup)
+;; Dirvish navigates by changing `default-directory' in the SAME buffer
+;; rather than spawning new dired buffers, so the dired-mode-hook above
+;; only fires on the very first visit. Re-attach on revert.
+(add-hook 'dired-after-readin-hook #'my/dired-fn-setup)
+
+;; Retrofit any dired buffers that already existed when this file was loaded.
+(dolist (buf (buffer-list))
+  (with-current-buffer buf
+    (when (derived-mode-p 'dired-mode)
+      (my/dired-fn-setup))))
 
 ;; Same arrow keys when Dirvish isn't overriding (plain Dired buffers).
 (with-eval-after-load 'dired
