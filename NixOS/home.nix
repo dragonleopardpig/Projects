@@ -96,15 +96,6 @@ in
     terminal = false;
   };
 
-  xdg.desktopEntries.freecad = {
-    name = "FreeCAD";
-    exec = "/home/thinky/.local/bin/freecad-opaque %f";
-    icon = "freecad";
-    comment = "FreeCAD (opaque Qt style)";
-    categories = [ "Graphics" "Engineering" "Science" ];
-    terminal = false;
-  };
-
   xdg.desktopEntries.remmina-xcb = {
     name = "Remmina (X11)";
     exec = "/home/thinky/.local/bin/remmina-xcb %U";
@@ -561,7 +552,26 @@ in
 
   # Hide system .desktop entries that duplicate our wrappers in Walker.
   # Each override shadows the system entry by sharing the same desktop ID.
-  xdg.desktopEntries."org.freecad.FreeCAD"    = { name = "FreeCAD";  exec = "true"; noDisplay = true; };
+  # FreeCAD: route through freecad-opaque wrapper so launcher-spawned
+  # invocations inherit the NVIDIA EGL/GLX env that a plain `FreeCAD`
+  # call lacks (otherwise Qt's wayland → xcb fallback can't init GL).
+  xdg.desktopEntries."org.freecad.FreeCAD" = {
+    name = "FreeCAD";
+    genericName = "CAD Application";
+    comment = "Feature based Parametric Modeler (XWayland, NVIDIA EGL)";
+    exec = "/home/thinky/.local/bin/freecad-opaque %F";
+    icon = "org.freecad.FreeCAD";
+    categories = [ "Graphics" "Science" "Education" "Engineering" ];
+    mimeType = [
+      "application/x-extension-fcstd"
+      "model/step" "model/step+zip" "model/iges" "application/iges"
+      "model/stl" "model/obj" "model/vrml" "model/vnd.collada+xml"
+      "image/vnd.dwg" "image/vnd.dxf" "application/vnd.shp"
+    ];
+    startupNotify = true;
+    settings.StartupWMClass = "FreeCAD";
+    terminal = false;
+  };
   xdg.desktopEntries.sioyek                   = { name = "Sioyek";   exec = "true"; noDisplay = true; };
   xdg.desktopEntries.mayo                     = { name = "Mayo";     exec = "true"; noDisplay = true; };
   xdg.desktopEntries.gmsh                     = { name = "Gmsh";     exec = "true"; noDisplay = true; };
@@ -626,25 +636,20 @@ in
     executable = true;
     text = ''
       #!/bin/sh
-      # Force XWayland + opaque Qt style to avoid transparency under Wayland/Kvantum
+      # Force XWayland + opaque Qt style to avoid transparency under Wayland/Kvantum.
+      # The XCB platform + Fusion style + cleared platform theme gets opaque
+      # backgrounds; hardware GL is left alone so FreeCAD's 3D viewport
+      # (QOpenGLWidget / Coin3D) can create real GLX contexts on NVIDIA.
       export QT_QPA_PLATFORM=xcb
       export XDG_SESSION_TYPE=x11
       export XDG_CURRENT_DESKTOP=X-Generic
       export QT_QPA_PLATFORMTHEME=
       export QT_STYLE_OVERRIDE=Fusion
-      # Avoid GLX/DRI3 compositor transparency issues on NVIDIA + XWayland
-      export QT_XCB_GL_INTEGRATION=none
-      export LIBGL_DRI3_DISABLE=1
-      export QT_OPENGL=desktop
-      export QT_QUICK_BACKEND=software
-      # Force Qt to avoid alpha/transparent surfaces
       export QT_X11_NO_MITSHM=1
       export QT_AUTO_SCREEN_SCALE_FACTOR=0
-      export QML_DISABLE_DISK_CACHE=1
-      export QSG_RHI_BACKEND=software
       export GDK_BACKEND=x11
       export NO_AT_BRIDGE=1
-      # Force NVIDIA EGL/GLX so f3d thumbnailer doesn't try Mesa on the NVIDIA GPU
+      # NVIDIA driver via GLVND (also keeps f3d thumbnailer off Mesa)
       export __EGL_VENDOR_LIBRARY_FILENAMES=/run/opengl-driver/share/glvnd/egl_vendor.d/10_nvidia.json
       export __GLX_VENDOR_LIBRARY_NAME=nvidia
       exec ${pkgs.freecad}/bin/FreeCAD "$@"
