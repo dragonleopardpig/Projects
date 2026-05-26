@@ -321,12 +321,22 @@ window.Bar .ControlButton {
 }
 window.Bar .ControlButton:hover { color: #ff69b4; }
 
+/* App-drawer launcher: NixOS snowflake glyph (nf-linux-nixos, U+F313).
+   font-size is bumped well above the bar default (15px) so the flake
+   reads as the visual anchor. text-shadow gives it the same kind of
+   "lit-up" feel the fastfetch ASCII logo has at the terminal. */
 window.Bar .AppDrawerButton {
-    color: #00ffff;
-    padding: 0 8px;
-    font-size: 15px;
+    color: #7ebae4;                 /* NixOS sky-blue, a touch lighter for punch */
+    padding: 0 6px;
+    font-size: 26px;
+    text-shadow: 0 0 6px rgba(126, 186, 228, 0.95),
+                 0 0 14px rgba(126, 186, 228, 0.55);
 }
-window.Bar .AppDrawerButton:hover { color: #ff69b4; }
+window.Bar .AppDrawerButton:hover {
+    color: #ff69b4;
+    text-shadow: 0 0 8px rgba(255, 105, 180, 0.95),
+                 0 0 18px rgba(255, 105, 180, 0.55);
+}
 
 /* ── App Drawer (full-screen Launchpad) ─────────────────────────── */
 window.AppDrawerWindow {
