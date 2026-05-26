@@ -12,7 +12,7 @@ export default function SysTray() {
                 actionGroup={bind(item, "actionGroup").as(g => ["dbusmenu", g])}
                 menuModel={bind(item, "menuModel")}
             >
-                <icon gicon={bind(item, "gicon")} />
+                <icon gicon={bind(item, "gicon")} pixelSize={18} />
             </menubutton>
         )))}
     </box>
