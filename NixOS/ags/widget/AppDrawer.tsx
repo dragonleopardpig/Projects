@@ -1,6 +1,28 @@
 import { App, Astal, Gtk, Gdk } from "astal/gtk3"
-import { Variable } from "astal"
+import { Variable, exec, execAsync } from "astal"
 import Apps from "gi://AstalApps"
+
+// Launch an app pinned to the currently-focused Hyprland workspace.
+// Hyprland's PID-based initial_workspace_tracking can't follow the
+// spawn chain across the AGS layer-shell + systemd-scope boundary, so
+// untracked windows drift to whichever workspace Hyprland defaults to
+// (often the one hosting a long-lived client like Kitty). We query
+// the active workspace ID and dispatch via `[workspace N silent]`,
+// which is Hyprland's runtime windowrule prefix.
+function launchOnActiveWorkspace(app: Apps.Application) {
+    try {
+        const ws = JSON.parse(exec("hyprctl activeworkspace -j")).id
+        // Strip XDG field codes (%f %F %u %U %i %c %k) before passing
+        // to hyprctl — the launcher isn't supplying any file/url args.
+        const cmd = app.executable.replace(/\s*%[a-zA-Z]/g, "").trim()
+        execAsync(["hyprctl", "dispatch", "exec",
+                   `[workspace ${ws} silent] ${cmd}`])
+            .catch(e => { console.error("hyprctl dispatch failed:", e); app.launch() })
+    } catch (e) {
+        console.error("launchOnActiveWorkspace fallback:", e)
+        app.launch()
+    }
+}
 
 // macOS Launchpad-style app drawer: a true full-screen overlay with a
 // search box and a FlowBox of icon tiles. Click outside any icon or
@@ -43,7 +65,7 @@ export default function AppDrawer() {
         btn.add(inner)
         btn.get_style_context().add_class("AppTile")
         btn.connect("clicked", () => {
-            try { app.launch() } catch (e) { console.error("launch failed:", e) }
+            launchOnActiveWorkspace(app)
             App.toggle_window("app-drawer")
         })
         btn.set_tooltip_text(app.description || app.name)
@@ -81,7 +103,7 @@ export default function AppDrawer() {
     searchEntry.connect("activate", () => {
         const results = apps.fuzzy_query(query.get())
         if (results.length) {
-            try { results[0].launch() } catch (e) { console.error(e) }
+            launchOnActiveWorkspace(results[0])
             App.toggle_window("app-drawer")
         }
     })
