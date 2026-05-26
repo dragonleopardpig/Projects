@@ -113,5 +113,5 @@ tooltip label { color: #ffd700; padding: 4px; }
 #custom-holiday.school-upcoming { color: #00ffff; }
 #custom-holiday.school-today    { color: #ffd700; font-weight: bold; }
 #custom-notification { color: #ffd700; padding: 0 8px; }
-#custom-power     { color: #ff4500; padding: 0 12px; font-size: 14px; }
+#custom-power     { color: #ff4500; padding: 0 12px; font-size: 18px; }
 #custom-power:hover { color: #ff69b4; }
