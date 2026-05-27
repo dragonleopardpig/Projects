@@ -52,13 +52,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor, index: number) {
                 <Network />
                 <Battery />
                 <KeyboardState />
-                <SysTray />
                 <Weather />
                 <Clock />
                 <Privacy />
                 <Notification />
                 <IdleInhibitor />
                 <ControlButton />
+                <SysTray />
                 <Power />
             </box>
         </centerbox>

@@ -430,3 +430,43 @@ window.Bar .MprisTitle:hover { color: #ffd700; }
 window.Bar .MprisPlay { color: #ffd700; padding: 0 4px; }
 window.Bar .MprisPlay:hover { color: #ff69b4; }
 
+/* ── OSD (volume / brightness flash) ─────────────────────────────── */
+window.OsdWindow { background: transparent; }
+
+window.OsdWindow .Osd {
+    background: rgba(20, 20, 30, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 10px 16px;
+    color: #eee;
+    font-family: "CaskaydiaCove Nerd Font", "Symbols Nerd Font Mono", monospace;
+}
+
+window.OsdWindow .OsdGlyph {
+    color: #ffd700;
+    font-size: 22px;
+    min-width: 28px;
+}
+
+window.OsdWindow .OsdValue {
+    color: #ddd;
+    font-weight: bold;
+}
+
+window.OsdWindow .OsdBar trough {
+    min-height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+window.OsdWindow .OsdBar block {
+    min-height: 6px;
+    border-radius: 3px;
+    background: transparent;
+    border: none;
+}
+
+window.OsdWindow .OsdBar block.filled {
+    background: #ffd700;
+}
+
