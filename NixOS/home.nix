@@ -702,6 +702,39 @@ in
     '';
   };
 
+  home.file.".local/bin/screenshot-full" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+      grim - | swappy -f -
+    '';
+  };
+
+  home.file.".local/bin/screenshot-monitor" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+      out=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')
+      grim -o "$out" - | swappy -f -
+    '';
+  };
+
+  home.file.".local/bin/screenshot-window" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+      # Feed all on-screen window rects to slurp; click one to capture it.
+      geom=$(hyprctl clients -j \
+        | jq -r '.[] | select(.workspace.id >= 0 and .mapped == true and .hidden == false)
+                     | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"' \
+        | slurp)
+      grim -g "$geom" - | swappy -f -
+    '';
+  };
+
   home.file.".local/bin/brightness-ctl" = {
     executable = true;
     text = ''
@@ -1060,6 +1093,14 @@ in
     }
 
     windowrule {
+      name = swappy-float
+      match:class = ^swappy$
+      float = yes
+      center = yes
+      size = 1600 1000
+    }
+
+    windowrule {
       name = onlyoffice-float
       match:class = ^(DesktopEditors|ONLYOFFICE|onlyoffice-desktopeditors)$
       float = yes
@@ -1210,6 +1251,9 @@ in
           "$mod SHIFT, F, fullscreen, 1"
           "$mod SHIFT, B, exec, ags request togglebar"
           '', Print, exec, ~/.local/bin/screenshot''
+          "SHIFT, Print, exec, ~/.local/bin/screenshot-full"
+          "CTRL, Print, exec, ~/.local/bin/screenshot-monitor"
+          "ALT, Print, exec, ~/.local/bin/screenshot-window"
           ", XF86AudioRaiseVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
           ", XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
           ", XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
