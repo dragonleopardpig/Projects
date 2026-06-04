@@ -1249,7 +1249,8 @@ in
           "$mod, up, movefocus, u"
           "$mod, down, movefocus, d"
           "$mod SHIFT, F, fullscreen, 1"
-          "$mod SHIFT, B, exec, ags request togglebar"
+          "$mod SHIFT, A, exec, ags request togglebar"
+          "$mod, A, exec, sh -c 'ags quit 2>/dev/null; sleep 0.3; uwsm app -- ags run'"
           '', Print, exec, ~/.local/bin/screenshot''
           "SHIFT, Print, exec, ~/.local/bin/screenshot-full"
           "CTRL, Print, exec, ~/.local/bin/screenshot-monitor"
