@@ -37,23 +37,29 @@ if (speaker) {
     speaker.connect("notify::mute", onAudio)
 }
 
-// brightnessctl reads sysfs; cheap enough to poll every 200ms.
-function readBrightness(): number {
+// Scope reads to the backlight class. Without `-c backlight`, brightnessctl
+// falls back to the first LED device (capslock/numlock), so toggling Caps Lock
+// would otherwise trip the brightness OSD. Machines with no backlight (desktops
+// driving monitors over DDC) read nothing and never flash brightness.
+function readBacklight(): number | null {
     try {
-        const cur = parseInt(exec("brightnessctl g"))
-        const max = parseInt(exec("brightnessctl m"))
-        return max > 0 ? cur / max : 0
-    } catch { return 0 }
+        const cur = parseInt(exec("brightnessctl -c backlight g"))
+        const max = parseInt(exec("brightnessctl -c backlight m"))
+        return max > 0 ? cur / max : null
+    } catch { return null }
 }
-let lastBrightness = readBrightness()
-Variable(0).poll(200, () => {
-    const cur = readBrightness()
-    if (cur !== lastBrightness) {
-        lastBrightness = cur
-        if (primed) flash("brightness", cur)
-    }
-    return 0
-})
+const hasBacklight = readBacklight() !== null
+if (hasBacklight) {
+    let lastBrightness = readBacklight()
+    Variable(0).poll(200, () => {
+        const cur = readBacklight()
+        if (cur !== null && cur !== lastBrightness) {
+            lastBrightness = cur
+            if (primed) flash("brightness", cur)
+        }
+        return 0
+    })
+}
 
 const BRIGHT_GLYPH = "\u{f0335}"  // nf-md-brightness_6
 

@@ -31,16 +31,25 @@ function AudioCard() {
     </box>
 }
 
-// ── Brightness card (intel_backlight via brightnessctl) ───────────
+// ── Brightness card (backlight via brightnessctl) ─────────────────
+// Scope to the backlight class; bare `brightnessctl` falls back to LED devices
+// (capslock/numlock) on desktops with no backlight, which drive brightness over
+// DDC instead. No backlight → no card.
+function hasBacklight(): boolean {
+    try { return parseInt(exec("brightnessctl -c backlight m")) > 0 }
+    catch { return false }
+}
+
 const brightness = Variable(0).poll(2000, () => {
     try {
-        const cur = parseInt(exec("brightnessctl g"))
-        const max = parseInt(exec("brightnessctl m"))
+        const cur = parseInt(exec("brightnessctl -c backlight g"))
+        const max = parseInt(exec("brightnessctl -c backlight m"))
         return max > 0 ? cur / max : 0
     } catch { return 0 }
 })
 
 function BrightnessCard() {
+    if (!hasBacklight()) return <box />
     return <box className="Card" vertical spacing={4}>
         <label className="CardTitle" label="Brightness" xalign={0} />
         <box spacing={8}>
@@ -50,7 +59,7 @@ function BrightnessCard() {
                 value={brightness()}
                 onDragged={({ value }) => {
                     brightness.set(value)
-                    execAsync(["brightnessctl", "s", `${Math.round(value * 100)}%`])
+                    execAsync(["brightnessctl", "-c", "backlight", "s", `${Math.round(value * 100)}%`])
                         .catch(() => {})
                 }}
             />
