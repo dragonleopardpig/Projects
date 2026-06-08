@@ -571,6 +571,153 @@ self-contained and survives whatever the Emacs image layer does."
 (require 'saveplace-pdf-view)
 (save-place-mode 1)
 
+;; ** PDF follow view — two-page spread across side-by-side windows
+;; pdf-view is image-based, so the built-in `follow-mode' can't flow a single
+;; page across windows.  Instead show consecutive pages like an open book: the
+;; right window always trails the left by one page, and navigation flips the
+;; spread two pages at a time (keyboard and mouse wheel).  Toggle with `d'
+;; (`f' is taken by pdf-links-minor-mode for link isearch).
+(defvar pdf-view-follow-minor-mode)    ; forward decl; defined by define-minor-mode below
+(defvar pdf-view-follow--syncing nil
+  "Re-entrancy guard for `pdf-view-follow--sync'.")
+
+(defun pdf-view-follow--windows ()
+  "Return this PDF buffer's two windows ordered (LEFT RIGHT), or nil.
+Screen position is the single source of truth: the windows are sorted by
+their left edge so the physically leftmost window is always first and gets
+the lower page.  Deriving order from geometry every time (rather than
+trusting a window recorded at setup) means the spread can never invert if
+the windows are ever rearranged."
+  (let ((wins (sort (get-buffer-window-list nil nil nil)
+                    (lambda (a b)
+                      (< (car (window-edges a)) (car (window-edges b)))))))
+    (when (>= (length wins) 2)
+      (list (nth 0 wins) (nth 1 wins)))))
+
+(defun pdf-view-follow--uncross-overlays ()
+  "Bind every window's pdf-view overlay back to that same window.
+After `split-window-right', pdf-view leaves the two windows' overlays
+*crossed*: window A's overlay carries a `window' property pointing at window
+B (and vice versa), so each window renders the OTHER window's page -- the
+page property reads correct while the displayed image is swapped.  The two
+overlays are distinct objects, so re-pointing each at its own window
+un-crosses them.  Cheap and idempotent; safe to call on every sync."
+  (dolist (w (get-buffer-window-list nil nil nil))
+    (let ((ol (image-mode-window-get 'overlay w)))
+      (when (overlayp ol)
+        (overlay-put ol 'window w)))))
+
+(defun pdf-view-follow--sync ()
+  "Make the spread authoritative: left = lower page, right = left + 1.
+Run from `pdf-view-after-change-page-hook', which selects the window whose
+page just changed.  Take that window's page as the anchor, derive the other
+window's page, un-cross the overlays, then repaint BOTH windows to their own
+page.  Repainting both (even the unchanged one) self-heals any overlay
+crossing, so the physical-left window can never show the higher page."
+  (unless pdf-view-follow--syncing
+    (let ((pdf-view-follow--syncing t)
+          (wins (pdf-view-follow--windows)))
+      (when (and pdf-view-follow-minor-mode wins)
+        (let* ((left (nth 0 wins))
+               (right (nth 1 wins))
+               (sel (selected-window))
+               (np (pdf-cache-number-of-pages))
+               (lp (pdf-view-current-page left))
+               (rp (pdf-view-current-page right)))
+          (if (eq sel right)
+              (setq lp (max 1 (1- rp)))
+            (setq rp (min np (1+ lp))))
+          (pdf-view-follow--uncross-overlays)
+          (pdf-view-goto-page lp left)
+          (pdf-view-goto-page rp right))))))
+
+(defun pdf-view-follow-next-page ()
+  "Flip the two-page spread forward by two pages."
+  (interactive)
+  (let ((wins (pdf-view-follow--windows)))
+    (if (not wins)
+        (call-interactively #'pdf-view-next-page-command)
+      (let ((left (nth 0 wins))
+            (np (pdf-cache-number-of-pages)))
+        (pdf-view-goto-page (min (max 1 (1- np))
+                                 (+ 2 (pdf-view-current-page left)))
+                            left)))))
+
+(defun pdf-view-follow-previous-page ()
+  "Flip the two-page spread back by two pages."
+  (interactive)
+  (let ((wins (pdf-view-follow--windows)))
+    (if (not wins)
+        (call-interactively #'pdf-view-previous-page-command)
+      (let ((left (nth 0 wins)))
+        (pdf-view-goto-page (max 1 (- (pdf-view-current-page left) 2)) left)))))
+
+(defvar pdf-view-follow-minor-mode-map (make-sparse-keymap)
+  "Keymap for `pdf-view-follow-minor-mode'.")
+
+;; Populate at top level (not inside the defvar) so reloading this file
+;; refreshes the bindings on the *existing* keymap object — the one
+;; `define-minor-mode' captured — instead of being skipped because the defvar
+;; is already bound.
+(setcdr pdf-view-follow-minor-mode-map nil)   ; drop any bindings from a prior load
+(let ((map pdf-view-follow-minor-mode-map))
+  ;; Page navigation flips the spread two pages at a time.  PageDown/PageUp
+  ;; (`<next>'/`<prior>') are bound to `forward-page'/`backward-page' in the
+  ;; major map, so bind both the keys and the remap targets to be safe.
+  (define-key map [remap pdf-view-next-page-command]     #'pdf-view-follow-next-page)
+  (define-key map [remap pdf-view-previous-page-command] #'pdf-view-follow-previous-page)
+  (define-key map [remap forward-page]                   #'pdf-view-follow-next-page)
+  (define-key map [remap backward-page]                  #'pdf-view-follow-previous-page)
+  (define-key map (kbd "<next>")                         #'pdf-view-follow-next-page)
+  (define-key map (kbd "<prior>")                        #'pdf-view-follow-previous-page))
+  ;; SPC/DEL/arrows/wheel are left alone so you can zoom (`+'/`-'/`W'/`H'/`P')
+  ;; and pan within an enlarged page; the sync hook keeps the two windows
+  ;; one page apart however you move.
+
+(defun pdf-view-follow--setup ()
+  "Lay out two side-by-side windows and sync them as a spread.
+Split the frame, then derive left/right from `pdf-view-follow--windows' (by
+screen position) so the initial assignment uses the same physical-order rule
+as every later sync -- the leftmost window shows the lower page."
+  (delete-other-windows)
+  (split-window-right)
+  (add-hook 'pdf-view-after-change-page-hook #'pdf-view-follow--sync nil t)
+  (let ((wins (pdf-view-follow--windows)))
+    (when wins
+      (let* ((left (nth 0 wins))
+             (right (nth 1 wins))
+             (p (pdf-view-current-page left))
+             (np (pdf-cache-number-of-pages)))
+        (with-selected-window left  (pdf-view-fit-page-to-window))
+        (with-selected-window right (pdf-view-fit-page-to-window))
+        (pdf-view-goto-page (min np (1+ p)) right)
+        ;; `split-window-right' leaves the per-window overlays crossed; fix
+        ;; that and repaint both windows so each shows its own page.
+        (pdf-view-follow--uncross-overlays)
+        (pdf-view-goto-page (pdf-view-current-page left) left)
+        (pdf-view-goto-page (pdf-view-current-page right) right)))))
+
+(defun pdf-view-follow--teardown ()
+  "Stop syncing and collapse back to a single window."
+  (remove-hook 'pdf-view-after-change-page-hook #'pdf-view-follow--sync t)
+  (let ((keep (selected-window)))
+    (dolist (w (or (pdf-view-follow--windows) '()))
+      (unless (eq w keep)
+        (when (window-live-p w) (delete-window w))))))
+
+(define-minor-mode pdf-view-follow-minor-mode
+  "Two-page book-style spread across two side-by-side windows.
+The right window trails the left by one page; navigation flips both
+windows two pages at a time."
+  :lighter " Follow"
+  :keymap pdf-view-follow-minor-mode-map
+  (if pdf-view-follow-minor-mode
+      (pdf-view-follow--setup)
+    (pdf-view-follow--teardown)))
+
+(with-eval-after-load 'pdf-view
+  (define-key pdf-view-mode-map (kbd "d") #'pdf-view-follow-minor-mode))
+
 ;; * Magit
 (keymap-global-set "C-x g" 'magit-status)
 (keymap-global-set "C-x M-g" 'magit-dispatch)
