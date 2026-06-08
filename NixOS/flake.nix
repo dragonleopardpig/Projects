@@ -36,6 +36,17 @@
           ];
         });
 
+        # Add a native two-page (book spread) mode to Sioyek. Upstream already
+        # has the layout + toggle_two_page_mode command but ships it unbound and
+        # with no way to start in it; the patch binds Ctrl+d and adds a
+        # startup_two_page_mode config option. Source patch tracked in
+        # ~/Projects/sioyek (fork of ahrm/sioyek) for upstreaming.
+        sioyek = prev.sioyek.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ./patches/sioyek-dual-page.patch
+          ];
+        });
+
         # nixpkgs nwg-drawer (0.7.5) preInstall copies desktop-directories +
         # drawer.css to $out/share/nwg-drawer but forgets img/ — the upstream
         # Makefile copies all three. Without img/{lock,sleep,reboot,exit,

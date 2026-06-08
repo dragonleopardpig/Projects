@@ -1,0 +1,89 @@
+diff --git a/pdf_viewer/config.cpp b/pdf_viewer/config.cpp
+index 0803fe4e..4deec863 100644
+--- a/pdf_viewer/config.cpp
++++ b/pdf_viewer/config.cpp
+@@ -33,6 +33,7 @@ bool SCROLL_PAST_DOCUMENT_ENDS = true;
+ bool HORIZONTAL_SCROLL_PAST_PAGE_ENDS = false;
+ bool SIMPLIFY_FREEHAND_DRAWINGS = true;
+ bool RECTO_VERSO_ADJUSTMENT = false;
++bool STARTUP_TWO_PAGE_MODE = false;
+ bool KEYBOARD_SELECT_INCLUSIVE = false;
+ 
+ #ifdef SIOYEK_MOBILE
+@@ -1039,6 +1040,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
+     add_bool(L"uniform_page_widths", &SAME_WIDTH);
+     add_bool(L"simplify_freehand_drawings", &SIMPLIFY_FREEHAND_DRAWINGS);
+     add_bool(L"recto_verso_adjustment", &RECTO_VERSO_ADJUSTMENT);
++    add_bool(L"startup_two_page_mode", &STARTUP_TWO_PAGE_MODE);
+     add_bool(L"keyboard_select_inclusive", &KEYBOARD_SELECT_INCLUSIVE);
+ 
+     add_string(L"google_scholar_address", &GOOGLE_SCHOLAR_ADDRESS);
+diff --git a/pdf_viewer/keys.config b/pdf_viewer/keys.config
+index 7f5c83da..a32a5a5a 100644
+--- a/pdf_viewer/keys.config
++++ b/pdf_viewer/keys.config
+@@ -257,6 +257,10 @@ external_search s
+ # opens the selected text as a url in the default browser
+ # open_selected_url Q
+ 
++# Toggle two page (book spread) mode: pages shown side-by-side, earlier on the left
++# (bare `d` is a prefix for db/dh/dp delete commands, so this uses Ctrl+d)
++toggle_two_page_mode <C-d>
++
+ # Toggle dark mode (inverted colors)
+ toggle_dark_mode <f8>
+ 
+diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
+index 9a9a62ed..400a316b 100644
+--- a/pdf_viewer/main_widget.cpp
++++ b/pdf_viewer/main_widget.cpp
+@@ -110,6 +110,7 @@ extern bool MULTILINE_MENUS;
+ extern bool SORT_BOOKMARKS_BY_LOCATION;
+ extern bool SORT_HIGHLIGHTS_BY_LOCATION;
+ extern bool FLAT_TABLE_OF_CONTENTS;
++extern bool STARTUP_TWO_PAGE_MODE;
+ extern bool HOVER_OVERVIEW;
+ extern bool WHEEL_ZOOM_ON_CURSOR;
+ extern float MOVE_SCREEN_PERCENTAGE;
+@@ -1778,6 +1779,12 @@ void MainWidget::validate_render() {
+     if (!isVisible()) {
+         return;
+     }
++    if (STARTUP_TWO_PAGE_MODE && !startup_two_page_applied && main_document_view_has_document()) {
++        startup_two_page_applied = true;
++        if (!main_document_view->is_two_page_mode()) {
++            handle_toggle_two_page_mode();
++        }
++    }
+     if (last_smart_fit_page) {
+         int current_page = get_current_page_number();
+         if (current_page != last_smart_fit_page) {
+diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
+index 474fe789..8b82e726 100644
+--- a/pdf_viewer/main_widget.h
++++ b/pdf_viewer/main_widget.h
+@@ -359,6 +359,9 @@ public:
+     // the current drawing of MainWidget is not correct (for example due to moving vertically)
+     bool is_render_invalidated = false;
+ 
++    // ensures startup_two_page_mode is applied only once, on the first document of the session
++    bool startup_two_page_applied = false;
++
+     // determines if the UI is invalid and needs to be updated
+     // this can be the case for example when updating the search progress
+     // note that when render is invalid we automatically validate the UI anyway
+diff --git a/pdf_viewer/prefs.config b/pdf_viewer/prefs.config
+index 661ec549..40814363 100644
+--- a/pdf_viewer/prefs.config
++++ b/pdf_viewer/prefs.config
+@@ -52,6 +52,10 @@ move_screen_ratio      0.5
+ # If 0, Table of Contents is shown in a hierarchial tree, otherwise it is a flat list (can improve performance for extremely large table of contents)
+ flat_toc                            0
+ 
++# If 1, the application starts in two page (book spread) mode. Toggle at runtime with `toggle_two_page_mode` (bound to Ctrl+d by default).
++# Use `recto_verso_adjustment 1` for a lone cover page followed by 2-3, 4-5... pairings, and `page_space_x`/`page_space_y` to tune the gap.
++startup_two_page_mode               0
++
+ # If it is 1, when launching the application if we detect multiple monitors, we automatically launch the helper window in second monitor
+ should_use_multiple_monitors        0
+ 
