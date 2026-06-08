@@ -106,11 +106,17 @@
           (ignore-errors (revert-buffer t t)))
         (when (fboundp 'dirvish--redisplay)
           (ignore-errors (dirvish--redisplay)))
-        ;; If a preview is showing for a file we just invalidated, force it
-        ;; to repaint now (otherwise the old image overlay can linger).
-        (when (fboundp 'dirvish--preview-update)
-          (let ((dv (and (fboundp 'dirvish-curr) (dirvish-curr))))
-            (when dv (ignore-errors (dirvish--preview-update dv)))))
+        ;; If a preview is showing, repaint it for the entry under point so an
+        ;; overwritten/changed file refreshes immediately instead of leaving a
+        ;; stale image (dirvish only re-previews on point movement otherwise).
+        ;; dirvish-20250504 changed the signature to (dv INDEX) where INDEX is
+        ;; the file path, so pass the current filename (was a 1-arg call that
+        ;; silently errored out under ignore-errors after the upgrade).
+        (when (and (fboundp 'dirvish--preview-update) (fboundp 'dirvish-curr))
+          (let ((dv (dirvish-curr))
+                (idx (dired-get-filename nil t)))
+            (when (and dv idx)
+              (ignore-errors (dirvish--preview-update dv idx)))))
         (force-mode-line-update t)))))
 
 (defun my/dired-fn-handler (event)
@@ -127,8 +133,11 @@
     (when (buffer-live-p target)
       (with-current-buffer target
         (when (timerp my/dired-fn-timer) (cancel-timer my/dired-fn-timer))
+        ;; Short trailing debounce: coalesces bursts (e.g. a large copy emits
+        ;; many events) yet fires ~0.1s after writes settle, so single changes
+        ;; feel near-instant like Yazi.
         (setq my/dired-fn-timer
-              (run-with-timer 0.2 nil #'my/dired-fn--do-revert target))))))
+              (run-with-timer 0.1 nil #'my/dired-fn--do-revert target))))))
 
 (defun my/dired-fn-teardown ()
   (when (timerp my/dired-fn-timer) (cancel-timer my/dired-fn-timer))
