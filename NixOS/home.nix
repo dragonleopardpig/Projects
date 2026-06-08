@@ -1322,6 +1322,11 @@ in
                     "uwsm app -- awww-daemon"
                     "env GDK_BACKEND=x11 copyq --daemon"
                     "protonvpn-app"
+                    # Filen sync client, started straight to the tray. --hidden
+                    # suppresses both the launcher and main window (index.js
+                    # checks process.argv for it); minimize-to-tray comes from
+                    # the filen-desktop overlay patch in flake.nix.
+                    "~/.local/bin/filen-desktop --hidden"
                     "~/.local/bin/random-wallpaper"
                     "while true; do sleep 60; ~/.local/bin/random-wallpaper; done"
                     "systemctl --user start hyprpolkitagent"
