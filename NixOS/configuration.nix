@@ -379,6 +379,13 @@ in
         "nvidia-settings"
         "nvidia-x11"
         "proton-vpn"
+        # Unfree firmware pulled in by hardware.enableAllFirmware on the
+        # PortableSSD host (broad device coverage for booting any machine).
+        "broadcom-bt-firmware"
+        "b43-firmware"
+        "xone-dongle-firmware"
+        "facetimehd-firmware"
+        "facetimehd-calibration"
       ]
       || lib.hasPrefix "brscan4" name
       || hasCudaEula;

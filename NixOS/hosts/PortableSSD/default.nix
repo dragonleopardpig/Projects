@@ -1,4 +1,12 @@
 # Portable SSD - boots on any x86_64 UEFI machine
+#
+# Goal: feature-identical to the M90aPro generation (same desktop, services and
+# home config — all of which live in the shared ./configuration.nix + ./home.nix)
+# but with hardware specifics generalised so the disk boots on most modern
+# machines. The deliberate difference from M90aPro is that we do NOT import
+# nvidia-prime.nix (its hard-coded NVIDIA bus IDs + proprietary driver would
+# break a non-NVIDIA host); generic modesetting (i915 / amdgpu / nouveau) is
+# used instead.
 { config, lib, pkgs, ... }:
 {
   imports = [
@@ -6,6 +14,26 @@
   ];
 
   networking.hostName = "PortableSSD";
+
+  # ── Portability: hardware coverage for arbitrary machines ──
+  # All firmware (not just the redistributable subset) so WiFi/Bluetooth/GPU on
+  # whatever host we boot has its blobs present. The extra unfree firmware this
+  # pulls in is whitelisted in configuration.nix's allowUnfreePredicate.
+  hardware.enableAllFirmware = true;
+
+  # 32-bit GL/Vulkan parity with M90aPro (Steam, wine, 32-bit apps). The base
+  # hardware.graphics.enable is already turned on by programs.hyprland.
+  hardware.graphics.enable32Bit = lib.mkDefault true;
+
+  # CPU microcode for either vendor, since the disk may land on Intel or AMD.
+  hardware.cpu.intel.updateMicrocode = lib.mkDefault true;
+  hardware.cpu.amd.updateMicrocode = lib.mkDefault true;
+
+  # Swap parity with M90aPro: a swapfile keeps nixos-rebuild from OOM-ing on
+  # low-RAM hosts. It lives on the encrypted root, so it travels with the disk.
+  swapDevices = lib.mkForce [
+    { device = "/swapfile"; size = 16384; }
+  ];
 
   # Portable UEFI: don't touch host firmware, install to fallback EFI path
   boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
@@ -24,7 +52,6 @@
     "boot.shell_on_fail"
     "udev.log_priority=3"
     "rd.systemd.show_status=auto"
-    "systemd.swap=0"
   ];
 
   # Disable plymouth on unknown hardware (GPU drivers may vary)
