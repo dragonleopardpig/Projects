@@ -29,11 +29,12 @@
   hardware.cpu.intel.updateMicrocode = lib.mkDefault true;
   hardware.cpu.amd.updateMicrocode = lib.mkDefault true;
 
-  # Swap parity with M90aPro: a swapfile keeps nixos-rebuild from OOM-ing on
-  # low-RAM hosts. It lives on the encrypted root, so it travels with the disk.
-  swapDevices = lib.mkForce [
-    { device = "/swapfile"; size = 16384; }
-  ];
+  # No swap on the portable disk. Unlike M90aPro (which has a 16G /swapfile),
+  # this root is small and routinely near-full, so a large swapfile fills it on
+  # boot — the mkswap service runs out of space, which cascades into a failed
+  # home-manager activation (stale bar, apps won't launch) and an unbootable,
+  # 100%-full disk. Keep it swapless; rely on RAM/zram instead if ever needed.
+  swapDevices = lib.mkForce [];
 
   # Portable UEFI: don't touch host firmware, install to fallback EFI path
   boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
@@ -52,6 +53,7 @@
     "boot.shell_on_fail"
     "udev.log_priority=3"
     "rd.systemd.show_status=auto"
+    "systemd.swap=0"
   ];
 
   # Disable plymouth on unknown hardware (GPU drivers may vary)
