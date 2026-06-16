@@ -248,33 +248,147 @@ function NetworkCard() {
 }
 
 // ── Bluetooth card ────────────────────────────────────────────────
+const BT_GLYPH = "\u{f00af}"  // nf-md-bluetooth
+
+// Map a freedesktop device icon name to a glyph; fall back to the BT symbol.
+// Only classic nf-fa codepoints (present in CaskaydiaCove) are used.
+function devGlyph(icon: string | null): string {
+    if (!icon) return BT_GLYPH
+    if (/audio|head(set|phone)/.test(icon)) return "\u{f025}"  // headphones
+    if (/keyboard/.test(icon))              return "\u{f11c}"  // keyboard
+    if (/phone/.test(icon))                 return "\u{f10b}"  // mobile
+    return BT_GLYPH
+}
+
+function devBattery(dev: AstalBluetooth.Device): string {
+    const p = dev.batteryPercentage
+    if (!p || p <= 0) return ""
+    return (p <= 1 ? Math.round(p * 100) : Math.round(p)) + "%"
+}
+
 function BluetoothCard() {
     const bt = AstalBluetooth.get_default()
     if (!bt) return <box />
 
-    return <button
-        className="Card Tile"
-        onClicked={() => bt.toggle()}
-        tooltipText="Click: toggle Bluetooth">
-        <box vertical spacing={2}>
-            <box spacing={6}>
-                <label label={"\u{f00af}"} />
-                <label className="CardTitle" label="Bluetooth" xalign={0} hexpand />
-                <label
-                    className={bind(bt, "isPowered").as(p => p ? "On" : "Off")}
-                    label={bind(bt, "isPowered").as(p => p ? "ON" : "OFF")}
-                />
+    const adapter = bt.get_adapter()
+    const expanded = Variable(false)
+    const status = Variable("")
+
+    function discover(on: boolean) {
+        if (!adapter) return
+        try { on ? adapter.start_discovery() : adapter.stop_discovery() }
+        catch (e) { console.error("bt discovery:", e) }
+    }
+
+    function onDevClicked(dev: AstalBluetooth.Device) {
+        if (dev.connecting) return
+        if (dev.connected) {
+            status.set(`Disconnecting ${dev.name}…`)
+            ;(dev as any).disconnect_device((_s: any, res: any) => {
+                try { (dev as any).disconnect_device_finish(res); status.set("") }
+                catch (e) { status.set(`Failed: ${dev.name}`); console.error("bt disconnect:", e) }
+            })
+            return
+        }
+        // pair() is only needed (and only invoked) for unknown devices; saved
+        // ones go straight to connect. Trust so it auto-reconnects next time.
+        if (!dev.paired) {
+            status.set(`Pairing ${dev.name}…`)
+            try { dev.pair() } catch (e) { console.error("bt pair:", e) }
+        }
+        try { dev.set_trusted(true) } catch (e) { /* non-fatal */ }
+        status.set(`Connecting ${dev.name}…`)
+        ;(dev as any).connect_device((_s: any, res: any) => {
+            try { (dev as any).connect_device_finish(res); status.set(`Connected ${dev.name}`) }
+            catch (e) { status.set(`Failed: ${dev.name}`); console.error("bt connect:", e) }
+        })
+    }
+
+    function DevRow(dev: AstalBluetooth.Device) {
+        const meta = derive(
+            [bind(dev, "connected"), bind(dev, "connecting"), bind(dev, "batteryPercentage")],
+            () => {
+                if (dev.connecting) return "connecting…"
+                if (dev.connected) { const b = devBattery(dev); return b ? `connected · ${b}` : "connected" }
+                return dev.paired ? "paired" : "tap to pair"
+            }
+        )
+        return <button className="ApRow" onClicked={() => onDevClicked(dev)}
+            tooltipText={dev.address}>
+            <box spacing={8}>
+                <label className="ApLock" label={devGlyph(dev.icon)} />
+                <box vertical hexpand>
+                    <label className="ApSsid" xalign={0} label={dev.name ?? dev.address} />
+                    <label className="Subtle" xalign={0} label={meta()} />
+                </box>
+                <label className="ApActive"
+                    label={bind(dev, "connected").as(c => c ? ICON.check : " ")} />
             </box>
-            <label
-                className="Subtle"
-                xalign={0}
-                label={bind(bt, "devices").as(devs => {
-                    const conn = devs?.filter(d => d.connected) ?? []
-                    return conn.length ? conn.map(d => d.name).join(", ") : "(no device)"
-                })}
-            />
+        </button>
+    }
+
+    // Connected → paired → discovered; named devices ahead of bare addresses.
+    const devRows = bind(bt, "devices").as((devs: AstalBluetooth.Device[]) => {
+        const score = (d: AstalBluetooth.Device) => d.connected ? 0 : d.paired ? 1 : 2
+        const list = (devs ?? [])
+            .slice()
+            .sort((a, b) => score(a) - score(b) || (a.name ?? "~").localeCompare(b.name ?? "~"))
+            .slice(0, 16)
+        if (!list.length) {
+            return [<label className="Subtle ApEmpty" xalign={0}
+                label={bt.get_is_powered() ? "Searching…" : "Bluetooth is off"} />]
+        }
+        return list.map(d => DevRow(d))
+    })
+
+    const subtitle = bind(bt, "devices").as((devs: AstalBluetooth.Device[]) => {
+        const conn = (devs ?? []).filter(d => d.connected)
+        return conn.length ? conn.map(d => d.name).join(", ")
+                           : (bt.get_is_powered() ? "No device connected" : "Off")
+    })
+
+    return <box className="Card BtCard" vertical spacing={6}>
+        <box spacing={6}>
+            <button className="NetHeader" hexpand
+                onClicked={() => { const e = !expanded.get(); expanded.set(e); discover(e) }}
+                tooltipText="Show Bluetooth devices">
+                <box spacing={8}>
+                    <label label={BT_GLYPH} />
+                    <box vertical hexpand>
+                        <label className="CardTitle" xalign={0} label="Bluetooth" />
+                        <label className="Subtle" xalign={0} label={subtitle} />
+                    </box>
+                    <label className="Chevron"
+                        label={expanded().as(e => e ? ICON.chevron_up : ICON.chevron_dn)} />
+                </box>
+            </button>
+            <button className="NetToggle" onClicked={() => bt.toggle()}
+                tooltipText="Toggle Bluetooth radio">
+                <label className={bind(bt, "isPowered").as(p => p ? "On" : "Off")}
+                    label={bind(bt, "isPowered").as(p => p ? "ON" : "OFF")} />
+            </button>
         </box>
-    </button>
+
+        <revealer revealChild={expanded()}
+            transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN}
+            transitionDuration={150}>
+            <box className="ApList" vertical spacing={6}>
+                <box spacing={6}>
+                    <label className="Subtle" xalign={0} hexpand
+                        label={status().as(s => s || "Devices")} />
+                    <label className="Subtle"
+                        label={adapter ? bind(adapter, "discovering").as(d => d ? "scanning…" : "") : ""} />
+                    <button className="ApRefresh" onClicked={() => discover(true)} tooltipText="Scan">
+                        <label label={ICON.refresh} />
+                    </button>
+                </box>
+                <scrollable className="ApScroll" heightRequest={170}
+                    vscroll={Gtk.PolicyType.AUTOMATIC} hscroll={Gtk.PolicyType.NEVER}>
+                    <box vertical spacing={2}>{devRows}</box>
+                </scrollable>
+            </box>
+        </revealer>
+    </box>
 }
 
 // ── Power Profile card ────────────────────────────────────────────
@@ -345,11 +459,11 @@ export default function ControlCenter() {
             <AudioCard />
             <BrightnessCard />
             <NetworkCard />
+            <BluetoothCard />
             <box homogeneous spacing={10}>
-                <BluetoothCard />
                 <PowerProfileCard />
+                <WeatherCard />
             </box>
-            <WeatherCard />
         </box>
     </window>
 }
