@@ -489,10 +489,8 @@ export default function ControlCenter() {
             <BrightnessCard />
             <NetworkCard />
             <BluetoothCard />
-            <box homogeneous spacing={10}>
-                <PowerProfileCard />
-                <WeatherCard />
-            </box>
+            <PowerProfileCard />
+            <WeatherCard />
         </box>
     </window>
 }
