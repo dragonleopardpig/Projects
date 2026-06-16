@@ -7,6 +7,12 @@ export const ICON = {
     temp:       "\u{f2c8}",  // nf-fa-thermometer
     warning:    "\u{f071}",  // nf-fa-warning
     battery:    "\u{f240}",  // nf-fa-battery_full
+    bat_full:   "\u{f240}",  // nf-fa-battery_full
+    bat_3q:     "\u{f241}",  // nf-fa-battery_three_quarters
+    bat_half:   "\u{f242}",  // nf-fa-battery_half
+    bat_1q:     "\u{f243}",  // nf-fa-battery_quarter
+    bat_empty:  "\u{f244}",  // nf-fa-battery_empty
+    charging:   "\u{f0e7}",  // nf-fa-bolt  (battery charging)
     wifi:       "\u{f1eb}",  // nf-fa-wifi
     ethernet:   "\u{f0200}", // nf-md-ethernet
     nowifi:     "\u{f05aa}", // nf-md-wifi_off

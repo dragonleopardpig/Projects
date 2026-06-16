@@ -36,6 +36,8 @@ window.Bar {
     .Window         { color: #ff69b4; padding: 0 8px; }
     .Clock          { color: #ffd700; padding: 0 8px; }
     .Battery        { color: #ffd700; }
+    .Battery .Charging { color: #4ade80; }   /* green bolt while charging */
+    .Battery .Low      { color: #ff5555; }   /* red when low + discharging */
     .Network        { color: #00ffff; }
     .AudioSlider    { color: #ffd700; }
     .Weather        { color: #00ffff; padding: 0 8px; }
@@ -320,6 +322,21 @@ window.ControlCenterWindow {
     button.ApJoin    { color: #00ffff; font-weight: bold; }
     .ApRefresh       { color: #888; }
     .ApRefresh:hover { color: #ff69b4; }
+
+    /* ── Power profile selector (PowerProfileCard) ────────────── */
+    button.PowerOpt {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 6px 4px;
+        color: #aaa;
+    }
+    button.PowerOpt:hover  { background: rgba(255, 105, 180, 0.12); color: #fff; }
+    button.PowerOpt.Active {
+        background: rgba(0, 255, 255, 0.15);
+        color: #00ffff;
+        font-weight: bold;
+    }
+    .PowerDegraded { color: #ffb347; font-size: 11px; padding-top: 2px; }
 
     /* Slim, macOS-style sliders — flat with a tiny thumb. */
     scale trough {

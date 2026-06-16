@@ -392,36 +392,65 @@ function BluetoothCard() {
 }
 
 // ── Power Profile card ────────────────────────────────────────────
-// Drive via `powerprofilesctl` directly — the AstalPowerProfiles binding
-// races with late D-Bus activation when power-profiles-daemon wasn't
-// running at AGS startup. CLI is dbus-activated each call and always works.
-const POWER_PROFILES = ["power-saver", "balanced", "performance"] as const
-const power = Variable("balanced").poll(2000, "powerprofilesctl get")
+// Tap-to-pick selector. Drive via `powerprofilesctl` directly — the
+// AstalPowerProfiles binding races with late D-Bus activation when
+// power-profiles-daemon wasn't running at AGS startup. CLI is
+// dbus-activated each call and always works.
+const POWER_PROFILES = [
+    { id: "power-saver", label: "Saver" },
+    { id: "balanced",    label: "Balanced" },
+    { id: "performance", label: "Performance" },
+] as const
+
+// Full `powerprofilesctl` listing, re-read periodically (and on demand after
+// a set). We parse the active profile and any performance-degraded reason
+// (e.g. "lap-detected") out of it.
+const ppdText = Variable("").poll(4000, "powerprofilesctl")
+
+function parsePPD(text: string): { active: string; degraded: string } {
+    let active = "balanced", degraded = "", profile: string | null = null
+    for (const ln of (text ?? "").split("\n")) {
+        const h = ln.match(/^(\*|\s)\s*([a-z-]+):\s*$/)
+        if (h) { profile = h[2]; if (h[1] === "*") active = profile; continue }
+        const d = ln.match(/Degraded:\s*(.+?)\s*$/)
+        if (d && profile === "performance" && d[1] !== "no") {
+            const paren = d[1].match(/\(([^)]+)\)/)   // "yes (lap-detected)" → "lap-detected"
+            degraded = (paren ? paren[1] : d[1]).replace(/-/g, " ")
+        }
+    }
+    return { active, degraded }
+}
 
 function PowerProfileCard() {
-    function next() {
-        const cur = power.get().trim()
-        const idx = POWER_PROFILES.indexOf(cur as any)
-        const nxt = POWER_PROFILES[(idx + 1) % POWER_PROFILES.length]
-        execAsync(["powerprofilesctl", "set", nxt])
-            .then(() => power.set(nxt))
+    const state = ppdText().as(parsePPD)
+
+    function setProfile(id: string) {
+        execAsync(["powerprofilesctl", "set", id])
+            .then(() => execAsync("powerprofilesctl"))
+            .then(t => ppdText.set(t))
             .catch(e => console.error("set power profile:", e))
     }
 
-    return <button
-        className="Card Tile"
-        onClicked={next}
-        tooltipText="Click to cycle: power-saver → balanced → performance">
-        <box vertical spacing={2}>
-            <box spacing={6}>
-                <label label={"\u{f0335}"} />
-                <label className="CardTitle" label="Power" xalign={0} hexpand />
-            </box>
-            <label className="Subtle" xalign={0}
-                label={power().as(p => p.trim().replaceAll("-", " "))}
-            />
+    return <box className="Card PowerCard" vertical spacing={6}>
+        <box spacing={6}>
+            <label label={"\u{f0335}"} />
+            <label className="CardTitle" label="Power" xalign={0} hexpand />
         </box>
-    </button>
+        <box className="PowerSeg" homogeneous spacing={6}>
+            {POWER_PROFILES.map(p =>
+                <button className={state.as(s => s.active === p.id ? "PowerOpt Active" : "PowerOpt")}
+                    onClicked={() => setProfile(p.id)}
+                    tooltipText={`Set ${p.label} power profile`}>
+                    <label label={p.label} />
+                </button>
+            )}
+        </box>
+        <revealer revealChild={state.as(s => s.degraded !== "")}
+            transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN}>
+            <label className="Subtle PowerDegraded" xalign={0} wrap
+                label={state.as(s => `${ICON.warning}  performance throttled · ${s.degraded}`)} />
+        </revealer>
+    </box>
 }
 
 // ── Weather card ──────────────────────────────────────────────────
