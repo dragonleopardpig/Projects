@@ -1228,7 +1228,23 @@ in
       ];
       input = {
         follow_mouse = 1;
+        # Natural scrolling everywhere, to match the external mouse — content
+        # tracks finger/stick direction. `natural_scroll` here covers mice and
+        # the TrackPoint (a pointing stick, treated as a mouse); the touchpad
+        # needs its own sub-block as it's a separate libinput category.
+        natural_scroll = true;
+        touchpad = {
+          natural_scroll = true;
+        };
       };
+      # Explicit per-device override so the TrackPoint's middle-button scroll
+      # is natural too (belt-and-suspenders alongside input.natural_scroll).
+      device = [
+        {
+          name = "tpps/2-elan-trackpoint";
+          natural_scroll = true;
+        }
+      ];
       "$mod" = "SUPER";
       bind =
         [
@@ -1307,10 +1323,6 @@ in
       bindc =[
         "$mod, mouse:274, togglefloating"
       ];
-      input = {
-        natural_scroll = true;
-        # other input settings...
-      };
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
       exec-once = [ "uwsm app -- pypr"
