@@ -26,4 +26,10 @@ export const ICON = {
     mic:        "\u{f130}",  // nf-fa-microphone
     camera:     "\u{f030}",  // nf-fa-camera
     caps:       "\u{f11c}",  // nf-fa-keyboard_o
+    lock:       "\u{f023}",  // nf-fa-lock        (secured Wi-Fi)
+    check:      "\u{f00c}",  // nf-fa-check       (active connection)
+    chevron_dn: "\u{f078}",  // nf-fa-chevron_down
+    chevron_up: "\u{f077}",  // nf-fa-chevron_up
+    refresh:    "\u{f021}",  // nf-fa-refresh     (rescan)
+    close:      "\u{f00d}",  // nf-fa-times       (cancel)
 }

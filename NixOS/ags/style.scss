@@ -281,6 +281,46 @@ window.ControlCenterWindow {
 
     button.Card.Tile:hover { background: rgba(255, 105, 180, 0.12); }
 
+    /* ── Wi-Fi network picker (NetworkCard) ───────────────────── */
+    .NetHeader { padding: 0; }                 /* header reads as content, not a button */
+    .NetToggle { padding: 0 4px; }
+    .Chevron   { color: #888; font-size: 11px; }
+
+    .ApScroll {
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: 10px;
+        padding: 4px;
+    }
+    /* drop GTK's scroll-edge shadow overlays */
+    .ApScroll undershoot.top,
+    .ApScroll undershoot.bottom { background: none; }
+    .ApEmpty { padding: 8px 6px; }
+
+    button.ApRow {
+        padding: 5px 8px;
+        border-radius: 8px;
+        color: #eee;
+    }
+    button.ApRow:hover { background: rgba(255, 105, 180, 0.12); color: #eee; }
+    .ApLock   { color: #ffd700; font-size: 11px; }
+    .ApSsid   { color: #eee;    font-size: 12px; }
+    .ApActive { color: #00ffff; font-size: 11px; }
+    .ApSignal { color: #00ffff; font-size: 12px; }
+
+    .ApPassword { padding: 2px; }
+    .ApPwEntry {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        padding: 4px 8px;
+        color: #eee;
+        caret-color: #ffd700;
+    }
+    .ApPwEntry:focus { border-color: #00ffff; }
+    button.ApJoin    { color: #00ffff; font-weight: bold; }
+    .ApRefresh       { color: #888; }
+    .ApRefresh:hover { color: #ff69b4; }
+
     /* Slim, macOS-style sliders — flat with a tiny thumb. */
     scale trough {
         min-height: 4px;
