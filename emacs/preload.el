@@ -26,9 +26,15 @@
 ;; is unavailable.
 (when (and (fboundp 'treesit-available-p) (treesit-available-p))
   (require 'treesit)
+  ;; Custom prebuilt grammars shipped with this config (magik, rust).
   (let ((ts-dir (expand-file-name "~/Projects/emacs/tree-sitter")))
     (when (file-directory-p ts-dir)
-      (add-to-list 'treesit-extra-load-path ts-dir))))
+      (add-to-list 'treesit-extra-load-path ts-dir)))
+  ;; Nix-built grammars (json/python/html/css/bash/…).  home-manager writes
+  ;; the current store path into this generated file (see NixOS/home.nix).
+  (let ((nix-ts (expand-file-name "~/.emacs.d/nix-tree-sitter.el")))
+    (when (file-exists-p nix-ts)
+      (load nix-ts nil t))))
 
 ;; Keep jinx-mod.so's rpath fresh across ELPA upgrades.
 ;; ELPA periodically replaces our patched jinx-mod.so with a fresh
