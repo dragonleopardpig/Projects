@@ -17,6 +17,19 @@
                   sys-lib
                 (concat sys-lib ":" existing))))))
 
+;; * Tree-sitter grammar load path
+;; Prebuilt grammar shared libs (libtree-sitter-magik.so, …-rust.so) live in
+;; ~/Projects/emacs/tree-sitter/.  Emacs only auto-searches
+;; <user-emacs-directory>/tree-sitter (i.e. ~/.emacs.d/tree-sitter/, which
+;; doesn't exist here), so *-ts-mode can't find them unless we register our
+;; own dir.  Without this, opening a .magik file warns that the magik grammar
+;; is unavailable.
+(when (and (fboundp 'treesit-available-p) (treesit-available-p))
+  (require 'treesit)
+  (let ((ts-dir (expand-file-name "~/Projects/emacs/tree-sitter")))
+    (when (file-directory-p ts-dir)
+      (add-to-list 'treesit-extra-load-path ts-dir))))
+
 ;; Keep jinx-mod.so's rpath fresh across ELPA upgrades.
 ;; ELPA periodically replaces our patched jinx-mod.so with a fresh
 ;; prebuilt one that has no rpath; dlopen of libenchant-2.so.2 then
