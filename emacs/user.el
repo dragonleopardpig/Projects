@@ -784,6 +784,13 @@ windows two pages at a time."
 
 (set-fontset-font t 'unicode (font-spec :family "CaskaydiaCove Nerd Font") nil 'append)
 
+;; * Line numbers (code buffers only, relative)
+;; display-line-numbers-mode (Emacs 26+) only in prog-mode buffers, so org /
+;; dired / terminals stay clean.  'relative shows the current line's absolute
+;; number and counts outward from it (handy for N-line motions).
+(setq display-line-numbers-type 'relative)
+(add-hook 'prog-mode-hook #'display-line-numbers-mode)
+
 ;; * Theme-independent code faces
 (defun my/apply-code-font-lock-faces ()
   "Apply code face overrides independent of the active theme."
