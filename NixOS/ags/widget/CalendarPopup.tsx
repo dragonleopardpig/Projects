@@ -229,16 +229,11 @@ export default function CalendarPopup() {
     gridBox.show_all()
     detailBox.show_all()
 
-    // Full-screen anchor with a transparent backdrop that closes the popup
-    // on click. The panel itself sits in the bottom-right via halign/valign,
-    // wrapped in an EventBox that swallows clicks so they don't reach the
-    // backdrop. Esc still closes.
-    // Small panel anchored top-right — NOT full screen. The full-screen
-    // backdrop approach caused a "dead zone" on the bar: with NORMAL
-    // exclusivity the layer-shell surface still covered the bar area but
-    // the inner eventbox couldn't be allocated there, so clicks on the
-    // bar got swallowed. Dismiss is via the Clock toggle button, the bar
-    // wrapper's dismissDrawers handler, or Esc.
+    // Full-screen transparent window (NORMAL exclusivity keeps it below the
+    // bar, so the bar stays clickable — no dead zone). An outer eventbox
+    // catches clicks anywhere outside the panel and dismisses; the panel is
+    // pinned top-right and wrapped in an inner eventbox that swallows its own
+    // clicks so they don't reach the backdrop. Same pattern as AppDrawer.
     return <window
         name="calendar"
         className="CalendarPopupWindow"
@@ -246,11 +241,18 @@ export default function CalendarPopup() {
         visible={false}
         keymode={Astal.Keymode.ON_DEMAND}
         exclusivity={Astal.Exclusivity.NORMAL}
-        anchor={TOP | RIGHT}
+        anchor={TOP | BOTTOM | LEFT | RIGHT}
         layer={Astal.Layer.OVERLAY}
         onKeyPressEvent={(self, ev) => {
             if (ev.get_keyval()[1] === 0xff1b /* GDK_KEY_Escape */) self.hide()
         }}>
+        <eventbox hexpand vexpand
+            onButtonPressEvent={(self) => {
+                const w = self.get_ancestor(Astal.Window.$gtype) as Astal.Window
+                w?.hide(); return true
+            }}>
+        <box halign={Gtk.Align.END} valign={Gtk.Align.START}>
+        <eventbox onButtonPressEvent={() => true}>
         <box className="CalendarPanel" vertical spacing={8}
             widthRequest={460}>
             <box className="CalHeader" spacing={6}>
@@ -270,5 +272,8 @@ export default function CalendarPopup() {
             {gridBox}
             {detailBox}
         </box>
+        </eventbox>
+        </box>
+        </eventbox>
     </window>
 }

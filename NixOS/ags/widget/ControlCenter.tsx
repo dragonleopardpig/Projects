@@ -470,7 +470,10 @@ function WeatherCard() {
 export default function ControlCenter() {
     const { TOP, BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
 
-    // Small top-right panel. Dismiss via gear toggle, bar wrapper, or Esc.
+    // Full-screen transparent window; NORMAL exclusivity keeps it below the
+    // bar so the bar stays clickable. Outer eventbox dismisses on any click
+    // outside the panel; inner eventbox swallows the panel's own clicks.
+    // Also dismissable via the gear toggle, the bar wrapper, or Esc.
     return <window
         name="control-center"
         className="ControlCenterWindow"
@@ -478,11 +481,18 @@ export default function ControlCenter() {
         visible={false}
         keymode={Astal.Keymode.ON_DEMAND}
         exclusivity={Astal.Exclusivity.NORMAL}
-        anchor={TOP | RIGHT}
+        anchor={TOP | BOTTOM | LEFT | RIGHT}
         layer={Astal.Layer.OVERLAY}
         onKeyPressEvent={(self, ev) => {
             if (ev.get_keyval()[1] === 0xff1b) self.hide()
         }}>
+        <eventbox hexpand vexpand
+            onButtonPressEvent={(self) => {
+                const w = self.get_ancestor(Astal.Window.$gtype) as Astal.Window
+                w?.hide(); return true
+            }}>
+        <box halign={Gtk.Align.END} valign={Gtk.Align.START}>
+        <eventbox onButtonPressEvent={() => true}>
         <box className="ControlCenter" vertical spacing={10}
             widthRequest={420}>
             <AudioCard />
@@ -492,5 +502,8 @@ export default function ControlCenter() {
             <PowerProfileCard />
             <WeatherCard />
         </box>
+        </eventbox>
+        </box>
+        </eventbox>
     </window>
 }
