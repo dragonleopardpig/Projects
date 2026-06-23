@@ -241,6 +241,16 @@ in
       set -eu
 
       export XDG_CURRENT_DESKTOP=Hyprland
+
+      # Single-instance guard. Filen-desktop has no single-instance lock, so a
+      # second launch spawns a duplicate that registers its OWN tray icon.
+      # Quitting one instance then leaves the other's icon orphaned in the bar.
+      # If one is already running, reveal its window instead of starting another.
+      if ${pkgs.procps}/bin/pgrep -f '@filen/desktop/dist/index\.js' >/dev/null 2>&1; then
+        hyprctl dispatch focuswindow 'class:^([Ff]ilen[ -][Dd]esktop)$' >/dev/null 2>&1 || true
+        exit 0
+      fi
+
       exec ${pkgs.filen-desktop}/bin/filen-desktop "$@"
     '';
   };
@@ -1398,7 +1408,6 @@ in
                     "~/.local/bin/random-wallpaper"
                     "while true; do sleep 60; ~/.local/bin/random-wallpaper; done"
                     "systemctl --user start hyprpolkitagent"
-                    "solaar --window=hide"
                     "~/.local/bin/remmina-dnd-watcher"
                   ];
       misc = {
