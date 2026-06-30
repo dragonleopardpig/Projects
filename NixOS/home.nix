@@ -1850,6 +1850,9 @@ in
     gnome-disk-utility
     xdg-desktop-portal-gtk
     nwg-drawer
+    # Microsoft discontinued the native Linux Teams client; this is the
+    # maintained Electron wrapper around the Teams web app.
+    teams-for-linux
   ];
 
   # basic configuration of git, please change to your own
