@@ -31,6 +31,35 @@ function AudioCard() {
     </box>
 }
 
+// ── Microphone card ───────────────────────────────────────────────
+// Mirrors AudioCard but drives the default *input* (defaultMicrophone).
+// A muted mic shows the slashed glyph; the slider stays live so you can
+// pre-set gain while muted. No default source → no card.
+function MicCard() {
+    const wp = Wp.get_default()
+    const mic = wp?.audio?.defaultMicrophone
+    if (!mic) return <box />
+    return <box className="Card" vertical spacing={4}>
+        <label className="CardTitle" label="Microphone" xalign={0} />
+        <box spacing={8}>
+            <button
+                onClicked={() => mic.set_mute(!mic.mute)}
+                tooltipText="Mute / unmute microphone">
+                <label label={bind(mic, "mute").as(m => m ? ICON.mic_off : ICON.mic)} />
+            </button>
+            <slider
+                hexpand
+                value={bind(mic, "volume")}
+                onDragged={({ value }) => mic.set_volume(value)}
+            />
+            <label
+                widthChars={4}
+                label={bind(mic, "volume").as(v => `${Math.round(v * 100)}%`)}
+            />
+        </box>
+    </box>
+}
+
 // ── Brightness card (backlight via brightnessctl) ─────────────────
 // Scope to the backlight class; bare `brightnessctl` falls back to LED devices
 // (capslock/numlock) on desktops with no backlight, which drive brightness over
@@ -496,6 +525,7 @@ export default function ControlCenter() {
         <box className="ControlCenter" vertical spacing={10}
             widthRequest={420}>
             <AudioCard />
+            <MicCard />
             <BrightnessCard />
             <NetworkCard />
             <BluetoothCard />

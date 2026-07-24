@@ -30,6 +30,7 @@ export const ICON = {
     caffeine:   "\u{f0f4}",  // nf-fa-coffee  (idle inhibitor on)
     sleep:      "\u{f04b8}", // nf-md-sleep   (idle inhibitor off)
     mic:        "\u{f130}",  // nf-fa-microphone
+    mic_off:    "\u{f131}",  // nf-fa-microphone_slash
     camera:     "\u{f030}",  // nf-fa-camera
     caps:       "\u{f11c}",  // nf-fa-keyboard_o
     lock:       "\u{f023}",  // nf-fa-lock        (secured Wi-Fi)
