@@ -52,6 +52,8 @@ window.Bar {
     .Disk           { color: #00ffff; }
     .Temperature    { color: #ff4500; }
     .SystemdFailed  { color: #ff4500; font-weight: bold; }
+    .PrintQueue        { color: #00bfff; font-weight: bold; }
+    .PrintQueue:hover  { color: #ff69b4; }
 
     .Mpris          { color: #ff69b4; }
     .Notification   { color: #ffd700; }

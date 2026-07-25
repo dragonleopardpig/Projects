@@ -495,6 +495,161 @@ function WeatherCard() {
     </box>
 }
 
+// ── Printers & Scanners card ──────────────────────────────────────
+// No Astal CUPS/SANE binding exists, so drive the CLI like PowerProfileCard
+// drives powerprofilesctl. Printer state + queue length poll cheaply (local
+// lpstat). Scanner enumeration (scanimage -L is slow over the network) runs
+// lazily on first expand. Tapping a printer sets a USER default via
+// `lpoptions -d` — no root, unlike the system-wide `lpadmin -d`.
+const PRINT_POLL =
+    "lpstat -p 2>/dev/null; echo __DEF__; lpstat -d 2>/dev/null; echo __JOBS__; lpstat -o 2>/dev/null | wc -l"
+
+type PrinterInfo = { name: string; state: string }
+
+function parsePrinters(text: string): { printers: PrinterInfo[]; def: string; jobs: number } {
+    const printers: PrinterInfo[] = []
+    let def = "", jobs = 0, section = "p"
+    for (const ln of (text ?? "").split("\n")) {
+        if (ln === "__DEF__") { section = "d"; continue }
+        if (ln === "__JOBS__") { section = "j"; continue }
+        if (section === "p") {
+            const m = ln.match(/^printer (\S+) (.*)$/)
+            if (m) {
+                const rest = m[2]
+                const state = /now printing|is printing/.test(rest) ? "printing"
+                            : /disabled/.test(rest) ? "disabled"
+                            : /is idle/.test(rest) ? "idle" : "ready"
+                printers.push({ name: m[1], state })
+            }
+        } else if (section === "d") {
+            const m = ln.match(/system default destination: (\S+)/)
+            if (m) def = m[1]
+        } else if (section === "j") {
+            const n = parseInt(ln.trim()); if (!isNaN(n)) jobs = n
+        }
+    }
+    return { printers, def, jobs }
+}
+
+const printRaw = Variable("").poll(8000, () => {
+    try { return exec(["sh", "-c", PRINT_POLL]) } catch { return "" }
+})
+
+function PrintersCard() {
+    const expanded = Variable(false)
+    const scanners = Variable<{ id: string; name: string }[]>([])
+    const scanState = Variable("")
+
+    const state = printRaw().as(parsePrinters)
+
+    function refresh() { try { printRaw.set(exec(["sh", "-c", PRINT_POLL])) } catch { /* keep last */ } }
+
+    function setDefault(name: string) {
+        execAsync(["lpoptions", "-d", name]).then(refresh)
+            .catch(e => console.error("set default printer:", e))
+    }
+
+    // scanimage -L: `device `escl:...' is a Brother … scanner`. Skip v4l webcams.
+    function detectScanners() {
+        scanState.set("Detecting…")
+        execAsync(["scanimage", "-L"]).then(out => {
+            const list: { id: string; name: string }[] = []
+            for (const ln of out.split("\n")) {
+                const m = ln.match(/device `([^']+)' is a (.+)/)
+                if (!m || m[1].startsWith("v4l:")) continue
+                list.push({ id: m[1], name: m[2].replace(/ scanner$/, "") })
+            }
+            scanners.set(list)
+            scanState.set(list.length ? "Scanners" : "No scanners found")
+        }).catch(e => { console.error("scanimage -L:", e); scanState.set("Scanner detect failed") })
+    }
+
+    let scanned = false
+    function onExpand() {
+        const e = !expanded.get(); expanded.set(e)
+        if (e && !scanned) { scanned = true; detectScanners() }
+    }
+
+    // Launch a GUI app onto the active workspace, dismissing the panel first.
+    function launch(cmd: string) {
+        App.get_window("control-center")?.hide()
+        execAsync(["hyprctl", "dispatch", "exec", cmd])
+            .catch(e => console.error("launch:", e))
+    }
+
+    const subtitle = state.as(s => {
+        if (!s.def) return "No default printer"
+        const p = s.printers.find(x => x.name === s.def)
+        const st = p ? p.state : "unknown"
+        return `${s.def.replace(/_/g, " ")} · ${st}` + (s.jobs ? ` · ${s.jobs} in queue` : "")
+    })
+
+    return <box className="Card BtCard" vertical spacing={6}>
+        <box spacing={6}>
+            <button className="NetHeader" hexpand onClicked={onExpand}
+                tooltipText="Show printers and scanners">
+                <box spacing={8}>
+                    <label label={ICON.printer} />
+                    <box vertical hexpand>
+                        <label className="CardTitle" xalign={0} label="Printers & Scanners" />
+                        <label className="Subtle" xalign={0} label={subtitle} />
+                    </box>
+                    <label className="Chevron"
+                        label={expanded().as(e => e ? ICON.chevron_up : ICON.chevron_dn)} />
+                </box>
+            </button>
+            <button className="NetToggle" onClicked={() => launch("naps2")}
+                tooltipText="Open NAPS2 scanner">
+                <label label="Scan" />
+            </button>
+        </box>
+
+        <revealer revealChild={expanded()}
+            transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN} transitionDuration={150}>
+            <box className="ApList" vertical spacing={6}>
+                <label className="Subtle" xalign={0} label="Printers · tap to set default" />
+                {state.as(s => s.printers.length
+                    ? s.printers.map(p =>
+                        <button className="ApRow" onClicked={() => setDefault(p.name)}
+                            tooltipText={`Set ${p.name} as default`}>
+                            <box spacing={8}>
+                                <label className="ApSsid" xalign={0} hexpand
+                                    label={p.name.replace(/_/g, " ")} />
+                                <label className="Subtle" label={p.state} />
+                                <label className="ApActive" label={p.name === s.def ? ICON.check : " "} />
+                            </box>
+                        </button>)
+                    : [<label className="Subtle ApEmpty" xalign={0} label="No printers configured" />])}
+
+                <label className="Subtle" xalign={0} label={scanState()} />
+                {scanners().as(list => list.map(sc =>
+                    <button className="ApRow" onClicked={() => launch("naps2")} tooltipText={sc.id}>
+                        <box spacing={8}>
+                            <label className="ApSsid" xalign={0} hexpand label={sc.name} />
+                            <label className="Subtle" label={/^escl:/.test(sc.id) ? "network" : "usb"} />
+                        </box>
+                    </button>))}
+
+                <box spacing={6} homogeneous>
+                    <button className="PowerOpt" onClicked={() => launch("naps2")}
+                        tooltipText="Scan documents (NAPS2)">
+                        <label label="Scan (NAPS2)" />
+                    </button>
+                    <button className="PowerOpt"
+                        onClicked={() => launch("xdg-open http://localhost:631/printers")}
+                        tooltipText="Open the CUPS web interface">
+                        <label label="CUPS" />
+                    </button>
+                    <button className="ApRefresh" onClicked={() => { refresh(); detectScanners() }}
+                        tooltipText="Refresh">
+                        <label label={ICON.refresh} />
+                    </button>
+                </box>
+            </box>
+        </revealer>
+    </box>
+}
+
 // ── Panel ─────────────────────────────────────────────────────────
 export default function ControlCenter() {
     const { TOP, BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
@@ -530,6 +685,7 @@ export default function ControlCenter() {
             <NetworkCard />
             <BluetoothCard />
             <PowerProfileCard />
+            <PrintersCard />
             <WeatherCard />
         </box>
         </eventbox>

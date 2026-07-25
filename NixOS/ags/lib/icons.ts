@@ -32,6 +32,7 @@ export const ICON = {
     mic:        "\u{f130}",  // nf-fa-microphone
     mic_off:    "\u{f131}",  // nf-fa-microphone_slash
     camera:     "\u{f030}",  // nf-fa-camera
+    printer:    "\u{f02f}",  // nf-fa-print
     caps:       "\u{f11c}",  // nf-fa-keyboard_o
     lock:       "\u{f023}",  // nf-fa-lock        (secured Wi-Fi)
     check:      "\u{f00c}",  // nf-fa-check       (active connection)
