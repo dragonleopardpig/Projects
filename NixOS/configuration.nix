@@ -462,7 +462,8 @@ in
     brightnessctl              # Screen brightness control
     ddcutil                    # External monitor brightness via DDC/CI
     power-profiles-daemon      # Power profile management (balanced, performance, saver)
-    simple-scan
+    simple-scan                # Simple GNOME scan GUI (flatbed / quick scans)
+    naps2                      # Multi-page ADF → searchable-PDF scanning with OCR
     xsane
     sane-airscan
 
