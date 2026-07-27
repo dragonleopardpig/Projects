@@ -251,7 +251,21 @@ in
         exit 0
       fi
 
-      exec ${pkgs.filen-desktop}/bin/filen-desktop "$@"
+      # Launch under a resource-limited transient scope so a heavy sync
+      # (hashing/compressing thousands of files) can't starve the desktop and
+      # freeze the UI, as it did on quit. CPUWeight/MemoryHigh enforce because
+      # the cpu+memory controllers are delegated to the user manager; nice
+      # deprioritises the hashing threads. IOWeight is best-effort only — the
+      # io controller isn't delegated and the root is dm-crypt on a 'none'
+      # -scheduler NVMe, where cgroup write-throttling doesn't bite. The real
+      # disk-churn reduction is the attachment/.filenignore excludes.
+      exec ${pkgs.systemd}/bin/systemd-run --user --scope --quiet \
+        --property=CPUWeight=20 \
+        --property=MemoryHigh=4G \
+        --property=IOWeight=10 \
+        ${pkgs.util-linux}/bin/ionice -c 3 \
+        ${pkgs.coreutils}/bin/nice -n 10 \
+        ${pkgs.filen-desktop}/bin/filen-desktop "$@"
     '';
   };
 
