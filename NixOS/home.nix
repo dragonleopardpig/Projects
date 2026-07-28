@@ -247,25 +247,29 @@ in
       # Quitting one instance then leaves the other's icon orphaned in the bar.
       # If one is already running, reveal its window instead of starting another.
       if ${pkgs.procps}/bin/pgrep -f '@filen/desktop/dist/index\.js' >/dev/null 2>&1; then
-        hyprctl dispatch focuswindow 'class:^([Ff]ilen[ -][Dd]esktop)$' >/dev/null 2>&1 || true
+        if [ "''${1:-}" != "--hidden" ]; then
+          hyprctl dispatch focuswindow 'class:^([Ff]ilen[ -][Dd]esktop)$' >/dev/null 2>&1 || true
+        fi
         exit 0
       fi
 
-      # Launch under a resource-limited transient scope so a heavy sync
-      # (hashing/compressing thousands of files) can't starve the desktop and
-      # freeze the UI, as it did on quit. CPUWeight/MemoryHigh enforce because
-      # the cpu+memory controllers are delegated to the user manager; nice
-      # deprioritises the hashing threads. IOWeight is best-effort only — the
-      # io controller isn't delegated and the root is dm-crypt on a 'none'
-      # -scheduler NVMe, where cgroup write-throttling doesn't bite. The real
-      # disk-churn reduction is the attachment/.filenignore excludes.
-      exec ${pkgs.systemd}/bin/systemd-run --user --scope --quiet \
-        --property=CPUWeight=20 \
-        --property=MemoryHigh=4G \
-        --property=IOWeight=10 \
-        ${pkgs.util-linux}/bin/ionice -c 3 \
-        ${pkgs.coreutils}/bin/nice -n 10 \
-        ${pkgs.filen-desktop}/bin/filen-desktop "$@"
+      # Start Filen as a low-priority background UWSM service so it is stopped
+      # with the graphical session. Nice, idle I/O scheduling, and LimitCORE
+      # are inherited even when Electron moves a process into its own scope.
+      # LimitCORE is essential here: a Filen/Electron exit crash otherwise
+      # makes systemd-coredump stream tens of gigabytes and saturate the disk.
+      exec ${pkgs.uwsm}/bin/uwsm app \
+        -s b \
+        -t service \
+        -u filen-desktop.service \
+        -d "Filen Desktop sync client" \
+        -p CPUWeight=20 \
+        -p MemoryHigh=4G \
+        -p IOWeight=10 \
+        -p Nice=10 \
+        -p IOSchedulingClass=idle \
+        -p LimitCORE=0 \
+        -- ${pkgs.filen-desktop}/bin/filen-desktop "$@"
     '';
   };
 
@@ -1418,7 +1422,9 @@ in
                     # suppresses both the launcher and main window (index.js
                     # checks process.argv for it); minimize-to-tray comes from
                     # the filen-desktop overlay patch in flake.nix.
-                    "~/.local/bin/filen-desktop --hidden"
+                    # Keep Filen out of the login critical path. Its initial
+                    # scan can be I/O-heavy even when no files need syncing.
+                    "sleep 15; ~/.local/bin/filen-desktop --hidden"
                     "~/.local/bin/random-wallpaper"
                     "while true; do sleep 60; ~/.local/bin/random-wallpaper; done"
                     "systemctl --user start hyprpolkitagent"

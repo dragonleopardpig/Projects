@@ -89,6 +89,13 @@
             index_path = Path("${placeholder "out"}/lib/node_modules/@filen/desktop/dist/index.js")
             text = index_path.read_text()
 
+            # Filen enables Electron's local Crashpad database even though it
+            # never uploads reports. On Electron 41 an Exit-triggered crash can
+            # make systemd-coredump stream tens of gigabytes from Electron's
+            # sparse address space, saturating the disk for several minutes.
+            old_crash_reporter = """        electron_1.crashReporter.start({\n            submitURL: undefined,\n            productName: \"io.filen.desktop\",\n            uploadToServer: false,\n            ignoreSystemCrashHandler: false,\n            rateLimit: false,\n            compress: false,\n            globalExtra: {\n                cpus: os_1.default.cpus().length.toString(),\n                ram: os_1.default.totalmem().toString(),\n                platform: os_1.default.platform(),\n                release: os_1.default.release()\n            }\n        });"""
+            new_crash_reporter = """        // Local crash reporting disabled by the NixOS overlay."""
+
             old_minimize = """        (_c = this.driveWindow) === null || _c === void 0 ? void 0 : _c.on(\"minimize\", () => {\n            var _a;\n            if (process.platform === \"darwin\" && this.minimizeToTray) {\n                (_a = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _a === void 0 ? void 0 : _a.hide();\n            }\n        });"""
             new_minimize = """        (_c = this.driveWindow) === null || _c === void 0 ? void 0 : _c.on(\"minimize\", e => {\n            var _a, _b;\n            if (this.minimizeToTray) {\n                if (process.platform === \"darwin\") {\n                    (_a = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _a === void 0 ? void 0 : _a.hide();\n                }\n                else {\n                    e.preventDefault();\n                    (_b = this.driveWindow) === null || _b === void 0 ? void 0 : _b.hide();\n                    return;\n                }\n            }\n        });"""
 
@@ -97,9 +104,10 @@
             old_init = """            const options = await this.options.get();\n            await electron_1.app.whenReady();"""
             new_init = """            const options = await this.options.get();\n            this.minimizeToTray = options.minimizeToTray ?? false;\n            await electron_1.app.whenReady();"""
 
-            if old_minimize not in text or old_close not in text or old_init not in text:
+            if old_crash_reporter not in text or old_minimize not in text or old_close not in text or old_init not in text:
                 raise SystemExit("filen-desktop patch anchors not found")
 
+            text = text.replace(old_crash_reporter, new_crash_reporter)
             text = text.replace(old_init, new_init)
             text = text.replace(old_minimize, new_minimize)
             text = text.replace(old_close, new_close)
@@ -127,10 +135,14 @@
             old_open = """                {\n                    label: \"Open\",\n                    type: \"normal\",\n                    click: () => {\n                        this.desktop.showOrOpenDriveWindow();\n                    }\n                },\n                {\n                    label: \"Separator\",\n                    type: \"separator\"\n                },"""
             new_open = """                {\n                    label: \"Open\",\n                    type: \"normal\",\n                    click: () => {\n                        this.desktop.showOrOpenDriveWindow();\n                    }\n                },\n                {\n                    label: \"Hide\",\n                    type: \"normal\",\n                    click: () => {\n                        var _a;\n                        (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.hide();\n                    }\n                },\n                {\n                    label: \"Separator\",\n                    type: \"separator\"\n                },"""
 
-            if old_open not in status_text:
+            old_exit = """                    click: () => {\n                        electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.exit(0);\n                    }"""
+            new_exit = """                    click: () => {\n                        this.desktop.shouldExitOnQuit = true;\n                        electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.exit(0);\n                    }"""
+
+            if old_open not in status_text or old_exit not in status_text:
                 raise SystemExit("filen-desktop status patch anchor not found")
 
             status_text = status_text.replace(old_open, new_open)
+            status_text = status_text.replace(old_exit, new_exit)
             status_path.write_text(status_text)
             PY
           '';
