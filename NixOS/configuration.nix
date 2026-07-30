@@ -609,6 +609,13 @@ in
     nix-output-monitor         # Pretty nix build output (nom)
     devenv                     # Developer environment manager
     repomix                    # Repository content mixer for LLM context
+    xvfb-run                   # Run a GUI/render command on a throwaway X display. `Xvfb` itself
+                               # already comes in transitively via xorg-server, but only the
+                               # wrapper allocates a free display AND tears it down: a leftover
+                               # Xvfb wedges user@1000.service at logout, so the NEXT login waits
+                               # out the ~90 s stop-timeout. Headless KrakenOS validator/render
+                               # runs are the source, e.g. `xvfb-run -a .devenv/state/venv/bin/python
+                               # -m KrakenOS.UI.validate_open3d_...`.
 
     # ── AI Assistants ──
     # claude-code                # Anthropic Claude CLI coding assistant
