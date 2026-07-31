@@ -22,6 +22,10 @@ function flash(k: OsdKind, v: number) {
     })
 }
 
+export function showBrightnessOsd(percent: number) {
+    flash("brightness", percent / 100)
+}
+
 // Don't flash on the initial reads at module load.
 let primed = false
 timeout(800, () => { primed = true })
@@ -40,7 +44,8 @@ if (speaker) {
 // Scope reads to the backlight class. Without `-c backlight`, brightnessctl
 // falls back to the first LED device (capslock/numlock), so toggling Caps Lock
 // would otherwise trip the brightness OSD. Machines with no backlight (desktops
-// driving monitors over DDC) read nothing and never flash brightness.
+// driving monitors over DDC) skip polling; brightness-ctl reports their changes
+// through the request handler instead.
 function readBacklight(): number | null {
     try {
         const cur = parseInt(exec("brightnessctl -c backlight g"))

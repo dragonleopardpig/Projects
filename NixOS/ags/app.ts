@@ -5,7 +5,7 @@ import CalendarPopup from "./widget/CalendarPopup"
 import ControlCenter from "./widget/ControlCenter"
 import AppDrawer from "./widget/AppDrawer"
 import WeatherPopup from "./widget/WeatherPopup"
-import Osd from "./widget/Osd"
+import Osd, { showBrightnessOsd } from "./widget/Osd"
 
 // GTK3's CSS parser doesn't understand `@charset` and bails on the whole
 // stylesheet if it sees one. Sass emits it automatically when the SCSS source
@@ -20,6 +20,14 @@ App.start({
             const anyVisible = bars.some(w => w.visible)
             for (const w of bars) w.visible = !anyVisible
             res("ok")
+        } else if (/^brightness:\d{1,3}$/.test(req)) {
+            const percent = Number(req.slice("brightness:".length))
+            if (percent <= 100) {
+                showBrightnessOsd(percent)
+                res("ok")
+            } else {
+                res(`invalid brightness: ${percent}`)
+            }
         } else {
             res(`unknown: ${req}`)
         }

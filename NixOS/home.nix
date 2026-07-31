@@ -792,6 +792,16 @@ in
           else
             [ "$1" = up ] && ddcutil setvcp 10 + 10 \
                           || ddcutil setvcp 10 - 10
+            # AGS cannot poll DDC-only monitors without issuing an expensive
+            # I2C read every 200 ms, so report the new value explicitly.
+            line=$(ddcutil --terse getvcp 10 2>/dev/null || true)
+            if [ -n "$line" ]; then
+              cur=$(echo "$line" | awk '{print $4}')
+              max=$(echo "$line" | awk '{print $5}')
+              [ "$max" -gt 0 ] || max=100
+              pct=$(( cur * 100 / max ))
+              ags request "brightness:$pct" >/dev/null 2>&1 || true
+            fi
           fi
           pkill -RTMIN+8 waybar 2>/dev/null || true
           ;;
