@@ -33,9 +33,17 @@ timeout(800, () => { primed = true })
 const wp = Wp.get_default()
 const speaker = wp?.audio?.defaultSpeaker
 if (speaker) {
+    let lastVolume = speaker.volume
+    let lastMute = speaker.mute
     const onAudio = () => {
-        if (!primed) return
-        flash(speaker.mute ? "mute" : "volume", speaker.volume)
+        const nextVolume = speaker.volume
+        const nextMute = speaker.mute
+        const changed = nextMute !== lastMute
+            || Math.abs(nextVolume - lastVolume) >= 0.001
+        lastVolume = nextVolume
+        lastMute = nextMute
+        if (!primed || !changed) return
+        flash(nextMute ? "mute" : "volume", nextVolume)
     }
     speaker.connect("notify::volume", onAudio)
     speaker.connect("notify::mute", onAudio)
