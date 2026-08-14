@@ -52,33 +52,6 @@ let
   gproLedSioyek = pkgs.g810-led.override {
     profile = sioyekKeyboardProfile;
   };
-  # PER_KEY_LIGHTING's persistent FrameEnd writes EEPROM, so expose it as an
-  # explicit helper instead of putting it in the udev rule that runs on attach.
-  gproSioyekStore = pkgs.writeShellApplication {
-    name = "gpro-sioyek-store";
-    runtimeInputs = [ gproLedSioyek pkgs.gnugrep pkgs.hidapitester ];
-    text = ''
-      gpro-led -p ${sioyekKeyboardProfile}
-
-      response="$(hidapitester \
-        --vidpid 046d:c339 \
-        --usagePage 0xff43 \
-        --usage 0x0602 \
-        --length 20 \
-        --timeout 2000 \
-        --open \
-        --send-output 0x11,0xff,0x0c,0x5a,0x01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 \
-        --read-input 0x11)"
-
-      if ! grep -qi "11 FF 0C 5A 01" <<< "$response"; then
-        printf '%s\n' "$response" >&2
-        echo "The keyboard did not confirm the persistent profile commit." >&2
-        exit 1
-      fi
-
-      echo "Stored the Sioyek palette in the GPRO Backlight+7 preset."
-    '';
-  };
 in
 {
   imports = [];
@@ -146,6 +119,9 @@ in
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.settings.trusted-users = [ "root" "thinky" ];
   nix.settings.download-buffer-size = 134217728; # 128 MB
+  # Leave CPU and memory headroom for the desktop during source builds.
+  nix.settings.max-jobs = 2;
+  nix.settings.cores = 2;
   nix.gc = {
     automatic = true;
     dates = "daily";
@@ -531,7 +507,6 @@ in
     brightnessctl              # Screen brightness control
     ddcutil                    # External monitor brightness via DDC/CI
     gproLedSioyek              # GPRO live/udev profile matching Sioyek highlights
-    gproSioyekStore            # One-shot save of that profile to Backlight+7
     power-profiles-daemon      # Power profile management (balanced, performance, saver)
     simple-scan                # Simple GNOME scan GUI (flatbed / quick scans)
     naps2                      # Multi-page ADF → searchable-PDF scanning with OCR
