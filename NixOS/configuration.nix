@@ -10,6 +10,75 @@ let
     embeddedTheme = "pixel_sakura";
     themeConfig = { FormPosition = "left"; };
   };
+  # Sioyek chooses a highlight type by pressing h followed by a-z. Mirror its
+  # default 26-color palette on those letter keys of the Logitech GPRO. This
+  # keyboard exposes HID++ PER_KEY_LIGHTING 0x8080, which Solaar detects but
+  # cannot configure; g810-led supports the exact 046d:c339 model.
+  sioyekHighlightColors = {
+    a = "f0a3ff";
+    b = "0075db";
+    c = "994000";
+    d = "4d005c";
+    e = "1a1a1a";
+    f = "005c30";
+    g = "2bcf47";
+    h = "ffcc99";
+    i = "808080";
+    j = "94ffb5";
+    k = "8f7d00";
+    l = "9ecc00";
+    m = "c20087";
+    n = "003380";
+    o = "ffa305";
+    p = "ffa8ba";
+    q = "426600";
+    r = "ff000f";
+    s = "5ef2f2";
+    t = "00998f";
+    u = "e0ff66";
+    v = "730aff";
+    w = "990000";
+    x = "ffff80";
+    y = "ffff00";
+    z = "ff4f05";
+  };
+  sioyekKeyboardProfile = pkgs.writeText "gpro-sioyek-highlights.profile" (
+    "a ffffff\n"
+    + lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (key: color: "k ${key} ${color}") sioyekHighlightColors
+      )
+    + "\nc\n"
+  );
+  gproLedSioyek = pkgs.g810-led.override {
+    profile = sioyekKeyboardProfile;
+  };
+  # PER_KEY_LIGHTING's persistent FrameEnd writes EEPROM, so expose it as an
+  # explicit helper instead of putting it in the udev rule that runs on attach.
+  gproSioyekStore = pkgs.writeShellApplication {
+    name = "gpro-sioyek-store";
+    runtimeInputs = [ gproLedSioyek pkgs.gnugrep pkgs.hidapitester ];
+    text = ''
+      gpro-led -p ${sioyekKeyboardProfile}
+
+      response="$(hidapitester \
+        --vidpid 046d:c339 \
+        --usagePage 0xff43 \
+        --usage 0x0602 \
+        --length 20 \
+        --timeout 2000 \
+        --open \
+        --send-output 0x11,0xff,0x0c,0x5a,0x01,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 \
+        --read-input 0x11)"
+
+      if ! grep -qi "11 FF 0C 5A 01" <<< "$response"; then
+        printf '%s\n' "$response" >&2
+        echo "The keyboard did not confirm the persistent profile commit." >&2
+        exit 1
+      fi
+
+      echo "Stored the Sioyek palette in the GPRO Backlight+7 preset."
+    '';
+  };
 in
 {
   imports = [];
@@ -68,7 +137,7 @@ in
   # Group-writable backlight devices so waybar's backlight/slider (which writes
   # /sys/class/backlight/<dev>/brightness directly) works without root.
   # Covers intel_backlight on M90aPro and ddcciN on X299 hosts.
-  services.udev.packages = [ pkgs.brightnessctl ];
+  services.udev.packages = [ pkgs.brightnessctl gproLedSioyek ];
 
   # Console font configuration
   console.font = "${pkgs.terminus_font}/share/consolefonts/ter-i20n.psf.gz";
@@ -88,9 +157,9 @@ in
 
   hardware.i2c.enable = true;
 
-  # Logitech wireless/wired device support (G502X, PRO X TKL)
+  # Logitech wireless/wired device support (G502X, PRO Gaming Keyboard)
   hardware.logitech.wireless.enable = true;
-  hardware.logitech.wireless.enableGraphical = true;  # Solaar GUI
+  hardware.logitech.wireless.enableGraphical = true;  # Solaar GUI/device access
 
   # GVFS for Nemo trash, network mounts, etc.
   services.gvfs.enable = true;
@@ -461,6 +530,8 @@ in
     # ── Hardware & Power ──
     brightnessctl              # Screen brightness control
     ddcutil                    # External monitor brightness via DDC/CI
+    gproLedSioyek              # GPRO live/udev profile matching Sioyek highlights
+    gproSioyekStore            # One-shot save of that profile to Backlight+7
     power-profiles-daemon      # Power profile management (balanced, performance, saver)
     simple-scan                # Simple GNOME scan GUI (flatbed / quick scans)
     naps2                      # Multi-page ADF → searchable-PDF scanning with OCR
