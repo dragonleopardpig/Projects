@@ -52,6 +52,9 @@ let
   gproLedSioyek = pkgs.g810-led.override {
     profile = sioyekKeyboardProfile;
   };
+  gproSioyekApply = pkgs.writeShellScriptBin "gpro-sioyek" ''
+    exec ${lib.getExe' gproLedSioyek "gpro-led"} -p ${sioyekKeyboardProfile}
+  '';
 in
 {
   imports = [];
@@ -507,6 +510,7 @@ in
     brightnessctl              # Screen brightness control
     ddcutil                    # External monitor brightness via DDC/CI
     gproLedSioyek              # GPRO live/udev profile matching Sioyek highlights
+    gproSioyekApply            # Reapply that profile with gpro-sioyek
     power-profiles-daemon      # Power profile management (balanced, performance, saver)
     simple-scan                # Simple GNOME scan GUI (flatbed / quick scans)
     naps2                      # Multi-page ADF → searchable-PDF scanning with OCR

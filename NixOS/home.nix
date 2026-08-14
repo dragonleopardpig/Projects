@@ -1359,6 +1359,7 @@ in
           "$mod, up, movefocus, u"
           "$mod, down, movefocus, d"
           "$mod SHIFT, F, fullscreen, 1"
+          "$mod, F7, exec, sh -c 'gpro-sioyek && notify-send -a Keyboard -i input-keyboard \"Sioyek keyboard palette restored\"'"
           "$mod SHIFT, A, exec, ags request togglebar"
           "$mod, A, exec, sh -c 'ags quit 2>/dev/null; sleep 0.3; uwsm app -- ags run'"
           '', Print, exec, ~/.local/bin/screenshot''
