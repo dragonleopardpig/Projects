@@ -47,14 +47,31 @@
   # simply doesn't bind to anything — harmless on portable boots).
   boot.extraModulePackages = lib.mkForce [ config.boot.kernelPackages.ddcci-driver ];
   boot.kernelModules = [ "ddcci_backlight" ];
+  # Boot loudly on this disk. On 2026-08-20 a boot filled the screen with red
+  # text just after the LUKS unlock and then froze. Nothing was recoverable
+  # afterwards: the freeze happened before switch-root, so journald's initrd
+  # buffer (/run/log/journal, RAM-only until /var is writable) died with the
+  # reset — `journalctl --list-boots` has no entry for it at all, and nothing
+  # under /var was written during the window. There is no quiet/splash here so
+  # that a repeat stays legible on screen long enough to photograph.
+  #   loglevel=7              kernel prints warnings too, not just errors —
+  #                           a USB root-device dropout shows its run-up
+  #   rd.systemd.show_status=yes  name every stage-1 unit, so the last line
+  #                           printed identifies where it stopped
+  #   boot.shell_on_fail      rescue shell instead of a hard freeze if stage 1
+  #                           is what fails
+  # udev stays at priority 3: its event spam would scroll the actual failure
+  # off-screen, which defeats the point.
   boot.kernelParams = lib.mkForce [
-    "quiet"
-    "splash"
+    "loglevel=7"
     "boot.shell_on_fail"
     "udev.log_priority=3"
-    "rd.systemd.show_status=auto"
+    "rd.systemd.show_status=yes"
     "systemd.swap=0"
   ];
+
+  # Same reason: the shared config sets this false to hide first-boot output.
+  boot.initrd.verbose = lib.mkForce true;
 
   # Disable plymouth on unknown hardware (GPU drivers may vary)
   boot.plymouth.enable = lib.mkForce false;

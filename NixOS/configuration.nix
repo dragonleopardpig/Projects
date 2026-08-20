@@ -628,6 +628,8 @@ in
     # ── Disk & Partitioning ──
     gparted                    # GUI partition editor
     usbimager                  # Write disk images to USB drives
+    smartmontools              # SMART health + drive error log (smartctl -d sat /dev/sda
+                               # for the USB-attached PortableSSD root)
 
     # ── Hyprland & Wayland Desktop ──
     awww                       # Animated wallpaper daemon for Wayland
