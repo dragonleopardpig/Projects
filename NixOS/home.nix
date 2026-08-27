@@ -63,6 +63,16 @@ in
     categories = [ "Office" "Viewer" ];
   };
 
+  xdg.desktopEntries.sioyek-djvu = {
+    name = "Sioyek (DjVu)";
+    exec = "/home/thinky/.local/bin/sioyek-djvu %f";
+    icon = "sioyek";
+    comment = "Open DjVu in Sioyek by converting it to a searchable PDF";
+    mimeType = [ "image/vnd.djvu" "image/vnd.djvu+multipage" "image/x-djvu" ];
+    categories = [ "Office" "Viewer" ];
+    terminal = false;
+  };
+
   xdg.desktopEntries.mayo-xcb = {
     name = "Mayo";
     exec = "/home/thinky/.local/bin/mayo-xcb %f";
@@ -291,6 +301,9 @@ in
     defaultApplications = {
       "inode/directory" = [ "nemo-x11.desktop" ];
       "application/pdf" = [ "sioyek-xcb.desktop" ];
+      "image/vnd.djvu" = [ "sioyek-djvu.desktop" ];
+      "image/vnd.djvu+multipage" = [ "sioyek-djvu.desktop" ];
+      "image/x-djvu" = [ "sioyek-djvu.desktop" ];
       "image/png" = [ "nomacs-x11.desktop" ];
       "image/jpeg" = [ "nomacs-x11.desktop" ];
       "image/gif" = [ "nomacs-x11.desktop" ];
@@ -529,6 +542,38 @@ in
     text = ''
       #!/bin/sh
       exec env QT_QPA_PLATFORM=xcb sioyek "$@"
+    '';
+  };
+
+  # Sioyek cannot render DjVu, so convert to a searchable PDF (cached beside the
+  # source) and open that instead. The first open of a long scan runs OCR and
+  # takes minutes, so the conversion is announced via a notification.
+  home.file.".local/bin/sioyek-djvu" = {
+    executable = true;
+    text = ''
+      #!/bin/sh
+      set -e
+
+      src="$1"
+      if [ -z "$src" ]; then
+        echo "usage: sioyek-djvu <file.djvu>" >&2
+        exit 2
+      fi
+
+      pdf="''${src%.[dD][jJ][vV]*}.pdf"
+      if [ ! -s "$pdf" ] || [ "$src" -nt "$pdf" ]; then
+        notify-send -a Sioyek -i document-open-recent \
+          "Converting DjVu" "$(basename "$src") — OCR may take a few minutes."
+        if ! pdf=$(djvu2pdf "$src"); then
+          notify-send -u critical -a Sioyek -i dialog-error \
+            "DjVu conversion failed" "$(basename "$src")"
+          exit 1
+        fi
+        notify-send -a Sioyek -i document-open \
+          "DjVu ready" "$(basename "$pdf")"
+      fi
+
+      exec env QT_QPA_PLATFORM=xcb sioyek "$pdf"
     '';
   };
 

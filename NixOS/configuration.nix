@@ -161,6 +161,81 @@ let
 
     exec ${lib.getExe gproSioyekApply}
   '';
+
+  # Sioyek renders through MuPDF, which has no DjVu backend, so DjVu files are
+  # converted once into a PDF cached beside the source. ddjvu discards the
+  # embedded text layer, hence the Tesseract pass: it restores search and also
+  # avoids the duplicated hyphen fragments ("at dif- different heights") that
+  # older DjVu text layers carry.
+  djvuToPdf = pkgs.writeShellApplication {
+    name = "djvu2pdf";
+    runtimeInputs = with pkgs; [ djvulibre ocrmypdf tesseract coreutils ];
+    text = ''
+      force=0
+      ocr=1
+      src=""
+      dst=""
+
+      usage() {
+        echo "Usage: djvu2pdf [--force] [--no-ocr] <file.djvu> [out.pdf]" >&2
+        echo "" >&2
+        echo "  --force   reconvert even if the PDF is already up to date" >&2
+        echo "  --no-ocr  skip the OCR pass (fast, but leaves no searchable text)" >&2
+        echo "" >&2
+        echo "Prints the path of the resulting PDF on stdout." >&2
+      }
+
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --force)   force=1; shift ;;
+          --no-ocr)  ocr=0; shift ;;
+          -h|--help) usage; exit 0 ;;
+          -*)        echo "djvu2pdf: unknown option $1" >&2; usage; exit 2 ;;
+          *)         if [ -z "$src" ]; then src="$1"; else dst="$1"; fi; shift ;;
+        esac
+      done
+
+      if [ -z "$src" ]; then
+        usage
+        exit 2
+      fi
+      if [ ! -r "$src" ]; then
+        echo "djvu2pdf: cannot read $src" >&2
+        exit 1
+      fi
+      if [ -z "$dst" ]; then
+        dst="''${src%.[dD][jJ][vV]*}.pdf"
+      fi
+
+      # Up to date already: report the cached PDF and stop.
+      if [ "$force" -eq 0 ] && [ -s "$dst" ] && [ "$dst" -nt "$src" ]; then
+        echo "$dst"
+        exit 0
+      fi
+
+      jobs=$(( $(nproc) - 2 ))
+      if [ "$jobs" -lt 1 ]; then
+        jobs=1
+      fi
+
+      tmp=$(mktemp -d)
+      trap 'rm -rf "$tmp"' EXIT
+
+      # ddjvu emits benign libtiff IFD warnings on stderr; the exit code is what matters.
+      nice -n 15 ddjvu -format=pdf -quality=85 -skip "$src" "$tmp/img.pdf" 2>/dev/null
+
+      if [ "$ocr" -eq 1 ]; then
+        # --skip-text keeps the run idempotent if a page ever arrives with text.
+        nice -n 15 ocrmypdf --optimize 1 --output-type pdf --skip-text \
+          --jobs "$jobs" "$tmp/img.pdf" "$tmp/out.pdf"
+      else
+        mv "$tmp/img.pdf" "$tmp/out.pdf"
+      fi
+
+      mv "$tmp/out.pdf" "$dst"
+      echo "$dst"
+    '';
+  };
 in
 {
   imports = [];
@@ -846,6 +921,10 @@ in
         wrapProgram $out/bin/sioyek --set QT_QPA_PLATFORM xcb
       '';
     })
+    djvuToPdf                  # djvu2pdf: DjVu → searchable PDF for Sioyek
+    djvulibre                  # ddjvu/djvused/djvudump for inspecting DjVu directly
+    ocrmypdf                   # Adds a searchable text layer to scanned PDFs
+    tesseract                  # OCR engine behind ocrmypdf
 
     # ── Cloud ──
     filen-desktop
