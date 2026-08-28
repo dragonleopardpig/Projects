@@ -258,6 +258,13 @@ let
   # untouched while the paper is rewritten. DuXiu scans are one bitonal image
   # per page: already white and fast, usually just missing OCR. pdf-prep works
   # out which of those it is and does only the parts that file needs.
+  # Internet Archive scans layer each page as a low-resolution RGB background
+  # (the paper, plus any continuous-tone photo) with the ink painted over it
+  # through a high-resolution JBIG2 stencil mask. That structure is why they
+  # need whitening, why they scroll badly, and why the text can be left
+  # untouched while the paper is rewritten. DuXiu scans are one bitonal image
+  # per page: already white and fast, usually just missing OCR. pdf-prep works
+  # out which of those it is and does only the parts that file needs.
   pdfPrepScript = pkgs.writeText "pdf-prep.py" ''
     """Make a scanned PDF pleasant to read: white paper, fast scrolling, selectable text.
 
@@ -286,7 +293,7 @@ let
     import pikepdf
     from PIL import Image
 
-    FLAT_STDEV = 12.0    # background stdev above this means real content is present
+    HIGHPASS_CONTENT = 1.0  # high-pass energy above this means a real picture is present
     KNEE = 110           # tones at/below this are photo detail and are left alone
     MIN_BG_DIM = 1500    # a "background" wider than this is really a full-page image
     ALREADY_WHITE = 245  # paper at least this bright is done; touching it only degrades
@@ -342,22 +349,52 @@ let
 
     # ---------------------------------------------------------------- tone helpers
 
-    def paper_level(ch):
-        """Lower edge of the dominant bright tone in one channel.
+    def paper_levels(rgb):
+        """Per-channel paper level, measured over ONE shared set of paper pixels.
 
-        Taking the mode's lower edge rather than a high percentile means the whole paper
-        distribution clips to white; a percentile only lifts its brightest tail, leaving
-        the bulk of the paper visibly grey.
+        The level is taken at the lower edge of the paper's distribution, not at a high
+        percentile: a percentile lifts only the brightest tail and leaves the bulk of the
+        paper visibly grey.
+
+        Crucially the paper pixels are chosen once, by luminance, and every channel is
+        then read over that same set. Letting each channel find its own mode lets them
+        latch onto different features on a photo-heavy page -- paper in one channel, a
+        photo highlight in another -- which produced gains like (1.67, 1.40, 1.76) and
+        tinted whole pages purple.
         """
+        grey = rgb.mean(axis=2)
         lo = KNEE + 10
-        hist = np.bincount(ch.ravel(), minlength=256)
+        hist = np.bincount(grey.astype(np.uint8).ravel(), minlength=256)
         band = hist[lo:]
         if band.sum() == 0:
-            return float(max(np.percentile(ch, 99), lo))
+            return [float(max(np.percentile(rgb[..., c], 99), lo)) for c in range(3)]
         mode = int(np.argmax(band)) + lo
-        near = ch[(ch >= mode - 20) & (ch <= mode + 20)]
-        sd = float(near.std()) if near.size else 3.0
-        return float(max(lo, mode - 3.0 * max(sd, 2.0)))
+        sel = (grey >= mode - 15) & (grey <= mode + 15)
+        if sel.sum() < 0.02 * grey.size:      # too few: widen rather than guess
+            sel = grey >= mode - 30
+        out = []
+        for c in range(3):
+            v = rgb[..., c][sel].astype(np.float32)
+            out.append(float(max(lo, v.mean() - 3.0 * max(v.std(), 2.0))))
+        return out
+
+
+    def highpass_energy(grey):
+        """How much fine detail the layer holds, ignoring smooth shading.
+
+        Plain stdev cannot tell a picture from an uneven scanner lamp: a page that is
+        simply brighter at the top than the bottom scores the same as one with a
+        photograph on it. Measured on one book, pages carrying only a gradient scored
+        0.4-0.6 here while real pictures scored 4-14, with 210 of 246 pages below 1.0
+        and a clean gap above it.
+
+        That distinction matters: a gradient-only page should be flattened to white,
+        but flattening a page with a photograph would erase the photograph.
+        """
+        im = Image.fromarray(grey.astype(np.uint8), "L")
+        small = im.resize((max(1, im.width // 16), max(1, im.height // 16)), Image.BILINEAR)
+        blur = np.asarray(small.resize(im.size, Image.BILINEAR), dtype=np.float32)
+        return float((grey - blur).std())
 
 
     def gain_lut(white_point):
@@ -471,7 +508,7 @@ let
                 if not (grey.mean() > 120 and p99 >= 130 and sat_p95 < 60):
                     alone += 1
                     continue
-                levels = [paper_level(rgb[..., c]) for c in range(3)]
+                levels = paper_levels(rgb)
                 if min(levels) >= ALREADY_WHITE:
                     alone += 1
                     continue
@@ -487,7 +524,10 @@ let
                 curved += 1
                 continue
 
-            if grey.std() <= FLAT_STDEV:
+            if highpass_energy(grey) < HIGHPASS_CONTENT:
+                # Paper only, however unevenly it was lit: flatten it outright. A gain
+                # would keep the shading, and any colour in it, which is what left
+                # tinted bands along the bottom of these pages.
                 buf = io.BytesIO()
                 Image.new("L", (w, h), 255).save(buf, "PNG")
                 page.replace_image(xref, stream=buf.getvalue())
@@ -496,7 +536,7 @@ let
                 # Balance each channel separately. Scanned paper is warm, so one
                 # luminance curve drives red to 255 while blue lags, turning the paper
                 # yellow instead of white.
-                levels = [paper_level(rgb[..., c]) for c in range(3)]
+                levels = paper_levels(rgb)
                 if min(levels) >= ALREADY_WHITE:
                     alone += 1
                     continue
