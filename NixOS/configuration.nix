@@ -272,6 +272,13 @@ let
   # untouched while the paper is rewritten. DuXiu scans are one bitonal image
   # per page: already white and fast, usually just missing OCR. pdf-prep works
   # out which of those it is and does only the parts that file needs.
+  # Internet Archive scans layer each page as a low-resolution RGB background
+  # (the paper, plus any continuous-tone photo) with the ink painted over it
+  # through a high-resolution JBIG2 stencil mask. That structure is why they
+  # need whitening, why they scroll badly, and why the text can be left
+  # untouched while the paper is rewritten. DuXiu scans are one bitonal image
+  # per page: already white and fast, usually just missing OCR. pdf-prep works
+  # out which of those it is and does only the parts that file needs.
   pdfPrepScript = pkgs.writeText "pdf-prep.py" ''
     """Make a scanned PDF pleasant to read: white paper, fast scrolling, selectable text.
 
@@ -500,9 +507,14 @@ let
                 dpis.append(big[2] / width_in)
             pix = page.get_pixmap(dpi=36)
             a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
-                pix.height, pix.width, pix.n)[..., :3]
-            if min(float(np.percentile(a[..., c], 98)) for c in range(3)) < 240:
-                tinted += 1
+                pix.height, pix.width, pix.n)[..., :3].astype(np.float32)
+            m = a.mean(axis=2) > 170          # paper, excluding the ink
+            if m.sum() >= 100:
+                paper = [float(a[..., c][m].mean()) for c in range(3)]
+                # Dim-but-neutral is just dense text dragging the average down; a
+                # spread between channels is a real tint.
+                if max(paper) - min(paper) > 3 or min(paper) < 235:
+                    tinted += 1
         doc.close()
         return {
             "pages": pages,
@@ -701,6 +713,9 @@ let
         ap.add_argument("--no-fast", action="store_true")
         ap.add_argument("--force-ocr", action="store_true",
                         help="OCR even if the file already has a text layer")
+        ap.add_argument("--force-whiten", action="store_true",
+                        help="run the whiten pass even if the survey sees little to do; "
+                             "harmless, since already-white pages are skipped")
         ap.add_argument("--no-migrate", action="store_true",
                         help="do not move Sioyek's highlights onto the new file")
         args = ap.parse_args()
@@ -721,7 +736,7 @@ let
               % ("missing" if s["needs_ocr"] else "present", s["texted"], s["pages"]))
         print("  paper      : %s" % ("tinted" if s["needs_whiten"] else "already white"))
 
-        do_whiten = s["needs_whiten"] and not args.no_whiten
+        do_whiten = (s["needs_whiten"] or args.force_whiten) and not args.no_whiten
         do_fast = s["needs_fast"] and not args.no_fast
         do_ocr = (s["needs_ocr"] or args.force_ocr) and not args.no_ocr
         plan = [n for n, on in (("whiten", do_whiten), ("fast", do_fast), ("ocr", do_ocr)) if on]
