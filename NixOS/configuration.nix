@@ -244,12 +244,30 @@ let
   # that and leaves the text bit-for-bit untouched, because the mask is never
   # rewritten -- far better than re-rendering pages and levelling them, which
   # softens the type and discards the MRC compression.
-  pdfWhitenScript = pkgs.writeText "pdf-whiten.py" ''
-    """Whiten the paper of an Internet Archive (MRC-layered) scanned PDF."""
+  # Internet Archive scans layer each page as a low-resolution RGB background
+  # (the paper, plus any continuous-tone photo) with the ink painted over it
+  # through a high-resolution JBIG2 stencil mask. That structure is why they
+  # need whitening, why they scroll badly, and why the text can be left
+  # untouched while the paper is rewritten. DuXiu scans are one bitonal image
+  # per page: already white and fast, usually just missing OCR. pdf-prep works
+  # out which of those it is and does only the parts that file needs.
+  pdfPrepScript = pkgs.writeText "pdf-prep.py" ''
+    """Make a scanned PDF pleasant to read: white paper, fast scrolling, selectable text.
+
+    Works out what the file actually needs rather than applying everything blindly.
+
+    Internet Archive scans layer each page as a low-resolution RGB background (the paper,
+    plus any continuous-tone photo) with the ink painted over it through a high-resolution
+    JBIG2 stencil mask. That structure is why they need whitening (their paper can sit at
+    60% grey) and why they scroll badly (a 10 megapixel JPEG 2000 decoded per page just to
+    supply ink colour). DuXiu scans are a single bitonal image per page: already white,
+    already fast, and usually just missing OCR.
+    """
     import argparse
     import io
     import os
     import shutil
+    import subprocess
     import sys
     import tempfile
     import zlib
@@ -259,18 +277,21 @@ let
     import pikepdf
     from PIL import Image
 
-    FLAT_STDEV = 12.0   # background stdev above this means real content is present
-    KNEE = 110          # tones at/below this are photo detail and are left alone
-    MIN_BG_DIM = 1500   # a "background" wider than this is really a full-page image
+    FLAT_STDEV = 12.0    # background stdev above this means real content is present
+    KNEE = 110           # tones at/below this are photo detail and are left alone
+    MIN_BG_DIM = 1500    # a "background" wider than this is really a full-page image
     ALREADY_WHITE = 245  # paper at least this bright is done; touching it only degrades
+    TEXT_PER_PAGE = 50   # a page with fewer characters than this counts as untexted
 
+
+    # ---------------------------------------------------------------- tone helpers
 
     def paper_level(ch):
         """Lower edge of the dominant bright tone in one channel.
 
-        Taking the mode's lower edge rather than a high percentile means the whole
-        paper distribution clips to white; a percentile only lifts its brightest
-        tail, leaving the bulk of the paper visibly grey.
+        Taking the mode's lower edge rather than a high percentile means the whole paper
+        distribution clips to white; a percentile only lifts its brightest tail, leaving
+        the bulk of the paper visibly grey.
         """
         lo = KNEE + 10
         hist = np.bincount(ch.ravel(), minlength=256)
@@ -292,8 +313,8 @@ let
     def knee_lut(white_point):
         """Identity below KNEE, linear lift above it.
 
-        For images where the ink shares the layer with the paper: a plain gain
-        would lighten the text and cost contrast, so the shadows are held.
+        For images where the ink shares the layer with the paper: a plain gain would
+        lighten the text and cost contrast, so the shadows are held.
         """
         lut = np.arange(256, dtype=np.float32)
         hi = lut > KNEE
@@ -302,29 +323,157 @@ let
         return np.clip(lut, 0, 255).astype(np.uint8)
 
 
-    def image_array(doc, xref):
-        raw = doc.extract_image(xref)
-        pix = fitz.Pixmap(raw["image"])
-        if pix.n > 3:
-            pix = fitz.Pixmap(fitz.csRGB, pix)
-        return np.frombuffer(pix.samples, dtype=np.uint8).reshape(
-            pix.height, pix.width, pix.n)
+    # ------------------------------------------------------------------- analysis
 
+    def survey(path):
+        """Report what this file is and what it needs."""
+        doc = fitz.open(path)
+        pages = len(doc)
+        texted = 0
+        mrc = 0
+        fat_fg = 0
+        dpis = []
+        tinted = 0
+        sampled = 0
+        step = max(1, pages // 40)
+        for pno in range(pages):
+            page = doc[pno]
+            if len(page.get_text().strip()) >= TEXT_PER_PAGE:
+                texted += 1
+            if pno % step:
+                continue
+            sampled += 1
+            imgs = page.get_images(full=True)
+            if not imgs:
+                continue
+            if len(imgs) >= 2 and min(i[2] for i in imgs) < MIN_BG_DIM:
+                mrc += 1
+            # get_images tuples are (xref, smask, width, height, ...): a wide image
+            # carrying a soft mask is the costly JPEG 2000 colour layer. If it has
+            # already been shrunk there is no speed left to win.
+            if any(i[1] != 0 and i[2] >= MIN_BG_DIM for i in imgs):
+                fat_fg += 1
+            big = max(imgs, key=lambda i: i[2] * i[3])
+            width_in = page.rect.width / 72.0
+            if width_in > 0:
+                dpis.append(big[2] / width_in)
+            pix = page.get_pixmap(dpi=36)
+            a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                pix.height, pix.width, pix.n)[..., :3]
+            if min(float(np.percentile(a[..., c], 98)) for c in range(3)) < 240:
+                tinted += 1
+        doc.close()
+        return {
+            "pages": pages,
+            "texted": texted,
+            "needs_ocr": texted < pages * 0.5,
+            "is_mrc": bool(sampled and mrc > sampled * 0.5),
+            "needs_fast": bool(sampled and fat_fg > sampled * 0.5),
+            "dpi": int(np.median(dpis)) if dpis else 0,
+            "needs_whiten": bool(sampled and tinted > sampled * 0.2),
+        }
+
+
+    # ------------------------------------------------------------------ whitening
+
+    def whiten(path, dst):
+        doc = fitz.open(path)
+        white = curved = alone = 0
+        for pno in range(len(doc)):
+            page = doc[pno]
+            imgs = page.get_images(full=True)
+            if not imgs:
+                continue
+            small = min(imgs, key=lambda i: i[2] * i[3])
+            xref, w, h = small[0], small[2], small[3]
+            try:
+                raw = doc.extract_image(xref)
+                pix = fitz.Pixmap(raw["image"])
+                if pix.n > 3:
+                    pix = fitz.Pixmap(fitz.csRGB, pix)
+                a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                    pix.height, pix.width, pix.n)
+            except Exception:
+                alone += 1
+                continue
+
+            # A bitonal or greyscale scan arrives with a single channel; widen it so
+            # everything below can assume three, and save it back as grey.
+            is_grey = a.shape[2] == 1
+            rgb = np.repeat(a, 3, axis=2) if is_grey else a[..., :3]
+            grey = rgb.mean(axis=2)
+
+            if w > MIN_BG_DIM:
+                # No MRC split: ink and paper share one image. Judge colour by a high
+                # percentile of saturation, not its mean -- a cover is mostly pale
+                # artwork around one saturated block, which drags the mean down to
+                # text-page levels. Measured, covers sit at 112-176 and text pages at
+                # 0-23. No upper bound on p99: an already-light page still needs the
+                # last push.
+                p99 = float(np.percentile(grey, 99))
+                sat_p95 = float(np.percentile(rgb.max(axis=2) - rgb.min(axis=2), 95))
+                if not (grey.mean() > 120 and p99 >= 130 and sat_p95 < 60):
+                    alone += 1
+                    continue
+                levels = [paper_level(rgb[..., c]) for c in range(3)]
+                if min(levels) >= ALREADY_WHITE:
+                    alone += 1
+                    continue
+                out = np.empty_like(rgb)
+                for c in range(3):
+                    out[..., c] = knee_lut(levels[c])[rgb[..., c]]
+                buf = io.BytesIO()
+                if is_grey:
+                    Image.fromarray(out[..., 0], "L").save(buf, "JPEG", quality=85)
+                else:
+                    Image.fromarray(out, "RGB").save(buf, "JPEG", quality=85)
+                page.replace_image(xref, stream=buf.getvalue())
+                curved += 1
+                continue
+
+            if grey.std() <= FLAT_STDEV:
+                buf = io.BytesIO()
+                Image.new("L", (w, h), 255).save(buf, "PNG")
+                page.replace_image(xref, stream=buf.getvalue())
+                white += 1
+            else:
+                # Balance each channel separately. Scanned paper is warm, so one
+                # luminance curve drives red to 255 while blue lags, turning the paper
+                # yellow instead of white.
+                levels = [paper_level(rgb[..., c]) for c in range(3)]
+                if min(levels) >= ALREADY_WHITE:
+                    alone += 1
+                    continue
+                out = np.empty_like(rgb)
+                for c in range(3):
+                    out[..., c] = gain_lut(levels[c])[rgb[..., c]]
+                buf = io.BytesIO()
+                if is_grey:
+                    Image.fromarray(out[..., 0], "L").save(buf, "JPEG", quality=88)
+                else:
+                    Image.fromarray(out, "RGB").save(buf, "JPEG", quality=88, subsampling=0)
+                page.replace_image(xref, stream=buf.getvalue())
+                curved += 1
+
+        fitz.TOOLS.mupdf_display_errors(False)
+        doc.save(dst, garbage=4, deflate=True)
+        fitz.TOOLS.mupdf_display_errors(True)
+        doc.close()
+        return white, curved, alone
+
+
+    # ----------------------------------------------------------------- speed pass
 
     def slim_foregrounds(path, max_side=128):
         """Shrink the MRC foreground, which is only a smooth field of ink colour.
 
-        An Internet Archive page composites a full-resolution JBIG2 stencil over a
-        same-sized JPEG 2000 image that supplies nothing but colour. Decoding ten
-        megapixels of JPEG 2000 per page is what makes these files crawl -- around
-        610 ms a page against 90 ms for an ordinary bitonal scan. The stencil is
-        what carries the letter shapes, and PDF lets a soft mask have different
-        pixel dimensions from the image it masks, so the colour field can shrink to
-        a thumbnail while the text stays exactly as sharp. Measured at 4.8x faster,
-        rendering identically.
+        Decoding ten megapixels of JPEG 2000 per page is what makes these files crawl.
+        The stencil carries the letter shapes, and PDF lets a soft mask have different
+        pixel dimensions from the image it masks, so the colour field can shrink to a
+        thumbnail while the text stays exactly as sharp.
 
-        This has to be done with pikepdf: PyMuPDF's replace_image drops /SMask,
-        which loses the stencil and paints the page a solid black smear.
+        Must be pikepdf: PyMuPDF's replace_image drops /SMask, losing the stencil and
+        painting each page a solid black smear.
         """
         pdf = pikepdf.open(path, allow_overwriting_input=True)
         slimmed = 0
@@ -356,11 +505,25 @@ let
         return slimmed
 
 
-    def verify(path):
-        """Measure the result: a rendered page can look lighter than it truly is.
+    # ------------------------------------------------------------------------ OCR
 
-        Checked per channel, because a grey-only check passes a page whose paper
-        has gone yellow -- red hits 255 while blue lags far behind.
+    def run_ocr(src, dst, dpi):
+        cmd = ["ocrmypdf", "--skip-text", "--optimize", "0",
+               "--jobs", str(max(1, (os.cpu_count() or 4) - 2))]
+        # Tesseract wants about 300 dpi; upscale a coarser scan before recognition.
+        if dpi and dpi < 300:
+            cmd += ["--oversample", "300"]
+        cmd += [src, dst]
+        subprocess.run(cmd, check=True)
+
+
+    # --------------------------------------------------------------------- verify
+
+    def verify(path):
+        """Measure the result -- a rendered page can look lighter than it truly is.
+
+        Per channel, because a greyscale check passes a page whose paper has gone
+        yellow: red hits 255 while blue lags far behind.
         """
         doc = fitz.open(path)
         tinted = []
@@ -368,180 +531,97 @@ let
             pix = doc[pno].get_pixmap(dpi=36)
             a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
                 pix.height, pix.width, pix.n)[..., :3]
-            # The paper is the bright end; require every channel to reach white.
             paper = [float(np.percentile(a[..., c], 98)) for c in range(3)]
             if min(paper) < 240:
-                tinted.append((pno + 1, paper))
+                tinted.append(pno + 1)
+        npages = len(doc)
+        chars = sum(len(doc[p].get_text()) for p in range(npages))
         doc.close()
-        return tinted
+        return npages, tinted, chars
 
 
     def main():
         ap = argparse.ArgumentParser(
-            prog="pdf-whiten",
-            description="Whiten the tan paper of an Internet Archive scanned PDF, "
-                        "leaving the text mask and any photographs intact.")
+            prog="pdf-prep",
+            description="Whiten the paper, speed up scrolling and OCR a scanned PDF, "
+                        "doing only the parts the file actually needs.")
         ap.add_argument("input")
         ap.add_argument("output", nargs="?",
-                        help="default: <input>-white.pdf beside the source")
-        ap.add_argument("--in-place", action="store_true",
-                        help="overwrite the input file")
+                        help="default: <input>-prep.pdf beside the source")
+        ap.add_argument("--in-place", action="store_true", help="overwrite the input")
         ap.add_argument("--dry-run", action="store_true",
-                        help="classify every page and report, writing nothing")
-        ap.add_argument("--no-verify", action="store_true",
-                        help="skip the post-write measurement pass")
-        ap.add_argument("--fast", action="store_true",
-                        help="also shrink the MRC colour layer, which renders ~5x "
-                             "faster with no visible change (text stays full "
-                             "resolution)")
+                        help="report what would be done, writing nothing")
+        ap.add_argument("--no-ocr", action="store_true")
+        ap.add_argument("--no-whiten", action="store_true")
+        ap.add_argument("--no-fast", action="store_true")
+        ap.add_argument("--force-ocr", action="store_true",
+                        help="OCR even if the file already has a text layer")
         args = ap.parse_args()
 
         if not os.path.isfile(args.input):
-            sys.exit("pdf-whiten: cannot read " + args.input)
+            sys.exit("pdf-prep: cannot read " + args.input)
         if args.output and args.in_place:
-            sys.exit("pdf-whiten: give an output path or --in-place, not both")
+            sys.exit("pdf-prep: give an output path or --in-place, not both")
 
         stem, ext = os.path.splitext(args.input)
-        dst = args.output or (args.input if args.in_place else stem + "-white" + ext)
+        dst = args.output or (args.input if args.in_place else stem + "-prep" + ext)
 
-        doc = fitz.open(args.input)
-        whitened = curved = untouched = 0
+        s = survey(args.input)
+        kind = "Internet Archive (MRC layered)" if s["is_mrc"] else "single image per page"
+        print("%d pages, %s, about %d dpi" % (s["pages"], kind, s["dpi"]))
+        print("  text layer : %s (%d of %d pages)"
+              % ("missing" if s["needs_ocr"] else "present", s["texted"], s["pages"]))
+        print("  paper      : %s" % ("tinted" if s["needs_whiten"] else "already white"))
 
-        for pno in range(len(doc)):
-            page = doc[pno]
-            imgs = page.get_images(full=True)
-            if not imgs:
-                untouched += 1
-                continue
-            smallest = min(imgs, key=lambda i: i[2] * i[3])
-            xref, w, h = smallest[0], smallest[2], smallest[3]
-
-            try:
-                a = image_array(doc, xref)
-            except Exception as exc:
-                untouched += 1
-                print("  page %d: left alone (%s)" % (pno + 1, type(exc).__name__))
-                continue
-
-            # A bitonal or greyscale scan arrives with a single channel; widen it so
-            # everything below can assume three, and remember to save it back as grey.
-            is_grey = a.shape[2] == 1
-            rgb = np.repeat(a, 3, axis=2) if is_grey else a[..., :3]
-            grey = rgb.mean(axis=2)
-
-            if w > MIN_BG_DIM:
-                # No MRC split: ink and paper share one image. Only treat it when it
-                # looks like paper, so colour covers are never washed out.
-                #
-                # Judge colour by a high percentile of saturation, not its mean: a
-                # cover is mostly pale artwork with a saturated block or two, which
-                # drags the mean down to text-page levels. Measured, covers sit at
-                # satP95 112-176 and text pages at 0-23, so 60 separates them with
-                # room to spare. There is deliberately no upper bound on p99 -- an
-                # already-light page still needs lifting the rest of the way.
-                p99 = float(np.percentile(grey, 99))
-                sat = rgb.max(axis=2) - rgb.min(axis=2)
-                sat_p95 = float(np.percentile(sat, 95))
-                if not (grey.mean() > 120 and p99 >= 130 and sat_p95 < 60):
-                    untouched += 1
-                    print("  page %d: left alone (cover/plate, mean=%.0f satP95=%.0f)"
-                          % (pno + 1, grey.mean(), sat_p95))
-                    continue
-                # Per channel, and staying in colour: converting to grey would throw
-                # away any colour the page does carry.
-                levels = [paper_level(rgb[..., c]) for c in range(3)]
-                if min(levels) >= ALREADY_WHITE:
-                    # Nothing to gain, and re-encoding a crisp bitonal scan as JPEG
-                    # would only smear ringing around the type.
-                    untouched += 1
-                    print("  page %d: already white, left alone" % (pno + 1))
-                    continue
-                curved += 1
-                print("  page %d: full-page scan, paper rgb(%.0f,%.0f,%.0f) -> lifted"
-                      % (pno + 1, levels[0], levels[1], levels[2]))
-                if args.dry_run:
-                    continue
-                out = np.empty_like(rgb)
-                for c in range(3):
-                    out[..., c] = knee_lut(levels[c])[rgb[..., c]]
-                buf = io.BytesIO()
-                if is_grey:
-                    Image.fromarray(out[..., 0], "L").save(buf, format="JPEG", quality=85)
-                else:
-                    Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=85)
-                page.replace_image(xref, stream=buf.getvalue())
-                continue
-
-            if grey.std() <= FLAT_STDEV:
-                whitened += 1
-                if args.dry_run:
-                    continue
-                buf = io.BytesIO()
-                Image.new("L", (w, h), 255).save(buf, format="PNG")
-                page.replace_image(xref, stream=buf.getvalue())
-            else:
-                # Balance each channel separately. Scanned paper is warm, so one
-                # luminance curve drives red to 255 while blue lags, turning the
-                # paper yellow instead of white.
-                levels = [paper_level(rgb[..., c]) for c in range(3)]
-                if min(levels) >= ALREADY_WHITE:
-                    untouched += 1
-                    print("  page %d: already white, left alone" % (pno + 1))
-                    continue
-                curved += 1
-                print("  page %d: photo in background, paper rgb(%.0f,%.0f,%.0f)"
-                      " -> balanced" % (pno + 1, levels[0], levels[1], levels[2]))
-                if args.dry_run:
-                    continue
-                out = np.empty_like(rgb)
-                for c in range(3):
-                    out[..., c] = gain_lut(levels[c])[rgb[..., c]]
-                buf = io.BytesIO()
-                if is_grey:
-                    Image.fromarray(out[..., 0], "L").save(buf, format="JPEG",
-                                                           quality=88)
-                else:
-                    Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=88,
-                                                     subsampling=0)
-                page.replace_image(xref, stream=buf.getvalue())
-
-        print("pages whitened (flat paper)  : %d" % whitened)
-        print("pages curved  (photo/no MRC) : %d" % curved)
-        print("pages left alone             : %d" % untouched)
+        do_whiten = s["needs_whiten"] and not args.no_whiten
+        do_fast = s["needs_fast"] and not args.no_fast
+        do_ocr = (s["needs_ocr"] or args.force_ocr) and not args.no_ocr
+        plan = [n for n, on in (("whiten", do_whiten), ("fast", do_fast), ("ocr", do_ocr)) if on]
+        print("  plan       : %s" % (", ".join(plan) if plan else "nothing to do"))
 
         if args.dry_run:
             print("dry run: nothing written")
             return
+        if not plan:
+            print("nothing to do")
+            return
 
-        # Never write straight over the input: a failed save would lose the original.
-        fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=os.path.dirname(dst) or ".")
+        workdir = os.path.dirname(os.path.abspath(dst)) or "."
+        fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=workdir)
         os.close(fd)
-        # Garbage-collecting the image objects we replaced makes MuPDF log
-        # "cannot find object in xref" for every one of them. It is noise, not
-        # damage -- the verify pass below renders every page and would fail on real
-        # corruption -- but it reads alarmingly, so keep it out of the output.
-        fitz.TOOLS.mupdf_display_errors(False)
-        doc.save(tmp, garbage=4, deflate=True)
-        fitz.TOOLS.mupdf_display_errors(True)
-        doc.close()
-        shutil.move(tmp, dst)
+        try:
+            if do_whiten:
+                w, c, a = whiten(args.input, tmp)
+                print("whiten: %d pages to white, %d balanced, %d left alone" % (w, c, a))
+            else:
+                shutil.copyfile(args.input, tmp)
 
-        if args.fast:
-            slimmed = slim_foregrounds(dst)
-            print("fast: shrank the colour layer on %d pages "
-                  "(text resolution untouched)" % slimmed)
+            if do_fast:
+                print("fast: shrank the colour layer on %d pages (text untouched)"
+                      % slim_foregrounds(tmp))
 
-        if not args.no_verify:
-            tinted = verify(dst)
-            checked = fitz.open(dst)
-            npages = len(checked)
-            checked.close()
-            print("verify: all %d pages render; %d still have tinted paper"
-                  % (npages, len(tinted)))
-            for p, paper in tinted[:10]:
-                print("  page %d: paper rgb(%.0f,%.0f,%.0f)"
-                      " (expected for a colour cover)"
-                      % (p, paper[0], paper[1], paper[2]))
+            if do_ocr:
+                # OCR last so it sees the whitened images, and --optimize 0 so it does
+                # not re-encode the work above.
+                fd2, tmp2 = tempfile.mkstemp(suffix=".pdf", dir=workdir)
+                os.close(fd2)
+                try:
+                    run_ocr(tmp, tmp2, s["dpi"])
+                    os.replace(tmp2, tmp)
+                except subprocess.CalledProcessError as exc:
+                    os.path.exists(tmp2) and os.unlink(tmp2)
+                    sys.exit("pdf-prep: ocrmypdf failed (%s)" % exc.returncode)
+
+            npages, tinted, chars = verify(tmp)
+            print("verify: all %d pages render; %d still tinted; %d characters of text"
+                  % (npages, len(tinted), chars))
+            if tinted:
+                print("  tinted pages: %s%s"
+                      % (tinted[:10], " ..." if len(tinted) > 10 else ""))
+            shutil.move(tmp, dst)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
 
         print(dst)
 
@@ -550,13 +630,15 @@ let
         main()
   '';
 
-  pdfWhiten = pkgs.writeShellApplication {
-    name = "pdf-whiten";
+  pdfPrep = pkgs.writeShellApplication {
+    name = "pdf-prep";
     runtimeInputs = [
       (pkgs.python3.withPackages (ps: with ps; [ pymupdf numpy pillow pikepdf ]))
+      pkgs.ocrmypdf
+      pkgs.tesseract
     ];
     text = ''
-      exec python3 ${pdfWhitenScript} "$@"
+      exec python3 ${pdfPrepScript} "$@"
     '';
   };
 in
@@ -1245,7 +1327,7 @@ in
       '';
     })
     djvuToPdf                  # djvu2pdf: DjVu → searchable PDF for Sioyek
-    pdfWhiten                  # pdf-whiten: white out the paper of an Internet Archive scan
+    pdfPrep                    # pdf-prep: whiten, speed up and OCR a scanned PDF
     djvulibre                  # ddjvu/djvused/djvudump for inspecting DjVu directly
     ocrmypdf                   # Adds a searchable text layer to scanned PDFs
     tesseract                  # OCR engine behind ocrmypdf
