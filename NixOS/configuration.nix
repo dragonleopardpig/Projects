@@ -251,6 +251,13 @@ let
   # untouched while the paper is rewritten. DuXiu scans are one bitonal image
   # per page: already white and fast, usually just missing OCR. pdf-prep works
   # out which of those it is and does only the parts that file needs.
+  # Internet Archive scans layer each page as a low-resolution RGB background
+  # (the paper, plus any continuous-tone photo) with the ink painted over it
+  # through a high-resolution JBIG2 stencil mask. That structure is why they
+  # need whitening, why they scroll badly, and why the text can be left
+  # untouched while the paper is rewritten. DuXiu scans are one bitonal image
+  # per page: already white and fast, usually just missing OCR. pdf-prep works
+  # out which of those it is and does only the parts that file needs.
   pdfPrepScript = pkgs.writeText "pdf-prep.py" ''
     """Make a scanned PDF pleasant to read: white paper, fast scrolling, selectable text.
 
@@ -264,9 +271,11 @@ let
     already fast, and usually just missing OCR.
     """
     import argparse
+    import hashlib
     import io
     import os
     import shutil
+    import sqlite3
     import subprocess
     import sys
     import tempfile
@@ -282,6 +291,53 @@ let
     MIN_BG_DIM = 1500    # a "background" wider than this is really a full-page image
     ALREADY_WHITE = 245  # paper at least this bright is done; touching it only degrades
     TEXT_PER_PAGE = 50   # a page with fewer characters than this counts as untexted
+    SIOYEK_DB = os.environ.get("PDF_PREP_SIOYEK_DB",
+                               os.path.expanduser("~/.local/share/sioyek/shared.db"))
+
+    # Every one of these columns holds a document checksum, not a filesystem path.
+    SIOYEK_KEYS = (("highlights", "document_path"), ("bookmarks", "document_path"),
+                   ("marks", "document_path"), ("opened_books", "path"),
+                   ("links", "src_document"), ("links", "dst_document"))
+
+
+    def md5_of(path):
+        h = hashlib.md5()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+
+    def migrate_sioyek(old_sum, new_sum):
+        """Re-point Sioyek's annotations at the rewritten file.
+
+        Sioyek identifies a document by the MD5 of its entire contents, so *any* edit
+        orphans its highlights, bookmarks and marks even though the pages are
+        unchanged. Nothing here alters page geometry -- only the images inside each
+        page -- so the stored coordinates stay valid and just need re-keying.
+        """
+        if old_sum == new_sum or not os.path.exists(SIOYEK_DB):
+            return {}
+        moved = {}
+        con = sqlite3.connect(SIOYEK_DB)
+        try:
+            for table, col in SIOYEK_KEYS:
+                try:
+                    n = con.execute("SELECT COUNT(*) FROM %s WHERE %s=?" % (table, col),
+                                    (old_sum,)).fetchone()[0]
+                except sqlite3.Error:
+                    continue
+                if not n:
+                    continue
+                # OR REPLACE: opened_books.path and marks are UNIQUE, so a row already
+                # keyed to the new checksum would otherwise abort the update.
+                con.execute("UPDATE OR REPLACE %s SET %s=? WHERE %s=?" % (table, col, col),
+                            (new_sum, old_sum))
+                moved["%s.%s" % (table, col)] = n
+            con.commit()
+        finally:
+            con.close()
+        return moved
 
 
     # ---------------------------------------------------------------- tone helpers
@@ -556,6 +612,8 @@ let
         ap.add_argument("--no-fast", action="store_true")
         ap.add_argument("--force-ocr", action="store_true",
                         help="OCR even if the file already has a text layer")
+        ap.add_argument("--no-migrate", action="store_true",
+                        help="do not move Sioyek's highlights onto the new file")
         args = ap.parse_args()
 
         if not os.path.isfile(args.input):
@@ -566,6 +624,7 @@ let
         stem, ext = os.path.splitext(args.input)
         dst = args.output or (args.input if args.in_place else stem + "-prep" + ext)
 
+        src_sum = md5_of(args.input)
         s = survey(args.input)
         kind = "Internet Archive (MRC layered)" if s["is_mrc"] else "single image per page"
         print("%d pages, %s, about %d dpi" % (s["pages"], kind, s["dpi"]))
@@ -622,6 +681,13 @@ let
         finally:
             if os.path.exists(tmp):
                 os.unlink(tmp)
+
+        if not args.no_migrate:
+            moved = migrate_sioyek(src_sum, md5_of(dst))
+            if moved:
+                print("sioyek: moved %s onto the new file"
+                      % ", ".join("%d %s" % (n, k.split(".")[0]) for k, n in moved.items()))
+                print("  (close Sioyek before running this, or it may write back stale state)")
 
         print(dst)
 
