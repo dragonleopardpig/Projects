@@ -260,6 +260,7 @@ let
     FLAT_STDEV = 12.0   # background stdev above this means real content is present
     KNEE = 110          # tones at/below this are photo detail and are left alone
     MIN_BG_DIM = 1500   # a "background" wider than this is really a full-page image
+    ALREADY_WHITE = 245  # paper at least this bright is done; touching it only degrades
 
 
     def paper_level(ch):
@@ -371,7 +372,11 @@ let
                 print("  page %d: left alone (%s)" % (pno + 1, type(exc).__name__))
                 continue
 
-            grey = a[..., :3].mean(axis=2)
+            # A bitonal or greyscale scan arrives with a single channel; widen it so
+            # everything below can assume three, and remember to save it back as grey.
+            is_grey = a.shape[2] == 1
+            rgb = np.repeat(a, 3, axis=2) if is_grey else a[..., :3]
+            grey = rgb.mean(axis=2)
 
             if w > MIN_BG_DIM:
                 # No MRC split: ink and paper share one image. Only treat it when it
@@ -384,7 +389,7 @@ let
                 # room to spare. There is deliberately no upper bound on p99 -- an
                 # already-light page still needs lifting the rest of the way.
                 p99 = float(np.percentile(grey, 99))
-                sat = a[..., :3].max(axis=2) - a[..., :3].min(axis=2)
+                sat = rgb.max(axis=2) - rgb.min(axis=2)
                 sat_p95 = float(np.percentile(sat, 95))
                 if not (grey.mean() > 120 and p99 >= 130 and sat_p95 < 60):
                     untouched += 1
@@ -393,17 +398,26 @@ let
                     continue
                 # Per channel, and staying in colour: converting to grey would throw
                 # away any colour the page does carry.
-                levels = [paper_level(a[..., c]) for c in range(3)]
+                levels = [paper_level(rgb[..., c]) for c in range(3)]
+                if min(levels) >= ALREADY_WHITE:
+                    # Nothing to gain, and re-encoding a crisp bitonal scan as JPEG
+                    # would only smear ringing around the type.
+                    untouched += 1
+                    print("  page %d: already white, left alone" % (pno + 1))
+                    continue
                 curved += 1
                 print("  page %d: full-page scan, paper rgb(%.0f,%.0f,%.0f) -> lifted"
                       % (pno + 1, levels[0], levels[1], levels[2]))
                 if args.dry_run:
                     continue
-                out = np.empty_like(a[..., :3])
+                out = np.empty_like(rgb)
                 for c in range(3):
-                    out[..., c] = knee_lut(levels[c])[a[..., c]]
+                    out[..., c] = knee_lut(levels[c])[rgb[..., c]]
                 buf = io.BytesIO()
-                Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=85)
+                if is_grey:
+                    Image.fromarray(out[..., 0], "L").save(buf, format="JPEG", quality=85)
+                else:
+                    Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=85)
                 page.replace_image(xref, stream=buf.getvalue())
                 continue
 
@@ -418,18 +432,26 @@ let
                 # Balance each channel separately. Scanned paper is warm, so one
                 # luminance curve drives red to 255 while blue lags, turning the
                 # paper yellow instead of white.
-                levels = [paper_level(a[..., c]) for c in range(3)]
+                levels = [paper_level(rgb[..., c]) for c in range(3)]
+                if min(levels) >= ALREADY_WHITE:
+                    untouched += 1
+                    print("  page %d: already white, left alone" % (pno + 1))
+                    continue
                 curved += 1
                 print("  page %d: photo in background, paper rgb(%.0f,%.0f,%.0f)"
                       " -> balanced" % (pno + 1, levels[0], levels[1], levels[2]))
                 if args.dry_run:
                     continue
-                out = np.empty_like(a[..., :3])
+                out = np.empty_like(rgb)
                 for c in range(3):
-                    out[..., c] = gain_lut(levels[c])[a[..., c]]
+                    out[..., c] = gain_lut(levels[c])[rgb[..., c]]
                 buf = io.BytesIO()
-                Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=88,
-                                                 subsampling=0)
+                if is_grey:
+                    Image.fromarray(out[..., 0], "L").save(buf, format="JPEG",
+                                                           quality=88)
+                else:
+                    Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=88,
+                                                     subsampling=0)
                 page.replace_image(xref, stream=buf.getvalue())
 
         print("pages whitened (flat paper)  : %d" % whitened)
