@@ -265,6 +265,13 @@ let
   # untouched while the paper is rewritten. DuXiu scans are one bitonal image
   # per page: already white and fast, usually just missing OCR. pdf-prep works
   # out which of those it is and does only the parts that file needs.
+  # Internet Archive scans layer each page as a low-resolution RGB background
+  # (the paper, plus any continuous-tone photo) with the ink painted over it
+  # through a high-resolution JBIG2 stencil mask. That structure is why they
+  # need whitening, why they scroll badly, and why the text can be left
+  # untouched while the paper is rewritten. DuXiu scans are one bitonal image
+  # per page: already white and fast, usually just missing OCR. pdf-prep works
+  # out which of those it is and does only the parts that file needs.
   pdfPrepScript = pkgs.writeText "pdf-prep.py" ''
     """Make a scanned PDF pleasant to read: white paper, fast scrolling, selectable text.
 
@@ -293,8 +300,7 @@ let
     import pikepdf
     from PIL import Image
 
-    HIGHPASS_CONTENT = 1.0  # high-pass energy above this means a real picture is present
-    KNEE = 110           # tones at/below this are photo detail and are left alone
+    PAPER_FLOOR = 40     # a channel's paper level cannot sensibly fall below this
     MIN_BG_DIM = 1500    # a "background" wider than this is really a full-page image
     ALREADY_WHITE = 245  # paper at least this bright is done; touching it only degrades
     TEXT_PER_PAGE = 50   # a page with fewer characters than this counts as untexted
@@ -363,7 +369,7 @@ let
         tinted whole pages purple.
         """
         grey = rgb.mean(axis=2)
-        lo = KNEE + 10
+        lo = PAPER_FLOOR
         hist = np.bincount(grey.astype(np.uint8).ravel(), minlength=256)
         band = hist[lo:]
         if band.sum() == 0:
@@ -379,22 +385,57 @@ let
         return out
 
 
-    def highpass_energy(grey):
-        """How much fine detail the layer holds, ignoring smooth shading.
+    def background_image(imgs):
+        """The paper layer: the image with no soft mask.
 
-        Plain stdev cannot tell a picture from an uneven scanner lamp: a page that is
-        simply brighter at the top than the bottom scores the same as one with a
-        photograph on it. Measured on one book, pages carrying only a gradient scored
-        0.4-0.6 here while real pictures scored 4-14, with 210 of 246 pages below 1.0
-        and a clean gap above it.
-
-        That distinction matters: a gradient-only page should be flattened to white,
-        but flattening a page with a photograph would erase the photograph.
+        Not simply the smallest image. In an MRC page the foreground carries the JBIG2
+        stencil as its /SMask and the background does not, and once --fast has shrunk
+        that foreground to a thumbnail it becomes the smallest image on the page. A
+        size-based rule would then pick the ink-colour layer and whiten *that*,
+        wrecking the page on a second run.
         """
+        plain = [i for i in imgs if i[1] == 0]
+        if not plain:
+            return None
+        return min(plain, key=lambda i: i[2] * i[3])
+
+
+    def has_picture(rgb):
+        """Is there a real picture in this layer, or only paper?
+
+        Absolute high-frequency energy does not port between scans: one book's blank
+        pages score 0.4 and another's 2.0, so any fixed cut either flattens pages that
+        hold a photograph or leaves the other book's gradient in place. Both measures
+        here are scale-free.
+
+        darkfrac -- in an MRC background the text lives in the mask, so anything much
+        darker than the paper IS a picture. Measured: photographs 0.15, a faint figure
+        0.007, blank pages 0.000-0.001.
+
+        tileratio -- how localised the fine detail is. A photograph is concentrated in
+        part of the page; scanner noise is spread evenly. Measured: photographs 37-46,
+        a faint figure 10, blank pages 1.2-3.5.
+        """
+        grey = rgb.mean(axis=2)
+        hist = np.bincount(grey.astype(np.uint8).ravel(), minlength=256)
+        mode = int(np.argmax(hist[120:])) + 120
+        if float((grey < mode - 45).mean()) > 0.003:
+            return True
+
         im = Image.fromarray(grey.astype(np.uint8), "L")
         small = im.resize((max(1, im.width // 16), max(1, im.height // 16)), Image.BILINEAR)
         blur = np.asarray(small.resize(im.size, Image.BILINEAR), dtype=np.float32)
-        return float((grey - blur).std())
+        resid = grey - blur
+        h, w = resid.shape
+        th, tw = max(1, h // 12), max(1, w // 12)
+        e = np.array([resid[i:i + th, j:j + tw].std()
+                      for i in range(0, h - th + 1, th)
+                      for j in range(0, w - tw + 1, tw)])
+        med = float(np.median(e))
+        if med < 0.05:
+            # Already flat everywhere; a ratio here would divide by ~zero.
+            return float(e.max()) > 2.0
+        return float(np.percentile(e, 95) / med) > 6.0
 
 
     def gain_lut(white_point):
@@ -403,17 +444,24 @@ let
         return np.clip(lut, 0, 255).astype(np.uint8)
 
 
-    def knee_lut(white_point):
-        """Identity below KNEE, linear lift above it.
+    def balance_and_deepen(rgb, levels, gamma=1.8):
+        """White-balance a layer that holds both ink and paper, then restore ink density.
 
-        For images where the ink shares the layer with the paper: a plain gain would
-        lighten the text and cost contrast, so the shadows are held.
+        A fixed luminance knee cannot be used here. On strongly yellowed paper the blue
+        channel sits *below* the knee, so red and green get lifted to white while blue is
+        left untouched -- turning a mild yellow into a vivid one (measured: paper coming
+        out rgb(254,254,97)).
+
+        So balance each channel against its own paper level first, which makes the paper
+        neutral white whatever its tint. That lifts the ink too, so a gamma then pulls the
+        midtones back down: white stays white, and the text returns to roughly its
+        original density instead of washing out to grey.
         """
-        lut = np.arange(256, dtype=np.float32)
-        hi = lut > KNEE
-        wp = max(float(white_point), KNEE + 10.0)
-        lut[hi] = KNEE + (255.0 - KNEE) * (lut[hi] - KNEE) / (wp - KNEE)
-        return np.clip(lut, 0, 255).astype(np.uint8)
+        out = np.empty_like(rgb)
+        for c in range(3):
+            out[..., c] = gain_lut(levels[c])[rgb[..., c]]
+        lut = (255.0 * (np.arange(256, dtype=np.float32) / 255.0) ** gamma)
+        return np.clip(lut, 0, 255).astype(np.uint8)[out]
 
 
     # ------------------------------------------------------------------- analysis
@@ -477,7 +525,10 @@ let
             imgs = page.get_images(full=True)
             if not imgs:
                 continue
-            small = min(imgs, key=lambda i: i[2] * i[3])
+            small = background_image(imgs)
+            if small is None:
+                alone += 1
+                continue
             xref, w, h = small[0], small[2], small[3]
             try:
                 raw = doc.extract_image(xref)
@@ -512,9 +563,7 @@ let
                 if min(levels) >= ALREADY_WHITE:
                     alone += 1
                     continue
-                out = np.empty_like(rgb)
-                for c in range(3):
-                    out[..., c] = knee_lut(levels[c])[rgb[..., c]]
+                out = balance_and_deepen(rgb, levels)
                 buf = io.BytesIO()
                 if is_grey:
                     Image.fromarray(out[..., 0], "L").save(buf, "JPEG", quality=85)
@@ -524,7 +573,7 @@ let
                 curved += 1
                 continue
 
-            if highpass_energy(grey) < HIGHPASS_CONTENT:
+            if not has_picture(rgb):
                 # Paper only, however unevenly it was lit: flatten it outright. A gain
                 # would keep the shading, and any colour in it, which is what left
                 # tinted bands along the bottom of these pages.
