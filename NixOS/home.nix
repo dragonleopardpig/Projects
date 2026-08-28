@@ -373,6 +373,31 @@ in
     save_filename_format=swappy-%Y%m%d-%H%M%S.png
   '';
 
+  # Sioyek keybindings. Upstream ships all three of these commands unbound.
+  # force, because this replaces a hand-edited file that predates being managed.
+  # Sioyek only ever writes prefs_user.config (via setconfig), never this file,
+  # so a read-only store symlink is safe — but its built-in `keys_user` command
+  # opens this path in an editor, and that edit can no longer be saved. Change
+  # bindings here instead.
+  xdg.configFile."sioyek/keys_user.config".force = true;
+  xdg.configFile."sioyek/keys_user.config".text = ''
+    # Toggle two page (book spread) mode: pages side-by-side, earlier page on the left.
+    # bare `d` is a prefix for db/dh/dp (delete commands), so use Ctrl+d.
+    toggle_two_page_mode <C-d>
+
+    # Fit the whole page height into the window. In two page mode an A4 spread is
+    # 1191x839pt (aspect 1.42) while a 1920x1080 window is aspect 1.78, so fitting
+    # to width makes the spread 1353px tall and the bottom ~20% -- the last one or
+    # two lines -- falls outside the window. That reads as a clipped page but is
+    # only the viewport.
+    fit_to_page_height <C-h>
+
+    # Same, but fits the text block rather than the paper, so margins are trimmed
+    # and the type comes out larger. Better on a scan with generous margins.
+    # Sioyek rejects the <C-S-h> form: an uppercase letter carries the shift.
+    fit_to_page_height_smart <C-H>
+  '';
+
   services.cliphist = {
     enable = true;
     allowImages = true;
