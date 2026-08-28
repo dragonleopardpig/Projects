@@ -396,6 +396,22 @@ in
     # and the type comes out larger. Better on a scan with generous margins.
     # Sioyek rejects the <C-S-h> form: an uppercase letter carries the shift.
     fit_to_page_height_smart <C-H>
+
+    # Step a whole page at a time. Upstream binds space and PageUp/Down to
+    # screen_down/screen_up, which deliberately move only move_screen_ratio of a
+    # screen (0.5 by default) -- hence the half-page creep. next_page moves by one
+    # page height instead, and in two page mode that is exactly one spread, so it
+    # stays aligned to page boundaries however long you read.
+    next_page <space>
+    previous_page <S-<space>>
+    next_page <pagedown>
+    previous_page <pageup>
+
+    # Upstream's partial scroll, kept under Ctrl. Whole-page stepping skips
+    # content when the page is taller than the window, so use these when zoomed
+    # in past fit-to-height.
+    screen_down <C-<pagedown>>
+    screen_up <C-<pageup>>
   '';
 
   services.cliphist = {
