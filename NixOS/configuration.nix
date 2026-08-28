@@ -262,8 +262,36 @@ let
     MIN_BG_DIM = 1500   # a "background" wider than this is really a full-page image
 
 
-    def build_lut(white_point):
-        """Identity below KNEE, linear lift from KNEE up to the paper white point."""
+    def paper_level(ch):
+        """Lower edge of the dominant bright tone in one channel.
+
+        Taking the mode's lower edge rather than a high percentile means the whole
+        paper distribution clips to white; a percentile only lifts its brightest
+        tail, leaving the bulk of the paper visibly grey.
+        """
+        lo = KNEE + 10
+        hist = np.bincount(ch.ravel(), minlength=256)
+        band = hist[lo:]
+        if band.sum() == 0:
+            return float(max(np.percentile(ch, 99), lo))
+        mode = int(np.argmax(band)) + lo
+        near = ch[(ch >= mode - 20) & (ch <= mode + 20)]
+        sd = float(near.std()) if near.size else 3.0
+        return float(max(lo, mode - 3.0 * max(sd, 2.0)))
+
+
+    def gain_lut(white_point):
+        """Linear white balance -- what the scanner should have done."""
+        lut = np.arange(256, dtype=np.float32) * (255.0 / max(white_point, 1.0))
+        return np.clip(lut, 0, 255).astype(np.uint8)
+
+
+    def knee_lut(white_point):
+        """Identity below KNEE, linear lift above it.
+
+        For images where the ink shares the layer with the paper: a plain gain
+        would lighten the text and cost contrast, so the shadows are held.
+        """
         lut = np.arange(256, dtype=np.float32)
         hi = lut > KNEE
         wp = max(float(white_point), KNEE + 10.0)
@@ -281,14 +309,20 @@ let
 
 
     def verify(path):
-        """Measure the result: a rendered page can look lighter than it truly is."""
+        """Measure the result: a rendered page can look lighter than it truly is.
+
+        Checked per channel, because a grey-only check passes a page whose paper
+        has gone yellow -- red hits 255 while blue lags far behind.
+        """
         doc = fitz.open(path)
         tinted = []
         for pno in range(len(doc)):
-            pix = doc[pno].get_pixmap(dpi=36, colorspace=fitz.csGRAY)
-            a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width)
-            paper = float(np.percentile(a, 98))
-            if paper < 240:
+            pix = doc[pno].get_pixmap(dpi=36)
+            a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                pix.height, pix.width, pix.n)[..., :3]
+            # The paper is the bright end; require every channel to reach white.
+            paper = [float(np.percentile(a[..., c], 98)) for c in range(3)]
+            if min(paper) < 240:
                 tinted.append((pno + 1, paper))
         doc.close()
         return tinted
@@ -349,12 +383,14 @@ let
                     print("  page %d: left alone (cover/plate, mean=%.0f sat=%.0f)"
                           % (pno + 1, grey.mean(), sat))
                     continue
+                g = grey.astype(np.uint8)
+                wp = paper_level(g)
                 curved += 1
-                print("  page %d: full-page scan, white point %.0f -> curved"
-                      % (pno + 1, p99))
+                print("  page %d: full-page scan, paper %.0f -> lifted"
+                      % (pno + 1, wp))
                 if args.dry_run:
                     continue
-                out = build_lut(p99)[grey.astype(np.uint8)]
+                out = knee_lut(wp)[g]
                 buf = io.BytesIO()
                 Image.fromarray(out, "L").save(buf, format="JPEG", quality=85)
                 page.replace_image(xref, stream=buf.getvalue())
@@ -368,13 +404,18 @@ let
                 Image.new("L", (w, h), 255).save(buf, format="PNG")
                 page.replace_image(xref, stream=buf.getvalue())
             else:
-                p99 = float(np.percentile(grey, 99))
+                # Balance each channel separately. Scanned paper is warm, so one
+                # luminance curve drives red to 255 while blue lags, turning the
+                # paper yellow instead of white.
+                levels = [paper_level(a[..., c]) for c in range(3)]
                 curved += 1
-                print("  page %d: photo in background, white point %.0f -> curved"
-                      % (pno + 1, p99))
+                print("  page %d: photo in background, paper rgb(%.0f,%.0f,%.0f)"
+                      " -> balanced" % (pno + 1, levels[0], levels[1], levels[2]))
                 if args.dry_run:
                     continue
-                out = build_lut(p99)[a[..., :3]]
+                out = np.empty_like(a[..., :3])
+                for c in range(3):
+                    out[..., c] = gain_lut(levels[c])[a[..., c]]
                 buf = io.BytesIO()
                 Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=88,
                                                  subsampling=0)
@@ -399,7 +440,9 @@ let
             tinted = verify(dst)
             print("verify: %d of the pages still have tinted paper" % len(tinted))
             for p, paper in tinted[:10]:
-                print("  page %d: paper=%.0f (expected for a colour cover)" % (p, paper))
+                print("  page %d: paper rgb(%.0f,%.0f,%.0f)"
+                      " (expected for a colour cover)"
+                      % (p, paper[0], paper[1], paper[2]))
 
         print(dst)
 
