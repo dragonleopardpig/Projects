@@ -397,21 +397,16 @@ in
     # Sioyek rejects the <C-S-h> form: an uppercase letter carries the shift.
     fit_to_page_height_smart <C-H>
 
-    # Step a whole page at a time. Upstream binds space and PageUp/Down to
-    # screen_down/screen_up, which deliberately move only move_screen_ratio of a
-    # screen (0.5 by default) -- hence the half-page creep. next_page moves by one
-    # page height instead, and in two page mode that is exactly one spread, so it
-    # stays aligned to page boundaries however long you read.
-    next_page <space>
-    previous_page <S-<space>>
+    # PageUp/Down step a whole page. Upstream binds them to screen_down/screen_up,
+    # which move only move_screen_ratio of a screen (0.5 by default) and so creep
+    # half a page at a time. next_page moves by one page height instead, and in two
+    # page mode that is exactly one spread, so it stays aligned to page boundaries.
+    #
+    # Space is deliberately NOT rebound: it keeps upstream's partial scroll, which
+    # is what you want for continuous reading and is the safe one when zoomed in
+    # past fit-to-height, where whole-page steps would skip the bottom of a page.
     next_page <pagedown>
     previous_page <pageup>
-
-    # Upstream's partial scroll, kept under Ctrl. Whole-page stepping skips
-    # content when the page is taller than the window, so use these when zoomed
-    # in past fit-to-height.
-    screen_down <C-<pagedown>>
-    screen_up <C-<pageup>>
   '';
 
   services.cliphist = {
