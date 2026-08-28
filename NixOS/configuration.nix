@@ -236,6 +236,187 @@ let
       echo "$dst"
     '';
   };
+
+  # Internet Archive scans layer each page as a low-resolution RGB background
+  # (the paper, plus any continuous-tone photo) with the ink painted over it
+  # through a high-resolution JBIG2 stencil mask. Their paper sits around 60%
+  # grey, so the book reads as muddy. Whitening only the background layer fixes
+  # that and leaves the text bit-for-bit untouched, because the mask is never
+  # rewritten -- far better than re-rendering pages and levelling them, which
+  # softens the type and discards the MRC compression.
+  pdfWhitenScript = pkgs.writeText "pdf-whiten.py" ''
+    """Whiten the paper of an Internet Archive (MRC-layered) scanned PDF."""
+    import argparse
+    import io
+    import os
+    import shutil
+    import sys
+    import tempfile
+
+    import fitz
+    import numpy as np
+    from PIL import Image
+
+    FLAT_STDEV = 12.0   # background stdev above this means real content is present
+    KNEE = 110          # tones at/below this are photo detail and are left alone
+    MIN_BG_DIM = 1500   # a "background" wider than this is really a full-page image
+
+
+    def build_lut(white_point):
+        """Identity below KNEE, linear lift from KNEE up to the paper white point."""
+        lut = np.arange(256, dtype=np.float32)
+        hi = lut > KNEE
+        wp = max(float(white_point), KNEE + 10.0)
+        lut[hi] = KNEE + (255.0 - KNEE) * (lut[hi] - KNEE) / (wp - KNEE)
+        return np.clip(lut, 0, 255).astype(np.uint8)
+
+
+    def image_array(doc, xref):
+        raw = doc.extract_image(xref)
+        pix = fitz.Pixmap(raw["image"])
+        if pix.n > 3:
+            pix = fitz.Pixmap(fitz.csRGB, pix)
+        return np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+            pix.height, pix.width, pix.n)
+
+
+    def verify(path):
+        """Measure the result: a rendered page can look lighter than it truly is."""
+        doc = fitz.open(path)
+        tinted = []
+        for pno in range(len(doc)):
+            pix = doc[pno].get_pixmap(dpi=36, colorspace=fitz.csGRAY)
+            a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width)
+            paper = float(np.percentile(a, 98))
+            if paper < 240:
+                tinted.append((pno + 1, paper))
+        doc.close()
+        return tinted
+
+
+    def main():
+        ap = argparse.ArgumentParser(
+            prog="pdf-whiten",
+            description="Whiten the tan paper of an Internet Archive scanned PDF, "
+                        "leaving the text mask and any photographs intact.")
+        ap.add_argument("input")
+        ap.add_argument("output", nargs="?",
+                        help="default: <input>-white.pdf beside the source")
+        ap.add_argument("--in-place", action="store_true",
+                        help="overwrite the input file")
+        ap.add_argument("--dry-run", action="store_true",
+                        help="classify every page and report, writing nothing")
+        ap.add_argument("--no-verify", action="store_true",
+                        help="skip the post-write measurement pass")
+        args = ap.parse_args()
+
+        if not os.path.isfile(args.input):
+            sys.exit("pdf-whiten: cannot read " + args.input)
+        if args.output and args.in_place:
+            sys.exit("pdf-whiten: give an output path or --in-place, not both")
+
+        stem, ext = os.path.splitext(args.input)
+        dst = args.output or (args.input if args.in_place else stem + "-white" + ext)
+
+        doc = fitz.open(args.input)
+        whitened = curved = untouched = 0
+
+        for pno in range(len(doc)):
+            page = doc[pno]
+            imgs = page.get_images(full=True)
+            if not imgs:
+                untouched += 1
+                continue
+            smallest = min(imgs, key=lambda i: i[2] * i[3])
+            xref, w, h = smallest[0], smallest[2], smallest[3]
+
+            try:
+                a = image_array(doc, xref)
+            except Exception as exc:
+                untouched += 1
+                print("  page %d: left alone (%s)" % (pno + 1, type(exc).__name__))
+                continue
+
+            grey = a[..., :3].mean(axis=2)
+
+            if w > MIN_BG_DIM:
+                # No MRC split: ink and paper share one image. Only treat it when it
+                # looks like tan paper, so colour covers are never washed out.
+                p99 = float(np.percentile(grey, 99))
+                sat = float(np.mean(a[..., :3].max(axis=2) - a[..., :3].min(axis=2)))
+                if not (grey.mean() > 120 and 130 <= p99 <= 200 and sat < 40):
+                    untouched += 1
+                    print("  page %d: left alone (cover/plate, mean=%.0f sat=%.0f)"
+                          % (pno + 1, grey.mean(), sat))
+                    continue
+                curved += 1
+                print("  page %d: full-page scan, white point %.0f -> curved"
+                      % (pno + 1, p99))
+                if args.dry_run:
+                    continue
+                out = build_lut(p99)[grey.astype(np.uint8)]
+                buf = io.BytesIO()
+                Image.fromarray(out, "L").save(buf, format="JPEG", quality=85)
+                page.replace_image(xref, stream=buf.getvalue())
+                continue
+
+            if grey.std() <= FLAT_STDEV:
+                whitened += 1
+                if args.dry_run:
+                    continue
+                buf = io.BytesIO()
+                Image.new("L", (w, h), 255).save(buf, format="PNG")
+                page.replace_image(xref, stream=buf.getvalue())
+            else:
+                p99 = float(np.percentile(grey, 99))
+                curved += 1
+                print("  page %d: photo in background, white point %.0f -> curved"
+                      % (pno + 1, p99))
+                if args.dry_run:
+                    continue
+                out = build_lut(p99)[a[..., :3]]
+                buf = io.BytesIO()
+                Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=88,
+                                                 subsampling=0)
+                page.replace_image(xref, stream=buf.getvalue())
+
+        print("pages whitened (flat paper)  : %d" % whitened)
+        print("pages curved  (photo/no MRC) : %d" % curved)
+        print("pages left alone             : %d" % untouched)
+
+        if args.dry_run:
+            print("dry run: nothing written")
+            return
+
+        # Never write straight over the input: a failed save would lose the original.
+        fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=os.path.dirname(dst) or ".")
+        os.close(fd)
+        doc.save(tmp, garbage=4, deflate=True)
+        doc.close()
+        shutil.move(tmp, dst)
+
+        if not args.no_verify:
+            tinted = verify(dst)
+            print("verify: %d of the pages still have tinted paper" % len(tinted))
+            for p, paper in tinted[:10]:
+                print("  page %d: paper=%.0f (expected for a colour cover)" % (p, paper))
+
+        print(dst)
+
+
+    if __name__ == "__main__":
+        main()
+  '';
+
+  pdfWhiten = pkgs.writeShellApplication {
+    name = "pdf-whiten";
+    runtimeInputs = [
+      (pkgs.python3.withPackages (ps: with ps; [ pymupdf numpy pillow ]))
+    ];
+    text = ''
+      exec python3 ${pdfWhitenScript} "$@"
+    '';
+  };
 in
 {
   imports = [];
@@ -922,6 +1103,7 @@ in
       '';
     })
     djvuToPdf                  # djvu2pdf: DjVu → searchable PDF for Sioyek
+    pdfWhiten                  # pdf-whiten: white out the paper of an Internet Archive scan
     djvulibre                  # ddjvu/djvused/djvudump for inspecting DjVu directly
     ocrmypdf                   # Adds a searchable text layer to scanned PDFs
     tesseract                  # OCR engine behind ocrmypdf
