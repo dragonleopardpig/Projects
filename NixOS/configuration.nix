@@ -747,6 +747,100 @@ let
       exec python3 ${pdfPrepScript} "$@"
     '';
   };
+
+  # Sioyek has no area-screenshot command, but a custom command containing
+  # %{selected_rect} makes it prompt for a rectangle and then hand over
+  # "page,x0,y0,x1,y1" in MuPDF document space -- page-relative points, which
+  # is exactly what PyMuPDF's clip argument wants. Sioyek runs custom commands
+  # through QProcess with an argv list rather than a shell, so a substituted
+  # path keeps its spaces without any quoting.
+  sioyekSnipScript = pkgs.writeText "sioyek-snip.py" ''
+    """Crop the rectangle Sioyek just selected into a PNG.
+
+    Sioyek has no area-screenshot command, but a custom command containing
+    %{selected_rect} makes it prompt for a rectangle and then hands over
+    "page,x0,y0,x1,y1" in MuPDF document space -- page-relative points, the very
+    coordinates PyMuPDF's clip argument wants. Rendering through PyMuPDF rather than
+    converting to pixels for an external cropper keeps page rotation and a non-zero
+    MediaBox origin correct for free.
+    """
+    import os
+    import shutil
+    import subprocess
+    import sys
+    import time
+
+    import fitz
+
+    DPI = int(os.environ.get("SIOYEK_SNIP_DPI", "300"))
+    OUTDIR = os.path.expanduser(os.environ.get("SIOYEK_SNIP_DIR", "~/Pictures/Screenshots"))
+
+
+    def notify(summary, body, urgency="normal"):
+        if shutil.which("notify-send"):
+            subprocess.run(["notify-send", "-a", "Sioyek", "-u", urgency,
+                            "-i", "applets-screenshooter", summary, body], check=False)
+
+
+    def main():
+        if len(sys.argv) < 3:
+            sys.exit("usage: sioyek-snip <page,x0,y0,x1,y1> <document.pdf>")
+        rect_arg, path = sys.argv[1], sys.argv[2]
+
+        try:
+            page_no, x0, y0, x1, y1 = (float(v) for v in rect_arg.split(","))
+        except ValueError:
+            sys.exit("sioyek-snip: cannot parse rect %r" % rect_arg)
+
+        if not os.path.isfile(path):
+            sys.exit("sioyek-snip: cannot read " + path)
+
+        doc = fitz.open(path)
+        page = doc[int(page_no)]
+        clip = fitz.Rect(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+        clip = clip & page.rect                      # a drag can run past the page edge
+        if clip.is_empty:
+            notify("Snip failed", "The selection was empty.", "critical")
+            sys.exit("sioyek-snip: empty selection")
+
+        pix = page.get_pixmap(clip=clip, dpi=DPI)
+        os.makedirs(OUTDIR, exist_ok=True)
+        stem = os.path.splitext(os.path.basename(path))[0][:60]
+        out = os.path.join(OUTDIR, "%s-p%d-%s.png"
+                           % (stem, int(page_no) + 1, time.strftime("%Y%m%d-%H%M%S")))
+        pix.save(out)
+        doc.close()
+
+        copied = ""
+        if shutil.which("wl-copy"):
+            # Do not wait on wl-copy: on Wayland the copier has to stay resident to
+            # serve the selection, so waiting for it never returns.
+            with open(out, "rb") as fh:
+                subprocess.Popen(["wl-copy", "-t", "image/png"], stdin=fh,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 start_new_session=True)
+            copied = " and copied to the clipboard"
+
+        notify("Snipped page %d" % (int(page_no) + 1),
+               "%dx%d px at %d dpi%s" % (pix.width, pix.height, DPI, copied))
+        print(out)
+
+
+    if __name__ == "__main__":
+        main()
+  '';
+
+  sioyekSnip = pkgs.writeShellApplication {
+    name = "sioyek-snip";
+    runtimeInputs = [
+      (pkgs.python3.withPackages (ps: with ps; [ pymupdf ]))
+      pkgs.wl-clipboard
+      pkgs.libnotify
+    ];
+    text = ''
+      exec python3 ${sioyekSnipScript} "$@"
+    '';
+  };
 in
 {
   imports = [];
@@ -1434,6 +1528,7 @@ in
     })
     djvuToPdf                  # djvu2pdf: DjVu → searchable PDF for Sioyek
     pdfPrep                    # pdf-prep: whiten, speed up and OCR a scanned PDF
+    sioyekSnip                 # sioyek-snip: crop a dragged rectangle out of a page
     djvulibre                  # ddjvu/djvused/djvudump for inspecting DjVu directly
     ocrmypdf                   # Adds a searchable text layer to scanned PDFs
     tesseract                  # OCR engine behind ocrmypdf

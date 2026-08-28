@@ -407,6 +407,25 @@ in
     # past fit-to-height, where whole-page steps would skip the bottom of a page.
     next_page <pagedown>
     previous_page <pageup>
+
+    # Area snapshot: drag a box, get a cropped PNG. Sioyek ships no such command,
+    # so _snip is defined in prefs_user.config below.
+    _snip <C-s>
+  '';
+
+  # Sioyek reads a prefs_user.config from both ~/.local/share/sioyek and
+  # ~/.config/sioyek, and writes to the last one that exists -- this one. So
+  # `setconfig` commands and the settings UI can no longer persist anything;
+  # change settings here and rebuild instead. Nothing writes it during normal
+  # reading, only an explicit settings change.
+  xdg.configFile."sioyek/prefs_user.config".force = true;
+  xdg.configFile."sioyek/prefs_user.config".text = ''
+    # Custom command names must begin with an underscore. Sioyek prompts for a
+    # rectangle because the command mentions %{selected_rect}, then substitutes
+    # "page,x0,y0,x1,y1" in page-relative points. It runs the command through
+    # QProcess with an argv list, not a shell, so %{file_path} survives spaces
+    # in the filename without quoting.
+    new_command _snip sioyek-snip %{selected_rect} %{file_path}
   '';
 
   services.cliphist = {
