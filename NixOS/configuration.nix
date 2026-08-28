@@ -375,24 +375,35 @@ let
 
             if w > MIN_BG_DIM:
                 # No MRC split: ink and paper share one image. Only treat it when it
-                # looks like tan paper, so colour covers are never washed out.
+                # looks like paper, so colour covers are never washed out.
+                #
+                # Judge colour by a high percentile of saturation, not its mean: a
+                # cover is mostly pale artwork with a saturated block or two, which
+                # drags the mean down to text-page levels. Measured, covers sit at
+                # satP95 112-176 and text pages at 0-23, so 60 separates them with
+                # room to spare. There is deliberately no upper bound on p99 -- an
+                # already-light page still needs lifting the rest of the way.
                 p99 = float(np.percentile(grey, 99))
-                sat = float(np.mean(a[..., :3].max(axis=2) - a[..., :3].min(axis=2)))
-                if not (grey.mean() > 120 and 130 <= p99 <= 200 and sat < 40):
+                sat = a[..., :3].max(axis=2) - a[..., :3].min(axis=2)
+                sat_p95 = float(np.percentile(sat, 95))
+                if not (grey.mean() > 120 and p99 >= 130 and sat_p95 < 60):
                     untouched += 1
-                    print("  page %d: left alone (cover/plate, mean=%.0f sat=%.0f)"
-                          % (pno + 1, grey.mean(), sat))
+                    print("  page %d: left alone (cover/plate, mean=%.0f satP95=%.0f)"
+                          % (pno + 1, grey.mean(), sat_p95))
                     continue
-                g = grey.astype(np.uint8)
-                wp = paper_level(g)
+                # Per channel, and staying in colour: converting to grey would throw
+                # away any colour the page does carry.
+                levels = [paper_level(a[..., c]) for c in range(3)]
                 curved += 1
-                print("  page %d: full-page scan, paper %.0f -> lifted"
-                      % (pno + 1, wp))
+                print("  page %d: full-page scan, paper rgb(%.0f,%.0f,%.0f) -> lifted"
+                      % (pno + 1, levels[0], levels[1], levels[2]))
                 if args.dry_run:
                     continue
-                out = knee_lut(wp)[g]
+                out = np.empty_like(a[..., :3])
+                for c in range(3):
+                    out[..., c] = knee_lut(levels[c])[a[..., c]]
                 buf = io.BytesIO()
-                Image.fromarray(out, "L").save(buf, format="JPEG", quality=85)
+                Image.fromarray(out, "RGB").save(buf, format="JPEG", quality=85)
                 page.replace_image(xref, stream=buf.getvalue())
                 continue
 
@@ -432,13 +443,23 @@ let
         # Never write straight over the input: a failed save would lose the original.
         fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=os.path.dirname(dst) or ".")
         os.close(fd)
+        # Garbage-collecting the image objects we replaced makes MuPDF log
+        # "cannot find object in xref" for every one of them. It is noise, not
+        # damage -- the verify pass below renders every page and would fail on real
+        # corruption -- but it reads alarmingly, so keep it out of the output.
+        fitz.TOOLS.mupdf_display_errors(False)
         doc.save(tmp, garbage=4, deflate=True)
+        fitz.TOOLS.mupdf_display_errors(True)
         doc.close()
         shutil.move(tmp, dst)
 
         if not args.no_verify:
             tinted = verify(dst)
-            print("verify: %d of the pages still have tinted paper" % len(tinted))
+            checked = fitz.open(dst)
+            npages = len(checked)
+            checked.close()
+            print("verify: all %d pages render; %d still have tinted paper"
+                  % (npages, len(tinted)))
             for p, paper in tinted[:10]:
                 print("  page %d: paper rgb(%.0f,%.0f,%.0f)"
                       " (expected for a colour cover)"
