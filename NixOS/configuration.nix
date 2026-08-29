@@ -308,6 +308,12 @@ let
     from PIL import Image
 
     PAPER_FLOOR = 40     # a channel's paper level cannot sensibly fall below this
+    DARKFRAC_FLOOR = 0.0015   # below this a page is paper however busy the book
+    DARKFRAC_CEIL = 0.05      # above this it is a picture however busy the book
+    TILERATIO_FLOOR = 2.5
+    TILERATIO_CEIL = 15.0
+    DARKFRAC_CEIL_FALLBACK = 0.003    # used when a document is too short to calibrate
+    TILERATIO_CEIL_FALLBACK = 6.0
     MIN_BG_DIM = 1500    # a "background" wider than this is really a full-page image
     ALREADY_WHITE = 245  # paper at least this bright is done; touching it only degrades
     TEXT_PER_PAGE = 50   # a page with fewer characters than this counts as untexted
@@ -407,27 +413,18 @@ let
         return min(plain, key=lambda i: i[2] * i[3])
 
 
-    def has_picture(rgb):
-        """Is there a real picture in this layer, or only paper?
+    def page_metrics(rgb):
+        """The two scale-free measures used to spot a picture in the paper layer.
 
-        Absolute high-frequency energy does not port between scans: one book's blank
-        pages score 0.4 and another's 2.0, so any fixed cut either flattens pages that
-        hold a photograph or leaves the other book's gradient in place. Both measures
-        here are scale-free.
-
-        darkfrac -- in an MRC background the text lives in the mask, so anything much
-        darker than the paper IS a picture. Measured: photographs 0.15, a faint figure
-        0.007, blank pages 0.000-0.001.
-
-        tileratio -- how localised the fine detail is. A photograph is concentrated in
-        part of the page; scanner noise is spread evenly. Measured: photographs 37-46,
-        a faint figure 10, blank pages 1.2-3.5.
+        darkfrac -- share of the layer notably darker than the paper. In an MRC
+        background the text lives in the mask, so anything dark IS a picture.
+        tileratio -- how localised the fine detail is. A picture is concentrated;
+        scanner noise is spread evenly.
         """
         grey = rgb.mean(axis=2)
         hist = np.bincount(grey.astype(np.uint8).ravel(), minlength=256)
         mode = int(np.argmax(hist[120:])) + 120
-        if float((grey < mode - 45).mean()) > 0.003:
-            return True
+        darkfrac = float((grey < mode - 45).mean())
 
         im = Image.fromarray(grey.astype(np.uint8), "L")
         small = im.resize((max(1, im.width // 16), max(1, im.height // 16)), Image.BILINEAR)
@@ -441,9 +438,64 @@ let
         med = float(np.median(e))
         if med < 0.05:
             # Already flat everywhere; a ratio here would divide by ~zero.
-            return float(e.max()) > 2.0
-        return float(np.percentile(e, 95) / med) > 6.0
+            tileratio = float(e.max()) / 2.0
+        else:
+            tileratio = float(np.percentile(e, 95) / med)
+        return darkfrac, tileratio
 
+
+    def calibrate(doc, sample=25):
+        """Learn this document's own paper baseline.
+
+        Fixed thresholds do not port between scans. Measured over 52 MRC documents,
+        the paper side of darkfrac reached 0.0030 against a 0.003 cut -- no margin at
+        all -- and 44% of pages sat near a boundary. Most pages of a scanned book
+        carry no picture, so that book's own median is its paper level and a picture
+        is an outlier against it. Calibrating per document lifted the median relative
+        margin from 0.23 to 0.37 on the same corpus.
+
+        The floors stop a book with a picture on every page from calling everything
+        paper; the ceilings stop a very clean book from calling faint texture a
+        picture.
+        """
+        values = []
+        step = max(1, len(doc) // sample)
+        for pno in range(0, len(doc), step):
+            imgs = doc[pno].get_images(full=True)
+            small = background_image(imgs)
+            if small is None or small[2] >= MIN_BG_DIM:
+                continue
+            try:
+                pix = fitz.Pixmap(doc.extract_image(small[0])["image"])
+                if pix.n > 3:
+                    pix = fitz.Pixmap(fitz.csRGB, pix)
+                a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                    pix.height, pix.width, pix.n)
+            except Exception:
+                continue
+            if a.shape[2] == 1:
+                a = np.repeat(a, 3, axis=2)
+            values.append(page_metrics(a[..., :3]))
+
+        if len(values) < 6:
+            return DARKFRAC_CEIL_FALLBACK, TILERATIO_CEIL_FALLBACK
+        array = np.array(values)
+        out = []
+        for column, floor, ceil in ((0, DARKFRAC_FLOOR, DARKFRAC_CEIL),
+                                    (1, TILERATIO_FLOOR, TILERATIO_CEIL)):
+            v = array[:, column]
+            median = float(np.median(v))
+            deviation = float(np.median(np.abs(v - median))) or 1e-6
+            out.append(float(np.clip(median + 8.0 * deviation, floor, ceil)))
+        return out[0], out[1]
+
+
+    def has_picture(rgb, thresholds=None):
+        """Is there a real picture in this layer, or only paper?"""
+        darkfrac_t, tileratio_t = thresholds or (DARKFRAC_CEIL_FALLBACK,
+                                                 TILERATIO_CEIL_FALLBACK)
+        darkfrac, tileratio = page_metrics(rgb)
+        return darkfrac > darkfrac_t or tileratio > tileratio_t
 
     def gain_lut(white_point):
         """Linear white balance -- what the scanner should have done."""
@@ -508,7 +560,11 @@ let
             pix = page.get_pixmap(dpi=36)
             a = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
                 pix.height, pix.width, pix.n)[..., :3].astype(np.float32)
-            m = a.mean(axis=2) > 170          # paper, excluding the ink
+            # Select the paper relative to this page, not at a fixed level: a dark
+            # scan can have no pixel above an absolute cut, which silently skipped
+            # the very books that most needed whitening.
+            luminance = a.mean(axis=2)
+            m = luminance > np.percentile(luminance, 70)
             if m.sum() >= 100:
                 paper = [float(a[..., c][m].mean()) for c in range(3)]
                 # Dim-but-neutral is just dense text dragging the average down; a
@@ -531,6 +587,7 @@ let
 
     def whiten(path, dst):
         doc = fitz.open(path)
+        thresholds = calibrate(doc)
         white = curved = alone = 0
         for pno in range(len(doc)):
             page = doc[pno]
@@ -585,7 +642,7 @@ let
                 curved += 1
                 continue
 
-            if not has_picture(rgb):
+            if not has_picture(rgb, thresholds):
                 # Paper only, however unevenly it was lit: flatten it outright. A gain
                 # would keep the shading, and any colour in it, which is what left
                 # tinted bands along the bottom of these pages.
