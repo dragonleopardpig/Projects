@@ -20,6 +20,26 @@
         "type": "github"
       }
     },
+    "djvu2pdf": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788060797,
+        "narHash": "sha256-ywxXbs+qvG0iTXMVz8BznMt7cPN/wfzUw0aEb67K7Ro=",
+        "owner": "dragonleopardpig",
+        "repo": "djvu2pdf",
+        "rev": "50434a75939331caa55f8d59d71cf3c6385b4fff",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "djvu2pdf",
+        "type": "github"
+      }
+    },
     "elephant": {
       "inputs": {
         "nixpkgs": "nixpkgs",
@@ -164,6 +184,7 @@
     "root": {
       "inputs": {
         "disko": "disko",
+        "djvu2pdf": "djvu2pdf",
         "elephant": "elephant",
         "grub2-themes": "grub2-themes",
         "home-manager": "home-manager",

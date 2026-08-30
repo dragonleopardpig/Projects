@@ -13,6 +13,10 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    djvu2pdf = {
+      url = "github:dragonleopardpig/djvu2pdf";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # pdf-prep lives in its own repo now; this config consumed a ~575 line
     # embedded copy until 2026-08-30. Edit it there, not here.
     pdf-prep = {
