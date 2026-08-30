@@ -50,7 +50,14 @@
         sioyek = prev.sioyek.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/sioyek-dual-page.patch
+            # Native DjVu, via a DjVuLibre-backed fz_document_handler. Generated
+            # from ~/Projects/sioyek commit 3e471bd6. pkg-config is required or
+            # the .pro's packagesExist(ddjvuapi) guard silently fails and you get
+            # a Sioyek that builds fine and still cannot open a DjVu.
+            ./patches/sioyek-native-djvu.patch
           ];
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
+          buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];
         });
 
         # nixpkgs nwg-drawer (0.7.5) preInstall copies desktop-directories +

@@ -61,18 +61,14 @@ in
     comment = "Sioyek document viewer (XWayland)";
     # Sioyek renders through MuPDF, so EPUB is native -- no conversion involved.
     # It has to be declared here or Sioyek never appears as a choice for one.
-    mimeType = [ "application/pdf" "application/epub+zip" ];
+    mimeType = [
+      "application/pdf"
+      "application/epub+zip"
+      "image/vnd.djvu"
+      "image/vnd.djvu+multipage"
+      "image/x-djvu"
+    ];
     categories = [ "Office" "Viewer" ];
-  };
-
-  xdg.desktopEntries.sioyek-djvu = {
-    name = "Sioyek (DjVu)";
-    exec = "/home/thinky/.local/bin/sioyek-djvu %f";
-    icon = "sioyek";
-    comment = "Open DjVu in Sioyek by converting it to a searchable PDF";
-    mimeType = [ "image/vnd.djvu" "image/vnd.djvu+multipage" "image/x-djvu" ];
-    categories = [ "Office" "Viewer" ];
-    terminal = false;
   };
 
   xdg.desktopEntries.mayo-xcb = {
@@ -307,9 +303,10 @@ in
       # picks -- OnlyOffice, here. Nemo's "Set as default" cannot fix that,
       # because this file is a read-only symlink into the Nix store.
       "application/epub+zip" = [ "sioyek-xcb.desktop" ];
-      "image/vnd.djvu" = [ "sioyek-djvu.desktop" ];
-      "image/vnd.djvu+multipage" = [ "sioyek-djvu.desktop" ];
-      "image/x-djvu" = [ "sioyek-djvu.desktop" ];
+      # Native since the sioyek-native-djvu patch; no conversion involved.
+      "image/vnd.djvu" = [ "sioyek-xcb.desktop" ];
+      "image/vnd.djvu+multipage" = [ "sioyek-xcb.desktop" ];
+      "image/x-djvu" = [ "sioyek-xcb.desktop" ];
       "image/png" = [ "nomacs-x11.desktop" ];
       "image/jpeg" = [ "nomacs-x11.desktop" ];
       "image/gif" = [ "nomacs-x11.desktop" ];
@@ -603,38 +600,6 @@ in
     text = ''
       #!/bin/sh
       exec env QT_QPA_PLATFORM=xcb sioyek "$@"
-    '';
-  };
-
-  # Sioyek cannot render DjVu, so convert to a searchable PDF (cached beside the
-  # source) and open that instead. The first open of a long scan runs OCR and
-  # takes minutes, so the conversion is announced via a notification.
-  home.file.".local/bin/sioyek-djvu" = {
-    executable = true;
-    text = ''
-      #!/bin/sh
-      set -e
-
-      src="$1"
-      if [ -z "$src" ]; then
-        echo "usage: sioyek-djvu <file.djvu>" >&2
-        exit 2
-      fi
-
-      pdf="''${src%.[dD][jJ][vV]*}.pdf"
-      if [ ! -s "$pdf" ] || [ "$src" -nt "$pdf" ]; then
-        notify-send -a Sioyek -i document-open-recent \
-          "Converting DjVu" "$(basename "$src") — OCR may take a few minutes."
-        if ! pdf=$(djvu2pdf "$src"); then
-          notify-send -u critical -a Sioyek -i dialog-error \
-            "DjVu conversion failed" "$(basename "$src")"
-          exit 1
-        fi
-        notify-send -a Sioyek -i document-open \
-          "DjVu ready" "$(basename "$pdf")"
-      fi
-
-      exec env QT_QPA_PLATFORM=xcb sioyek "$pdf"
     '';
   };
 
