@@ -13,6 +13,12 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # pdf-prep lives in its own repo now; this config consumed a ~575 line
+    # embedded copy until 2026-08-30. Edit it there, not here.
+    pdf-prep = {
+      url = "github:dragonleopardpig/pdf-prep";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     elephant.url = "github:abenz1267/elephant";
     walker = {
       url = "github:abenz1267/walker";

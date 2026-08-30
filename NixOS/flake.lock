@@ -141,6 +141,26 @@
         "type": "github"
       }
     },
+    "pdf-prep": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788056099,
+        "narHash": "sha256-C+JLiRzcxIXOL4sCV0Ig3Po7lp5R9nBz3cbg0WblJxQ=",
+        "owner": "dragonleopardpig",
+        "repo": "pdf-prep",
+        "rev": "a3351e48ea5a4cd91c9b4a8d5f9267f73e82d2df",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "pdf-prep",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "disko": "disko",
@@ -148,6 +168,7 @@
         "grub2-themes": "grub2-themes",
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs_3",
+        "pdf-prep": "pdf-prep",
         "walker": "walker"
       }
     },
