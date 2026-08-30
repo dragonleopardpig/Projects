@@ -58,8 +58,10 @@ in
     name = "Sioyek";
     exec = "/home/thinky/.local/bin/sioyek-xcb %f";
     icon = "sioyek";
-    comment = "Sioyek PDF viewer (XWayland)";
-    mimeType = [ "application/pdf" ];
+    comment = "Sioyek document viewer (XWayland)";
+    # Sioyek renders through MuPDF, so EPUB is native -- no conversion involved.
+    # It has to be declared here or Sioyek never appears as a choice for one.
+    mimeType = [ "application/pdf" "application/epub+zip" ];
     categories = [ "Office" "Viewer" ];
   };
 
@@ -301,6 +303,10 @@ in
     defaultApplications = {
       "inode/directory" = [ "nemo-x11.desktop" ];
       "application/pdf" = [ "sioyek-xcb.desktop" ];
+      # Without this an EPUB falls through to whatever the system MIME cache
+      # picks -- OnlyOffice, here. Nemo's "Set as default" cannot fix that,
+      # because this file is a read-only symlink into the Nix store.
+      "application/epub+zip" = [ "sioyek-xcb.desktop" ];
       "image/vnd.djvu" = [ "sioyek-djvu.desktop" ];
       "image/vnd.djvu+multipage" = [ "sioyek-djvu.desktop" ];
       "image/x-djvu" = [ "sioyek-djvu.desktop" ];
