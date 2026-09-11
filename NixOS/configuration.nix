@@ -628,9 +628,6 @@ in
       ) licenses;
     in
       builtins.elem name [
-        # Runtime dependency of nixpkgs' PaddleX package.  Formula recognition
-        # uses the pinned local model and never contacts AI Studio.
-        "aistudio-sdk"
         "brother-udev-rule-type1"
         "brscan4"
         "claude-code"

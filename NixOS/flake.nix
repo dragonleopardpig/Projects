@@ -27,9 +27,9 @@
       url = "github:dragonleopardpig/Minder/latex-inline-shapes";
       flake = false;
     };
-    latex-ocr-src = {
-      url = "github:dragonleopardpig/LaTeX-OCR";
-      flake = false;
+    formulaocr-offline = {
+      url = "github:dragonleopardpig/formulaocr-offline";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     elephant.url = "github:abenz1267/elephant";
     walker = {
@@ -49,13 +49,6 @@
           src = inputs.minder-src;
           patches = [ ];
         });
-
-        # Small, offline-only frontend from our LaTeX-OCR fork.  It uses the
-        # nixpkgs Paddle stack and an immutable PP-FormulaNet model, so no host
-        # needs a project checkout, devenv, or runtime model download.
-        formulaocr-offline = final.callPackage ./packages/formulaocr-offline.nix {
-          source = inputs.latex-ocr-src;
-        };
 
         # Drop yt-dlp's deno (=> rusty-v8) dependency. The JS runtime is only
         # needed for full YouTube extractor support since 2025.11.12; without
@@ -269,7 +262,10 @@
         specialArgs = { inherit inputs; };
         modules = [
           {
-            nixpkgs.overlays = [ localOverlay ];
+            nixpkgs.overlays = [
+              inputs.formulaocr-offline.overlays.default
+              localOverlay
+            ];
           }
           ./configuration.nix
           hostModule
