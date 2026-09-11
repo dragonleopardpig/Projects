@@ -42,6 +42,21 @@ index 58b2ee6f..7ab398ee 100644
  
      return NormalizedWindowRect(top_left, bottom_right);
  }
+diff --git a/pdf_viewer/pdf_view_opengl_widget.cpp b/pdf_viewer/pdf_view_opengl_widget.cpp
+index fc2693be..579b33a8 100644
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp
+@@ -3749,6 +3749,10 @@ ScratchPad* PdfViewOpenGLWidget::get_scratchpad() {
+ void PdfViewOpenGLWidget::render_selected_rectangle() {
+ 
+     if (selected_rectangle) {
++        // Two-page rendering leaves the last page mask in the stencil buffer.
++        // Rectangle selection owns the whole-window mask, so start it clean;
++        // otherwise one page is treated as part of the selected rectangle.
++        glClear(GL_STENCIL_BUFFER_BIT);
+         enable_stencil();
+ 
+         write_to_stencil();
 diff --git a/pdf_viewer/keys.config b/pdf_viewer/keys.config
 index 7f5c83da..a32a5a5a 100644
 --- a/pdf_viewer/keys.config
