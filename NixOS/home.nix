@@ -413,7 +413,7 @@ in
 
     # Area snapshot: drag a box, get a cropped PNG. Sioyek ships no such command,
     # so _snip is defined in prefs_user.config below.
-    _snip <C-s>
+    _snip s
   '';
 
   # Sioyek reads a prefs_user.config from both ~/.local/share/sioyek and
