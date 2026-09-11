@@ -65,8 +65,9 @@
 
         # Add a native two-page (book spread) mode to Sioyek. Upstream already
         # has the layout + toggle_two_page_mode command but ships it unbound and
-        # with no way to start in it; the patch binds Ctrl+d and adds a
-        # startup_two_page_mode config option. Source patch tracked in
+        # with no way to start in it; the patch binds Ctrl+d, adds a
+        # startup_two_page_mode config option, and keeps rectangle snapshots
+        # aligned when both pages are visible. Source patch tracked in
         # ~/Projects/sioyek (fork of ahrm/sioyek) for upstreaming.
         sioyek = prev.sioyek.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
