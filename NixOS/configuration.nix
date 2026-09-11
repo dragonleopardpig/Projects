@@ -628,6 +628,9 @@ in
       ) licenses;
     in
       builtins.elem name [
+        # Runtime dependency of nixpkgs' PaddleX package.  Formula recognition
+        # uses the pinned local model and never contacts AI Studio.
+        "aistudio-sdk"
         "brother-udev-rule-type1"
         "brscan4"
         "claude-code"
@@ -784,6 +787,7 @@ in
     hugo                       # Static site generator
     glow                       # Terminal markdown previewer
     minder                     # Mind map
+    formulaocr-offline         # Local PP-FormulaNet image-to-LaTeX recognition for Minder
 
     # ── CAD & Engineering ──
     librecad                   # 2D CAD application
@@ -1012,6 +1016,7 @@ in
 
   # Set the default editor to vim
   environment.variables.EDITOR = "xed";
+  environment.variables.MINDER_FORMULA_OCR = lib.getExe pkgs.formulaocr-offline;
   environment.variables.GTK_IM_MODULE = lib.mkForce "";
   environment.variables.QT_IM_MODULE = lib.mkForce "";
 

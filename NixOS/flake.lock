@@ -97,6 +97,39 @@
         "type": "github"
       }
     },
+    "latex-ocr-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789033783,
+        "narHash": "sha256-Afxd/GRkNR38BV06Y3qHpFh4V1bv7uC0X9ZAwthfSwI=",
+        "owner": "dragonleopardpig",
+        "repo": "LaTeX-OCR",
+        "rev": "9fca85124a3dcb8e159606b7be09d7dd78768b93",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "LaTeX-OCR",
+        "type": "github"
+      }
+    },
+    "minder-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789051553,
+        "narHash": "sha256-oWpdoeO6c8lvHpe6glfNCOph29bWpntqw8tpu+sejA8=",
+        "owner": "dragonleopardpig",
+        "repo": "Minder",
+        "rev": "79ed2b028a3028f95d8b269c3cc0d70b4f05a5de",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "ref": "latex-inline-shapes",
+        "repo": "Minder",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1764242076,
@@ -188,6 +221,8 @@
         "elephant": "elephant",
         "grub2-themes": "grub2-themes",
         "home-manager": "home-manager",
+        "latex-ocr-src": "latex-ocr-src",
+        "minder-src": "minder-src",
         "nixpkgs": "nixpkgs_3",
         "pdf-prep": "pdf-prep",
         "walker": "walker"

@@ -23,6 +23,14 @@
       url = "github:dragonleopardpig/pdf-prep";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    minder-src = {
+      url = "github:dragonleopardpig/Minder/latex-inline-shapes";
+      flake = false;
+    };
+    latex-ocr-src = {
+      url = "github:dragonleopardpig/LaTeX-OCR";
+      flake = false;
+    };
     elephant.url = "github:abenz1267/elephant";
     walker = {
       url = "github:abenz1267/walker";
@@ -33,6 +41,22 @@
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
     let
       localOverlay = final: prev: {
+        # Minder fork with local image-to-LaTeX recognition and inline Pango
+        # formula shapes.  The non-flake input keeps the exact source revision
+        # in flake.lock while allowing the fork to retain its upstream build.
+        minder = prev.minder.overrideAttrs (old: {
+          version = "2.0.9-inline-pango";
+          src = inputs.minder-src;
+          patches = [ ];
+        });
+
+        # Small, offline-only frontend from our LaTeX-OCR fork.  It uses the
+        # nixpkgs Paddle stack and an immutable PP-FormulaNet model, so no host
+        # needs a project checkout, devenv, or runtime model download.
+        formulaocr-offline = final.callPackage ./packages/formulaocr-offline.nix {
+          source = inputs.latex-ocr-src;
+        };
+
         # Drop yt-dlp's deno (=> rusty-v8) dependency. The JS runtime is only
         # needed for full YouTube extractor support since 2025.11.12; without
         # it yt-dlp still works for everything we use it for, and we avoid
