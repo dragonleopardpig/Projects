@@ -804,7 +804,9 @@ in
     text = ''
       #!/usr/bin/env bash
       set -eu
-      grim -g "$(slurp)" - | swappy -f -
+      geometry=$(slurp)
+      sleep 0.2
+      grim -g "$geometry" - | swappy -f -
     '';
   };
 
@@ -837,6 +839,7 @@ in
         | jq -r '.[] | select(.workspace.id >= 0 and .mapped == true and .hidden == false)
                      | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"' \
         | slurp)
+      sleep 0.2
       grim -g "$geom" - | swappy -f -
     '';
   };
