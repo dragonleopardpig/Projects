@@ -596,6 +596,33 @@ in
     enable = true;
     nssmdns4 = true;
   };
+
+  # nixpkgs' avahi-daemon unit is sandboxed (ProtectSystem=strict, bounding
+  # set = SYS_CHROOT/SETUID/SETGID only). Once a stale /run/avahi-daemon/pid
+  # exists, every start fails with "Failed to create PID file: File exists":
+  # libdaemon's stale-PID unlink runs as root BEFORE avahi drops to its own
+  # user, root has no CAP_DAC_OVERRIDE in the avahi-owned directory, and the
+  # failed unlink is ignored. That turned `nixos-rebuild switch` into exit 4 on
+  # 2026-09-13 (X299-SSD).
+  #
+  # The stale file came from a boot-time race: openresolv's
+  # libc.d/avahi-daemon hook (run by resolvconf.service) SIGHUPs the PID in
+  # that file, and when the signal lands in the ~1 ms between avahi writing the
+  # file and installing its signal handler, the daemon dies. systemd counts a
+  # SIGHUP death as a clean exit, so nothing is logged and Restart=on-failure
+  # would not fire; cups-browsed (BindsTo=avahi-daemon) then stays dead too.
+  systemd.services.avahi-daemon = {
+    # Let the boot-time resolvconf run finish before avahi exists, so its hook
+    # finds no PID file to signal. Harmless on hosts without resolvconf.service.
+    after = [ "resolvconf.service" ];
+    serviceConfig = {
+      # '+' runs this outside the sandbox with full privileges.
+      ExecStartPre = "+${pkgs.coreutils}/bin/rm -f /run/avahi-daemon/pid";
+      # Recover from any signal death during startup (clean exit to systemd).
+      Restart = "always";
+      RestartSec = 1;
+    };
+  };
   
   # Enable sound with pipewire.
   services.pulseaudio.enable = false;
