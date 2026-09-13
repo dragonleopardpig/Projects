@@ -66,11 +66,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1789106668,
-        "narHash": "sha256-q+4xrBtREPXS0ZZEdkY/S18W4uoCk6/LOoZ8Zmo+Iys=",
+        "lastModified": 1789260065,
+        "narHash": "sha256-gaq5l/lXDWwPyOWgUG9oHFq/ZrSni84bnBC3bUQxI1o=",
         "owner": "dragonleopardpig",
         "repo": "formulaocr-offline",
-        "rev": "4125770e0cb91abeac7c666b3367ee42f4daab4b",
+        "rev": "4cdf35d7bf50c90ae1f3afbbb40f156999e30bca",
         "type": "github"
       },
       "original": {
