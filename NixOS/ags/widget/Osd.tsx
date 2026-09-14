@@ -77,14 +77,17 @@ if (hasBacklight) {
 const BRIGHT_GLYPH = "\u{f0335}"  // nf-md-brightness_6
 
 export default function Osd() {
-    const monitor = App.get_monitors()[0]
-    if (!monitor) return null
     const { BOTTOM } = Astal.WindowAnchor
 
+    // No `gdkmonitor`: pinning the OSD to App.get_monitors()[0] tied it to
+    // whichever monitor happened to be first when AGS started, so after a
+    // display-mode change it could be anchored to a monitor that is now
+    // disabled and the HUD simply never appeared. Left unset, the compositor
+    // puts it on the focused output -- which is where an OSD belongs, and what
+    // the other popups already do.
     return <window
         name="osd"
         className="OsdWindow"
-        gdkmonitor={monitor}
         application={App}
         visible={false}
         anchor={BOTTOM}

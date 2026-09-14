@@ -1062,15 +1062,30 @@ in
         external)      want_on="$externals";            want_off="$internals" ;;
         internal)      want_on="$internals";            want_off="$externals" ;;
       esac
+      # Anchor the first screen at an explicit 0x0 before placing anything
+      # relative to it.  `auto` and `auto-up` position a monitor against
+      # whatever happens to be placed already, so without a fixed anchor the
+      # result depended on which mode we were leaving: coming from
+      # external-only, the laptop was put to the RIGHT of the external and the
+      # external then stacked above *that*, leaving the two sharing only a
+      # corner point with no edge for the cursor to cross.
+      anchor_first() {
+        if [ "$anchored" = no ]; then
+          hyprctl keyword monitor "$1,preferred,0x0,auto" >/dev/null
+          anchored=yes
+        else
+          hyprctl keyword monitor "$1,preferred,auto-right,auto" >/dev/null
+        fi
+      }
+      anchored=no
       case "$next" in
         extend|mirror)
-          # Internals first: `auto-up` stacks against what is already placed,
-          # so there has to be something there to stack above.
-          for m in $internals; do on        "$m"; done
-          for m in $externals; do on_beside "$m"; done ;;
+          # Internals define the baseline; externals then stack off it.
+          for m in $internals; do anchor_first "$m"; done
+          for m in $externals; do on_beside    "$m"; done ;;
         *)
-          # Only one kind of screen is live, so there is nothing to sit above.
-          for m in $want_on; do on "$m"; done ;;
+          # One kind of screen is live, so there is nothing to sit beside.
+          for m in $want_on; do anchor_first "$m"; done ;;
       esac
       for m in $want_off; do off "$m"; done
 
