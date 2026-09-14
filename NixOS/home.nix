@@ -979,6 +979,17 @@ in
   # asks the compositor what is actually attached.  With no built-in panel
   # (the X299 desktop) there is nothing to cycle, so F7/F8 keep their old job
   # of flipping that monitor's DDC/CI input source between machines.
+  # display-cycle rewrites this; just make sure it exists so `source` in
+  # hyprland.conf never points at a missing file. Deliberately not a
+  # home.file: those are symlinks into the read-only Nix store.
+  home.activation.hyprMonitorsStub = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    f="$HOME/.config/hypr/monitors.conf"
+    if [ ! -e "$f" ]; then
+      $DRY_RUN_CMD mkdir -p "$(dirname "$f")"
+      $DRY_RUN_CMD touch "$f"
+    fi
+  '';
+
   home.file.".local/bin/display-cycle" = {
     executable = true;
     text = ''
@@ -1076,6 +1087,12 @@ in
       # `display-cycle external` etc. jumps straight to one mode.
       case "$arg" in
         internal|external|mirror|extend) next="$arg" ;;
+        # `relayout` re-asserts whatever mode is already up.  Monitor
+        # positions are runtime state, so every Hyprland config reload throws
+        # them away and falls back to the built-in side-by-side rule -- which
+        # silently undid the external-above placement and left the laptop
+        # sitting to the right of the 4K screen looking like the secondary.
+        relayout) next="$cur" ;;
       esac
 
       # `preferred,auto,auto` is exactly Hyprland's own default rule, so
@@ -1118,8 +1135,16 @@ in
       # First just bring the right screens up, using Hyprland's own `auto`
       # placement -- it never overlaps.  Explicit coordinates come afterwards,
       # once modes and scales have actually been resolved.
-      for m in $want_on;  do on  "$m"; done
-      for m in $want_off; do off "$m"; done
+      #
+      # `relayout` skips this entirely.  Re-applying a monitor rule makes
+      # Hyprland re-create the output and hand it a fresh workspace, so running
+      # it on every config reload walked the workspace numbers up (1 -> 4) and
+      # grew the bar.  Nothing is being switched on or off there -- only the
+      # positions were lost -- so position them and leave the outputs alone.
+      if [ "$arg" != relayout ]; then
+        for m in $want_on;  do on  "$m"; done
+        for m in $want_off; do off "$m"; done
+      fi
 
       # Nothing below may run until Hyprland has actually applied the layout.
       # `hyprctl keyword` returns immediately, so a blind sleep let AGS
@@ -1183,6 +1208,41 @@ in
         hyprctl keyword monitor "$m,preferred,''${x}x0,auto" >/dev/null
         x=$(( x + $(logical "$m" w) ))
       done
+
+      # Persist exactly what was just applied.  Monitor positions set through
+      # `hyprctl keyword` are runtime-only: on every config reload Hyprland
+      # falls back to its built-in `,preferred,auto,auto`, which re-creates the
+      # outputs (handing them fresh workspaces, so the numbering crept upward)
+      # and lays them side by side again, undoing the external-above placement.
+      # hyprland.conf sources this file, so a reload now reapplies the real
+      # layout and nothing is re-created.
+      conf="''${XDG_CONFIG_HOME:-$HOME/.config}/hypr/monitors.conf"
+      mkdir -p "$(dirname "$conf")"
+      {
+        echo "# Written by display-cycle. Do not edit; it is rewritten on every mode change."
+        for m in $(echo "$internals" "$externals"); do
+          case " $(echo $want_on) " in
+            *" $m "*)
+              geo=$(hyprctl monitors -j | jq -r --arg m "$m" \
+                '[.[] | select(.name == $m)][0] | "\(.x)x\(.y)"')
+              if [ -n "$geo" ] && [ "$geo" != null ]; then
+                echo "monitor = $m,preferred,$geo,auto"
+              fi ;;
+            *) echo "monitor = $m,disable" ;;
+          esac
+        done
+        # Pin one workspace per live screen, in order, so two screens are
+        # always 1 and 2.  Persistent, because Hyprland collects an empty
+        # workspace the moment nothing shows it -- which is what left holes
+        # like "1  3" in the bar.  These have to be generated rather than
+        # written by hand: a static rule cannot know which connector is the
+        # laptop on a drive that boots on different machines.
+        n=1
+        for m in $(echo $want_on); do
+          echo "workspace = $n, persistent:true, monitor:$m"
+          n=$(( n + 1 ))
+        done
+      } > "$conf.tmp" && mv "$conf.tmp" "$conf"
 
       # Mirroring goes on only once the target is really enabled.  Hyprland
       # ignores a `mirror` rule aimed at a still-disabled monitor, so folding
@@ -1258,6 +1318,7 @@ in
       # jumps elsewhere.  That migration lands *after* the monitor set settles,
       # so restoring once straight away is not enough -- it gets overwritten.
       # Re-assert at the very end, once nothing else is still moving.
+      if [ "$arg" = relayout ]; then keep_ws=""; fi
       if [ -n "$keep_ws" ] && [ "$keep_ws" != null ]; then
         # Wait for the migration to stop moving things, THEN put the workspace
         # back exactly once.  Re-asserting in a loop also fought the user:
@@ -1707,6 +1768,13 @@ in
     env = GTK_IM_MODULE,
     env = QT_IM_MODULE,
 
+    # Monitor layout, written by display-cycle on every mode change. Sourced
+    # from here so a config reload reapplies the real positions instead of
+    # falling back to Hyprland's side-by-side `auto` default -- that fallback
+    # re-created the outputs, which handed them fresh workspaces and walked the
+    # numbering upward, and it put the laptop beside the 4K screen again.
+    source = ~/.config/hypr/monitors.conf
+
     windowrule {
       name = tile-sioyek
       match:class = ^sioyek$
@@ -1973,11 +2041,14 @@ in
       ];
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
-      exec-once = [ # Hyprland's built-in default places monitors side by side;
-                    # this puts the external back above the laptop at login,
-                    # so the layout matches without having to cycle to it.
-                    # SKIP_AGS: the bars are starting right now, leave them be.
-                    "env DISPLAY_CYCLE_SKIP_AGS=1 ~/.local/bin/display-cycle extend"
+      # `exec`, not `exec-once`: this also runs on every config reload, which
+      # is exactly when the runtime monitor positions are lost.  `relayout`
+      # re-applies the mode already in use rather than forcing extend, so a
+      # rebuild while on a single screen does not yank the other one back on.
+      # SKIP_AGS: at login the bars are still starting, so leave them alone.
+      exec = [ "env DISPLAY_CYCLE_SKIP_AGS=1 ~/.local/bin/display-cycle relayout" ];
+
+      exec-once = [
                     "uwsm app -- pypr"
                     # AGS v2 (Astal) is now the only bar (waybar retired).
                     "uwsm app -- ags run"
