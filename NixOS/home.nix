@@ -1046,8 +1046,14 @@ in
 
       # `preferred,auto,auto` is exactly Hyprland's own default rule, so
       # re-enabling restores the scales it picked at login (eDP 1.6, 4K 1.0).
-      on()  { hyprctl keyword monitor "$1,preferred,auto,auto" >/dev/null; }
-      off() { hyprctl keyword monitor "$1,disable" >/dev/null; }
+      # The external sits physically ABOVE the laptop here, so it is placed
+      # with `auto-up` and the cursor crosses upward rather than to the right.
+      # Override with DISPLAY_CYCLE_EXTERNAL_SIDE=auto-down|auto-left|auto-right
+      # if the monitor ever moves.
+      side="''${DISPLAY_CYCLE_EXTERNAL_SIDE:-auto-up}"
+      on()       { hyprctl keyword monitor "$1,preferred,auto,auto" >/dev/null; }
+      on_beside() { hyprctl keyword monitor "$1,preferred,$side,auto" >/dev/null; }
+      off()      { hyprctl keyword monitor "$1,disable" >/dev/null; }
 
       # Switch every output the target mode needs ON before turning any OFF, so
       # there is never a moment with zero enabled monitors.
@@ -1056,7 +1062,16 @@ in
         external)      want_on="$externals";            want_off="$internals" ;;
         internal)      want_on="$internals";            want_off="$externals" ;;
       esac
-      for m in $want_on;  do on  "$m"; done
+      case "$next" in
+        extend|mirror)
+          # Internals first: `auto-up` stacks against what is already placed,
+          # so there has to be something there to stack above.
+          for m in $internals; do on        "$m"; done
+          for m in $externals; do on_beside "$m"; done ;;
+        *)
+          # Only one kind of screen is live, so there is nothing to sit above.
+          for m in $want_on; do on "$m"; done ;;
+      esac
       for m in $want_off; do off "$m"; done
 
       # Nothing below may run until Hyprland has actually applied the layout.
@@ -1120,15 +1135,22 @@ in
       # bar.  Check that symptom directly instead of inferring it from the
       # transition: if any enabled monitor is missing its layer-shell bar,
       # restart AGS (the same dance as the $mod+A bind).
+      # At login this runs alongside AGS's own exec-once, and killing a bar
+      # that is still starting would just fight it -- so the startup call sets
+      # DISPLAY_CYCLE_SKIP_AGS and leaves the bars alone.
       bars_missing=no
-      for m in $(hyprctl monitors -j | jq -r '.[].name'); do
-        if ! hyprctl layers -j \
-             | jq -e --arg m "$m" '(.[$m].levels["2"] // []) | map(.namespace) | index("gtk-layer-shell")' \
-               >/dev/null 2>&1; then
-          bars_missing=yes
-        fi
-      done
-      if [ "$bars_missing" = yes ]; then
+      if [ -z "''${DISPLAY_CYCLE_SKIP_AGS:-}" ]; then
+        for m in $(hyprctl monitors -j | jq -r '.[].name'); do
+          if ! hyprctl layers -j \
+               | jq -e --arg m "$m" '(.[$m].levels["2"] // []) | map(.namespace) | index("gtk-layer-shell")' \
+                 >/dev/null 2>&1; then
+            bars_missing=yes
+          fi
+        done
+      fi
+      # Only restart a bar that is actually there; at login AGS may not have
+      # started yet, and something else is about to start it.
+      if [ "$bars_missing" = yes ] && pgrep -f 'ags\.js' >/dev/null 2>&1; then
         ags quit >/dev/null 2>&1 || true
         sleep 0.5
         # 9>&- matters: without it the backgrounded AGS inherits the lock fd
@@ -1737,7 +1759,12 @@ in
       ];
       # monitor = "DP-3,1920x1080@60,0x0,1";
       # Autostart programs
-      exec-once = [ "uwsm app -- pypr"
+      exec-once = [ # Hyprland's built-in default places monitors side by side;
+                    # this puts the external back above the laptop at login,
+                    # so the layout matches without having to cycle to it.
+                    # SKIP_AGS: the bars are starting right now, leave them be.
+                    "env DISPLAY_CYCLE_SKIP_AGS=1 ~/.local/bin/display-cycle extend"
+                    "uwsm app -- pypr"
                     # AGS v2 (Astal) is now the only bar (waybar retired).
                     "uwsm app -- ags run"
                     # swaync is launched by services.swaync (home-manager systemd unit);
