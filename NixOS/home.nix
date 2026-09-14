@@ -870,18 +870,62 @@ in
         ls /sys/class/backlight/ 2>/dev/null | grep -m1 ddcci || true
       }
 
+      # Which screen is the user actually looking at?  A laptop panel and an
+      # external monitor have completely different controls -- sysfs backlight
+      # versus DDC/CI over i2c -- so F5/F6 has to follow focus instead of
+      # always dimming the built-in panel.
+      focused_mon() {
+        hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused) | .name' 2>/dev/null || true
+      }
+
+      # DDC bus number for a DRM connector.  i915 links an i2c adapter under
+      # the connector in sysfs, but the proprietary NVIDIA driver does not, so
+      # fall back to asking ddcutil -- which probes every bus and takes about a
+      # second, hence the cache.
+      ddc_bus() {
+        [ -n "$1" ] || return 1
+        cache="''${XDG_RUNTIME_DIR:-/tmp}/ddc-bus-$1"
+        if [ -s "$cache" ]; then cat "$cache"; return 0; fi
+        for d in /sys/class/drm/card*-"$1"/i2c-*; do
+          [ -e "$d" ] || continue
+          printf '%s\n' "''${d##*/i2c-}" | tee "$cache"
+          return 0
+        done
+        b=$(ddcutil detect --terse 2>/dev/null | awk -v c="$1" '
+              /I2C bus:/       { bus = $NF; sub(/.*\/i2c-/, "", bus) }
+              /DRM connector:/ { if ($NF ~ ("-" c "$")) { print bus; exit } }')
+        [ -n "$b" ] || return 1
+        printf '%s\n' "$b" | tee "$cache"
+      }
+
       case "''${1:-}" in
         up|down)
-          DEV=$(pick_dev)
+          MON=$(focused_mon)
+          case "$MON" in
+            ""|eDP-*) DEV=$(pick_dev) ;;
+            # External screen: ddcci_backlight is a fast sysfs path where it
+            # managed to bind (the X299 desktop).  It does not bind here --
+            # ddcci-setup runs long before the NVIDIA i2c bus exists -- so the
+            # laptop falls through to speaking DDC/CI directly.
+            *)        DEV=$(ls /sys/class/backlight/ 2>/dev/null | grep -m1 ddcci || true) ;;
+          esac
           if [ -n "$DEV" ]; then
             [ "$1" = up ] && brightnessctl -d "$DEV" set +10% \
                           || brightnessctl -d "$DEV" set 10%-
           else
-            [ "$1" = up ] && ddcutil setvcp 10 + 10 \
-                          || ddcutil setvcp 10 - 10
+            BUS=$(ddc_bus "$MON" || true)
+            if [ -z "$BUS" ]; then
+              notify-send -a Brightness -i display-brightness -t 2000 \
+                "No brightness control" "$MON exposes neither a backlight nor DDC/CI." \
+                2>/dev/null || true
+              exit 0
+            fi
+            if [ "$1" = up ]; then ddcutil --bus "$BUS" setvcp 10 + 10
+            else                   ddcutil --bus "$BUS" setvcp 10 - 10
+            fi || rm -f "''${XDG_RUNTIME_DIR:-/tmp}/ddc-bus-$MON"
             # AGS cannot poll DDC-only monitors without issuing an expensive
             # I2C read every 200 ms, so report the new value explicitly.
-            line=$(ddcutil --terse getvcp 10 2>/dev/null || true)
+            line=$(ddcutil --bus "$BUS" --terse getvcp 10 2>/dev/null || true)
             if [ -n "$line" ]; then
               cur=$(echo "$line" | awk '{print $4}')
               max=$(echo "$line" | awk '{print $5}')
