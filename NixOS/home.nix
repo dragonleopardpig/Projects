@@ -1014,6 +1014,29 @@ in
         exit 0
       fi
 
+      # A closed lid means the built-in panel is not something anyone can look
+      # at.  Cycling onto it would move windows to a dead screen, and
+      # built-in-only would black the desktop out entirely -- leaving no
+      # visible screen to press F7 on to get back.  While the lid is shut and
+      # an external is attached, the external is the only mode offered.
+      # The glob simply does not match on a machine with no ACPI lid.
+      lid=open
+      for l in /proc/acpi/button/lid/*/state; do
+        if [ -e "$l" ]; then
+          case "$(cat "$l" 2>/dev/null)" in *closed*) lid=closed ;; esac
+        fi
+      done
+      lid_forced=no
+      lid_off=""
+      if [ "$lid" = closed ]; then
+        # Keep the list so the panel gets actively switched OFF below; just
+        # take it out of the running for anything that enables a screen.
+        lid_off="$internals"
+        internals=""
+        arg=external
+        lid_forced=yes
+      fi
+
       primary=$(echo "$internals" | head -n1)
       q() { echo "$mons" | jq -r --arg m "$1" --arg f "$2" '.[] | select(.name==$m) | .[$f]'; }
 
@@ -1061,6 +1084,7 @@ in
         external)      want_on="$externals";            want_off="$internals" ;;
         internal)      want_on="$internals";            want_off="$externals" ;;
       esac
+      want_off="$want_off $lid_off"
       # First just bring the right screens up, using Hyprland's own `auto`
       # placement -- it never overlaps.  Explicit coordinates come afterwards,
       # once modes and scales have actually been resolved.
@@ -1201,7 +1225,12 @@ in
 
       case "$next" in
         extend)   label="Extend";        detail="$(echo $internals $externals)" ;;
-        external) label="External only"; detail="$(echo $externals)" ;;
+        external) label="External only"
+                  if [ "$lid_forced" = yes ]; then
+                    detail="lid closed -- built-in unavailable"
+                  else
+                    detail="$(echo $externals)"
+                  fi ;;
         internal) label="Built-in only"; detail="$(echo $internals)" ;;
         mirror)   label="Duplicate";     detail="mirroring $primary" ;;
       esac
