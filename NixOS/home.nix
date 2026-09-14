@@ -1259,13 +1259,23 @@ in
       # so restoring once straight away is not enough -- it gets overwritten.
       # Re-assert at the very end, once nothing else is still moving.
       if [ -n "$keep_ws" ] && [ "$keep_ws" != null ]; then
+        # Wait for the migration to stop moving things, THEN put the workspace
+        # back exactly once.  Re-asserting in a loop also fought the user:
+        # switching workspace by hand within a few seconds of pressing F7 was
+        # dragged straight back, which looked like workspace switching had
+        # stopped working altogether.
+        prev=""
         i=0
-        while [ "$i" -lt 12 ]; do
-          if [ "$(hyprctl activeworkspace -j | jq -r .id)" = "$keep_ws" ]; then break; fi
-          hyprctl dispatch workspace "$keep_ws" >/dev/null 2>&1 || true
-          sleep 0.25
+        while [ "$i" -lt 15 ]; do
+          now_ws=$(hyprctl activeworkspace -j | jq -r .id)
+          if [ "$now_ws" = "$prev" ]; then break; fi
+          prev="$now_ws"
+          sleep 0.2
           i=$((i + 1))
         done
+        if [ "$prev" != "$keep_ws" ]; then
+          hyprctl dispatch workspace "$keep_ws" >/dev/null 2>&1 || true
+        fi
       fi
 
       case "$next" in
