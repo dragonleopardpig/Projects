@@ -38,18 +38,27 @@
     "thunderbolt" "mmc_block" "virtio_pci" "virtio_blk" "virtio_scsi"
   ];
 
-  # The shared desktop configuration includes NVIDIA for the fixed hosts.
-  # Portable systems must instead let the initrd and kernel discover the GPU.
-  boot.initrd.kernelModules = lib.mkForce [];
-  boot.extraModulePackages = lib.mkForce [ config.boot.kernelPackages.ddcci-driver ];
+  # Let the initrd and kernel discover whatever GPU the drive is plugged into.
+  #
+  # These used to be `lib.mkForce`, to undo the NVIDIA that configuration.nix
+  # pinned for the fixed hosts.  That cure was worse than the disease: mkForce
+  # replaces *every* definition of the option, so it also deleted the module
+  # package and kernel params that the NixOS nvidia module contributes when a
+  # portable host legitimately does have an NVIDIA GPU -- leaving the driver
+  # half-installed and the card on nouveau.  configuration.nix no longer names
+  # a GPU, so these can simply add to whatever the host declares.
+  boot.extraModulePackages = [ config.boot.kernelPackages.ddcci-driver ];
   boot.kernelModules = [ "kvm-intel" "kvm-amd" "ddcci_backlight" ];
 
   # Keep early boot diagnostic output visible.  This is particularly useful
   # when a USB enclosure or controller is unsupported on a new computer.
-  boot.kernelParams = lib.mkForce [
-    "loglevel=7"
-    "boot.shell_on_fail"
-    "udev.log_priority=3"
+  # `quiet`/`splash` are deliberately absent: they live in the fixed hosts now,
+  # so nothing has to be forced back off here.
+  # Raise the option rather than passing a bare "loglevel=7": NixOS appends
+  # `loglevel=${consoleLogLevel}` after our list, and the last one wins, so a
+  # raw param would be silently overridden by configuration.nix's quieter 3.
+  boot.consoleLogLevel = lib.mkForce 7;
+  boot.kernelParams = [
     "rd.systemd.show_status=yes"
     "systemd.swap=0"
   ];

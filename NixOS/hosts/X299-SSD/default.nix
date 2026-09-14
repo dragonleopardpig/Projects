@@ -6,6 +6,7 @@
   imports = [
     ./hardware-configuration.nix
     ../universal-boot.nix
+    ./nvidia.nix
   ];
 
   networking.hostName = "X299-SSD";

@@ -315,17 +315,16 @@ in
   boot = {
     kernelPackages = pkgs.linuxPackages_latest;
     kernelModules = ["i2c-dev"];
-    initrd.kernelModules = ["nvidia"];
-    extraModulePackages = [
-      config.boot.kernelPackages.nvidia_x11
-    ];
+    # NOTE: no NVIDIA here.  This file is shared by every host, so pinning
+    # nvidia_x11 (and an initrd "nvidia") forced one machine's GPU onto all of
+    # them, and hosts/universal-boot.nix then had to mkForce it back off --
+    # which also wiped the *real* driver that hardware.nvidia contributes.
+    # Each host declares its own GPU (hosts/*/nvidia*.nix); the NixOS nvidia
+    # module adds the right module package and kernel params by itself.
     kernelParams = [
-      "quiet"
-      "splash"
       "intremap=on"
       "boot.shell_on_fail"
       "udev.log_priority=3"
-      "rd.systemd.show_status=auto"
     ];
     # silence first boot output
     consoleLogLevel = 3;

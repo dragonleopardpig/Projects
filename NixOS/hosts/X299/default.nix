@@ -22,6 +22,10 @@ in
   # so /sys/class/backlight/ddcci* registers. After probe, ddcci-setup
   # drops delay to 0 so runtime writes (F5/F6, waybar scroll/click on
   # custom/brightness) finish in ~30 ms instead of ~500 ms.
+  # Quiet splash boot.  This lives per-host rather than in configuration.nix so
+  # that portable images can stay verbose (see hosts/universal-boot.nix).
+  boot.kernelParams = [ "quiet" "splash" "rd.systemd.show_status=auto" ];
+
   boot.kernelModules = [ "ddcci_backlight" ];
   boot.extraModulePackages = [ config.boot.kernelPackages.ddcci-driver ];
   boot.extraModprobeConfig = ''
