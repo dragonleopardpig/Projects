@@ -1209,6 +1209,53 @@ in
     '';
   };
 
+  # Hyprland/aquamarine renders on the FIRST device listed in AQ_DRM_DEVICES.
+  #
+  # On this laptop the HDMI port hangs off the NVIDIA dGPU while the built-in
+  # panel is on the Intel iGPU, so rendering on Intel meant every external
+  # frame had to be copied across the PCIe bus before it could be scanned out.
+  # Measured with Hyprland's own frame counter under one animation load: the 4K
+  # screen managed 21 FPS at 47 ms a frame with only 1.6 ms of that actually
+  # spent rendering, while the internal panel -- which renders and scans out on
+  # the same GPU -- hit 217 FPS. Listing the card that drives the external
+  # output first removes the copy.
+  #
+  # uwsm sources this file before starting the compositor, which is the only
+  # place early enough: aquamarine reads the variable as it initialises.
+  #
+  # Resolved live rather than hardcoded, because /dev/dri/cardN numbering is
+  # not stable (it already changed between two boots here) and this drive boots
+  # on other machines. If nothing matches, the variable is left unset and
+  # Hyprland picks as before -- a stale path here would stop the graphical
+  # session from starting at all.
+  home.file.".config/uwsm/env-hyprland".text = ''
+    _aq_pick() {
+      _ext=""
+      for _c in /sys/class/drm/card[0-9]*-*; do
+        [ -e "$_c/status" ] || continue
+        [ "$(cat "$_c/status" 2>/dev/null)" = connected ] || continue
+        _n=''${_c##*/}
+        # Built-in panels do not count: with no external attached, rendering on
+        # the dGPU would only add the same copy in the other direction.
+        case "$_n" in *-eDP-*|*-LVDS-*|*-DSI-*) continue ;; esac
+        _ext=''${_n%%-*}
+        break
+      done
+      [ -n "$_ext" ] || return 1
+      [ -e "/dev/dri/$_ext" ] || return 1
+      # Every card stays in the list; only the order matters.
+      _rest=""
+      for _d in /dev/dri/card[0-9]*; do
+        if [ "$_d" != "/dev/dri/$_ext" ]; then _rest="$_rest:$_d"; fi
+      done
+      printf '%s' "/dev/dri/$_ext$_rest"
+    }
+    _aq=$(_aq_pick 2>/dev/null) || _aq=""
+    if [ -n "$_aq" ]; then export AQ_DRM_DEVICES="$_aq"; fi
+    unset _aq _c _d _n _ext _rest
+    unset -f _aq_pick
+  '';
+
   # jinx-mod.so rebuild helper with rpath baked in.
   # The Emacs ELPA `jinx' package ships a precompiled jinx-mod.so that
   # dlopens libenchant-2.so.2 via LD_LIBRARY_PATH. On NixOS, envrc /
