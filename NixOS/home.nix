@@ -1906,8 +1906,13 @@ in
           ", F5, exec, ~/.local/bin/brightness-ctl down"
           ",XF86MonBrightnessUp, exec, ~/.local/bin/brightness-ctl up"
           ",XF86MonBrightnessDown, exec, ~/.local/bin/brightness-ctl down"
-          "CTRL ALT, left, focusworkspaceoncurrentmonitor, -1"
-          "CTRL ALT, right, focusworkspaceoncurrentmonitor, +1"
+          # e-1/e+1, not -1/+1: the bare numbers are arithmetic on the
+          # workspace ID, so walking right past the last one kept inventing
+          # empty workspaces 4, 5, 6 ... and left you staring at a blank
+          # screen.  The `e` form steps to the previous/next workspace that
+          # actually EXISTS, and wraps (see workspace_wraparound).
+          "CTRL ALT, left, focusworkspaceoncurrentmonitor, e-1"
+          "CTRL ALT, right, focusworkspaceoncurrentmonitor, e+1"
           "ALT, Tab, cyclenext, hist"
           "$mod, Tab, cyclenext, prev"
           # Pyprland
