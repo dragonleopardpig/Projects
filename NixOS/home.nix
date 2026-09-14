@@ -1906,8 +1906,8 @@ in
           ", F5, exec, ~/.local/bin/brightness-ctl down"
           ",XF86MonBrightnessUp, exec, ~/.local/bin/brightness-ctl up"
           ",XF86MonBrightnessDown, exec, ~/.local/bin/brightness-ctl down"
-          "CTRL ALT, left, workspace, -1"
-          "CTRL ALT, right, workspace, +1"
+          "CTRL ALT, left, focusworkspaceoncurrentmonitor, -1"
+          "CTRL ALT, right, focusworkspaceoncurrentmonitor, +1"
           "ALT, Tab, cyclenext, hist"
           "$mod, Tab, cyclenext, prev"
           # Pyprland
@@ -1924,7 +1924,13 @@ in
           builtins.concatLists (builtins.genList (i:
             let ws = i + 1;
             in [
-              "$mod, code:1${toString i}, workspace, ${toString ws}"
+              # focusworkspaceoncurrentmonitor, not workspace: a workspace is
+              # bound to the monitor it lives on, so plain `workspace N` moves
+              # FOCUS to whichever monitor already holds N and leaves both
+              # screens showing exactly what they showed before -- pressing a
+              # number appeared to do nothing at all.  This brings N onto the
+              # screen being looked at instead (swapping with what was there).
+              "$mod, code:1${toString i}, focusworkspaceoncurrentmonitor, ${toString ws}"
               "$mod SHIFT, code:1${toString i}, movetoworkspace, ${toString ws}"
             ]
           )
