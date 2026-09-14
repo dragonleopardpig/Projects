@@ -849,12 +849,25 @@ in
     text = ''
       #!/bin/sh
       # Backlight backend selection (preferred order):
-      #   1. intel_backlight (laptop panel, microsecond writes)
+      #   1. a native sysfs panel, by name: intel_backlight (M90aPro),
+      #      amdgpu_bl*, nvidia_wmi_ec_backlight (Predator Helios Neo 16 --
+      #      its panel hangs off the EC through NVIDIA's WMI bridge, so there
+      #      is no intel_backlight at all), acpi_video0; then any other
+      #      non-ddcci entry, so an unknown laptop still lands on its panel
+      #      instead of falling through to DDC.
       #   2. ddcci* (X299 hosts via ddcci_backlight, ~75 ms per write)
-      #   3. ddcutil setvcp 10 (last-ditch; only if neither sysfs entry exists)
+      #   3. ddcutil setvcp 10 (last-ditch; only if no sysfs entry exists)
       pick_dev() {
-        if [ -d /sys/class/backlight/intel_backlight ]; then echo intel_backlight
-        else ls /sys/class/backlight/ 2>/dev/null | grep -m1 ddcci || true; fi
+        for d in intel_backlight amdgpu_bl0 amdgpu_bl1 nvidia_wmi_ec_backlight acpi_video0; do
+          if [ -d "/sys/class/backlight/$d" ]; then echo "$d"; return; fi
+        done
+        for d in /sys/class/backlight/*/; do
+          [ -d "$d" ] || continue
+          n=''${d%/}; n=''${n##*/}
+          case "$n" in ddcci*) continue ;; esac
+          echo "$n"; return
+        done
+        ls /sys/class/backlight/ 2>/dev/null | grep -m1 ddcci || true
       }
 
       case "''${1:-}" in
@@ -906,6 +919,124 @@ in
           ;;
         *) echo "Usage: brightness-ctl {up|down|status}" >&2; exit 1 ;;
       esac
+    '';
+  };
+
+  # Win+P-style display-mode cycle, bound to F7 / XF86Display.
+  #
+  # Acer's F7 "display of choice" key only does anything under the Windows
+  # Predator driver.  On Linux the Acer WMI hotkeys and Video Bus devices do
+  # emit KEY_SWITCHVIDEOMODE (XF86Display), but nothing consumed it, and bare
+  # F7 was wired straight to `ddcutil setvcp 60` -- the shared ASUS monitor's
+  # input switch from the X299 desktop, which is not a display switch at all.
+  #
+  # Hardware-detected rather than host-gated on purpose: X299-SSD is a
+  # portable drive that boots on whatever is in front of it, so the script
+  # asks the compositor what is actually attached.  With no built-in panel
+  # (the X299 desktop) there is nothing to cycle, so F7/F8 keep their old job
+  # of flipping that monitor's DDC/CI input source between machines.
+  home.file.".local/bin/display-cycle" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      mons=$(hyprctl monitors all -j)
+      internals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-")) | .name')
+      externals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-") | not) | .name')
+      arg="''${1:-}"
+
+      # -- No built-in panel: this is the desktop, keep the DDC/CI input switch --
+      if [ -z "$internals" ]; then
+        if [ "$arg" = input ]; then ddcutil setvcp 60 "''${2:-0x0f}"
+        else                        ddcutil setvcp 60 0x11
+        fi
+        exit 0
+      fi
+
+      # A laptop drives the external monitor itself, so there is no second
+      # source to switch to.  Firing F8's input change here would flip the
+      # monitor to an input nothing is driving and black it out.  Refuse.
+      if [ "$arg" = input ]; then exit 0; fi
+
+      if [ -z "$externals" ]; then
+        notify-send -a Display -i video-display -t 2000 \
+          "Display: built-in only" "No external monitor is connected."
+        exit 0
+      fi
+
+      primary=$(echo "$internals" | head -n1)
+      q() { echo "$mons" | jq -r --arg m "$1" --arg f "$2" '.[] | select(.name==$m) | .[$f]'; }
+
+      # Any disabled output tells us which mode we are in now.
+      int_off=no; for m in $internals; do if [ "$(q "$m" disabled)" = true ]; then int_off=yes; fi; done
+      ext_off=no; for m in $externals; do if [ "$(q "$m" disabled)" = true ]; then ext_off=yes; fi; done
+      mirrored=no
+      for m in $externals; do if [ "$(q "$m" mirrorOf)" != none ]; then mirrored=yes; fi; done
+
+      if   [ "$ext_off" = yes ];  then cur=internal
+      elif [ "$int_off" = yes ];  then cur=external
+      elif [ "$mirrored" = yes ]; then cur=mirror
+      else                             cur=extend
+      fi
+
+      # Windows' Win+P order: PC screen only -> Duplicate -> Extend -> Second only.
+      case "$cur" in
+        internal) next=mirror   ;;
+        mirror)   next=extend   ;;
+        extend)   next=external ;;
+        *)        next=internal ;;
+      esac
+      # `display-cycle external` etc. jumps straight to one mode.
+      case "$arg" in
+        internal|external|mirror|extend) next="$arg" ;;
+      esac
+
+      # `preferred,auto,auto` is exactly Hyprland's own default rule, so
+      # re-enabling restores the scales it picked at login (eDP 1.6, 4K 1.0).
+      on()  { hyprctl keyword monitor "$1,preferred,auto,auto" >/dev/null; }
+      off() { hyprctl keyword monitor "$1,disable" >/dev/null; }
+
+      # Always switch the surviving output on before turning the other off, so
+      # there is never a moment with zero enabled monitors.
+      case "$next" in
+        extend)
+          for m in $internals $externals; do on "$m"; done ;;
+        external)
+          for m in $externals; do on "$m"; done
+          for m in $internals; do off "$m"; done ;;
+        internal)
+          for m in $internals; do on "$m"; done
+          for m in $externals; do off "$m"; done ;;
+        mirror)
+          on "$primary"
+          for m in $externals; do
+            hyprctl keyword monitor "$m,preferred,auto,auto,mirror,$primary" >/dev/null
+          done ;;
+      esac
+
+      # ags/app.ts builds its bars once in main() from App.get_monitors() and
+      # never listens for monitor-added, so an output coming back would have
+      # no bar.  Restart AGS, same dance as the $mod+A bind.
+      woke=no
+      case "$next" in
+        extend|mirror) if [ "$int_off" = yes ] || [ "$ext_off" = yes ]; then woke=yes; fi ;;
+        external)      if [ "$ext_off" = yes ]; then woke=yes; fi ;;
+        internal)      if [ "$int_off" = yes ]; then woke=yes; fi ;;
+      esac
+      if [ "$woke" = yes ]; then
+        ags quit >/dev/null 2>&1 || true
+        sleep 0.3
+        uwsm app -- ags run >/dev/null 2>&1 &
+      fi
+
+      case "$next" in
+        extend)   label="Extend";        detail="$(echo $internals $externals)" ;;
+        external) label="External only"; detail="$(echo $externals)" ;;
+        internal) label="Built-in only"; detail="$(echo $internals)" ;;
+        mirror)   label="Duplicate";     detail="mirroring $primary" ;;
+      esac
+      notify-send -a Display -i video-display -t 2000 "Display: $label" "$detail"
     '';
   };
 
@@ -1449,8 +1580,6 @@ in
           ", XF86AudioPlay, exec, playerctl play-pause"
           ", XF86AudioPrev, exec, playerctl previous"
           ", F1, exec, sleep 0.1 && hyprctl dispatch dpms off && hyprlock"
-          ", F7, exec, ddcutil setvcp 60 0x11"
-          ", F8, exec, ddcutil setvcp 60 0x0f"
           ", F6, exec, ~/.local/bin/brightness-ctl up"
           ", F5, exec, ~/.local/bin/brightness-ctl down"
           ",XF86MonBrightnessUp, exec, ~/.local/bin/brightness-ctl up"
@@ -1486,8 +1615,15 @@ in
         "$mod ALT, mouse:272, resizewindow"
       ];
       bindl = [
-        ", F7, exec, ddcutil setvcp 60 0x11"
-        ", F8, exec, ddcutil setvcp 60 0x0f"
+        # Acer's display-switch key reaches us two ways: as bare F7 when the
+        # Predator's Fn-lock is on, and as XF86Display (KEY_SWITCHVIDEOMODE,
+        # from the "Acer WMI hotkeys" / "Video Bus" input devices) when Fn is
+        # held.  Bind both so the key works either way.
+        ", F7, exec, ~/.local/bin/display-cycle"
+        ", XF86Display, exec, ~/.local/bin/display-cycle"
+        # F8 keeps the DDC/CI input switch, but only on a machine with no
+        # built-in panel; display-cycle makes that call at runtime.
+        ", F8, exec, ~/.local/bin/display-cycle input 0x0f"
       ];
       bindc =[
         "$mod, mouse:274, togglefloating"
