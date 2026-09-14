@@ -1051,9 +1051,8 @@ in
       # Override with DISPLAY_CYCLE_EXTERNAL_SIDE=auto-down|auto-left|auto-right
       # if the monitor ever moves.
       side="''${DISPLAY_CYCLE_EXTERNAL_SIDE:-auto-up}"
-      on()       { hyprctl keyword monitor "$1,preferred,auto,auto" >/dev/null; }
-      on_beside() { hyprctl keyword monitor "$1,preferred,$side,auto" >/dev/null; }
-      off()      { hyprctl keyword monitor "$1,disable" >/dev/null; }
+      on()  { hyprctl keyword monitor "$1,preferred,auto,auto" >/dev/null; }
+      off() { hyprctl keyword monitor "$1,disable" >/dev/null; }
 
       # Switch every output the target mode needs ON before turning any OFF, so
       # there is never a moment with zero enabled monitors.
@@ -1062,31 +1061,10 @@ in
         external)      want_on="$externals";            want_off="$internals" ;;
         internal)      want_on="$internals";            want_off="$externals" ;;
       esac
-      # Anchor the first screen at an explicit 0x0 before placing anything
-      # relative to it.  `auto` and `auto-up` position a monitor against
-      # whatever happens to be placed already, so without a fixed anchor the
-      # result depended on which mode we were leaving: coming from
-      # external-only, the laptop was put to the RIGHT of the external and the
-      # external then stacked above *that*, leaving the two sharing only a
-      # corner point with no edge for the cursor to cross.
-      anchor_first() {
-        if [ "$anchored" = no ]; then
-          hyprctl keyword monitor "$1,preferred,0x0,auto" >/dev/null
-          anchored=yes
-        else
-          hyprctl keyword monitor "$1,preferred,auto-right,auto" >/dev/null
-        fi
-      }
-      anchored=no
-      case "$next" in
-        extend|mirror)
-          # Internals define the baseline; externals then stack off it.
-          for m in $internals; do anchor_first "$m"; done
-          for m in $externals; do on_beside    "$m"; done ;;
-        *)
-          # One kind of screen is live, so there is nothing to sit beside.
-          for m in $want_on; do anchor_first "$m"; done ;;
-      esac
+      # First just bring the right screens up, using Hyprland's own `auto`
+      # placement -- it never overlaps.  Explicit coordinates come afterwards,
+      # once modes and scales have actually been resolved.
+      for m in $want_on;  do on  "$m"; done
       for m in $want_off; do off "$m"; done
 
       # Nothing below may run until Hyprland has actually applied the layout.
@@ -1104,6 +1082,53 @@ in
         done
       }
       settle "$(printf '%s\n' $want_on | sed '/^$/d' | sort | tr '\n' ' ')"
+
+      # Now place everything at explicit coordinates.  `auto`/`auto-up` position
+      # a monitor against whatever is already placed, so the layout depended on
+      # which mode we were leaving; and anchoring the laptop at 0x0 while the
+      # external still sat there made the two overlap for an instant, which
+      # Hyprland reports on screen.  Externals are moved to their own row
+      # FIRST, so at no point do two monitors occupy the same space.
+      logical() {
+        hyprctl monitors -j | jq -r --arg m "$1" --arg f "$2" \
+          '[.[] | select(.name == $m)]
+           | if length == 0 then 0
+             else (.[0] | (if $f == "w" then .width else .height end) / .scale | floor)
+             end'
+      }
+      if [ "$next" = extend ] || [ "$next" = mirror ]; then
+        iw=0; ih=0
+        for m in $internals; do
+          iw=$(( iw + $(logical "$m" w) ))
+          h=$(logical "$m" h)
+          if [ "$h" -gt "$ih" ]; then ih=$h; fi
+        done
+        x=0
+        for m in $externals; do
+          w=$(logical "$m" w); h=$(logical "$m" h)
+          case "$side" in
+            auto-down)  pos="''${x}x''${ih}"      ;;
+            auto-left)  pos="-$(( x + w ))x0"   ;;
+            auto-right) pos="$(( iw + x ))x0"   ;;
+            *)          pos="''${x}x-''${h}"      ;;  # auto-up: bottom edge on y=0
+          esac
+          hyprctl keyword monitor "$m,preferred,$pos,auto" >/dev/null
+          x=$(( x + w ))
+        done
+      fi
+      # Unquoted $(echo ...) on purpose: it collapses the newline-separated
+      # list into spaces, so the membership test below can look for " $m ".
+      ext_list=" $(echo $externals) "
+      x=0
+      for m in $want_on; do
+        skip=no
+        case "$next" in
+          extend|mirror) case "$ext_list" in *" $m "*) skip=yes ;; esac ;;
+        esac
+        if [ "$skip" = yes ]; then continue; fi
+        hyprctl keyword monitor "$m,preferred,''${x}x0,auto" >/dev/null
+        x=$(( x + $(logical "$m" w) ))
+      done
 
       # Mirroring goes on only once the target is really enabled.  Hyprland
       # ignores a `mirror` rule aimed at a still-disabled monitor, so folding
