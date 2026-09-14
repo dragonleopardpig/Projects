@@ -1912,8 +1912,17 @@ in
           # fresh session.  The arithmetic form always moves, stepping into a
           # new workspace the way a dynamic-workspace desktop does; Hyprland
           # destroys the empty one again as soon as you leave it.
-          "CTRL ALT, left, focusworkspaceoncurrentmonitor, -1"
-          "CTRL ALT, right, focusworkspaceoncurrentmonitor, +1"
+          # Plain `workspace`, NOT focusworkspaceoncurrentmonitor.  The
+          # numbered $mod binds use that one deliberately -- naming a workspace
+          # should bring it to the screen you are on -- but applying it to a
+          # relative step made the two screens EXCHANGE workspaces whenever the
+          # step crossed one living on the other monitor.  The bar then looked
+          # unchanged (same set, same highlight moving between them) and the
+          # numbering jumped, 1,2,3 turning into 1,2,4 as the vacated workspace
+          # was destroyed.  Stepping leaves the other screen alone; focus just
+          # follows the workspace to whichever monitor holds it.
+          "CTRL ALT, left, workspace, -1"
+          "CTRL ALT, right, workspace, +1"
           "ALT, Tab, cyclenext, hist"
           "$mod, Tab, cyclenext, prev"
           # Pyprland
