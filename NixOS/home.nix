@@ -941,6 +941,11 @@ in
       #!/usr/bin/env bash
       set -eu
 
+      # F7 is easy to press faster than a monitor change settles, and
+      # overlapping runs raced each other into a half-applied layout.
+      exec 9>"''${XDG_RUNTIME_DIR:-/tmp}/display-cycle.lock"
+      flock -n 9 || exit 0
+
       mons=$(hyprctl monitors all -j)
       internals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-")) | .name')
       externals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-") | not) | .name')
@@ -980,10 +985,13 @@ in
       else                             cur=extend
       fi
 
-      # Windows' Win+P order: PC screen only -> Duplicate -> Extend -> Second only.
+      # Win+P order, minus Duplicate: Hyprland drives a mirrored output at the
+      # SOURCE monitor's mode rather than scaling to it, and this laptop's
+      # 2560x1600 panel is a mode the 4K monitor does not have at all, so the
+      # mirror fails and can leave that output disabled.  The rotation sticks
+      # to modes that work; `display-cycle mirror` still asks for it explicitly.
       case "$cur" in
-        internal) next=mirror   ;;
-        mirror)   next=extend   ;;
+        internal) next=extend   ;;
         extend)   next=external ;;
         *)        next=internal ;;
       esac
@@ -997,37 +1005,92 @@ in
       on()  { hyprctl keyword monitor "$1,preferred,auto,auto" >/dev/null; }
       off() { hyprctl keyword monitor "$1,disable" >/dev/null; }
 
-      # Always switch the surviving output on before turning the other off, so
+      # Switch every output the target mode needs ON before turning any OFF, so
       # there is never a moment with zero enabled monitors.
       case "$next" in
-        extend)
-          for m in $internals $externals; do on "$m"; done ;;
-        external)
-          for m in $externals; do on "$m"; done
-          for m in $internals; do off "$m"; done ;;
-        internal)
-          for m in $internals; do on "$m"; done
-          for m in $externals; do off "$m"; done ;;
-        mirror)
-          on "$primary"
-          for m in $externals; do
-            hyprctl keyword monitor "$m,preferred,auto,auto,mirror,$primary" >/dev/null
-          done ;;
+        extend|mirror) want_on="$internals $externals"; want_off="" ;;
+        external)      want_on="$externals";            want_off="$internals" ;;
+        internal)      want_on="$internals";            want_off="$externals" ;;
       esac
+      for m in $want_on;  do on  "$m"; done
+      for m in $want_off; do off "$m"; done
+
+      # Nothing below may run until Hyprland has actually applied the layout.
+      # `hyprctl keyword` returns immediately, so a blind sleep let AGS
+      # enumerate a half-changed monitor set and build bars for the wrong
+      # outputs -- that is how a screen ended up with no bar and no wallpaper,
+      # still showing the previous layout's framebuffer.
+      settle() {
+        i=0
+        while [ "$i" -lt 40 ]; do
+          have=$(hyprctl monitors -j | jq -r '.[].name' | sort | tr '\n' ' ')
+          if [ "$have" = "$1" ]; then return 0; fi
+          sleep 0.1
+          i=$((i + 1))
+        done
+      }
+      settle "$(printf '%s\n' $want_on | sed '/^$/d' | sort | tr '\n' ' ')"
+
+      # Mirroring goes on only once the target is really enabled.  Hyprland
+      # ignores a `mirror` rule aimed at a still-disabled monitor, so folding
+      # it into the enable step above left the monitor off, stalled `settle`,
+      # and stuck the cycle one mode behind.
+      if [ "$next" = mirror ]; then
+        for m in $externals; do
+          hyprctl keyword monitor "$m,preferred,auto,auto,mirror,$primary" >/dev/null
+        done
+        sleep 1
+        # Verify it actually took.  When the panels share no common mode the
+        # request fails silently and the output is left disabled -- losing a
+        # screen is far worse than not duplicating, so fall back to extend.
+        live() { hyprctl monitors all -j | jq -r --arg m "$1" --arg f "$2" '.[] | select(.name==$m) | .[$f]'; }
+        bad=no
+        for m in $externals; do
+          if [ "$(live "$m" disabled)" = true ] || [ "$(live "$m" mirrorOf)" = none ]; then
+            bad=yes
+          fi
+        done
+        if [ "$bad" = yes ]; then
+          for m in $internals $externals; do on "$m"; done
+          next=extend
+          settle "$(printf '%s\n' $internals $externals | sed '/^$/d' | sort | tr '\n' ' ')"
+          notify-send -a Display -i video-display -t 3000 \
+            "Display: Duplicate unavailable" "These screens share no common mode -- extended instead."
+        fi
+      fi
+
+      # awww does not re-render when outputs come and go: it can drop the
+      # background layer entirely (`awww query` goes empty), leaving the panel
+      # showing whatever was already in the framebuffer.  Re-assert the image
+      # it is already on -- not a random one, which would make every F7 press
+      # change the wallpaper.  'none' completes the transition instantly.
+      paper=$(awww query 2>/dev/null | sed -n 's/.*currently displaying: image: //p' | head -n1)
+      if [ -n "$paper" ] && [ -f "$paper" ]; then
+        awww img "$paper" --transition-type none >/dev/null 2>&1 || true
+      else
+        ~/.local/bin/random-wallpaper >/dev/null 2>&1 || true
+      fi
 
       # ags/app.ts builds its bars once in main() from App.get_monitors() and
-      # never listens for monitor-added, so an output coming back would have
-      # no bar.  Restart AGS, same dance as the $mod+A bind.
-      woke=no
-      case "$next" in
-        extend|mirror) if [ "$int_off" = yes ] || [ "$ext_off" = yes ]; then woke=yes; fi ;;
-        external)      if [ "$ext_off" = yes ]; then woke=yes; fi ;;
-        internal)      if [ "$int_off" = yes ]; then woke=yes; fi ;;
-      esac
-      if [ "$woke" = yes ]; then
+      # never listens for monitor-added, so an output that comes back has no
+      # bar.  Check that symptom directly instead of inferring it from the
+      # transition: if any enabled monitor is missing its layer-shell bar,
+      # restart AGS (the same dance as the $mod+A bind).
+      bars_missing=no
+      for m in $(hyprctl monitors -j | jq -r '.[].name'); do
+        if ! hyprctl layers -j \
+             | jq -e --arg m "$m" '(.[$m].levels["2"] // []) | map(.namespace) | index("gtk-layer-shell")' \
+               >/dev/null 2>&1; then
+          bars_missing=yes
+        fi
+      done
+      if [ "$bars_missing" = yes ]; then
         ags quit >/dev/null 2>&1 || true
-        sleep 0.3
-        uwsm app -- ags run >/dev/null 2>&1 &
+        sleep 0.5
+        # 9>&- matters: without it the backgrounded AGS inherits the lock fd
+        # and holds the flock for its whole lifetime, so every later F7 press
+        # exits at `flock -n` and the cycle appears frozen on one mode.
+        uwsm app -- ags run >/dev/null 2>&1 9>&- &
       fi
 
       case "$next" in
