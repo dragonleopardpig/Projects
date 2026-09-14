@@ -1026,9 +1026,20 @@ in
           case "$(cat "$l" 2>/dev/null)" in *closed*) lid=closed ;; esac
         fi
       done
+      # AQ_DRM_DEVICES is only ever set (by ~/.config/uwsm/env-hyprland) to
+      # force rendering onto the GPU that drives the EXTERNAL screen.  That
+      # direction works; the reverse does not -- frames rendered on the dGPU
+      # never land on the Intel-driven built-in panel, which stalls with
+      # "drm: Cannot commit when a page-flip is awaiting" and freezes on
+      # whatever it last showed.  So while that is in force, the built-in panel
+      # is not something we may switch to.  Inherited from Hyprland, since
+      # binds run as its children.
+      gpu_locked=no
+      if [ -n "''${AQ_DRM_DEVICES:-}" ]; then gpu_locked=yes; fi
+
       lid_forced=no
       lid_off=""
-      if [ "$lid" = closed ]; then
+      if [ "$lid" = closed ] || [ "$gpu_locked" = yes ]; then
         # Keep the list so the panel gets actively switched OFF below; just
         # take it out of the running for anything that enables a screen.
         lid_off="$internals"
@@ -1085,6 +1096,25 @@ in
         internal)      want_on="$internals";            want_off="$externals" ;;
       esac
       want_off="$want_off $lid_off"
+
+      # Note what the screen we are keeping is currently showing, so the
+      # workspace shuffle above can be undone.  Prefer the focused screen.
+      keep_ws=""
+      focus_mon=$(echo "$mons" | jq -r '.[] | select(.focused) | .name')
+      for m in $want_on; do
+        if [ "$m" = "$focus_mon" ]; then
+          keep_ws=$(echo "$mons" | jq -r --arg m "$m" \
+            '.[] | select(.name==$m) | .activeWorkspace.id')
+          break
+        fi
+      done
+      if [ -z "$keep_ws" ]; then
+        for m in $want_on; do
+          w=$(echo "$mons" | jq -r --arg m "$m" \
+            '.[] | select(.name==$m and .disabled==false) | .activeWorkspace.id')
+          if [ -n "$w" ] && [ "$w" != null ]; then keep_ws=$w; break; fi
+        done
+      fi
       # First just bring the right screens up, using Hyprland's own `auto`
       # placement -- it never overlaps.  Explicit coordinates come afterwards,
       # once modes and scales have actually been resolved.
@@ -1223,10 +1253,27 @@ in
         uwsm app -- ags run >/dev/null 2>&1 9>&- &
       fi
 
+      # Hyprland migrates a disabled monitor's workspaces onto a surviving
+      # screen and brings them to the front, so the screen you were looking at
+      # jumps elsewhere.  That migration lands *after* the monitor set settles,
+      # so restoring once straight away is not enough -- it gets overwritten.
+      # Re-assert at the very end, once nothing else is still moving.
+      if [ -n "$keep_ws" ] && [ "$keep_ws" != null ]; then
+        i=0
+        while [ "$i" -lt 12 ]; do
+          if [ "$(hyprctl activeworkspace -j | jq -r .id)" = "$keep_ws" ]; then break; fi
+          hyprctl dispatch workspace "$keep_ws" >/dev/null 2>&1 || true
+          sleep 0.25
+          i=$((i + 1))
+        done
+      fi
+
       case "$next" in
         extend)   label="Extend";        detail="$(echo $internals $externals)" ;;
         external) label="External only"
-                  if [ "$lid_forced" = yes ]; then
+                  if [ "$lid_forced" = yes ] && [ "$gpu_locked" = yes ] && [ "$lid" != closed ]; then
+                    detail="built-in needs a re-login (rendering is on the dGPU)"
+                  elif [ "$lid_forced" = yes ]; then
                     detail="lid closed -- built-in unavailable"
                   else
                     detail="$(echo $externals)"
@@ -1901,6 +1948,17 @@ in
                     "systemctl --user start hyprpolkitagent"
                     "~/.local/bin/remmina-dnd-watcher"
                   ];
+      cursor = {
+        # Software cursors are required here, not a preference.  Rendering now
+        # happens on the NVIDIA dGPU (see the AQ_DRM_DEVICES note above), but
+        # the built-in panel hangs off the Intel iGPU, and a cursor buffer
+        # allocated on one GPU cannot be imported into the other's hardware
+        # cursor plane -- so the pointer simply stopped being drawn on the
+        # laptop screen while the compositor still tracked it perfectly.
+        # Hyprland's default here is "auto", which does not catch this case.
+        no_hardware_cursors = true;
+      };
+
       misc = {
         mouse_move_enables_dpms = false;
         key_press_enables_dpms = true;
