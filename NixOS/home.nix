@@ -785,6 +785,11 @@ in
   };
 
   # ONLYOFFICE wrapper: avoid Kvantum/XWayland GL issues under Hyprland
+  home.file.".local/share/fonts/NotoSansCJK-VF.otf.ttc".source =
+    "${pkgs.noto-fonts-cjk-sans}/share/fonts/opentype/noto-cjk/NotoSansCJK-VF.otf.ttc";
+  home.file.".local/share/fonts/wqy-zenhei.ttc".source =
+    "${pkgs.wqy_zenhei}/share/fonts/wqy-zenhei.ttc";
+
   home.file.".local/bin/onlyoffice-desktopeditors" = {
     executable = true;
     text = ''
@@ -2024,6 +2029,10 @@ in
         "$mod ALT, mouse:272, resizewindow"
       ];
       bindl = [
+        # Rescue: reattach a locker to an orphaned session lock.  bindl, so it
+        # still works while locked -- which is the only moment it matters.
+        # Needs misc:allow_session_lock_restore above.
+        "CTRL ALT, L, exec, pgrep -x hyprlock >/dev/null || hyprlock"
         # Acer's display-switch key reaches us two ways: as bare F7 when the
         # Predator's Fn-lock is on, and as XF86Display (KEY_SWITCHVIDEOMODE,
         # from the "Acer WMI hotkeys" / "Video Bus" input devices) when Fn is
@@ -2080,6 +2089,13 @@ in
       };
 
       misc = {
+        # A session lock whose client has died cannot normally be dismissed --
+        # the compositor keeps the session locked and there is nothing left to
+        # type into, which has twice meant a forced reboot.  This permits a
+        # fresh locker to take over an orphaned lock, which together with the
+        # CTRL+ALT+L bind below turns "reboot the machine" into "press a key".
+        # hyprlock aborting is the fault; this is the seatbelt.
+        allow_session_lock_restore = true;
         mouse_move_enables_dpms = false;
         key_press_enables_dpms = true;
         initial_workspace_tracking = 2;
