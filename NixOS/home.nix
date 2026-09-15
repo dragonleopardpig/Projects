@@ -989,17 +989,6 @@ in
   # asks the compositor what is actually attached.  With no built-in panel
   # (the X299 desktop) there is nothing to cycle, so F7/F8 keep their old job
   # of flipping that monitor's DDC/CI input source between machines.
-  # display-cycle rewrites this; just make sure it exists so `source` in
-  # hyprland.conf never points at a missing file. Deliberately not a
-  # home.file: those are symlinks into the read-only Nix store.
-  home.activation.hyprMonitorsStub = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    f="$HOME/.config/hypr/monitors.conf"
-    if [ ! -e "$f" ]; then
-      $DRY_RUN_CMD mkdir -p "$(dirname "$f")"
-      $DRY_RUN_CMD touch "$f"
-    fi
-  '';
-
   # F1: lock the session and blank the screens.
   #
   # The order matters, and it used to be backwards: `dpms off && hyprlock`
@@ -1329,47 +1318,14 @@ in
         x=$(( x + $(logical "$m" w) ))
       done
 
-      # Persist exactly what was just applied.  Monitor positions set through
-      # `hyprctl keyword` are runtime-only: on every config reload Hyprland
-      # falls back to its built-in `,highres,auto,auto`, which re-creates the
-      # outputs (handing them fresh workspaces, so the numbering crept upward)
-      # and lays them side by side again, undoing the external-above placement.
-      # hyprland.conf sources this file, so a reload now reapplies the real
-      # layout and nothing is re-created.
-      conf="''${XDG_CONFIG_HOME:-$HOME/.config}/hypr/monitors.conf"
-      mkdir -p "$(dirname "$conf")"
-      {
-        echo "# Written by display-cycle. Do not edit; it is rewritten on every mode change."
-        # NEVER write `disable` here.  This file is sourced at EVERY login, so
-        # a persisted `monitor = eDP-1,disable` left the laptop with no display
-        # at all whenever the external was off or unplugged: the machine booted
-        # to a black screen and looked dead, through several reboots.  Only
-        # screens that are currently on get a position; anything else simply
-        # gets no rule and falls back to Hyprland's default, which is to enable
-        # it.  Persisting a layout must never be able to cost every display.
-        for m in $(echo $all_mons); do
-          case " $(echo $want_on) " in
-            *" $m "*) ;;
-            *) continue ;;
-          esac
-          geo=$(hyprctl monitors -j | jq -r --arg m "$m" \
-            '[.[] | select(.name == $m)][0] | "\(.x)x\(.y)"')
-          if [ -n "$geo" ] && [ "$geo" != null ]; then
-            echo "monitor = $m,highres,$geo,auto"
-          fi
-        done
-        # Pin one workspace per live screen, in order, so two screens are
-        # always 1 and 2.  Persistent, because Hyprland collects an empty
-        # workspace the moment nothing shows it -- which is what left holes
-        # like "1  3" in the bar.  These have to be generated rather than
-        # written by hand: a static rule cannot know which connector is the
-        # laptop on a drive that boots on different machines.
-        n=1
-        for m in $(echo $want_on); do
-          echo "workspace = $n, persistent:true, monitor:$m"
-          n=$(( n + 1 ))
-        done
-      } > "$conf.tmp" && mv "$conf.tmp" "$conf"
+      # Deliberately NOT persisting the layout to a sourced config file.
+      # That was tried and caused two opposite failures: writing
+      # `monitor = eDP-1,disable` bricked the laptop at login whenever the
+      # external was off, and removing the disable meant the file's own write
+      # tripped Hyprland's autoreload and re-enabled the monitor that had just
+      # been switched off.  Positions are re-applied by `display-cycle
+      # relayout` from exec on every reload instead, which needs no state on
+      # disk and cannot cost a display.
 
       # Mirroring goes on only once the target is really enabled.  Hyprland
       # ignores a `mirror` rule aimed at a still-disabled monitor, so folding
@@ -1837,13 +1793,6 @@ in
     env = GTK_IM_MODULE,
     env = QT_IM_MODULE,
 
-    # Monitor layout, written by display-cycle on every mode change. Sourced
-    # from here so a config reload reapplies the real positions instead of
-    # falling back to Hyprland's side-by-side `auto` default -- that fallback
-    # re-created the outputs, which handed them fresh workspaces and walked the
-    # numbering upward, and it put the laptop beside the 4K screen again.
-    source = ~/.config/hypr/monitors.conf
-
     windowrule {
       name = tile-sioyek
       match:class = ^sioyek$
@@ -2153,6 +2102,15 @@ in
         # Hyprland's default here is "auto", which does not catch this case.
         no_hardware_cursors = true;
       };
+
+      # Keep 1 and 2 alive so the numbering does not grow holes when an empty
+      # workspace is collected.  Static, and deliberately not pinned to a
+      # particular monitor -- naming connectors here is what a portable image
+      # cannot do safely.
+      workspace = [
+        "1, persistent:true"
+        "2, persistent:true"
+      ];
 
       misc = {
         # A session lock whose client has died cannot normally be dismissed --
