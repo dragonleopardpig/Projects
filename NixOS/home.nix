@@ -1042,7 +1042,11 @@ in
           case "$(cat "$l" 2>/dev/null)" in *closed*) lid=closed ;; esac
         fi
       done
-      # AQ_DRM_DEVICES is only ever set (by ~/.config/uwsm/env-hyprland) to
+      # Nothing sets AQ_DRM_DEVICES any more (see the note where it used to be
+      # configured), so this is normally inert -- kept because if it ever is
+      # set by hand, the built-in panel really cannot be driven.  It would be
+      # set only to force rendering onto the GPU that drives the EXTERNAL
+      # screen.  Originally: AQ_DRM_DEVICES was set (by ~/.config/uwsm/env-hyprland) to
       # force rendering onto the GPU that drives the EXTERNAL screen.  That
       # direction works; the reverse does not -- frames rendered on the dGPU
       # never land on the Intel-driven built-in panel, which stalls with
@@ -1361,65 +1365,14 @@ in
     '';
   };
 
-  # Hyprland/aquamarine renders on the FIRST device listed in AQ_DRM_DEVICES.
-  #
-  # On this laptop the HDMI port hangs off the NVIDIA dGPU while the built-in
-  # panel is on the Intel iGPU, so rendering on Intel meant every external
-  # frame had to be copied across the PCIe bus before it could be scanned out.
-  # Measured with Hyprland's own frame counter under one animation load: the 4K
-  # screen managed 21 FPS at 47 ms a frame with only 1.6 ms of that actually
-  # spent rendering, while the internal panel -- which renders and scans out on
-  # the same GPU -- hit 217 FPS. Listing the card that drives the external
-  # output first removes the copy.
-  #
-  # uwsm sources this file before starting the compositor, which is the only
-  # place early enough: aquamarine reads the variable as it initialises.
-  #
-  # Resolved live rather than hardcoded, because /dev/dri/cardN numbering is
-  # not stable (it already changed between two boots here) and this drive boots
-  # on other machines. If nothing matches, the variable is left unset and
-  # Hyprland picks as before -- a stale path here would stop the graphical
-  # session from starting at all.
-  home.file.".config/uwsm/env-hyprland".text = ''
-    _aq_pick() {
-      # The trigger is simply "an external screen is attached at login", which
-      # the _ext search below already decides: no external, nothing is forced.
-      #
-      # This used to also require the lid to be shut, on the grounds that
-      # rendering on the dGPU is not symmetric -- Intel -> dGPU works (slowly),
-      # while dGPU -> Intel leaves the built-in panel frozen on its last image.
-      # That rule was unusable in practice: booting needs the lid open, the
-      # render device is fixed when the compositor starts, and closing the lid
-      # afterwards cannot change it -- so the fast path was never actually
-      # reached. Docking is what matters, not lid position.
-      #
-      # The cost is deliberate: while this is in force the built-in panel is
-      # not usable, and display-cycle refuses to switch to it and says so.
-      _ext=""
-      for _c in /sys/class/drm/card[0-9]*-*; do
-        [ -e "$_c/status" ] || continue
-        [ "$(cat "$_c/status" 2>/dev/null)" = connected ] || continue
-        _n=''${_c##*/}
-        # Built-in panels do not count: with no external attached, rendering on
-        # the dGPU would only add the same copy in the other direction.
-        case "$_n" in *-eDP-*|*-LVDS-*|*-DSI-*) continue ;; esac
-        _ext=''${_n%%-*}
-        break
-      done
-      [ -n "$_ext" ] || return 1
-      [ -e "/dev/dri/$_ext" ] || return 1
-      # Every card stays in the list; only the order matters.
-      _rest=""
-      for _d in /dev/dri/card[0-9]*; do
-        if [ "$_d" != "/dev/dri/$_ext" ]; then _rest="$_rest:$_d"; fi
-      done
-      printf '%s' "/dev/dri/$_ext$_rest"
-    }
-    _aq=$(_aq_pick 2>/dev/null) || _aq=""
-    if [ -n "$_aq" ]; then export AQ_DRM_DEVICES="$_aq"; fi
-    unset _aq _c _d _n _ext _rest
-    unset -f _aq_pick
-  '';
+  # No AQ_DRM_DEVICES here on purpose.  Forcing Hyprland to render on the dGPU
+  # did make the 4K external hit a measured 60 FPS instead of 21, but it cost
+  # the built-in panel entirely: with rendering on the dGPU that output never
+  # completes a frame -- `grim -o eDP-1` blocks indefinitely -- so the laptop
+  # screen is frozen and the display cycle has only one mode left to offer.
+  # Working screens beat smoother animation, so the render device is left to
+  # Hyprland. The external's animation is limited by the cross-GPU copy; that
+  # is a driver limitation, not something this config can tune away.
 
   # jinx-mod.so rebuild helper with rpath baked in.
   # The Emacs ELPA `jinx' package ships a precompiled jinx-mod.so that
@@ -2070,7 +2023,7 @@ in
                   ];
       cursor = {
         # Software cursors are required here, not a preference.  Rendering now
-        # happens on the NVIDIA dGPU (see the AQ_DRM_DEVICES note above), but
+        # can happen on the NVIDIA dGPU, but
         # the built-in panel hangs off the Intel iGPU, and a cursor buffer
         # allocated on one GPU cannot be imported into the other's hardware
         # cursor plane -- so the pointer simply stopped being drawn on the
