@@ -2478,6 +2478,21 @@ in
 
   programs.hyprlock = {
     enable = true;
+    settings = {
+      general = {
+        # A stray Enter on an empty field submits an empty password, which PAM
+        # records as a failed attempt.  Ignore empty submissions instead.
+        ignore_empty_input = true;
+      };
+      auth.pam = {
+        # Authenticate against hyprlock's own PAM stack rather than falling
+        # back to `su`'s, which carries pam_rootok, pam_faillock and pam_xauth.
+        # Defined by security.pam.services.hyprlock in configuration.nix --
+        # pointing at a module with no /etc/pam.d entry would make the session
+        # impossible to unlock, so that file is created first.
+        module = "hyprlock";
+      };
+    };
   };
 
   # Packages that should be installed to the user profile.

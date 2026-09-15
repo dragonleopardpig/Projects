@@ -625,6 +625,13 @@ in
   
   # Enable sound with pipewire.
   services.pulseaudio.enable = false;
+  # Give hyprlock its own PAM stack.  Without one it falls back to `su`, whose
+  # auth chain carries pam_rootok, pam_faillock and pam_xauth -- none of which
+  # belong in a screen locker -- and the failures show up in the log as
+  # `pam_unix(su:auth)`.  An empty definition here generates the same clean
+  # unix stack that swaylock and xlock already get.
+  security.pam.services.hyprlock = { };
+
   security.rtkit.enable = true;
   # Required for bubblewrap-based FHS env (EasyConnect launcher).
   security.unprivilegedUsernsClone = true;
