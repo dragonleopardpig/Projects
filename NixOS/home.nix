@@ -1003,7 +1003,12 @@ in
       #!/usr/bin/env bash
       set -eu
 
-      if ! pgrep -x swaylock >/dev/null 2>&1; then
+      # pgrep -f, not -x: swaylock on NixOS is a C wrapper that execs
+      # .swaylock-wrapped, so the process name is never "swaylock" and -x
+      # silently never matched -- which made the guard below decide the lock
+      # had failed and skip the blanking entirely.  The bracket class keeps the
+      # pattern from matching this command's own line.
+      if ! pgrep -f '[s]waylock' >/dev/null 2>&1; then
         # --daemonize so this returns once the lock surface is really up, and
         # a dark screen rather than swaylock's default white flash.
         # --indicator-idle-visible matters: without it swaylock draws nothing
@@ -1023,7 +1028,7 @@ in
       fi
 
       for _ in $(seq 1 40); do
-        if pgrep -x swaylock >/dev/null 2>&1; then break; fi
+        if pgrep -f '[s]waylock' >/dev/null 2>&1; then break; fi
         sleep 0.1
       done
       sleep 1
@@ -1031,7 +1036,7 @@ in
       # Blank only if the locker is actually up.  Blanking a session that
       # failed to lock would leave the machine unlocked behind a dark screen,
       # which is far worse than not blanking at all.
-      if pgrep -x swaylock >/dev/null 2>&1; then
+      if pgrep -f '[s]waylock' >/dev/null 2>&1; then
         hyprctl dispatch dpms off >/dev/null 2>&1 || true
       else
         notify-send -a Display -i dialog-warning -t 6000 \
@@ -2150,7 +2155,11 @@ in
         # Rescue: reattach a locker to an orphaned session lock.  bindl, so it
         # still works while locked -- which is the only moment it matters.
         # Needs misc:allow_session_lock_restore above.
-        "CTRL ALT, L, exec, pgrep -x swaylock >/dev/null || swaylock --daemonize --color 1e1e2e"
+        # Points at the script rather than running swaylock inline: this bind's
+        # own command line would otherwise contain the locker's name, so the
+        # pgrep guard would match itself, conclude a locker was already running
+        # and never start one -- exactly when it is needed most.
+        "CTRL ALT, L, exec, ~/.local/bin/lock-and-blank"
         # Acer's display-switch key reaches us two ways: as bare F7 when the
         # Predator's Fn-lock is on, and as XF86Display (KEY_SWITCHVIDEOMODE,
         # from the "Acer WMI hotkeys" / "Video Bus" input devices) when Fn is
