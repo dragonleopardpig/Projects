@@ -1043,6 +1043,47 @@ in
   # already on this screen or brand new, so nothing is ever swapped away from
   # the other monitor -- which was the complaint about using
   # focusworkspaceoncurrentmonitor for stepping in the first place.
+  # Last line of defence: never leave the session with no enabled display.
+  #
+  # display-cycle legitimately switches the built-in panel off -- external-only
+  # mode, or a closed lid.  If the external is then unplugged or switched off,
+  # nothing at all is enabled: the machine looks dead, and the keybinds that
+  # would fix it cannot be seen to be pressed.  That has happened twice.
+  #
+  # Polling rather than the event socket, because it needs no reconnect
+  # handling and one hyprctl call every couple of seconds costs nothing.  Two
+  # consecutive empty polls are required so that a mode change, which can
+  # briefly have nothing enabled, is not mistaken for the real thing.
+  home.file.".local/bin/display-rescue" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -u
+      empty=0
+      while true; do
+        sleep 2
+        n=$(hyprctl monitors -j 2>/dev/null | jq 'length' 2>/dev/null) || continue
+        case "$n" in ""|*[!0-9]*) continue ;; esac
+        if [ "$n" -gt 0 ]; then empty=0; continue; fi
+        empty=$(( empty + 1 ))
+        [ "$empty" -ge 2 ] || continue
+        empty=0
+        # Switch on everything physically attached, whatever it is.  Getting a
+        # picture back matters more than getting the layout right.
+        for c in /sys/class/drm/card[0-9]*-*; do
+          [ -e "$c/status" ] || continue
+          [ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
+          name=''${c##*/}
+          name=''${name#*-}
+          hyprctl keyword monitor "$name,highres,auto,auto" >/dev/null 2>&1 || true
+        done
+        notify-send -a Display -i video-display -t 6000 \
+          "Display rescued" "No screen was enabled; everything attached was switched back on." \
+          >/dev/null 2>&1 || true
+      done
+    '';
+  };
+
   home.file.".local/bin/ws-step" = {
     executable = true;
     text = ''
@@ -2070,7 +2111,7 @@ in
       # SKIP_AGS: at login the bars are still starting, so leave them alone.
       exec = [ "env DISPLAY_CYCLE_SKIP_AGS=1 ~/.local/bin/display-cycle relayout" ];
 
-      exec-once = [
+      exec-once = [ "~/.local/bin/display-rescue"
                     "uwsm app -- pypr"
                     # AGS v2 (Astal) is now the only bar (waybar retired).
                     "uwsm app -- ags run"
