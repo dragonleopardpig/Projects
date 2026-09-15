@@ -1003,17 +1003,28 @@ in
       #!/usr/bin/env bash
       set -eu
 
-      if ! pgrep -x hyprlock >/dev/null 2>&1; then
-        hyprlock >/dev/null 2>&1 &
+      if ! pgrep -x swaylock >/dev/null 2>&1; then
+        # --daemonize so this returns once the lock surface is really up, and
+        # a dark screen rather than swaylock's default white flash.
+        swaylock --daemonize --color 1e1e2e --indicator-caps-lock \
+          --inside-color 1e1e2e --ring-color 585b70 \
+          --key-hl-color a6e3a1 --text-color cdd6f4 \
+          --inside-wrong-color f38ba8 --ring-wrong-color f38ba8 \
+          >/dev/null 2>&1 || true
       fi
 
-      # Wait for the locker to exist rather than guessing with a fixed sleep,
-      # then give it a moment to commit its surface on every output.
       for _ in $(seq 1 40); do
-        if pgrep -x hyprlock >/dev/null 2>&1; then break; fi
+        if pgrep -x swaylock >/dev/null 2>&1; then break; fi
         sleep 0.1
       done
       sleep 1
+
+      # Now blank.  This is the whole point of the key, and it is only safe to
+      # do after the locker is up: the external drops its HDMI link when the
+      # signal stops, and an output vanishing is exactly what killed hyprlock.
+      # swaylock is expected to survive that; if it does not, CTRL+ALT+L
+      # reattaches a locker and the display watchdog brings the screens back.
+      hyprctl dispatch dpms off >/dev/null 2>&1 || true
 
       # NO `dpms off` here, and this is a safety matter rather than a
       # preference.  Blanking makes the external monitor drop its HDMI link
@@ -1702,7 +1713,7 @@ in
         -term kitty \
         -fm "$HOME/.local/bin/nemo-x11" \
         -closebtn right \
-        -pblock hyprlock \
+        -pblock "$HOME/.local/bin/lock-and-blank" \
         -pbexit "hyprctl dispatch exit" \
         -pbsleep "systemctl suspend" \
         -pbreboot "systemctl reboot" \
@@ -2126,7 +2137,7 @@ in
         # Rescue: reattach a locker to an orphaned session lock.  bindl, so it
         # still works while locked -- which is the only moment it matters.
         # Needs misc:allow_session_lock_restore above.
-        "CTRL ALT, L, exec, pgrep -x hyprlock >/dev/null || hyprlock"
+        "CTRL ALT, L, exec, pgrep -x swaylock >/dev/null || swaylock --daemonize --color 1e1e2e"
         # Acer's display-switch key reaches us two ways: as bare F7 when the
         # Predator's Fn-lock is on, and as XF86Display (KEY_SWITCHVIDEOMODE,
         # from the "Acer WMI hotkeys" / "Video Bus" input devices) when Fn is
@@ -2541,7 +2552,7 @@ in
   programs.wlogout = {
     enable = true;
     layout = [
-      { label = "lock";     action = "hyprlock";              text = "Lock";     keybind = "l"; }
+      { label = "lock";     action = "~/.local/bin/lock-and-blank"; text = "Lock";     keybind = "l"; }
       { label = "logout";   action = "hyprctl dispatch exit"; text = "Logout";     keybind = "e"; }
       { label = "suspend";  action = "systemctl suspend";     text = "Suspend";     keybind = "s"; }
       { label = "reboot";   action = "systemctl reboot";      text = "Reboot";     keybind = "r"; }
@@ -2579,13 +2590,13 @@ in
     general = {
       after_sleep_cmd = "hyprctl dispatch dpms on";
       ignore_dbus_inhibit = false;
-      lock_cmd = "hyprlock";
+      lock_cmd = "~/.local/bin/lock-and-blank";
     };
 
     listener = [
       {
         timeout = 900;
-        on-timeout = "hyprlock";
+        on-timeout = "~/.local/bin/lock-and-blank";
       }
       # Idle blanking is disabled for the same reason F1 no longer blanks: the
       # external monitor drops its link when the signal stops, and the output
@@ -2600,6 +2611,9 @@ in
     ];
   };
 
+  # Kept installed but no longer the locker -- see home.packages.  It stays so
+  # there is something to fall back on if swaylock ever misbehaves; nothing
+  # launches it automatically any more.
   programs.hyprlock = {
     enable = true;
     settings = {
@@ -2621,6 +2635,13 @@ in
 
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
+    # Screen locker.  Replaces hyprlock, which aborted from its Wayland
+    # dispatch thread when an output disappeared and left the session locked
+    # behind a dead client -- twice costing a forced reboot.  swaylock speaks
+    # the same ext-session-lock-v1 protocol, so this is not a downgrade to a
+    # mere overlay, and authenticates through libpam against the clean
+    # /etc/pam.d/swaylock stack.
+    swaylock
     (python3.withPackages (ps: with ps; [ pygobject3 ]))
     gtk3
     gobject-introspection
