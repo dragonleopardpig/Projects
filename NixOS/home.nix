@@ -850,7 +850,9 @@ in
       #!/bin/sh
       # Backlight backend selection (preferred order):
       #   1. a native sysfs panel, by name: intel_backlight (M90aPro),
-      #      amdgpu_bl*, nvidia_wmi_ec_backlight (Predator Helios Neo 16 --
+      #      amdgpu_bl*, nvidia_0 (what the NVIDIA driver exposes once the
+      #      panel is routed to the dGPU by the BIOS MUX), then
+      #      nvidia_wmi_ec_backlight (Predator Helios Neo 16 in hybrid mode --
       #      its panel hangs off the EC through NVIDIA's WMI bridge, so there
       #      is no intel_backlight at all), acpi_video0; then any other
       #      non-ddcci entry, so an unknown laptop still lands on its panel
@@ -858,7 +860,7 @@ in
       #   2. ddcci* (X299 hosts via ddcci_backlight, ~75 ms per write)
       #   3. ddcutil setvcp 10 (last-ditch; only if no sysfs entry exists)
       pick_dev() {
-        for d in intel_backlight amdgpu_bl0 amdgpu_bl1 nvidia_wmi_ec_backlight acpi_video0; do
+        for d in intel_backlight amdgpu_bl0 amdgpu_bl1 nvidia_0 nvidia_wmi_ec_backlight acpi_video0; do
           if [ -d "/sys/class/backlight/$d" ]; then echo "$d"; return; fi
         done
         for d in /sys/class/backlight/*/; do
@@ -1104,14 +1106,20 @@ in
         relayout) next="$cur" ;;
       esac
 
-      # `preferred,auto,auto` is exactly Hyprland's own default rule, so
-      # re-enabling restores the scales it picked at login (eDP 1.6, 4K 1.0).
+      # `highres`, not `preferred`.  The two connectors disagree about what is
+      # "preferred": routed through the Intel iGPU the laptop panel preferred
+      # 2560x1600@240, but on the NVIDIA connector it preferred the same
+      # resolution at 60Hz, quietly dropping the panel to a quarter of its
+      # refresh rate.  `highres` takes the highest resolution and the fastest
+      # mode at it -- 2560x1600@240 here, and 3840x2160@60 on the 4K screen.
+      # NOT `highrr`, which would chase refresh over resolution and put that
+      # monitor in 1280x1024@75.
       # The external sits physically ABOVE the laptop here, so it is placed
       # with `auto-up` and the cursor crosses upward rather than to the right.
       # Override with DISPLAY_CYCLE_EXTERNAL_SIDE=auto-down|auto-left|auto-right
       # if the monitor ever moves.
       side="''${DISPLAY_CYCLE_EXTERNAL_SIDE:-auto-up}"
-      on()  { hyprctl keyword monitor "$1,preferred,auto,auto" >/dev/null; }
+      on()  { hyprctl keyword monitor "$1,highres,auto,auto" >/dev/null; }
       off() { hyprctl keyword monitor "$1,disable" >/dev/null; }
 
       # Switch every output the target mode needs ON before turning any OFF, so
@@ -1200,7 +1208,7 @@ in
             auto-right) pos="$(( iw + x ))x0"   ;;
             *)          pos="''${x}x-''${h}"      ;;  # auto-up: bottom edge on y=0
           esac
-          hyprctl keyword monitor "$m,preferred,$pos,auto" >/dev/null
+          hyprctl keyword monitor "$m,highres,$pos,auto" >/dev/null
           x=$(( x + w ))
         done
       fi
@@ -1214,13 +1222,13 @@ in
           extend|mirror) case "$ext_list" in *" $m "*) skip=yes ;; esac ;;
         esac
         if [ "$skip" = yes ]; then continue; fi
-        hyprctl keyword monitor "$m,preferred,''${x}x0,auto" >/dev/null
+        hyprctl keyword monitor "$m,highres,''${x}x0,auto" >/dev/null
         x=$(( x + $(logical "$m" w) ))
       done
 
       # Persist exactly what was just applied.  Monitor positions set through
       # `hyprctl keyword` are runtime-only: on every config reload Hyprland
-      # falls back to its built-in `,preferred,auto,auto`, which re-creates the
+      # falls back to its built-in `,highres,auto,auto`, which re-creates the
       # outputs (handing them fresh workspaces, so the numbering crept upward)
       # and lays them side by side again, undoing the external-above placement.
       # hyprland.conf sources this file, so a reload now reapplies the real
@@ -1235,7 +1243,7 @@ in
               geo=$(hyprctl monitors -j | jq -r --arg m "$m" \
                 '[.[] | select(.name == $m)][0] | "\(.x)x\(.y)"')
               if [ -n "$geo" ] && [ "$geo" != null ]; then
-                echo "monitor = $m,preferred,$geo,auto"
+                echo "monitor = $m,highres,$geo,auto"
               fi ;;
             *) echo "monitor = $m,disable" ;;
           esac
@@ -1259,7 +1267,7 @@ in
       # and stuck the cycle one mode behind.
       if [ "$next" = mirror ]; then
         for m in $externals; do
-          hyprctl keyword monitor "$m,preferred,auto,auto,mirror,$primary" >/dev/null
+          hyprctl keyword monitor "$m,highres,auto,auto,mirror,$primary" >/dev/null
         done
         sleep 1
         # Verify it actually took.  When the panels share no common mode the
