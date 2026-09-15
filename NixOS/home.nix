@@ -785,15 +785,18 @@ in
   };
 
   # ONLYOFFICE wrapper: avoid Kvantum/XWayland GL issues under Hyprland
-  home.file.".local/share/fonts/NotoSansCJK-VF.otf.ttc".source =
-    "${pkgs.noto-fonts-cjk-sans}/share/fonts/opentype/noto-cjk/NotoSansCJK-VF.otf.ttc";
-  home.file.".local/share/fonts/wqy-zenhei.ttc".source =
-    "${pkgs.wqy_zenhei}/share/fonts/wqy-zenhei.ttc";
-
   home.file.".local/bin/onlyoffice-desktopeditors" = {
     executable = true;
     text = ''
       #!/bin/sh
+      cjk_font_dir="$HOME/.local/share/fonts"
+      cjk_font="$cjk_font_dir/wqy-zenhei-onlyoffice.ttc"
+      cjk_font_source="${pkgs.wqy_zenhei}/share/fonts/wqy-zenhei.ttc"
+      if [ ! -f "$cjk_font" ] || ! cmp -s "$cjk_font_source" "$cjk_font"; then
+        mkdir -p "$cjk_font_dir"
+        cp -f "$cjk_font_source" "$cjk_font"
+        rm -rf "$HOME/.local/share/onlyoffice/desktopeditors/data/fonts"
+      fi
       export QT_QPA_PLATFORM=xcb
       export XLIB_SKIP_ARGB_VISUALS=1
       export NO_AT_BRIDGE=1
@@ -1281,16 +1284,23 @@ in
       mkdir -p "$(dirname "$conf")"
       {
         echo "# Written by display-cycle. Do not edit; it is rewritten on every mode change."
+        # NEVER write `disable` here.  This file is sourced at EVERY login, so
+        # a persisted `monitor = eDP-1,disable` left the laptop with no display
+        # at all whenever the external was off or unplugged: the machine booted
+        # to a black screen and looked dead, through several reboots.  Only
+        # screens that are currently on get a position; anything else simply
+        # gets no rule and falls back to Hyprland's default, which is to enable
+        # it.  Persisting a layout must never be able to cost every display.
         for m in $(echo $all_mons); do
           case " $(echo $want_on) " in
-            *" $m "*)
-              geo=$(hyprctl monitors -j | jq -r --arg m "$m" \
-                '[.[] | select(.name == $m)][0] | "\(.x)x\(.y)"')
-              if [ -n "$geo" ] && [ "$geo" != null ]; then
-                echo "monitor = $m,highres,$geo,auto"
-              fi ;;
-            *) echo "monitor = $m,disable" ;;
+            *" $m "*) ;;
+            *) continue ;;
           esac
+          geo=$(hyprctl monitors -j | jq -r --arg m "$m" \
+            '[.[] | select(.name == $m)][0] | "\(.x)x\(.y)"')
+          if [ -n "$geo" ] && [ "$geo" != null ]; then
+            echo "monitor = $m,highres,$geo,auto"
+          fi
         done
         # Pin one workspace per live screen, in order, so two screens are
         # always 1 and 2.  Persistent, because Hyprland collects an empty
