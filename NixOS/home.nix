@@ -992,6 +992,45 @@ in
     fi
   '';
 
+  # F1: lock the session and blank the screens.
+  #
+  # The order matters, and it used to be backwards: `dpms off && hyprlock`
+  # blanked the outputs and then started the locker -- whose surface has to be
+  # shown on every output, so the compositor turned them straight back on a
+  # couple of seconds later, with nothing touched.  Verified in isolation that
+  # `dpms off` on its own stays off indefinitely, so the locker was the waker.
+  # Lock first, wait until it is actually up, and blank after.
+  home.file.".local/bin/lock-and-blank" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      if ! pgrep -x hyprlock >/dev/null 2>&1; then
+        hyprlock >/dev/null 2>&1 &
+      fi
+
+      # Wait for the locker to exist rather than guessing with a fixed sleep,
+      # then give it a moment to commit its surface on every output.
+      for _ in $(seq 1 40); do
+        if pgrep -x hyprlock >/dev/null 2>&1; then break; fi
+        sleep 0.1
+      done
+      sleep 1
+
+      hyprctl dispatch dpms off >/dev/null 2>&1 || true
+
+      # Insurance: if the locker still brought an output back as it finished
+      # coming up, blank once more.  Deliberately a single retry and not a
+      # loop -- repeatedly re-blanking would also fight the keypress that is
+      # meant to wake the screen to type the password.
+      sleep 1.5
+      if [ "$(hyprctl monitors -j 2>/dev/null | jq -r '[.[].dpmsStatus] | any' 2>/dev/null)" = true ]; then
+        hyprctl dispatch dpms off >/dev/null 2>&1 || true
+      fi
+    '';
+  };
+
   home.file.".local/bin/display-cycle" = {
     executable = true;
     text = ''
@@ -1928,7 +1967,7 @@ in
           ", XF86AudioPause, exec, playerctl play-pause"
           ", XF86AudioPlay, exec, playerctl play-pause"
           ", XF86AudioPrev, exec, playerctl previous"
-          ", F1, exec, sleep 0.1 && hyprctl dispatch dpms off && hyprlock"
+          ", F1, exec, ~/.local/bin/lock-and-blank"
           ", F6, exec, ~/.local/bin/brightness-ctl up"
           ", F5, exec, ~/.local/bin/brightness-ctl down"
           ",XF86MonBrightnessUp, exec, ~/.local/bin/brightness-ctl up"
