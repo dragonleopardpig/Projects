@@ -1006,9 +1006,18 @@ in
       if ! pgrep -x swaylock >/dev/null 2>&1; then
         # --daemonize so this returns once the lock surface is really up, and
         # a dark screen rather than swaylock's default white flash.
-        swaylock --daemonize --color 1e1e2e --indicator-caps-lock \
+        # --indicator-idle-visible matters: without it swaylock draws nothing
+        # until a key is pressed, so the screen looks blank and dead and you
+        # are typing a password with no evidence anything is listening.
+        swaylock --daemonize --color 1e1e2e \
+          --indicator-idle-visible \
+          --indicator-radius 120 --indicator-thickness 12 \
+          --indicator-caps-lock --show-failed-attempts \
+          --font-size 24 \
           --inside-color 1e1e2e --ring-color 585b70 \
-          --key-hl-color a6e3a1 --text-color cdd6f4 \
+          --key-hl-color a6e3a1 --bs-hl-color f38ba8 \
+          --text-color cdd6f4 --line-color 00000000 \
+          --inside-ver-color 1e1e2e --ring-ver-color 89b4fa \
           --inside-wrong-color f38ba8 --ring-wrong-color f38ba8 \
           >/dev/null 2>&1 || true
       fi
@@ -1019,12 +1028,16 @@ in
       done
       sleep 1
 
-      # Now blank.  This is the whole point of the key, and it is only safe to
-      # do after the locker is up: the external drops its HDMI link when the
-      # signal stops, and an output vanishing is exactly what killed hyprlock.
-      # swaylock is expected to survive that; if it does not, CTRL+ALT+L
-      # reattaches a locker and the display watchdog brings the screens back.
-      hyprctl dispatch dpms off >/dev/null 2>&1 || true
+      # Blank only if the locker is actually up.  Blanking a session that
+      # failed to lock would leave the machine unlocked behind a dark screen,
+      # which is far worse than not blanking at all.
+      if pgrep -x swaylock >/dev/null 2>&1; then
+        hyprctl dispatch dpms off >/dev/null 2>&1 || true
+      else
+        notify-send -a Display -i dialog-warning -t 6000 \
+          "Lock failed" "swaylock did not start; the screen was left on rather than blanked." \
+          >/dev/null 2>&1 || true
+      fi
 
       # NO `dpms off` here, and this is a safety matter rather than a
       # preference.  Blanking makes the external monitor drop its HDMI link
