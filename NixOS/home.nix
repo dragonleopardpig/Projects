@@ -1039,6 +1039,62 @@ in
     '';
   };
 
+  # Ctrl+Alt+Left/Right: step workspaces on the screen you are looking at.
+  #
+  # Neither of Hyprland's own relative forms does this on two monitors.  Plain
+  # `workspace +1` is global: from the external it immediately jumps focus to
+  # the laptop, and every new blank workspace gets created over there, so the
+  # screen in front of you never changes.  `m+1` is monitor-scoped but only
+  # cycles workspaces that monitor already has -- with one, it does nothing at
+  # all.  `emptym` picks an empty workspace wherever it lives, which was again
+  # the other screen.
+  #
+  # So: pick the next workspace that is already on this monitor, or failing
+  # that the lowest unused number, and pull it here.  Targets are either
+  # already on this screen or brand new, so nothing is ever swapped away from
+  # the other monitor -- which was the complaint about using
+  # focusworkspaceoncurrentmonitor for stepping in the first place.
+  home.file.".local/bin/ws-step" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+      dir="''${1:-next}"
+
+      mon=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')
+      cur=$(hyprctl activeworkspace -j | jq -r '.id')
+      mine=$(hyprctl workspaces -j | jq -r --arg m "$mon" \
+        '[.[] | select(.id > 0 and .monitor == $m) | .id] | sort | .[]')
+      all=$(hyprctl workspaces -j | jq -r '[.[] | select(.id > 0) | .id] | sort | .[]')
+
+      target=""
+      if [ "$dir" = next ]; then
+        for w in $mine; do
+          if [ "$w" -gt "$cur" ]; then target="$w"; break; fi
+        done
+        if [ -z "$target" ]; then
+          # Past the last one on this screen: take the lowest unused number
+          # ABOVE the current one, so repeated presses keep going forward.
+          # Counting from 1 instead made it fall back into a gap left by a
+          # workspace that had just been collected, and pressing right twice
+          # oscillated between two numbers rather than advancing.
+          n=$(( cur + 1 ))
+          while echo "$all" | grep -qx "$n"; do n=$(( n + 1 )); done
+          target="$n"
+        fi
+      else
+        for w in $mine; do
+          if [ "$w" -lt "$cur" ]; then target="$w"; fi
+        done
+        # Already at the first workspace on this screen: stay put rather than
+        # wrapping onto something the other monitor is showing.
+        if [ -z "$target" ]; then exit 0; fi
+      fi
+
+      hyprctl dispatch focusworkspaceoncurrentmonitor "$target" >/dev/null
+    '';
+  };
+
   home.file.".local/bin/display-cycle" = {
     executable = true;
     text = ''
@@ -2002,8 +2058,8 @@ in
           # numbering jumped, 1,2,3 turning into 1,2,4 as the vacated workspace
           # was destroyed.  Stepping leaves the other screen alone; focus just
           # follows the workspace to whichever monitor holds it.
-          "CTRL ALT, left, workspace, -1"
-          "CTRL ALT, right, workspace, +1"
+          "CTRL ALT, left, exec, ~/.local/bin/ws-step prev"
+          "CTRL ALT, right, exec, ~/.local/bin/ws-step next"
           "ALT, Tab, cyclenext, hist"
           "$mod, Tab, cyclenext, prev"
           # Pyprland
