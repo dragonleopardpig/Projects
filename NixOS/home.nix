@@ -1377,26 +1377,19 @@ in
   # session from starting at all.
   home.file.".config/uwsm/env-hyprland".text = ''
     _aq_pick() {
-      # Only safe while the built-in panel is out of the picture.  Rendering on
-      # the dGPU is not symmetric: Intel -> dGPU works (slowly), but dGPU ->
-      # Intel does not, and frames never reach the eDP -- it stalls with
-      # "drm: Cannot commit when a page-flip is awaiting" and freezes on its
-      # last image.  So force the render GPU only when the lid is already shut
-      # at login, or when there is no internal panel at all (a desktop).
-      _lid=open
-      for _l in /proc/acpi/button/lid/*/state; do
-        if [ -e "$_l" ]; then
-          case "$(cat "$_l" 2>/dev/null)" in *closed*) _lid=closed ;; esac
-        fi
-      done
-      _int=no
-      for _p in /sys/class/drm/card[0-9]*-*; do
-        [ -e "$_p/status" ] || continue
-        [ "$(cat "$_p/status" 2>/dev/null)" = connected ] || continue
-        case "''${_p##*/}" in *-eDP-*|*-LVDS-*|*-DSI-*) _int=yes ;; esac
-      done
-      if [ "$_int" = yes ] && [ "$_lid" != closed ]; then return 1; fi
-
+      # The trigger is simply "an external screen is attached at login", which
+      # the _ext search below already decides: no external, nothing is forced.
+      #
+      # This used to also require the lid to be shut, on the grounds that
+      # rendering on the dGPU is not symmetric -- Intel -> dGPU works (slowly),
+      # while dGPU -> Intel leaves the built-in panel frozen on its last image.
+      # That rule was unusable in practice: booting needs the lid open, the
+      # render device is fixed when the compositor starts, and closing the lid
+      # afterwards cannot change it -- so the fast path was never actually
+      # reached. Docking is what matters, not lid position.
+      #
+      # The cost is deliberate: while this is in force the built-in panel is
+      # not usable, and display-cycle refuses to switch to it and says so.
       _ext=""
       for _c in /sys/class/drm/card[0-9]*-*; do
         [ -e "$_c/status" ] || continue
@@ -1419,7 +1412,7 @@ in
     }
     _aq=$(_aq_pick 2>/dev/null) || _aq=""
     if [ -n "$_aq" ]; then export AQ_DRM_DEVICES="$_aq"; fi
-    unset _aq _c _d _n _ext _rest _l _p _lid _int
+    unset _aq _c _d _n _ext _rest
     unset -f _aq_pick
   '';
 
