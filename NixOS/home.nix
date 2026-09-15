@@ -1031,6 +1031,11 @@ in
       # visible screen to press F7 on to get back.  While the lid is shut and
       # an external is attached, the external is the only mode offered.
       # The glob simply does not match on a machine with no ACPI lid.
+      # Every output, captured before the guards below prune $internals.  The
+      # generated config must name them ALL: a monitor missing from that file
+      # falls back to Hyprland's default `auto` rule and comes back on.
+      all_mons="$internals $externals"
+
       lid=open
       for l in /proc/acpi/button/lid/*/state; do
         if [ -e "$l" ]; then
@@ -1220,7 +1225,7 @@ in
       mkdir -p "$(dirname "$conf")"
       {
         echo "# Written by display-cycle. Do not edit; it is rewritten on every mode change."
-        for m in $(echo "$internals" "$externals"); do
+        for m in $(echo $all_mons); do
           case " $(echo $want_on) " in
             *" $m "*)
               geo=$(hyprctl monitors -j | jq -r --arg m "$m" \
