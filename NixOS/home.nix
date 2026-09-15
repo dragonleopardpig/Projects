@@ -1077,6 +1077,44 @@ in
           name=''${name#*-}
           hyprctl keyword monitor "$name,highres,auto,auto" >/dev/null 2>&1 || true
         done
+        # Wait for the outputs to actually be up before dressing them.
+        i=0
+        while [ "$i" -lt 25 ]; do
+          [ "$(hyprctl monitors -j 2>/dev/null | jq 'length' 2>/dev/null)" != "0" ] && break
+          sleep 0.2
+          i=$(( i + 1 ))
+        done
+        sleep 1
+
+        # A screen that has just been switched on is bare: it gets an empty
+        # workspace, and AGS builds its bars once at startup so it has none
+        # either.  Coming back to nothing but wallpaper is barely better than
+        # coming back to nothing, so put a usable desktop on it.
+        paper=$(awww query 2>/dev/null | sed -n 's/.*currently displaying: image: //p' | head -n1)
+        if [ -n "$paper" ] && [ -f "$paper" ]; then
+          awww img "$paper" --transition-type none >/dev/null 2>&1 || true
+        fi
+
+        mon=$(hyprctl monitors -j 2>/dev/null | jq -r '.[0].name' 2>/dev/null)
+        ws=$(hyprctl clients -j 2>/dev/null \
+             | jq -r '[.[] | .workspace.id] | map(select(. > 0)) | sort | .[0] // empty' 2>/dev/null)
+        if [ -n "''${mon:-}" ] && [ -n "''${ws:-}" ]; then
+          hyprctl dispatch focusmonitor "$mon" >/dev/null 2>&1 || true
+          hyprctl dispatch focusworkspaceoncurrentmonitor "$ws" >/dev/null 2>&1 || true
+        fi
+
+        missing=no
+        for m in $(hyprctl monitors -j 2>/dev/null | jq -r '.[].name' 2>/dev/null); do
+          hyprctl layers -j 2>/dev/null \
+            | jq -e --arg m "$m" '(.[$m].levels["2"] // []) | map(.namespace) | index("gtk-layer-shell")' \
+              >/dev/null 2>&1 || missing=yes
+        done
+        if [ "$missing" = yes ] && pgrep -f 'ags\.js' >/dev/null 2>&1; then
+          ags quit >/dev/null 2>&1 || true
+          sleep 0.5
+          uwsm app -- ags run >/dev/null 2>&1 &
+        fi
+
         notify-send -a Display -i video-display -t 6000 \
           "Display rescued" "No screen was enabled; everything attached was switched back on." \
           >/dev/null 2>&1 || true
