@@ -1018,16 +1018,16 @@ in
       done
       sleep 1
 
-      hyprctl dispatch dpms off >/dev/null 2>&1 || true
-
-      # Insurance: if the locker still brought an output back as it finished
-      # coming up, blank once more.  Deliberately a single retry and not a
-      # loop -- repeatedly re-blanking would also fight the keypress that is
-      # meant to wake the screen to type the password.
-      sleep 1.5
-      if [ "$(hyprctl monitors -j 2>/dev/null | jq -r '[.[].dpmsStatus] | any' 2>/dev/null)" = true ]; then
-        hyprctl dispatch dpms off >/dev/null 2>&1 || true
-      fi
+      # NO `dpms off` here, and this is a safety matter rather than a
+      # preference.  Blanking makes the external monitor drop its HDMI link
+      # (confirmed: `drm: Got a hotplug event for /dev/dri/card1`, and the
+      # monitor list briefly goes empty).  The output disappearing underneath
+      # hyprlock takes down its Wayland dispatch thread -- it aborts, from
+      # CHyprlock::run's fatal path -- which leaves the session locked with a
+      # dead locker and no way back in.  That cost a forced reboot.
+      #
+      # Until the monitor stops dropping its link (its own auto-source-detect
+      # / deep-sleep setting is the suspect), locking must not blank.
     '';
   };
 
@@ -2468,11 +2468,16 @@ in
         timeout = 900;
         on-timeout = "hyprlock";
       }
-      {
-        timeout = 1200;
-        on-timeout = "hyprctl dispatch dpms off";
-        on-resume = "hyprctl dispatch dpms on";
-      }
+      # Idle blanking is disabled for the same reason F1 no longer blanks: the
+      # external monitor drops its link when the signal stops, and the output
+      # vanishing underneath hyprlock aborts it, stranding the session behind a
+      # dead lock screen.  Walking away for 20 minutes would have been enough.
+      # Restore this once the monitor is confirmed to hold its link.
+      # {
+      #   timeout = 1200;
+      #   on-timeout = "hyprctl dispatch dpms off";
+      #   on-resume = "hyprctl dispatch dpms on";
+      # }
     ];
   };
 
