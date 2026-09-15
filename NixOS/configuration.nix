@@ -625,6 +625,15 @@ in
   
   # Enable sound with pipewire.
   services.pulseaudio.enable = false;
+  # Full Magic SysRq.  The default here was 16 (sync only), which left no way
+  # out when a session lock's client died: the lock cannot be dismissed, there
+  # was no getty to reach and no sshd, so the only option was the power button.
+  # With this, Alt+SysRq+R takes the keyboard out of raw mode -- which is what
+  # a compositor holding an input grab breaks -- and REISUB shuts down cleanly
+  # instead of cutting power under a mounted filesystem.  It needs physical
+  # keyboard access, which on a laptop is no weaker than the power button.
+  boot.kernel.sysctl."kernel.sysrq" = 1;
+
   # Give hyprlock its own PAM stack.  Without one it falls back to `su`, whose
   # auth chain carries pam_rootok, pam_faillock and pam_xauth -- none of which
   # belong in a screen locker -- and the failures show up in the log as
