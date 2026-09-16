@@ -2575,11 +2575,15 @@ in
     enable = true;
     layout = [
       { label = "lock";     action = "~/.local/bin/lock-and-blank"; text = "Lock";     keybind = "l"; }
-      { label = "logout";   action = "hyprctl dispatch exit"; text = "Logout";     keybind = "e"; }
-      { label = "suspend";  action = "systemctl suspend";     text = "Suspend";     keybind = "s"; }
-      { label = "reboot";   action = "systemctl reboot";      text = "Reboot";     keybind = "r"; }
-      { label = "shutdown"; action = "systemctl poweroff";    text = "Shutdown";     keybind = "p"; }
-      { label = "hibernate"; action = "systemctl hibernate";    text = "Hibernate"; keybind = "h"; }
+      # Each action logs before it acts.  When Shutdown appeared to do nothing
+      # there was no way to tell whether the button had fired at all or whether
+      # systemctl had refused, and that ambiguity cost a lot of guessing.  A
+      # `journalctl -t wlogout` now answers it outright.
+      { label = "logout";   action = "logger -t wlogout logout; hyprctl dispatch exit"; text = "Logout";     keybind = "e"; }
+      { label = "suspend";  action = "logger -t wlogout suspend; systemctl suspend";     text = "Suspend";     keybind = "s"; }
+      { label = "reboot";   action = "logger -t wlogout reboot; systemctl reboot";      text = "Reboot";     keybind = "r"; }
+      { label = "shutdown"; action = "logger -t wlogout shutdown; systemctl poweroff";    text = "Shutdown";     keybind = "p"; }
+      { label = "hibernate"; action = "logger -t wlogout hibernate; systemctl hibernate";    text = "Hibernate"; keybind = "h"; }
     ];
     style = let
       icons = "${pkgs.wlogout}/share/wlogout/icons";
