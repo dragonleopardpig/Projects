@@ -5,7 +5,7 @@ import AstalNetwork from "gi://AstalNetwork"
 import AstalBluetooth from "gi://AstalBluetooth"
 import AstalPowerProfiles from "gi://AstalPowerProfiles"
 import { ICON } from "../lib/icons"
-import { WEATHER_CMD } from "../lib/paths"
+import { WEATHER_CMD, DISPLAY_SCALE_CMD } from "../lib/paths"
 
 // ── Audio card ────────────────────────────────────────────────────
 function AudioCard() {
@@ -93,6 +93,62 @@ function BrightnessCard() {
                 }}
             />
             <label widthChars={4} label={brightness().as(v => `${Math.round(v * 100)}%`)} />
+        </box>
+    </box>
+}
+
+// ── Display scale card ────────────────────────────────────────────
+// Windows-style display scaling for the focused monitor: the panel keeps its
+// native resolution and everything is drawn larger, so text gets bigger and
+// stays sharp instead of being upscaled.
+//
+// The slider moves over the steps that are VALID for that panel rather than a
+// continuous range. Hyprland only accepts a scale dividing the screen into
+// whole pixels -- 1.75 is fine on many monitors but not on 3840x2160 -- and a
+// free-running slider would keep producing values it refuses. display-scale
+// also snaps whatever it is given onto a valid step, so even if the focused
+// monitor changes under the card, nothing invalid can reach the compositor.
+function scaleSteps(): number[] {
+    try {
+        return exec(`${DISPLAY_SCALE_CMD} steps`).trim().split("\n")
+            .map(Number).filter(n => n > 0)
+    } catch { return [] }
+}
+
+function currentScale(): number {
+    try { return Number(exec(`${DISPLAY_SCALE_CMD} get`)) || 1 } catch { return 1 }
+}
+
+function ScaleCard() {
+    const steps = scaleSteps()
+    if (steps.length < 2) return <box />
+
+    const nearest = (v: number) => {
+        let best = 0
+        for (let i = 1; i < steps.length; i++)
+            if (Math.abs(steps[i] - v) < Math.abs(steps[best] - v)) best = i
+        return best
+    }
+    const idx = Variable(nearest(currentScale()))
+
+    return <box className="Card" vertical spacing={4}>
+        <label className="CardTitle" label="Display scale" xalign={0} />
+        <box spacing={8}>
+            <label label="Aa" />
+            <slider
+                hexpand
+                min={0}
+                max={steps.length - 1}
+                step={1}
+                value={bind(idx)}
+                onDragged={({ value }) => {
+                    const i = Math.max(0, Math.min(steps.length - 1, Math.round(value)))
+                    if (i === idx.get()) return
+                    idx.set(i)
+                    execAsync([DISPLAY_SCALE_CMD, "set", String(steps[i])]).catch(() => {})
+                }}
+            />
+            <label widthChars={5} label={bind(idx).as(i => `${Math.round(steps[i] * 100)}%`)} />
         </box>
     </box>
 }
@@ -682,6 +738,7 @@ export default function ControlCenter() {
             <AudioCard />
             <MicCard />
             <BrightnessCard />
+            <ScaleCard />
             <NetworkCard />
             <BluetoothCard />
             <PowerProfileCard />

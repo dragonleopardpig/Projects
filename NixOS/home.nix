@@ -347,6 +347,9 @@ in
     mkdir -p $out/lib
     cat > $out/lib/paths.ts <<'TS'
     export const HOST = "${osConfig.networking.hostName}";
+    // Per-monitor display scaling (Windows-style). Absolute, so it does not
+    // depend on the bar inheriting ~/.local/bin on PATH.
+    export const DISPLAY_SCALE_CMD = "${config.home.homeDirectory}/.local/bin/display-scale";
     export const WEATHER_CMD =
         "${pkgs.curl}/bin/curl -sf 'https://wttr.in/Singapore?format=%c+%t'";
     // Detailed forecast fetcher for the Weather popup; emits slim JSON.
@@ -1192,6 +1195,94 @@ in
     '';
   };
 
+  # Per-monitor scaling -- the equivalent of Windows' display scaling.  The
+  # panel keeps its native resolution and everything is drawn larger, so text
+  # is bigger AND sharp, rather than a lower resolution upscaled into a blur.
+  #
+  # Hyprland only accepts a scale that divides the panel into whole pixels, so
+  # the available steps are computed per monitor rather than assumed: 1.75 is
+  # valid on plenty of screens but not on 3840x2160, and offering it would just
+  # produce a config error.  The chosen value is remembered per connector so a
+  # display-mode change does not quietly reset it.
+  home.file.".local/bin/display-scale" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      state="''${XDG_STATE_HOME:-$HOME/.local/state}/hypr-monitor-scale"
+      mkdir -p "$state"
+
+      mon="''${2:-}"
+      if [ -z "$mon" ]; then
+        mon=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')
+      fi
+      [ -n "$mon" ] || exit 0
+
+      geom=$(hyprctl monitors all -j | jq -r --arg m "$mon" \
+        '[.[] | select(.name == $m)][0] | "\(.width) \(.height)"')
+      w=''${geom%% *}; h=''${geom##* }
+
+      # Only scales that divide BOTH dimensions into whole pixels.
+      steps() {
+        for c in 1.00 1.20 1.25 1.50 1.60 2.00 2.50 3.00; do
+          awk -v w="$w" -v h="$h" -v s="$c" 'BEGIN {
+            lw = w / s; lh = h / s
+            dw = lw - int(lw); dh = lh - int(lh)
+            if ((dw < 0.0001 || dw > 0.9999) && (dh < 0.0001 || dh > 0.9999)) print s
+          }'
+        done
+      }
+
+      nearest() {  # snap an arbitrary request onto the nearest valid step
+        steps | awk -v want="$1" 'BEGIN { best = ""; bd = 1e9 }
+          { d = $1 - want; if (d < 0) d = -d; if (d < bd) { bd = d; best = $1 } }
+          END { print best }'
+      }
+
+      current() {
+        hyprctl monitors -j | jq -r --arg m "$mon" \
+          '[.[] | select(.name == $m)][0].scale // 1'
+      }
+
+      apply() {
+        pos=$(hyprctl monitors -j | jq -r --arg m "$mon" \
+          '[.[] | select(.name == $m)][0] | "\(.x)x\(.y)"')
+        [ -n "$pos" ] && [ "$pos" != null ] || pos=auto
+        hyprctl keyword monitor "$mon,highres,$pos,$1" >/dev/null 2>&1 || true
+        printf '%s\n' "$1" > "$state/$mon"
+        notify-send -a Display -i video-display -t 1500 \
+          "$(awk -v s="$1" 'BEGIN { printf "%d%% scale", s * 100 }')" "$mon" \
+          >/dev/null 2>&1 || true
+      }
+
+      step_by() {  # $1 = +1 or -1
+        cur=$(current)
+        list=$(steps)
+        idx=$(printf '%s\n' "$list" | awk -v c="$cur" '
+          { d = $1 - c; if (d < 0) d = -d; if (d < 0.01) { print NR; exit } }')
+        [ -n "''${idx:-}" ] || idx=$(printf '%s\n' "$list" | wc -l)
+        n=$(( idx + $1 ))
+        total=$(printf '%s\n' "$list" | wc -l)
+        [ "$n" -ge 1 ] || n=1
+        [ "$n" -le "$total" ] || n=$total
+        apply "$(printf '%s\n' "$list" | sed -n "''${n}p")"
+      }
+
+      case "''${1:-get}" in
+        get)    current ;;
+        percent) awk -v s="$(current)" 'BEGIN { printf "%d\n", s * 100 }' ;;
+        steps)  steps ;;
+        up)     step_by 1 ;;
+        down)   step_by -1 ;;
+        set)    [ -n "''${2:-}" ] || exit 2
+                want=$2; mon=''${3:-$mon}; apply "$(nearest "$want")" ;;
+        *)      echo "usage: display-scale {get|percent|steps|up|down|set <scale>} [monitor]" >&2
+                exit 2 ;;
+      esac
+    '';
+  };
+
   home.file.".local/bin/display-cycle" = {
     executable = true;
     text = ''
@@ -1319,7 +1410,23 @@ in
       # Override with DISPLAY_CYCLE_EXTERNAL_SIDE=auto-down|auto-left|auto-right
       # if the monitor ever moves.
       side="''${DISPLAY_CYCLE_EXTERNAL_SIDE:-auto-up}"
-      on()  { hyprctl keyword monitor "$1,highres,auto,auto" >/dev/null; }
+      # Honour the per-monitor scale chosen with display-scale.  Without this
+      # every mode change and every config reload re-applied `auto` and threw
+      # the choice away -- which is what made 150% on the 4K screen not stick.
+      # A very high-density panel with no choice recorded gets 1.5 rather than
+      # 1.0, because 4K at 100% is unreadable on a desk-sized monitor.
+      scale_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/hypr-monitor-scale"
+      scale_for() {
+        if [ -s "$scale_dir/$1" ]; then cat "$scale_dir/$1"; return; fi
+        sw=$(hyprctl monitors all -j | jq -r --arg m "$1" \
+          '[.[] | select(.name == $m)][0].width // 0')
+        case "''${sw:-0}" in
+          ""|*[!0-9]*) echo auto ;;
+          *) if [ "$sw" -ge 3840 ]; then echo 1.5; else echo auto; fi ;;
+        esac
+      }
+
+      on()  { hyprctl keyword monitor "$1,highres,auto,$(scale_for "$1")" >/dev/null; }
       off() { hyprctl keyword monitor "$1,disable" >/dev/null; }
 
       # Switch every output the target mode needs ON before turning any OFF, so
@@ -1408,7 +1515,7 @@ in
             auto-right) pos="$(( iw + x ))x0"   ;;
             *)          pos="''${x}x-''${h}"      ;;  # auto-up: bottom edge on y=0
           esac
-          hyprctl keyword monitor "$m,highres,$pos,auto" >/dev/null
+          hyprctl keyword monitor "$m,highres,$pos,$(scale_for "$m")" >/dev/null
           x=$(( x + w ))
         done
       fi
@@ -1422,7 +1529,7 @@ in
           extend|mirror) case "$ext_list" in *" $m "*) skip=yes ;; esac ;;
         esac
         if [ "$skip" = yes ]; then continue; fi
-        hyprctl keyword monitor "$m,highres,''${x}x0,auto" >/dev/null
+        hyprctl keyword monitor "$m,highres,''${x}x0,$(scale_for "$m")" >/dev/null
         x=$(( x + $(logical "$m" w) ))
       done
 
@@ -1441,7 +1548,7 @@ in
       # and stuck the cycle one mode behind.
       if [ "$next" = mirror ]; then
         for m in $externals; do
-          hyprctl keyword monitor "$m,highres,auto,auto,mirror,$primary" >/dev/null
+          hyprctl keyword monitor "$m,highres,auto,$(scale_for "$m"),mirror,$primary" >/dev/null
         done
         sleep 1
         # Verify it actually took.  When the panels share no common mode the
