@@ -1036,12 +1036,19 @@ in
       done
       sleep 1
 
-      # Blank only if the locker is actually up.  Blanking a session that
-      # failed to lock would leave the machine unlocked behind a dark screen,
-      # which is far worse than not blanking at all.
-      if pgrep -f '[s]waylock' >/dev/null 2>&1; then
-        hyprctl dispatch dpms off >/dev/null 2>&1 || true
-      else
+      # BLANKING IS DISABLED, and this time it is a kernel problem rather than
+      # a locker one.  Blanking makes the external drop its HDMI link, the
+      # resulting ACPI notification reaches the NVIDIA driver, and the driver
+      # deadlocks in the kernel:
+      #
+      #   INFO: task kworker blocked on an rw-semaphore
+      #     rmapiLockAcquire / RmUnixRmApiPrologue / rm_acpi_notify [nvidia]
+      #     acpi_ev_notify_dispatch
+      #
+      # With the GPU driver wedged nothing can wake the screen, logind cannot
+      # even be killed, and the only way out is the power button -- with the
+      # filesystem mounted.  A dark screen on lock is not worth that.
+      if ! pgrep -f '[s]waylock' >/dev/null 2>&1; then
         notify-send -a Display -i dialog-warning -t 6000 \
           "Lock failed" "swaylock did not start; the screen was left on rather than blanked." \
           >/dev/null 2>&1 || true
@@ -1213,8 +1220,20 @@ in
       state="''${XDG_STATE_HOME:-$HOME/.local/state}/hypr-monitor-scale"
       mkdir -p "$state"
 
-      mon="''${2:-}"
-      if [ -z "$mon" ]; then
+      # Parse the monitor per subcommand.  `set` takes the value in $2 and the
+      # monitor in $3; everything else takes the monitor in $2.  Reading $2 as
+      # the monitor unconditionally meant `display-scale set 1.25` treated
+      # "1.25" as a connector name, looked up a monitor that does not exist and
+      # sent Hyprland `monitor 1.25,highres,nullxnull,1.25` -- so the slider
+      # moved and nothing happened.  Passing a monitor explicitly, as the
+      # tests did, hid it.
+      cmd="''${1:-get}"
+      want=""
+      case "$cmd" in
+        set) want="''${2:-}"; mon="''${3:-}" ;;
+        *)   mon="''${2:-}" ;;
+      esac
+      if [ -z "''${mon:-}" ]; then
         mon=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')
       fi
       [ -n "$mon" ] || exit 0
@@ -1246,9 +1265,11 @@ in
       }
 
       apply() {
+        # Refuse anything that would put a malformed rule in front of Hyprland.
+        case "''${1:-}" in ""|*[!0-9.]*) return 0 ;; esac
         pos=$(hyprctl monitors -j | jq -r --arg m "$mon" \
           '[.[] | select(.name == $m)][0] | "\(.x)x\(.y)"')
-        [ -n "$pos" ] && [ "$pos" != null ] || pos=auto
+        case "$pos" in ""|*null*) pos=auto ;; esac
         hyprctl keyword monitor "$mon,highres,$pos,$1" >/dev/null 2>&1 || true
         printf '%s\n' "$1" > "$state/$mon"
         notify-send -a Display -i video-display -t 1500 \
@@ -1269,14 +1290,17 @@ in
         apply "$(printf '%s\n' "$list" | sed -n "''${n}p")"
       }
 
-      case "''${1:-get}" in
+      case "$cmd" in
         get)    current ;;
         percent) awk -v s="$(current)" 'BEGIN { printf "%d\n", s * 100 }' ;;
         steps)  steps ;;
         up)     step_by 1 ;;
         down)   step_by -1 ;;
-        set)    [ -n "''${2:-}" ] || exit 2
-                want=$2; mon=''${3:-$mon}; apply "$(nearest "$want")" ;;
+        set)    # Validate before snapping: awk reads a non-numeric argument as 0,
+                # which nearest() then rounds to the smallest step, so a typo
+                # silently set the display to 100% instead of being refused.
+                case "$want" in ""|*[!0-9.]*) exit 2 ;; esac
+                apply "$(nearest "$want")" ;;
         *)      echo "usage: display-scale {get|percent|steps|up|down|set <scale>} [monitor]" >&2
                 exit 2 ;;
       esac
@@ -2736,11 +2760,13 @@ in
       # swaylock survives that, and blanking on lock is confirmed working.
       # Leaving it off was also a regression for the other laptops, which never
       # had the problem and were losing idle blanking for no reason.
-      {
-        timeout = 1200;
-        on-timeout = "hyprctl dispatch dpms off";
-        on-resume = "hyprctl dispatch dpms on";
-      }
+      # Disabled again: see the kernel deadlock described in lock-and-blank.
+      # Walking away for 20 minutes would trip exactly the same NVIDIA hang.
+      # {
+      #   timeout = 1200;
+      #   on-timeout = "hyprctl dispatch dpms off";
+      #   on-resume = "hyprctl dispatch dpms on";
+      # }
     ];
   };
 
