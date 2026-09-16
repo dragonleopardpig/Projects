@@ -2624,16 +2624,16 @@ in
         timeout = 900;
         on-timeout = "~/.local/bin/lock-and-blank";
       }
-      # Idle blanking is disabled for the same reason F1 no longer blanks: the
-      # external monitor drops its link when the signal stops, and the output
-      # vanishing underneath hyprlock aborts it, stranding the session behind a
-      # dead lock screen.  Walking away for 20 minutes would have been enough.
-      # Restore this once the monitor is confirmed to hold its link.
-      # {
-      #   timeout = 1200;
-      #   on-timeout = "hyprctl dispatch dpms off";
-      #   on-resume = "hyprctl dispatch dpms on";
-      # }
+      # Re-enabled.  This was disabled while hyprlock was the locker, because
+      # an output vanishing underneath it aborted it and stranded the session;
+      # swaylock survives that, and blanking on lock is confirmed working.
+      # Leaving it off was also a regression for the other laptops, which never
+      # had the problem and were losing idle blanking for no reason.
+      {
+        timeout = 1200;
+        on-timeout = "hyprctl dispatch dpms off";
+        on-resume = "hyprctl dispatch dpms on";
+      }
     ];
   };
 
