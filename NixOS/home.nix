@@ -2346,6 +2346,16 @@ in
         no_hardware_cursors = true;
       };
 
+      xwayland = {
+        # Under a fractional monitor scale Hyprland draws X11 clients at 1x
+        # and stretches them, which blurred KrakenOS (Tk has no Wayland
+        # backend).  With this, X11 clients get the monitor's native pixels
+        # and are left to scale themselves: KrakenOS does so via
+        # KRAKEN_UI_SCALE, which its devenv derives from the focused
+        # monitor's scale.  A no-op on monitors at scale 1.
+        force_zero_scaling = true;
+      };
+
       # Keep 1 and 2 alive so the numbering does not grow holes when an empty
       # workspace is collected.  Static, and deliberately not pinned to a
       # particular monitor -- naming connectors here is what a portable image
