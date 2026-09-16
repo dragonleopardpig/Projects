@@ -56,9 +56,9 @@ in
 
   xdg.desktopEntries.sioyek-xcb = {
     name = "Sioyek";
-    exec = "/home/thinky/.local/bin/sioyek-xcb %f";
+    exec = "/home/thinky/.local/bin/sioyek-xcb --new-window %f";
     icon = "sioyek";
-    comment = "Sioyek document viewer (XWayland)";
+    comment = "Sioyek document viewer in a separate window (XWayland)";
     # Sioyek renders through MuPDF, so EPUB is native -- no conversion involved.
     # It has to be declared here or Sioyek never appears as a choice for one.
     mimeType = [
