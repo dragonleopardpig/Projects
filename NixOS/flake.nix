@@ -41,6 +41,8 @@
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
     let
       localOverlay = final: prev: {
+        opencadstudio = final.callPackage ./packages/opencadstudio.nix { };
+
         # Minder fork with local image-to-LaTeX recognition and inline Pango
         # formula shapes.  The non-flake input keeps the exact source revision
         # in flake.lock while allowing the fork to retain its upstream build.

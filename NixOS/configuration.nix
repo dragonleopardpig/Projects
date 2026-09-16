@@ -872,6 +872,7 @@ in
     formulaocr-offline         # Local PP-FormulaNet image-to-LaTeX recognition for Minder
 
     # ── CAD & Engineering ──
+    opencadstudio              # DWG/DXF 2D and 3D CAD application
     librecad                   # 2D CAD application
     freecad                    # 3D parametric CAD modeler
     openscad
