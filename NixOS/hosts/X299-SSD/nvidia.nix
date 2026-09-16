@@ -42,6 +42,28 @@
     nvidiaSettings = true;
   };
 
+  # Turn NVIDIA's fbdev emulation OFF.  nixpkgs adds `nvidia-drm.fbdev=1`
+  # unconditionally once modesetting is on and the driver is >= 545, and on
+  # this machine that parameter is what makes blanking wedge the kernel:
+  # `hyprctl dispatch dpms off` goes through the fbdev helper, which takes the
+  # RM lock and never returns it --
+  #
+  #   drm_fb_helper_pan_display
+  #     nv_drm_atomic_apply_modeset_config
+  #       nvSetDispModeEvo          <- holds the RM lock
+  #
+  # with the ACPI worker and logind stacking up behind it.  Nothing can bring
+  # the screen back and the only way out is the power button with the
+  # filesystem mounted; that cost two forced reboots, and is why lock-and-blank
+  # in home.nix stopped blanking at all.
+  #
+  # mkAfter, not mkForce: forcing this list would delete everything the nvidia
+  # module itself contributes (modeset, the suspend notifiers).  Duplicate
+  # module parameters are applied left to right, so the later 0 is the one that
+  # takes effect -- verify with /sys/module/nvidia_drm/parameters/fbdev, not by
+  # reading the command line.
+  boot.kernelParams = lib.mkAfter [ "nvidia-drm.fbdev=0" ];
+
   # PRIME offload/sync are deliberately not configured: they need per-machine
   # PCI bus IDs, which would defeat the point of a portable image, and they are
   # X11 constructs.  Hyprland drives both GPUs natively on Wayland.
