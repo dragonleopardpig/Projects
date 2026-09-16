@@ -1272,6 +1272,8 @@ in
         case "$pos" in ""|*null*) pos=auto ;; esac
         hyprctl keyword monitor "$mon,highres,$pos,$1" >/dev/null 2>&1 || true
         printf '%s\n' "$1" > "$state/$mon"
+        # X11 clients do not follow a Wayland scale; push the matching DPI.
+        ~/.local/bin/xwayland-dpi || true
         notify-send -a Display -i video-display -t 1500 \
           "$(awk -v s="$1" 'BEGIN { printf "%d%% scale", s * 100 }')" "$mon" \
           >/dev/null 2>&1 || true
@@ -1304,6 +1306,30 @@ in
         *)      echo "usage: display-scale {get|percent|steps|up|down|set <scale>} [monitor]" >&2
                 exit 2 ;;
       esac
+    '';
+  };
+
+  # X11 has exactly one, global DPI.  XWayland hands every X11 client the
+  # monitor's native pixels (xwayland:force_zero_scaling, set below) at a fixed
+  # 96 DPI, so on a scaled monitor an X11 app is drawn 1/scale the size of
+  # everything around it -- measured: Nemo at 96 DPI beside Wayland apps at
+  # 125%.  Xft.dpi is what GTK and Qt read to scale themselves, and GTK re-reads
+  # it live from RESOURCE_MANAGER, so running apps follow.  Tk ignores it
+  # entirely (also measured), which is why KrakenOS needs KRAKEN_UI_SCALE.
+  #
+  # With several monitors at different scales there is no right answer -- X11
+  # cannot express per-output DPI -- so the focused monitor wins.
+  home.file.".local/bin/xwayland-dpi" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+      command -v xrdb >/dev/null 2>&1 || exit 0
+      scale=$(hyprctl monitors -j 2>/dev/null \
+        | jq -r '[.[] | select(.focused)][0].scale // empty')
+      case "''${scale:-}" in ""|*[!0-9.]*) exit 0 ;; esac
+      dpi=$(awk -v s="$scale" 'BEGIN { printf "%d", 96 * s + 0.5 }')
+      printf 'Xft.dpi: %s\n' "$dpi" | xrdb -merge >/dev/null 2>&1 || true
     '';
   };
 
@@ -1437,8 +1463,9 @@ in
       # Honour the per-monitor scale chosen with display-scale.  Without this
       # every mode change and every config reload re-applied `auto` and threw
       # the choice away -- which is what made 150% on the 4K screen not stick.
-      # A very high-density panel with no choice recorded gets 1.5 rather than
-      # 1.0, because 4K at 100% is unreadable on a desk-sized monitor.
+      # A very high-density panel with no choice recorded gets 1.25 rather
+      # than 1.0, because 4K at 100% is unreadable on a desk-sized monitor.
+      # 1.25 over 1.5: measured on the 32" ASUS, 1.5 was bigger than wanted.
       scale_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/hypr-monitor-scale"
       scale_for() {
         if [ -s "$scale_dir/$1" ]; then cat "$scale_dir/$1"; return; fi
@@ -1446,7 +1473,7 @@ in
           '[.[] | select(.name == $m)][0].width // 0')
         case "''${sw:-0}" in
           ""|*[!0-9]*) echo auto ;;
-          *) if [ "$sw" -ge 3840 ]; then echo 1.5; else echo auto; fi ;;
+          *) if [ "$sw" -ge 3840 ]; then echo 1.25; else echo auto; fi ;;
         esac
       }
 
@@ -1593,6 +1620,12 @@ in
             "Display: Duplicate unavailable" "These screens share no common mode -- extended instead."
         fi
       fi
+
+      # The scale may have changed with the mode (a monitor coming back gets
+      # scale_for), and X11 clients cannot see a Wayland scale.  `exec` runs
+      # `display-cycle relayout` at login and on every reload, so this is also
+      # what gives a fresh session its DPI.
+      ~/.local/bin/xwayland-dpi || true
 
       # awww does not re-render when outputs come and go: it can drop the
       # background layer entirely (`awww query` goes empty), leaving the panel
