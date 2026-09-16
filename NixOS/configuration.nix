@@ -864,6 +864,7 @@ in
     viu                        # Terminal image viewer (Unicode)
 
     # ── Office & Documents ──
+    libreoffice                # Office suite
     texliveFull                # Full TeX/LaTeX distribution
     hugo                       # Static site generator
     glow                       # Terminal markdown previewer
