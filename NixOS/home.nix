@@ -1325,11 +1325,25 @@ in
       #!/usr/bin/env bash
       set -eu
       command -v xrdb >/dev/null 2>&1 || exit 0
-      scale=$(hyprctl monitors -j 2>/dev/null \
-        | jq -r '[.[] | select(.focused)][0].scale // empty')
-      case "''${scale:-}" in ""|*[!0-9.]*) exit 0 ;; esac
-      dpi=$(awk -v s="$scale" 'BEGIN { printf "%d", 96 * s + 0.5 }')
-      printf 'Xft.dpi: %s\n' "$dpi" | xrdb -merge >/dev/null 2>&1 || true
+
+      sync_dpi() {
+        scale=$(hyprctl monitors -j 2>/dev/null \
+          | jq -r '[.[] | select(.focused)][0].scale // empty')
+        case "''${scale:-}" in ""|*[!0-9.]*) return 0 ;; esac
+        dpi=$(awk -v s="$scale" 'BEGIN { printf "%d", 96 * s + 0.5 }')
+        printf 'Xft.dpi: %s\n' "$dpi" | xrdb -merge >/dev/null 2>&1
+      }
+
+      if ! sync_dpi; then
+        # Xwayland comes up about two seconds after the compositor (measured
+        # from process start times), while Hyprland runs `exec` as it parses
+        # the config -- so at login this can fire before anything is listening
+        # and the resource is simply lost, leaving every X11 app 1/scale too
+        # small.  Keep trying, detached so no caller ever waits, and re-read
+        # the scale each round so a late retry cannot reinstate a stale value.
+        ( for _ in $(seq 20); do sleep 1; sync_dpi && break; done ) \
+          >/dev/null 2>&1 &
+      fi
     '';
   };
 
