@@ -326,6 +326,19 @@ window.ControlCenterWindow {
     .ApRefresh:hover { color: #ff69b4; }
 
     /* ── Power profile selector (PowerProfileCard) ────────────── */
+    /* Scale stepper: a small square nudge button at each end of the display
+       scale slider. The slider only has a handful of valid stops, so dragging
+       it precisely is fiddly and these do one step at a time. */
+    button.ScaleStep {
+        min-width: 20px;
+        min-height: 20px;
+        padding: 0 4px;
+        border-radius: 4px;
+        color: #00ffff;
+        font-weight: bold;
+    }
+    button.ScaleStep:hover { background: rgba(255, 105, 180, 0.15); color: #ff69b4; }
+
     button.PowerOpt {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 8px;

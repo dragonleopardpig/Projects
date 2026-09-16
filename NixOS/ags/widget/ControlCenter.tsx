@@ -131,23 +131,41 @@ function ScaleCard() {
     }
     const idx = Variable(nearest(currentScale()))
 
+    const setStep = (i: number) => {
+        const n = Math.max(0, Math.min(steps.length - 1, i))
+        if (n === idx.get()) return
+        idx.set(n)
+        execAsync([DISPLAY_SCALE_CMD, "set", String(steps[n])]).catch(() => {})
+    }
+
     return <box className="Card" vertical spacing={4}>
         <label className="CardTitle" label="Display scale" xalign={0} />
         <box spacing={8}>
             <label label="Aa" />
+            {/* The slider snaps between valid steps rather than sliding freely,
+                because Hyprland refuses a scale that does not divide the panel
+                into whole pixels.  With only a handful of steps, dragging is
+                fiddly, so there is a button at each end to nudge one step. */}
+            <button
+                className="ScaleStep"
+                tooltipText="Smaller"
+                onClicked={() => setStep(idx.get() - 1)}>
+                <label label="−" />
+            </button>
             <slider
                 hexpand
                 min={0}
                 max={steps.length - 1}
                 step={1}
                 value={bind(idx)}
-                onDragged={({ value }) => {
-                    const i = Math.max(0, Math.min(steps.length - 1, Math.round(value)))
-                    if (i === idx.get()) return
-                    idx.set(i)
-                    execAsync([DISPLAY_SCALE_CMD, "set", String(steps[i])]).catch(() => {})
-                }}
+                onDragged={({ value }) => setStep(Math.round(value))}
             />
+            <button
+                className="ScaleStep"
+                tooltipText="Larger"
+                onClicked={() => setStep(idx.get() + 1)}>
+                <label label="+" />
+            </button>
             <label widthChars={5} label={bind(idx).as(i => `${Math.round(steps[i] * 100)}%`)} />
         </box>
     </box>
