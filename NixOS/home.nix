@@ -992,6 +992,52 @@ in
   # asks the compositor what is actually attached.  With no built-in panel
   # (the X299 desktop) there is nothing to cycle, so F7/F8 keep their old job
   # of flipping that monitor's DDC/CI input source between machines.
+  # Blank every screen until the next key press, without the machine going to
+  # sleep underneath.  A bare `hyprctl dispatch dpms off` is not safe on a
+  # laptop with its lid shut: the NVIDIA driver reports a DPMS-off connector as
+  # disabled, so logind stops counting the external as docked and applies
+  # HandleLidSwitch=suspend.  Measured on the Predator: logind's Docked went
+  # true -> false during a blank, and the machine suspended nine seconds later.
+  # A handle-lid-switch inhibitor held for exactly as long as a screen is dark
+  # leaves the lid policy otherwise untouched.
+  home.file.".local/bin/blank-screen" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      # $1 = any | all: is at least one / every enabled output dark?
+      dark() {
+        hyprctl monitors -j 2>/dev/null \
+          | jq -e --arg q "$1" \
+              'length > 0 and (if $q == "all" then all(.[]; .dpmsStatus == false)
+                               else any(.[]; .dpmsStatus == false) end)' \
+          >/dev/null 2>&1
+      }
+
+      # Runs under the inhibitor (see below).  Polls because nothing announces
+      # that the screens came back; a failing hyprctl (compositor gone) also
+      # ends the loop, releasing the lid rather than holding it forever.
+      if [ "''${1:-}" = --hold ]; then
+        hyprctl dispatch dpms off >/dev/null
+        sleep 1
+        while dark any; do sleep 1; done
+        exit 0
+      fi
+
+      # Already dark -- F1 twice, or the idle blank after a lock.
+      if dark all; then exit 0; fi
+
+      # The inhibitor is taken BEFORE anything goes dark, and if it cannot be
+      # taken systemd-inhibit never runs the command: the failure mode is a
+      # screen left on, never a laptop asleep.
+      exec systemd-inhibit --what=handle-lid-switch --mode=block \
+        --who=blank-screen \
+        --why="Screens blanked; the external monitor is still in use" \
+        "$0" --hold
+    '';
+  };
+
   # F1: lock the session and blank the screens.
   #
   # The order matters, and it used to be backwards: `dpms off && hyprlock`
@@ -1036,34 +1082,21 @@ in
       done
       sleep 1
 
-      # BLANKING IS DISABLED, and this time it is a kernel problem rather than
-      # a locker one.  Blanking makes the external drop its HDMI link, the
-      # resulting ACPI notification reaches the NVIDIA driver, and the driver
-      # deadlocks in the kernel:
-      #
-      #   INFO: task kworker blocked on an rw-semaphore
-      #     rmapiLockAcquire / RmUnixRmApiPrologue / rm_acpi_notify [nvidia]
-      #     acpi_ev_notify_dispatch
-      #
-      # With the GPU driver wedged nothing can wake the screen, logind cannot
-      # even be killed, and the only way out is the power button -- with the
-      # filesystem mounted.  A dark screen on lock is not worth that.
+      # Blank only a session that really is locked: a screen that goes dark
+      # over an unlocked desktop is an open door that looks shut.
       if ! pgrep -f '[s]waylock' >/dev/null 2>&1; then
         notify-send -a Display -i dialog-warning -t 6000 \
           "Lock failed" "swaylock did not start; the screen was left on rather than blanked." \
           >/dev/null 2>&1 || true
+        exit 0
       fi
 
-      # NO `dpms off` here, and this is a safety matter rather than a
-      # preference.  Blanking makes the external monitor drop its HDMI link
-      # (confirmed: `drm: Got a hotplug event for /dev/dri/card1`, and the
-      # monitor list briefly goes empty).  The output disappearing underneath
-      # hyprlock takes down its Wayland dispatch thread -- it aborts, from
-      # CHyprlock::run's fatal path -- which leaves the session locked with a
-      # dead locker and no way back in.  That cost a forced reboot.
-      #
-      # Until the monitor stops dropping its link (its own auto-source-detect
-      # / deep-sleep setting is the suspect), locking must not blank.
+      # Blanking was off for a while because `dpms off` deadlocked the NVIDIA
+      # driver in the kernel on the Predator -- fbdev emulation holding the RM
+      # lock in nvSetDispModeEvo, two forced reboots.  X299-SSD now boots with
+      # nvidia-drm.fbdev=0 (hosts/X299-SSD/nvidia.nix), and blank-screen keeps
+      # the shut lid from suspending the machine while the screen is dark.
+      exec ~/.local/bin/blank-screen
     '';
   };
 
@@ -1359,6 +1392,41 @@ in
       flock -n 9 || exit 0
 
       mons=$(hyprctl monitors all -j)
+
+      # A firmware framebuffer is not a display.  With nvidia-drm.fbdev=0 (set
+      # on X299-SSD so blanking stops deadlocking the driver) the NVIDIA driver
+      # no longer evicts simpledrm, so the boot framebuffer survives as a DRM
+      # device of its own and Hyprland adopts it as a monitor: "Unknown-1",
+      # 1920x1080, no EDID.  Everything that is not eDP counts as external
+      # below, so it was enabled off the right edge of the real screen, taking
+      # a workspace and the pointer with it.  Recognise it by the driver behind
+      # the connector -- names are not stable -- and switch it off, unless it
+      # is the only output there is: a machine whose GPU driver failed to load
+      # would otherwise be left with no screen at all.
+      is_firmware_fb() {
+        for c in /sys/class/drm/card*-"$1"; do
+          [ -e "$c" ] || continue
+          case "$(basename "$(readlink -f "$c/device/device/driver" 2>/dev/null)")" in
+            simple-framebuffer|simpledrm|efi-framebuffer|ofdrm) return 0 ;;
+          esac
+        done
+        return 1
+      }
+      ghosts=" "
+      for m in $(echo "$mons" | jq -r '.[].name'); do
+        if is_firmware_fb "$m"; then ghosts="$ghosts$m "; fi
+      done
+      if [ "$ghosts" != " " ]; then
+        real=$(echo "$mons" | jq --arg g "$ghosts" \
+          '[.[] | select(.name as $n | $g | contains(" " + $n + " ") | not)]')
+        if [ "$(echo "$real" | jq length)" -gt 0 ]; then
+          for m in $ghosts; do
+            hyprctl keyword monitor "$m,disable" >/dev/null 2>&1 || true
+          done
+          mons=$real
+        fi
+      fi
+
       internals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-")) | .name')
       externals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-") | not) | .name')
       arg="''${1:-}"
@@ -2812,18 +2880,15 @@ in
         timeout = 900;
         on-timeout = "~/.local/bin/lock-and-blank";
       }
-      # Re-enabled.  This was disabled while hyprlock was the locker, because
-      # an output vanishing underneath it aborted it and stranded the session;
-      # swaylock survives that, and blanking on lock is confirmed working.
-      # Leaving it off was also a regression for the other laptops, which never
-      # had the problem and were losing idle blanking for no reason.
-      # Disabled again: see the kernel deadlock described in lock-and-blank.
-      # Walking away for 20 minutes would trip exactly the same NVIDIA hang.
-      # {
-      #   timeout = 1200;
-      #   on-timeout = "hyprctl dispatch dpms off";
-      #   on-resume = "hyprctl dispatch dpms on";
-      # }
+      # Idle blank, back on.  It was off while `dpms off` deadlocked the
+      # NVIDIA driver on the Predator (fixed there with nvidia-drm.fbdev=0).
+      # Through blank-screen, not a bare `dpms off`: with the lid shut a dark
+      # external stops counting as docked and logind suspends the laptop.
+      {
+        timeout = 1200;
+        on-timeout = "~/.local/bin/blank-screen";
+        on-resume = "hyprctl dispatch dpms on";
+      }
     ];
   };
 
