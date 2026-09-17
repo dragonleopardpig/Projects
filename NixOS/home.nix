@@ -1380,6 +1380,67 @@ in
     '';
   };
 
+  # Floating windows keep absolute coordinates.  Hyprland re-lays out tiled
+  # windows when a monitor moves but leaves floating ones exactly where they
+  # were -- measured: with the ASUS moved to 0,-1728 the ProtonVPN window
+  # stayed at 1304,514, below the screen.  Extend mode lifts the external above
+  # the panel and external-only drops it back to 0,0, so an F7 press stranded
+  # every floating window a screen-height off the monitor.  display-cycle takes
+  # a snapshot of each floating window's offset from its monitor before it
+  # touches the layout, and restores it afterwards; anything that would still
+  # land entirely off its monitor (including windows already lost) is centred.
+  home.file.".local/bin/float-carry" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      # float-carry snapshot             print each floating window's offset
+      #                                  from its monitor, as JSON
+      # float-carry restore <snapshot>   put them back at those offsets
+      set -eu
+
+      case "''${1:-}" in
+        snapshot)
+          hyprctl clients -j | jq -c --argjson mons "$(hyprctl monitors -j)" '
+            [ .[] | select(.floating and .mapped and (.hidden | not) and .workspace.id > 0)
+              | . as $c | first($mons[] | select(.id == $c.monitor)) as $m
+              | {address, rx: (.at[0] - $m.x), ry: (.at[1] - $m.y)} ]'
+          ;;
+        restore)
+          before="''${2:-[]}"
+          moves=$(hyprctl clients -j | jq -r --argjson mons "$(hyprctl monitors -j)" \
+                    --argjson before "$before" '
+            .[] | select(.floating and .mapped and (.hidden | not) and .workspace.id > 0)
+            | . as $c
+            | first($mons[] | select(.id == $c.monitor)) as $m
+            | ((if (($m.transform // 0) % 2) == 1 then $m.height else $m.width end)
+                 / $m.scale | floor) as $mw
+            | ((if (($m.transform // 0) % 2) == 1 then $m.width else $m.height end)
+                 / $m.scale | floor) as $mh
+            | (first($before[] | select(.address == $c.address)) // null) as $b
+            | (if $b then [$m.x + $b.rx, $m.y + $b.ry] else $c.at end) as $t
+            | (if ($t[0] + $c.size[0] <= $m.x) or ($t[0] >= $m.x + $mw)
+                 or ($t[1] + $c.size[1] <= $m.y) or ($t[1] >= $m.y + $mh)
+               then [$m.x + ((($mw - $c.size[0]) / 2) | floor),
+                     $m.y + ((($mh - $c.size[1]) / 2) | floor)]
+               else $t end) as $t
+            | select($t != $c.at)
+            | "dispatch movewindowpixel \($t[0] - $c.at[0]) \($t[1] - $c.at[1]),address:\($c.address)"')
+          # --batch, not `dispatch`: hyprctl reads a leading "-" in a negative
+          # move ("-10 -20") as one of its own flags, prints its usage and
+          # moves nothing.  Inside a batch string it is just an argument.
+          if [ -n "$moves" ]; then
+            hyprctl --batch "$(printf '%s\n' "$moves" | awk 'NR > 1 { printf " ; " } { printf "%s", $0 }')" \
+              >/dev/null 2>&1 || true
+          fi
+          ;;
+        *)
+          echo "usage: float-carry snapshot | restore <snapshot>" >&2
+          exit 2
+          ;;
+      esac
+    '';
+  };
+
   home.file.".local/bin/display-cycle" = {
     executable = true;
     text = ''
@@ -1426,6 +1487,9 @@ in
           mons=$real
         fi
       fi
+
+      # Before anything moves: where each floating window sits on its monitor.
+      floats=$(~/.local/bin/float-carry snapshot 2>/dev/null || true)
 
       internals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-")) | .name')
       externals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-") | not) | .name')
@@ -1702,6 +1766,11 @@ in
             "Display: Duplicate unavailable" "These screens share no common mode -- extended instead."
         fi
       fi
+
+      # Monitors have moved; floating windows have not.  Put them back where
+      # they were relative to their monitor (see float-carry).
+      sleep 0.3
+      ~/.local/bin/float-carry restore "''${floats:-[]}" || true
 
       # The scale may have changed with the mode (a monitor coming back gets
       # scale_for), and X11 clients cannot see a Wayland scale.  `exec` runs
