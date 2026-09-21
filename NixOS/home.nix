@@ -2385,7 +2385,7 @@ in
           "$mod, W, exec, walker"
           "$mod, B, exec, kitty -e btop"
           "$mod, N, exec, /home/thinky/.local/bin/nemo-x11"
-          "$mod, S, exec, ~/.local/bin/sioyek-xcb"
+          "$mod, S, exec, ~/.local/bin/sioyek-xcb --new-window"
           "$mod, Y, exec, kitty -e yazi"
           "$mod, Escape, exit,"
           "$mod, K, killactive,"
