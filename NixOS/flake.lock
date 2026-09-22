@@ -120,11 +120,11 @@
     "minder-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1789265278,
-        "narHash": "sha256-BUXmX5C0yPanLjEYkFfCc7mzrEqtfd5L5FEwUcDAFYI=",
+        "lastModified": 1790059059,
+        "narHash": "sha256-+oqUPAFospzc0LNRBkvKwBsl9pZiVwfKRx/ADBWjnhs=",
         "owner": "dragonleopardpig",
         "repo": "Minder",
-        "rev": "4947d8601bb0fbf772c5ad633f1755090a0c814f",
+        "rev": "e7de826a4938b95eaad065d4499b364c4b39347f",
         "type": "github"
       },
       "original": {
