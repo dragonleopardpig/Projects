@@ -634,6 +634,45 @@ in
   # keyboard access, which on a laptop is no weaker than the power button.
   boot.kernel.sysctl."kernel.sysrq" = 1;
 
+  # Closing the lid must not suspend this machine while it is on mains power.
+  #
+  # 2026-09-23: the lid was shut at the SDDM greeter, the password went in, and
+  # both screens went black for good.  That boot's journal:
+  #
+  #   08:28:41  systemd-logind: Lid closed.
+  #   08:28:47  sddm: Authentication for user "thinky" successful
+  #   08:28:48  sddm-helper: Jumping to VT 2        <- the greeter lets the GPU go
+  #   08:28:49  systemd-logind: Suspending...
+  #   08:28:50  kernel: PM: suspend entry (s2idle) / Filesystems sync
+  #   (no further kernel line, no resume; 08:29:22 "Lid opened" did nothing)
+  #
+  # logind counts an external display only where a DRM connector's sysfs
+  # `enabled` attribute reads "enabled", and the NVIDIA driver never sets it
+  # here -- with the desktop live on HDMI-A-1 every connector still reads
+  # `enabled=disabled`.  HandleLidSwitchDocked can therefore never apply on
+  # this laptop, so a lid-close event always lands on HandleLidSwitch=suspend.
+  # It was merely deferred while the greeter's weston held the outputs, and
+  # fired the instant SDDM handed the GPU to the session being logged into.
+  #
+  # The suspend then never completed: the kernel printed nothing after the
+  # filesystem sync -- NVIDIA's PM_SUSPEND_PREPARE notifier runs before user
+  # space is frozen, and the new session was initialising the GPU at that
+  # exact moment -- while systemd-sleep had already cgroup-frozen user.slice.
+  # System services carried on (nix-gc finished at 08:29:16), but every user
+  # session stayed frozen with no compositor on either screen, which is why
+  # the lid, the keyboard and the mouse were all dead.  Nothing here can
+  # promise that NVIDIA's suspend path returns, so the fix is to stop firing
+  # it by accident.
+  #
+  # On mains power the lid switch is now ignored outright; the panel still
+  # goes dark, because Hyprland disables eDP-1 on lid close by itself.  On
+  # battery HandleLidSwitch=suspend still applies, which is what a laptop
+  # being shut and carried off should do.  Desktops have no lid switch, so
+  # this is inert on them.  Takes effect at the next boot: logind is
+  # restartIfChanged = false, and restarting it under Wayland would yank the
+  # DRM and input handles out from under the running session.
+  services.logind.settings.Login.HandleLidSwitchExternalPower = "ignore";
+
   # Give hyprlock its own PAM stack.  Without one it falls back to `su`, whose
   # auth chain carries pam_rootok, pam_faillock and pam_xauth -- none of which
   # belong in a screen locker -- and the failures show up in the log as
