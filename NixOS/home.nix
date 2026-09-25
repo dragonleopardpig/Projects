@@ -414,6 +414,10 @@ in
     next_page <pagedown>
     previous_page <pageup>
 
+    # Draw a persistent rectangle annotation using the current drawing style.
+    # Ctrl+r is free; bare r/R remain clockwise/counterclockwise rotation.
+    draw_rectangle <C-r>
+
     # Area snapshot: drag a box, get a cropped PNG. Sioyek ships no such command,
     # so _snip is defined in prefs_user.config below.
     _snip s

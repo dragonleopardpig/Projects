@@ -79,6 +79,9 @@
             # the .pro's packagesExist(ddjvuapi) guard silently fails and you get
             # a Sioyek that builds fine and still cannot open a DjVu.
             ./patches/sioyek-native-djvu.patch
+            # Persistent rectangle annotations backed by Sioyek's drawing model,
+            # generated from ~/Projects/sioyek commit 135b07de.
+            ./patches/sioyek-rectangle-annotations.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];

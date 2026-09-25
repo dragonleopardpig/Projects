@@ -1,0 +1,145 @@
+diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
+index f811a964..960dc695 100644
+--- a/pdf_viewer/input.cpp
++++ b/pdf_viewer/input.cpp
+@@ -6157,6 +6157,29 @@ public:
+ 
+ };
+ 
++class DrawRectangleCommand : public Command {
++public:
++    static inline const std::string cname = "draw_rectangle";
++    static inline const std::string hname = "Draw a persistent rectangle annotation";
++    DrawRectangleCommand(MainWidget* w) : Command(cname, w) {};
++    std::optional<AbsoluteRect> rect = {};
++
++    std::optional<Requirement> next_requirement(MainWidget* widget) {
++        if (!rect.has_value()) {
++            return Requirement{ RequirementType::Rect, "Rectangle" };
++        }
++        return {};
++    }
++
++    void set_rect_requirement(AbsoluteRect value) {
++        rect = value;
++    }
++
++    void perform() {
++        widget->draw_rectangle(rect.value());
++    }
++};
++
+ class ToggleTypingModeCommand : public Command {
+ public:
+     static inline const std::string cname = "toggle_typing_mode";
+@@ -7435,6 +7458,7 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
+     register_command<OverviewRulerPortalCommand>();
+     register_command<GotoRulerPortalCommand>();
+     register_command<SelectRectCommand>();
++    register_command<DrawRectangleCommand>();
+     register_command<ToggleTypingModeCommand>();
+     register_command<DonateCommand>();
+     register_command<OverviewNextItemCommand>();
+diff --git a/pdf_viewer/keys.config b/pdf_viewer/keys.config
+index 7f5c83da..d51578de 100644
+--- a/pdf_viewer/keys.config
++++ b/pdf_viewer/keys.config
+@@ -195,6 +195,9 @@ delete_highlight dh
+ ## with highlight type set using `set_select_highlight_type`
+ #toggle_select_highlight <unbound>
+ 
++## Draw a persistent rectangle using the current freehand color, opacity, and thickness
++#draw_rectangle <unbound>
++
+ # Goto next/previous highlight in current document
+ goto_next_highlight gnh
+ goto_prev_highlight gNh
+diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
+index c4aff899..3f304691 100644
+--- a/pdf_viewer/main_widget.cpp
++++ b/pdf_viewer/main_widget.cpp
+@@ -8432,6 +8432,60 @@ void MainWidget::finish_drawing(QPoint pos) {
+     
+ }
+ 
++void MainWidget::draw_rectangle(AbsoluteRect rect) {
++    if (rect.x0 > rect.x1) {
++        std::swap(rect.x0, rect.x1);
++    }
++    if (rect.y0 > rect.y1) {
++        std::swap(rect.y0, rect.y1);
++    }
++
++    if (rect.width() <= 0 || rect.height() <= 0) {
++        clear_selected_rect();
++        invalidate_render();
++        show_error_message(L"The rectangle must have a non-zero width and height");
++        return;
++    }
++
++    if (!opengl_widget->get_scratchpad()) {
++        DocumentPos top_left = doc()->absolute_to_page_pos_uncentered(rect.top_left());
++        DocumentPos bottom_right = doc()->absolute_to_page_pos_uncentered(rect.bottom_right());
++        if (top_left.page != bottom_right.page) {
++            clear_selected_rect();
++            invalidate_render();
++            show_error_message(L"Rectangle annotations must stay within one page");
++            return;
++        }
++    }
++
++    float thickness = freehand_thickness;
++    if (opengl_widget->get_scratchpad()) {
++        thickness = freehand_thickness / dv()->get_zoom_level() * 3;
++    }
++
++    FreehandDrawing rectangle;
++    rectangle.type = current_freehand_type;
++    rectangle.alpha = freehand_alpha;
++    rectangle.creattion_time = QDateTime::currentDateTime();
++    rectangle.points = {
++        FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x0, rect.y0 }, thickness },
++        FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x1, rect.y0 }, thickness },
++        FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x1, rect.y1 }, thickness },
++        FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x0, rect.y1 }, thickness },
++        FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x0, rect.y0 }, thickness },
++    };
++
++    if (opengl_widget->get_scratchpad()) {
++        scratchpad->add_drawing(rectangle);
++    }
++    else {
++        doc()->add_freehand_drawing(rectangle);
++    }
++
++    clear_selected_rect();
++    invalidate_render();
++}
++
+ 
+ void MainWidget::delete_freehand_drawings(AbsoluteRect rect) {
+     if (opengl_widget->get_scratchpad()) {
+diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
+index fdddb482..26a42f18 100644
+--- a/pdf_viewer/main_widget.h
++++ b/pdf_viewer/main_widget.h
+@@ -776,6 +776,7 @@ public:
+     void handle_drawing_move(QPoint pos, float pressure);
+     void start_drawing();
+     void finish_drawing(QPoint pos);
++    void draw_rectangle(AbsoluteRect rect);
+     void handle_pen_drawing_event(QTabletEvent* te);
+     void select_freehand_drawings(AbsoluteRect rect);
+     void delete_freehand_drawings(AbsoluteRect rect);
+diff --git a/scripts/tools/command_names.txt b/scripts/tools/command_names.txt
+index e05d4c46..fb990543 100644
+--- a/scripts/tools/command_names.txt
++++ b/scripts/tools/command_names.txt
+@@ -40,6 +40,7 @@ donate
+ download_overview_paper
+ download_paper_under_cursor
+ download_paper_with_name
++draw_rectangle
+ edit_link
+ edit_portal
+ edit_selected_bookmark
