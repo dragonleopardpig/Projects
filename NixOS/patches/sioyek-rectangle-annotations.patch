@@ -1,8 +1,246 @@
+diff --git a/pdf_viewer/book.cpp b/pdf_viewer/book.cpp
+index 5888fd7c..9e524915 100644
+--- a/pdf_viewer/book.cpp
++++ b/pdf_viewer/book.cpp
+@@ -2,6 +2,8 @@
+ #include "utils.h"
+ #include "document.h"
+ 
++#include <cmath>
++
+ extern float BOOKMARK_RECT_SIZE;
+ 
+ bool operator==(const DocumentViewState& lhs, const DocumentViewState& rhs)
+@@ -341,7 +343,7 @@ AbsoluteRect BookMark::rect() {
+     return AbsoluteRect(begin_pos(), end_pos());
+ }
+ 
+-AbsoluteRect FreehandDrawing::bbox(){
++AbsoluteRect FreehandDrawing::bbox() const {
+     AbsoluteRect res;
+     if (points.size() > 0) {
+         res.x0 = points[0].pos.x;
+@@ -358,6 +360,25 @@ AbsoluteRect FreehandDrawing::bbox(){
+     return res;
+ }
+ 
++bool FreehandDrawing::is_rectangle() const {
++    if (points.size() != 5) {
++        return false;
++    }
++
++    auto equal = [](float lhs, float rhs) {
++        return std::fabs(lhs - rhs) < 0.001f;
++    };
++
++    return equal(points[0].pos.x, points[4].pos.x)
++        && equal(points[0].pos.y, points[4].pos.y)
++        && equal(points[0].pos.y, points[1].pos.y)
++        && equal(points[1].pos.x, points[2].pos.x)
++        && equal(points[2].pos.y, points[3].pos.y)
++        && equal(points[3].pos.x, points[0].pos.x)
++        && !equal(points[0].pos.x, points[1].pos.x)
++        && !equal(points[0].pos.y, points[3].pos.y);
++}
++
+ void SearchResult::fill(Document* doc) {
+     if (rects.size() == 0) {
+         doc->fill_search_result(this);
+diff --git a/pdf_viewer/book.h b/pdf_viewer/book.h
+index 5d9a2a16..bb7e3725 100644
+--- a/pdf_viewer/book.h
++++ b/pdf_viewer/book.h
+@@ -180,7 +180,8 @@ struct FreehandDrawing {
+     char type;
+     float alpha = 1;
+     QDateTime creattion_time;
+-    AbsoluteRect bbox();
++    AbsoluteRect bbox() const;
++    bool is_rectangle() const;
+ };
+ 
+ struct PixmapDrawing {
+diff --git a/pdf_viewer/document.cpp b/pdf_viewer/document.cpp
+index 31731b25..00b14bf3 100644
+--- a/pdf_viewer/document.cpp
++++ b/pdf_viewer/document.cpp
+@@ -2137,6 +2137,25 @@ void Document::get_pdf_annotations(std::vector<BookMark>& pdf_bookmarks, std::ve
+                     pdf_drawings.push_back(drawing);
+                 }
+             }
++            if (annot_type == pdf_annot_type::PDF_ANNOT_SQUARE) {
++                PagelessDocumentRect page_rect = pdf_bound_annot(context, annot);
++                AbsoluteRect rect = to_absolute(p, page_rect);
++                int n_channels;
++                float color[4];
++                pdf_annot_color(context, annot, &n_channels, color);
++                float thickness = pdf_annot_border(context, annot);
++
++                FreehandDrawing drawing;
++                drawing.type = get_highlight_color_type(color);
++                drawing.points = {
++                    FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x0, rect.y0 }, thickness },
++                    FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x1, rect.y0 }, thickness },
++                    FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x1, rect.y1 }, thickness },
++                    FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x0, rect.y1 }, thickness },
++                    FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x0, rect.y0 }, thickness },
++                };
++                pdf_drawings.push_back(drawing);
++            }
+             if (annot_type == pdf_annot_type::PDF_ANNOT_TEXT) {
+                 PagelessDocumentRect rect = pdf_bound_annot(context, annot);
+                 AbsoluteRect absrect = to_absolute(p, rect);
+@@ -2599,21 +2618,45 @@ void Document::embed_annotations(std::wstring new_file_path) {
+ 
+     for (auto [page_number, drawings] : page_freehand_drawings) {
+         for (auto drawing : drawings) {
++            if (drawing.points.empty()) {
++                continue;
++            }
++
+             fz_page* page = load_cached_page(page_number);
+             pdf_page* pdf_page = pdf_page_from_fz_page(context, page);
+-            pdf_annot* drawing_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_INK);
+-            std::vector<fz_point> points;
++            pdf_annot* drawing_annot;
++
++            if (drawing.is_rectangle()) {
++                drawing_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_SQUARE);
++                AbsoluteRect absolute_rect = drawing.bbox();
++                DocumentPos top_left = absolute_to_page_pos_uncentered(absolute_rect.top_left());
++                DocumentPos bottom_right = absolute_to_page_pos_uncentered(absolute_rect.bottom_right());
++                fz_rect page_rect = {
++                    std::min(top_left.x, bottom_right.x),
++                    std::min(top_left.y, bottom_right.y),
++                    std::max(top_left.x, bottom_right.x),
++                    std::max(top_left.y, bottom_right.y),
++                };
++                pdf_set_annot_rect(context, drawing_annot, page_rect);
++            }
++            else {
++                drawing_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_INK);
++                std::vector<fz_point> points;
++
++                for (auto point : drawing.points) {
++                    DocumentPos docpos = absolute_to_page_pos_uncentered(point.pos);
++                    if (docpos.page == page_number) {
++                        points.push_back(fz_point{ docpos.x, docpos.y });
++                    }
++                }
+ 
+-            for (auto point : drawing.points) {
+-                DocumentPos docpos = absolute_to_page_pos_uncentered(point.pos);
+-                if (docpos.page == page_number) {
+-                    points.push_back(fz_point{ docpos.x, docpos.y });
++                if (!points.empty()) {
++                    int count[1] = { static_cast<int>(points.size()) };
++                    pdf_set_annot_ink_list(context, drawing_annot, 1, count, &points[0]);
+                 }
+             }
+ 
+-            int count[1] = { static_cast<int>(points.size()) };
+             pdf_set_annot_border(context, drawing_annot, drawing.points[0].thickness);
+-            pdf_set_annot_ink_list(context, drawing_annot, 1, count, &points[0]);
+             if (drawing.type >= 'a' && drawing.type <= 'z') {
+                 pdf_set_annot_color(context, drawing_annot, 3, &HIGHLIGHT_COLORS[3 * (drawing.type - 'a')]);
+             }
+@@ -3500,6 +3543,21 @@ void Document::add_freehand_drawing(FreehandDrawing new_drawing) {
+     }
+ }
+ 
++bool Document::delete_rectangle_at(AbsoluteDocumentPos point) {
++    int page = absolute_to_page_pos_uncentered(point).page;
++    std::lock_guard guard(drawings_mutex);
++    std::vector<FreehandDrawing>& drawings = page_freehand_drawings[page];
++
++    for (int i = static_cast<int>(drawings.size()) - 1; i >= 0; i--) {
++        if (drawings[i].is_rectangle() && drawings[i].bbox().contains(point)) {
++            drawings.erase(drawings.begin() + i);
++            is_drawings_dirty = true;
++            return true;
++        }
++    }
++    return false;
++}
++
+ void Document::undo_freehand_drawing() {
+     int most_recent_page_index = -1;
+     QDateTime most_recent_page_time;
+@@ -3538,8 +3596,11 @@ std::vector<SelectedObjectIndex> Document::get_page_intersecting_drawing_indices
+         if (!mask[page_drawings[i].type - 'a']) {
+             continue;
+         }
++        if (page_drawings[i].is_rectangle() && page_drawings[i].bbox().intersects(absolute_rect)) {
++            indices.push_back(SelectedObjectIndex{ i, SelectedObjectType::Drawing });
++            continue;
++        }
+         for (auto point : page_drawings[i].points) {
+-            fz_point absolute_point = fz_point{ point.pos.x, point.pos.y };
+             if (absolute_rect.contains(point.pos)) {
+                 indices.push_back(SelectedObjectIndex{ i, SelectedObjectType::Drawing });
+                 break;
+diff --git a/pdf_viewer/document.h b/pdf_viewer/document.h
+index f13bc9f5..e326e83b 100644
+--- a/pdf_viewer/document.h
++++ b/pdf_viewer/document.h
+@@ -420,6 +420,7 @@ public:
+     std::vector<SearchResult> search_regex(std::wstring query, SearchCaseSensitivity case_sensitive, int begin_page, int min_page, int max_page);
+     float max_y_offset();
+     void add_freehand_drawing(FreehandDrawing new_drawing);
++    bool delete_rectangle_at(AbsoluteDocumentPos point);
+     void get_page_freehand_drawings_with_indices(int page, const std::vector<SelectedObjectIndex>& indices, std::vector<FreehandDrawing>& freehand_drawings, std::vector<PixmapDrawing>& pixmap_drawings);
+     void undo_freehand_drawing();
+     const std::vector<FreehandDrawing>& get_page_drawings(int page);
+diff --git a/pdf_viewer/document_view.cpp b/pdf_viewer/document_view.cpp
+index 9ecf61ea..4b584983 100644
+--- a/pdf_viewer/document_view.cpp
++++ b/pdf_viewer/document_view.cpp
+@@ -1788,6 +1788,10 @@ std::vector<int> ScratchPad::get_intersecting_drawing_indices(AbsoluteRect selec
+     std::vector<int> res;
+ 
+     for (int i = 0; i < all_drawings.size(); i++) {
++        if (all_drawings[i].is_rectangle() && all_drawings[i].bbox().intersects(selection)) {
++            res.push_back(i);
++            continue;
++        }
+         for (auto p : all_drawings[i].points) {
+             if (selection.contains(p.pos)) {
+                 res.push_back(i);
+@@ -1829,6 +1833,17 @@ void ScratchPad::delete_intersecting_objects(AbsoluteRect selection) {
+     delete_intersecting_pixmaps(selection);
+ }
+ 
++bool ScratchPad::delete_rectangle_at(AbsoluteDocumentPos point) {
++    for (int i = static_cast<int>(all_drawings.size()) - 1; i >= 0; i--) {
++        if (all_drawings[i].is_rectangle() && all_drawings[i].bbox().contains(point)) {
++            all_drawings.erase(all_drawings.begin() + i);
++            invalidate_compile(true);
++            return true;
++        }
++    }
++    return false;
++}
++
+ void ScratchPad::get_selected_objects_with_indices(const std::vector<SelectedObjectIndex>&indices, std::vector<FreehandDrawing>&freehand_drawings, std::vector<PixmapDrawing>&pixmap_drawings){
+ 
+     for (auto [index, type] : indices) {
+diff --git a/pdf_viewer/document_view.h b/pdf_viewer/document_view.h
+index 76da5a79..6b3377ff 100644
+--- a/pdf_viewer/document_view.h
++++ b/pdf_viewer/document_view.h
+@@ -271,6 +271,7 @@ public:
+     void delete_intersecting_drawings(AbsoluteRect selection);
+     void delete_intersecting_pixmaps(AbsoluteRect selection);
+     void delete_intersecting_objects(AbsoluteRect selection);
++    bool delete_rectangle_at(AbsoluteDocumentPos point);
+     void get_selected_objects_with_indices(const std::vector<SelectedObjectIndex>& indices, std::vector<FreehandDrawing>& freehand_drawings, std::vector<PixmapDrawing>& pixmap_drawings);
+     void add_pixmap(QPixmap pixmap);
+     AbsoluteRect get_bounding_box();
 diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
-index f811a964..960dc695 100644
+index f811a964..e5438a54 100644
 --- a/pdf_viewer/input.cpp
 +++ b/pdf_viewer/input.cpp
-@@ -6157,6 +6157,29 @@ public:
+@@ -6157,6 +6157,52 @@ public:
  
  };
  
@@ -29,36 +267,62 @@ index f811a964..960dc695 100644
 +    }
 +};
 +
++class DeleteRectangleCommand : public Command {
++public:
++    static inline const std::string cname = "delete_rectangle";
++    static inline const std::string hname = "Delete the rectangle annotation at a selected point";
++    DeleteRectangleCommand(MainWidget* w) : Command(cname, w) {};
++    std::optional<AbsoluteDocumentPos> point = {};
++
++    std::optional<Requirement> next_requirement(MainWidget* widget) {
++        if (!point.has_value()) {
++            return Requirement{ RequirementType::Point, "Rectangle to delete" };
++        }
++        return {};
++    }
++
++    void set_point_requirement(AbsoluteDocumentPos value) {
++        point = value;
++    }
++
++    void perform() {
++        widget->delete_rectangle(point.value());
++    }
++};
++
  class ToggleTypingModeCommand : public Command {
  public:
      static inline const std::string cname = "toggle_typing_mode";
-@@ -7435,6 +7458,7 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
+@@ -7435,6 +7481,8 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
      register_command<OverviewRulerPortalCommand>();
      register_command<GotoRulerPortalCommand>();
      register_command<SelectRectCommand>();
 +    register_command<DrawRectangleCommand>();
++    register_command<DeleteRectangleCommand>();
      register_command<ToggleTypingModeCommand>();
      register_command<DonateCommand>();
      register_command<OverviewNextItemCommand>();
 diff --git a/pdf_viewer/keys.config b/pdf_viewer/keys.config
-index 7f5c83da..d51578de 100644
+index 7f5c83da..f8c45910 100644
 --- a/pdf_viewer/keys.config
 +++ b/pdf_viewer/keys.config
-@@ -195,6 +195,9 @@ delete_highlight dh
+@@ -195,6 +195,11 @@ delete_highlight dh
  ## with highlight type set using `set_select_highlight_type`
  #toggle_select_highlight <unbound>
  
 +## Draw a persistent rectangle using the current freehand color, opacity, and thickness
 +#draw_rectangle <unbound>
++## Delete the most recent rectangle containing the selected point
++#delete_rectangle <unbound>
 +
  # Goto next/previous highlight in current document
  goto_next_highlight gnh
  goto_prev_highlight gNh
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index c4aff899..3f304691 100644
+index c4aff899..4671e64d 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
-@@ -8432,6 +8432,60 @@ void MainWidget::finish_drawing(QPoint pos) {
+@@ -8432,6 +8432,75 @@ void MainWidget::finish_drawing(QPoint pos) {
      
  }
  
@@ -116,26 +380,174 @@ index c4aff899..3f304691 100644
 +    invalidate_render();
 +}
 +
++void MainWidget::delete_rectangle(AbsoluteDocumentPos point) {
++    bool deleted;
++    if (opengl_widget->get_scratchpad()) {
++        deleted = scratchpad->delete_rectangle_at(point);
++    }
++    else {
++        deleted = doc()->delete_rectangle_at(point);
++    }
++
++    if (!deleted) {
++        show_error_message(L"No rectangle annotation found at that point");
++    }
++    invalidate_render();
++}
++
  
  void MainWidget::delete_freehand_drawings(AbsoluteRect rect) {
      if (opengl_widget->get_scratchpad()) {
 diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
-index fdddb482..26a42f18 100644
+index fdddb482..87766b13 100644
 --- a/pdf_viewer/main_widget.h
 +++ b/pdf_viewer/main_widget.h
-@@ -776,6 +776,7 @@ public:
+@@ -776,6 +776,8 @@ public:
      void handle_drawing_move(QPoint pos, float pressure);
      void start_drawing();
      void finish_drawing(QPoint pos);
 +    void draw_rectangle(AbsoluteRect rect);
++    void delete_rectangle(AbsoluteDocumentPos point);
      void handle_pen_drawing_event(QTabletEvent* te);
      void select_freehand_drawings(AbsoluteRect rect);
      void delete_freehand_drawings(AbsoluteRect rect);
+diff --git a/pdf_viewer/pdf_view_opengl_widget.cpp b/pdf_viewer/pdf_view_opengl_widget.cpp
+index 398fc717..2f5083dd 100644
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp
+@@ -717,7 +717,8 @@ void PdfViewOpenGLWidget::render_scratchpad(QPainter* painter) {
+      render_compiled_drawings();
+      glEnableVertexAttribArray(0);
+      glUseProgram(shared_gl_objects.line_program);
+-     render_drawings(scratchpad, scratchpad->get_non_compiled_drawings());
++     render_rectangle_drawings(scratchpad, scratchpad->get_all_drawings());
++     render_freehand_drawings(scratchpad, scratchpad->get_non_compiled_drawings());
+      render_drawings(scratchpad, moving_drawings, true);
+      render_drawings(scratchpad, moving_drawings, false);
+      render_drawings(scratchpad, pending_drawing);
+@@ -3008,6 +3009,9 @@ void PdfViewOpenGLWidget::compile_drawings(DocumentView* dv, const std::vector<F
+         if (!visible_drawing_mask[drawing.type - 'a']) {
+             continue;
+         }
++        if (drawing.is_rectangle()) {
++            continue;
++        }
+         if (drawing.points.size() == 1) {
+             add_point_coords(drawing.points[0], drawing.type - 'a');
+ 
+@@ -3251,6 +3255,79 @@ void PdfViewOpenGLWidget::render_compiled_drawings() {
+ }
+ 
+ void PdfViewOpenGLWidget::render_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted) {
++    render_rectangle_drawings(dv, drawings, highlighted);
++    render_freehand_drawings(dv, drawings, highlighted);
++}
++
++void PdfViewOpenGLWidget::render_rectangle_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted) {
++    if (drawings.empty()) {
++        return;
++    }
++
++    glEnable(GL_BLEND);
++    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
++    glEnable(GL_DEPTH_TEST);
++    glClear(GL_DEPTH_BUFFER_BIT);
++    glUseProgram(shared_gl_objects.line_program);
++    glEnableVertexAttribArray(0);
++
++    for (int i = static_cast<int>(drawings.size()) - 1; i >= 0; i--) {
++        const FreehandDrawing& drawing = drawings[i];
++        if (!drawing.is_rectangle() || drawing.points.empty()) {
++            continue;
++        }
++        if (drawing.type < 'a' || drawing.type > 'z' || !visible_drawing_mask[drawing.type - 'a']) {
++            continue;
++        }
++
++        float source_color[4] = {
++            HIGHLIGHT_COLORS[(drawing.type - 'a') * 3],
++            HIGHLIGHT_COLORS[(drawing.type - 'a') * 3 + 1],
++            HIGHLIGHT_COLORS[(drawing.type - 'a') * 3 + 2],
++            drawing.alpha,
++        };
++        float color[4] = { 0 };
++        get_color_for_current_mode(source_color, color);
++        color[3] = drawing.alpha;
++        if (highlighted) {
++            color[0] = 1.0f;
++            color[1] = 1.0f;
++            color[2] = 0.0f;
++        }
++        glUniform4fv(shared_gl_objects.freehand_line_color_uniform_location, 1, color);
++
++        NormalizedWindowRect window_rect = drawing.bbox().to_window_normalized(dv);
++        float left = std::min(window_rect.x0, window_rect.x1);
++        float right = std::max(window_rect.x0, window_rect.x1);
++        float bottom = std::min(window_rect.y0, window_rect.y1);
++        float top = std::max(window_rect.y0, window_rect.y1);
++        float highlight_factor = highlighted ? 3.0f : 1.0f;
++        float half_width_x = drawing.points[0].thickness * dv->get_zoom_level() / width() * highlight_factor;
++        float half_width_y = drawing.points[0].thickness * dv->get_zoom_level() / height() * highlight_factor;
++
++        std::vector<float> coordinates;
++        coordinates.reserve(48);
++        auto add_quad = [&coordinates](float x0, float y0, float x1, float y1) {
++            coordinates.insert(coordinates.end(), {
++                x0, y0, x1, y0, x0, y1,
++                x0, y1, x1, y0, x1, y1,
++            });
++        };
++
++        add_quad(left - half_width_x, top - half_width_y, right + half_width_x, top + half_width_y);
++        add_quad(left - half_width_x, bottom - half_width_y, right + half_width_x, bottom + half_width_y);
++        add_quad(left - half_width_x, bottom + half_width_y, left + half_width_x, top - half_width_y);
++        add_quad(right - half_width_x, bottom + half_width_y, right + half_width_x, top - half_width_y);
++
++        bind_points(coordinates);
++        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(coordinates.size() / 2));
++    }
++
++    glDisable(GL_DEPTH_TEST);
++    glDisable(GL_BLEND);
++}
++
++void PdfViewOpenGLWidget::render_freehand_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted) {
+ 
+     if (drawings.size() == 0) return;
+ 
+@@ -3270,6 +3347,9 @@ void PdfViewOpenGLWidget::render_drawings(DocumentView* dv, const std::vector<Fr
+     for (int i = drawings.size() - 1; i >= 0; i--) {
+         auto drawing = drawings[i];
+ 
++        if (drawing.is_rectangle()) {
++            continue;
++        }
+         if (DEBUG_SMOOTH_FREEHAND_DRAWINGS) {
+             drawing = smoothen_drawing(drawing);
+         }
+diff --git a/pdf_viewer/pdf_view_opengl_widget.h b/pdf_viewer/pdf_view_opengl_widget.h
+index 21d3fd7e..1d0fcbd7 100644
+--- a/pdf_viewer/pdf_view_opengl_widget.h
++++ b/pdf_viewer/pdf_view_opengl_widget.h
+@@ -186,6 +186,8 @@ protected:
+     void render_scratchpad(QPainter* painter);
+     void add_coordinates_for_window_point(DocumentView* dv, float window_x, float window_y, float r, int point_polygon_vertices, std::vector<float>& out_coordinates);
+     void render_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted = false);
++    void render_freehand_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted = false);
++    void render_rectangle_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted = false);
+     void render_compiled_drawings();
+     void render_line(DocumentView* dv, FreehandDrawing drawing);
+     std::vector<std::pair<QRect, QString>> get_hint_rect_and_texts();
 diff --git a/scripts/tools/command_names.txt b/scripts/tools/command_names.txt
-index e05d4c46..fb990543 100644
+index e05d4c46..f3390745 100644
 --- a/scripts/tools/command_names.txt
 +++ b/scripts/tools/command_names.txt
-@@ -40,6 +40,7 @@ donate
+@@ -36,10 +36,12 @@ delete_highlight
+ delete_highlight_under_cursor
+ delete_link
+ delete_portal
++delete_rectangle
+ donate
  download_overview_paper
  download_paper_under_cursor
  download_paper_with_name

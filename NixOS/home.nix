@@ -417,6 +417,8 @@ in
     # Draw a persistent rectangle annotation using the current drawing style.
     # Ctrl+r is free; bare r/R remain clockwise/counterclockwise rotation.
     draw_rectangle <C-r>
+    # Delete the newest rectangle containing the point clicked after this shortcut.
+    delete_rectangle <C-R>
 
     # Area snapshot: drag a box, get a cropped PNG. Sioyek ships no such command,
     # so _snip is defined in prefs_user.config below.

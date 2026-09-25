@@ -80,7 +80,7 @@
             # a Sioyek that builds fine and still cannot open a DjVu.
             ./patches/sioyek-native-djvu.patch
             # Persistent rectangle annotations backed by Sioyek's drawing model,
-            # generated from ~/Projects/sioyek commit 135b07de.
+            # generated from ~/Projects/sioyek commit ffe206c4.
             ./patches/sioyek-rectangle-annotations.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
