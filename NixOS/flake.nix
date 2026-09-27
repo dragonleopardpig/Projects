@@ -87,6 +87,8 @@
             ./patches/sioyek-note-box-controls.patch
             # Borderless note display and persistent per-note text color selection.
             ./patches/sioyek-note-color-border.patch
+            # Curved arrows attached to note boxes, with draggable tip and controls.
+            ./patches/sioyek-note-arrow.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];

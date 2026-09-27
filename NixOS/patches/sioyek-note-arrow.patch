@@ -1,0 +1,726 @@
+diff --git a/pdf_viewer/book.cpp b/pdf_viewer/book.cpp
+index 1c9508c..1aa1834 100644
+--- a/pdf_viewer/book.cpp
++++ b/pdf_viewer/book.cpp
+@@ -2,10 +2,54 @@
+ #include "utils.h"
+ #include "document.h"
+
++#include <algorithm>
+ #include <cmath>
++#include <QJsonDocument>
+
+ extern float BOOKMARK_RECT_SIZE;
+
++QJsonObject NoteArrow::to_json() const {
++    return {{"tip_x", tip.x}, {"tip_y", tip.y},
++            {"control1_x", control1.x}, {"control1_y", control1.y},
++            {"control2_x", control2.x}, {"control2_y", control2.y}};
++}
++
++std::optional<NoteArrow> NoteArrow::from_json(const QJsonValue& value) {
++    if (!value.isObject()) return {};
++    QJsonObject object = value.toObject();
++    for (const char* field : {"tip_x", "tip_y", "control1_x", "control1_y", "control2_x", "control2_y"}) {
++        if (!object[field].isDouble() || !std::isfinite(object[field].toDouble())) return {};
++    }
++    NoteArrow arrow;
++    arrow.tip = {static_cast<float>(object["tip_x"].toDouble()), static_cast<float>(object["tip_y"].toDouble())};
++    arrow.control1 = {static_cast<float>(object["control1_x"].toDouble()), static_cast<float>(object["control1_y"].toDouble())};
++    arrow.control2 = {static_cast<float>(object["control2_x"].toDouble()), static_cast<float>(object["control2_y"].toDouble())};
++    return arrow;
++}
++
++QString note_arrow_to_db_string(const std::optional<NoteArrow>& arrow) {
++    if (!arrow) return {};
++    return QString::fromUtf8(QJsonDocument(arrow->to_json()).toJson(QJsonDocument::Compact));
++}
++
++std::optional<NoteArrow> note_arrow_from_db_string(const QString& value) {
++    if (value.isEmpty()) return {};
++    return NoteArrow::from_json(QJsonDocument::fromJson(value.toUtf8()).object());
++}
++
++AbsoluteDocumentPos note_arrow_anchor(const BookMark& bookmark, AbsoluteDocumentPos toward) {
++    AbsoluteRect rect = bookmark.get_rectangle();
++    float cx = (rect.x0 + rect.x1) * 0.5f;
++    float cy = (rect.y0 + rect.y1) * 0.5f;
++    float dx = toward.x - cx;
++    float dy = toward.y - cy;
++    float half_width = std::max((rect.x1 - rect.x0) * 0.5f, 1.0f);
++    float half_height = std::max((rect.y1 - rect.y0) * 0.5f, 1.0f);
++    float scale = std::max(std::abs(dx) / half_width, std::abs(dy) / half_height);
++    if (scale < 0.001f) return {rect.x1, cy};
++    return {cx + dx / scale, cy + dy / scale};
++}
++
+ bool operator==(const DocumentViewState& lhs, const DocumentViewState& rhs)
+ {
+     return (lhs.book_state.offset_x == rhs.book_state.offset_x) &&
+@@ -117,6 +161,7 @@ QJsonObject BookMark::to_json(std::string doc_checksum) const
+         res["color_blue"] = color[2];
+         res["font_size"] = font_size;
+         res["font_face"] = QString::fromStdWString(font_face);
++        if (arrow) res["note_arrow"] = arrow->to_json();
+     }
+
+     add_metadata_to_json(res);
+@@ -137,6 +182,7 @@ void BookMark::add_to_tuples(std::vector<std::pair<std::string, QVariant>>& tupl
+     tuples.push_back({ "color_blue", color[2] });
+     tuples.push_back({ "font_size", font_size });
+     tuples.push_back({ "font_face", QString::fromStdWString(font_face) });
++    tuples.push_back({ "arrow_json", note_arrow_to_db_string(arrow) });
+ }
+
+ void BookMark::from_json(const QJsonObject& json_object)
+@@ -155,6 +201,7 @@ void BookMark::from_json(const QJsonObject& json_object)
+         font_size = json_object["font_size"].toDouble();
+         font_face = json_object["font_face"].toString().toStdWString();
+     }
++    arrow = NoteArrow::from_json(json_object["note_arrow"]);
+
+     load_metadata_from_json(json_object);
+ }
+diff --git a/pdf_viewer/book.h b/pdf_viewer/book.h
+index 2162e3b..7f7f1e0 100644
+--- a/pdf_viewer/book.h
++++ b/pdf_viewer/book.h
+@@ -8,6 +8,7 @@
+ #include <qopengl.h>
+ #include <variant>
+ #include <qjsonobject.h>
++#include <qjsonvalue.h>
+ #include <qdatetime.h>
+ #include <qpixmap.h>
+
+@@ -15,6 +16,7 @@
+
+ class DocumentView;
+ class Document;
++struct BookMark;
+
+ enum class SelectedObjectType {
+     Drawing,
+@@ -87,6 +89,19 @@ struct Mark : Annotation {
+     void add_to_tuples(std::vector<std::pair<std::string, QVariant>>& tuples) override;
+ };
+
++struct NoteArrow {
++    AbsoluteDocumentPos tip{0, 0};
++    AbsoluteDocumentPos control1{0, 0};
++    AbsoluteDocumentPos control2{0, 0};
++
++    QJsonObject to_json() const;
++    static std::optional<NoteArrow> from_json(const QJsonValue& value);
++};
++
++QString note_arrow_to_db_string(const std::optional<NoteArrow>& arrow);
++std::optional<NoteArrow> note_arrow_from_db_string(const QString& value);
++AbsoluteDocumentPos note_arrow_anchor(const BookMark& bookmark, AbsoluteDocumentPos toward);
++
+ /*
+     A bookmark is similar to mark but instead of being indexed by a symbol, it has a description.
+ */
+@@ -102,6 +117,7 @@ struct BookMark : Annotation {
+     float color[3] = { 0 };
+     float font_size = -1;
+     std::wstring font_face;
++    std::optional<NoteArrow> arrow;
+
+     AbsoluteDocumentPos begin_pos();
+     AbsoluteDocumentPos end_pos();
+diff --git a/pdf_viewer/database.cpp b/pdf_viewer/database.cpp
+index b4eb592..aa93e8a 100644
+--- a/pdf_viewer/database.cpp
++++ b/pdf_viewer/database.cpp
+@@ -241,7 +241,7 @@ static int global_highlight_select_callback(void* res_vector, int argc, char** a
+ static int bookmark_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
+
+     std::vector<BookMark>* res = (std::vector<BookMark>*)res_vector;
+-    assert(argc == 14);
++    assert(argc == 15);
+
+     std::wstring desc = utf8_decode(argv[0]);
+     float offset_y = -1;
+@@ -308,6 +308,7 @@ static int bookmark_select_callback(void* res_vector, int argc, char** argv, cha
+     bm.color[2] = color_blue;
+     bm.font_size = font_size;
+     bm.font_face = font_face;
++    if (argv[14]) bm.arrow = note_arrow_from_db_string(QString::fromUtf8(argv[14]));
+
+     res->push_back(bm);
+     return 0;
+@@ -579,6 +580,7 @@ bool DatabaseManager::create_bookmarks_table() {
+         "color_green real DEFAULT 0,"\
+         "color_blue real DEFAULT 0,"\
+         "font_face TEXT,"\
++        "arrow_json TEXT,"\
+         "begin_x real DEFAULT -1,"\
+         "begin_y real DEFAULT -1,"\
+         "end_x real DEFAULT -1,"\
+@@ -793,7 +795,7 @@ bool DatabaseManager::insert_bookmark_marked(const std::string& document_path, c
+ bool DatabaseManager::insert_bookmark_freetext(const std::string& document_path, const BookMark& bm) {
+
+     std::wstringstream ss;
+-    ss << "INSERT INTO bookmarks (document_path, desc, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, uuid, creation_time, modification_time) VALUES ('"
++    ss << "INSERT INTO bookmarks (document_path, desc, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, arrow_json, uuid, creation_time, modification_time) VALUES ('"
+         << esc(document_path) << "', '"
+         << esc(bm.description) << "', "
+         << bm.begin_x << " , "
+@@ -805,6 +807,7 @@ bool DatabaseManager::insert_bookmark_freetext(const std::string& document_path,
+         << bm.color[2] << ", "
+         << bm.font_size << ", '"
+         << bm.font_face << "', '"
++        << esc(note_arrow_to_db_string(bm.arrow).toStdWString()) << "', '"
+         << esc(bm.uuid) << "', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);";
+     char* error_message = nullptr;
+
+@@ -1105,7 +1108,7 @@ bool DatabaseManager::select_global_mark(char symbol, std::vector<std::pair<std:
+
+ bool DatabaseManager::select_bookmark(const std::string& book_path, std::vector<BookMark>& out_result) {
+     std::wstringstream ss;
+-    ss << "select desc, offset_y, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, uuid, creation_time, modification_time from bookmarks where document_path='" << esc(book_path) << "';";
++    ss << "select desc, offset_y, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, uuid, creation_time, modification_time, arrow_json from bookmarks where document_path='" << esc(book_path) << "';";
+
+     char* error_message = nullptr;
+     int error_code = sqlite3_exec(global_db, utf8_encode(ss.str()).c_str(), bookmark_select_callback, &out_result, &error_message);
+@@ -1542,7 +1545,15 @@ void DatabaseManager::import_json(std::wstring json_file_path, CachedChecksummer
+         }
+
+         for (const auto& bm : new_bookmarks) {
+-            insert_bookmark(checksum, bm.description, bm.y_offset_, utf8_decode(bm.uuid));
++            if (bm.is_freetext()) {
++                insert_bookmark_freetext(checksum, bm);
++            }
++            else if (bm.is_marked()) {
++                insert_bookmark_marked(checksum, bm.description, bm.begin_x, bm.begin_y, utf8_decode(bm.uuid));
++            }
++            else {
++                insert_bookmark(checksum, bm.description, bm.y_offset_, utf8_decode(bm.uuid));
++            }
+         }
+
+         for (const auto& mark : new_marks) {
+@@ -1676,6 +1687,18 @@ void DatabaseManager::ensure_schema_compatibility() {
+
+         set_version();
+     }
++
++    // This optional column leaves the existing database version usable by older Sioyek builds.
++    sqlite3_stmt* columns = nullptr;
++    if (sqlite3_prepare_v2(global_db, "PRAGMA table_info(bookmarks);", -1, &columns, nullptr) == SQLITE_OK) {
++        bool has_arrow_column = false;
++        while (sqlite3_step(columns) == SQLITE_ROW) {
++            const unsigned char* name = sqlite3_column_text(columns, 1);
++            if (name && std::string(reinterpret_cast<const char*>(name)) == "arrow_json") has_arrow_column = true;
++        }
++        sqlite3_finalize(columns);
++        if (!has_arrow_column) run_schema_query("ALTER TABLE bookmarks ADD COLUMN arrow_json TEXT;");
++    }
+ }
+
+ bool DatabaseManager::run_schema_query(const char* query) {
+@@ -1900,6 +1923,11 @@ bool DatabaseManager::update_bookmark_change_color(const std::string& uuid, cons
+             {"modification_time", "CURRENT_TIMESTAMP"},
+         });
+ }
++bool DatabaseManager::update_bookmark_arrow(const std::string& uuid, const std::optional<NoteArrow>& arrow) {
++    return generic_update_run_query("bookmarks",
++        {{"uuid", QString::fromStdString(uuid)}},
++        {{"arrow_json", note_arrow_to_db_string(arrow)}, {"modification_time", "CURRENT_TIMESTAMP"}});
++}
+ bool DatabaseManager::update_bookmark_change_position(const std::string& uuid, AbsoluteDocumentPos new_begin, AbsoluteDocumentPos new_end) {
+     std::wstringstream ss;
+
+diff --git a/pdf_viewer/database.h b/pdf_viewer/database.h
+index a3896f5..4633e4d 100644
+--- a/pdf_viewer/database.h
++++ b/pdf_viewer/database.h
+@@ -74,6 +74,7 @@ public:
+     bool update_highlight_type(const std::string& uuid, char new_type);
+     bool update_bookmark_change_text(const std::string& uuid, const std::wstring& new_text, float new_font_size);
+     bool update_bookmark_change_color(const std::string& uuid, const float color[3]);
++    bool update_bookmark_arrow(const std::string& uuid, const std::optional<NoteArrow>& arrow);
+     bool update_bookmark_change_position(const std::string& uuid, AbsoluteDocumentPos new_begin, AbsoluteDocumentPos new_end);
+     bool update_portal_change_src_position(const std::string& uuid, AbsoluteDocumentPos new_pos);
+     bool select_opened_books_path_values(std::vector<std::wstring>& out_result);
+@@ -145,4 +146,3 @@ public:
+     bool generic_insert_run_query(std::string table_name,
+         std::vector<std::pair<std::string, QVariant>> values);
+ };
+-
+diff --git a/pdf_viewer/document.cpp b/pdf_viewer/document.cpp
+index fbc31c1..06fab7f 100644
+--- a/pdf_viewer/document.cpp
++++ b/pdf_viewer/document.cpp
+@@ -3877,6 +3877,15 @@ void Document::update_bookmark_color(int index, const float color[3]) {
+     }
+ }
+
++void Document::update_bookmark_arrow(int index, const std::optional<NoteArrow>& arrow) {
++    if (index < 0 || index >= bookmarks.size()) return;
++    if (db_manager->update_bookmark_arrow(bookmarks[index].uuid, arrow)) {
++        bookmarks[index].arrow = arrow;
++        bookmarks[index].update_modification_time();
++        is_annotations_dirty = true;
++    }
++}
++
+ void Document::update_bookmark_position(int index, AbsoluteDocumentPos new_begin_position, AbsoluteDocumentPos new_end_position) {
+     if ((index >= 0) && (index < bookmarks.size())) {
+         if (db_manager->update_bookmark_change_position(bookmarks[index].uuid, new_begin_position, new_end_position)) {
+diff --git a/pdf_viewer/document.h b/pdf_viewer/document.h
+index 727084d..c26c86c 100644
+--- a/pdf_viewer/document.h
++++ b/pdf_viewer/document.h
+@@ -358,6 +358,7 @@ public:
+     void update_highlight_type(int index, char new_type);
+     void update_bookmark_text(int index, const std::wstring& new_text, float new_font_size);
+     void update_bookmark_color(int index, const float color[3]);
++    void update_bookmark_arrow(int index, const std::optional<NoteArrow>& arrow);
+     void update_bookmark_position(int index, AbsoluteDocumentPos new_begin_position, AbsoluteDocumentPos new_end_position);
+     void update_portal_src_position(int index, AbsoluteDocumentPos new_position);
+
+diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
+index 095c56d..ec6c343 100644
+--- a/pdf_viewer/input.cpp
++++ b/pdf_viewer/input.cpp
+@@ -3610,6 +3610,22 @@ public:
+     }
+ };
+
++class AddNoteArrowCommand : public Command {
++public:
++    static inline const std::string cname = "add_note_arrow";
++    static inline const std::string hname = "Attach a curved arrow to the selected note";
++    AddNoteArrowCommand(MainWidget* w) : Command(cname, w) {};
++    void perform() override { widget->begin_note_arrow(); }
++};
++
++class DeleteNoteArrowCommand : public Command {
++public:
++    static inline const std::string cname = "delete_note_arrow";
++    static inline const std::string hname = "Remove the arrow from the selected note";
++    DeleteNoteArrowCommand(MainWidget* w) : Command(cname, w) {};
++    void perform() override { widget->delete_selected_note_arrow(); }
++};
++
+ class EditSelectedBookmarkCommand : public TextCommand {
+ public:
+     static inline const std::string cname = "edit_selected_bookmark";
+@@ -7106,6 +7122,8 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
+     register_command<EditSelectedBookmarkCommand>();
+     register_command<DeleteSelectedBookmarkCommand>();
+     register_command<ChangeSelectedBookmarkColorCommand>();
++    register_command<AddNoteArrowCommand>();
++    register_command<DeleteNoteArrowCommand>();
+     register_command<EditSelectedHighlightCommand>();
+     register_command<SearchCommand>();
+     register_command<DownloadPaperWithUrlCommand>();
+diff --git a/pdf_viewer/keys.config b/pdf_viewer/keys.config
+index 41e1123..f9688de 100644
+--- a/pdf_viewer/keys.config
++++ b/pdf_viewer/keys.config
+@@ -413,3 +413,5 @@ keyboard_smart_jump F
+ # increase_freetext_font_size <C-+>
+ # decrease_freetext_font_size <C-->
+ # change_selected_bookmark_color <C-C>
++# add_note_arrow <C-A>
++# delete_note_arrow da
+diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
+index b5adb72..11b4830 100644
+--- a/pdf_viewer/main_widget.cpp
++++ b/pdf_viewer/main_widget.cpp
+@@ -614,6 +614,11 @@ void MainWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
+         return;
+     }
+
++    if (note_arrow_drag) {
++        move_note_arrow_handle(get_cursor_abspos());
++        return;
++    }
++
+     if (SHOW_STATUSBAR_ONLY_WHEN_MOUSE_OVER) {
+         if (should_show_status_label(false)) {
+             if (!status_label->isVisible()) {
+@@ -760,6 +765,10 @@ void MainWidget::mouseMoveEvent(QMouseEvent* mouse_event) {
+
+     if (!TOUCH_MODE && doc() && !pending_command_instance && !is_selecting &&
+         !opengl_widget->is_window_point_in_overview(normal_mpos)) {
++        if (placing_note_arrow_index >= 0 || note_arrow_handle_at(mpos) || note_arrow_tip_at(mpos) >= 0) {
++            setCursor(Qt::CrossCursor);
++            return;
++        }
+         int edges = freetext_resize_edges_at(mpos);
+         int index = doc()->get_bookmark_index_at_pos(abs_mpos);
+         if (edges) {
+@@ -977,7 +986,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
+     freetext_editor->viewport()->setCursor(Qt::IBeamCursor);
+     freetext_editor->setStyleSheet("QPlainTextEdit { background: #fffde7; border: none; selection-background-color: #377ac4; selection-color: white; }");
+     freetext_editor->setWordWrapMode(QTextOption::WordWrap);
+-    freetext_editor->setToolTip("Enter: save · Shift+Enter: new line · Escape: cancel · Ctrl +/-: text size · Ctrl+Shift+C: text color");
++    freetext_editor->setToolTip("Enter: save · Shift+Enter: new line · Escape: cancel · Ctrl +/-: text size · Ctrl+Shift+C: text color · Ctrl+Shift+A: arrow");
+     freetext_editor->installEventFilter(this);
+     QObject::connect(freetext_editor, &QPlainTextEdit::textChanged, this, [this]() {
+         if (freetext_editor->isVisible()) {
+@@ -1629,6 +1638,18 @@ std::wstring MainWidget::get_status_string(bool is_right) {
+
+ void MainWidget::handle_escape() {
+
++    if (placing_note_arrow_index >= 0 || note_arrow_drag) {
++        if (note_arrow_drag && doc() && note_arrow_drag->bookmark_index >= 0 &&
++            note_arrow_drag->bookmark_index < doc()->get_bookmarks().size()) {
++            doc()->get_bookmarks()[note_arrow_drag->bookmark_index].arrow = note_arrow_drag->original_arrow;
++        }
++        placing_note_arrow_index = -1;
++        note_arrow_drag = {};
++        setCursor(Qt::ArrowCursor);
++        invalidate_render();
++        return;
++    }
++
+     // add high escape priority to overview and search, if any of them are escaped, do not escape any further
+     if (opengl_widget) {
+         bool should_return = false;
+@@ -1658,6 +1679,7 @@ void MainWidget::handle_escape() {
+         bookmark.begin_y = bookmark_move_data->initial_begin_position.y;
+         bookmark.end_x = bookmark_move_data->initial_end_position.x;
+         bookmark.end_y = bookmark_move_data->initial_end_position.y;
++        bookmark.arrow = bookmark_move_data->initial_arrow;
+         bookmark_move_data = {};
+     }
+     smooth_y_move_amount = {};
+@@ -2090,6 +2112,8 @@ void MainWidget::open_document(const Path& path, std::optional<float> offset_x,
+ void MainWidget::open_document(const std::wstring& path, std::optional<float> offset_x, std::optional<float> offset_y, std::optional<float> zoom_level) {
+     finish_freetext_edit();
+     bookmark_move_data = {};
++    placing_note_arrow_index = -1;
++    note_arrow_drag = {};
+     opengl_widget->clear_all_selections();
+
+     //save the previous document state
+@@ -3052,6 +3076,19 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
+     // Double-clicking opened the editor; its release must not change the selection.
+     if (freetext_editor->isVisible()) return;
+
++    if (note_arrow_drag && mevent->button() == Qt::LeftButton) {
++        move_note_arrow_handle(get_cursor_abspos());
++        int index = note_arrow_drag->bookmark_index;
++        if (doc() && index >= 0 && index < doc()->get_bookmarks().size()) {
++            doc()->update_bookmark_arrow(index, doc()->get_bookmarks()[index].arrow);
++        }
++        note_arrow_drag = {};
++        setCursor(Qt::ArrowCursor);
++        is_selecting = false;
++        invalidate_render();
++        return;
++    }
++
+     bool is_shift_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ShiftModifier);
+     bool is_control_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ControlModifier);
+     bool is_command_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::MetaModifier);
+@@ -3239,6 +3276,39 @@ void MainWidget::mousePressEvent(QMouseEvent* mevent) {
+     bool is_command_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::MetaModifier);
+     bool is_alt_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::AltModifier);
+
++    if (!TOUCH_MODE && doc() && mevent->button() == Qt::LeftButton && mevent->modifiers() == Qt::NoModifier) {
++        if (placing_note_arrow_index >= 0 && placing_note_arrow_index < doc()->get_bookmarks().size()) {
++            int index = placing_note_arrow_index;
++            note_arrow_drag = NoteArrowDragData{index, NoteArrowDragPart::PlacingTip, doc()->get_bookmarks()[index].arrow};
++            placing_note_arrow_index = -1;
++            move_note_arrow_handle(WindowPos(mevent->pos()).to_absolute(main_document_view));
++            setFocus();
++            is_selecting = false;
++            return;
++        }
++        int handle = note_arrow_handle_at(WindowPos(mevent->pos()));
++        if (handle) {
++            NoteArrowDragPart part = handle == 1 ? NoteArrowDragPart::Tip :
++                                     handle == 2 ? NoteArrowDragPart::Control1 : NoteArrowDragPart::Control2;
++            note_arrow_drag = NoteArrowDragData{selected_bookmark_index, part,
++                                                 doc()->get_bookmarks()[selected_bookmark_index].arrow};
++            setFocus();
++            is_selecting = false;
++            return;
++        }
++        int arrow_index = note_arrow_tip_at(WindowPos(mevent->pos()));
++        if (arrow_index >= 0) {
++            set_selected_bookmark_index(arrow_index);
++            set_selected_highlight_index(-1);
++            note_arrow_drag = NoteArrowDragData{arrow_index, NoteArrowDragPart::Tip,
++                                                 doc()->get_bookmarks()[arrow_index].arrow};
++            setFocus();
++            is_selecting = false;
++            validate_render();
++            return;
++        }
++    }
++
+     if (should_draw(false) && (mevent->button() == Qt::MouseButton::LeftButton)) {
+         start_drawing();
+         return;
+@@ -8797,6 +8867,88 @@ void MainWidget::change_selected_bookmark_color() {
+     invalidate_render();
+ }
+
++static NoteArrow default_note_arrow(const BookMark& bookmark, AbsoluteDocumentPos tip) {
++    AbsoluteDocumentPos anchor = note_arrow_anchor(bookmark, tip);
++    float dx = tip.x - anchor.x;
++    float dy = tip.y - anchor.y;
++    float length = std::hypot(dx, dy);
++    float bend = std::min(45.0f, length * 0.22f);
++    float nx = length > 0.001f ? -dy / length : 0.0f;
++    float ny = length > 0.001f ? dx / length : 0.0f;
++    return {tip,
++            {anchor.x + dx * 0.30f + nx * bend, anchor.y + dy * 0.30f + ny * bend},
++            {anchor.x + dx * 0.70f + nx * bend, anchor.y + dy * 0.70f + ny * bend}};
++}
++
++void MainWidget::begin_note_arrow() {
++    if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
++    const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
++    if (!bookmark.is_freetext() || bookmark.is_box()) return;
++    std::string uuid = bookmark.uuid;
++    finish_freetext_edit();
++    int index = doc()->get_bookmark_index_with_uuid(uuid);
++    if (index < 0) return;
++    set_selected_bookmark_index(index);
++    placing_note_arrow_index = index;
++    setCursor(Qt::CrossCursor);
++}
++
++void MainWidget::delete_selected_note_arrow() {
++    if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
++    const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
++    if (!bookmark.is_freetext() || bookmark.is_box() || !bookmark.arrow) return;
++    placing_note_arrow_index = -1;
++    note_arrow_drag = {};
++    doc()->update_bookmark_arrow(selected_bookmark_index, {});
++    invalidate_render();
++}
++
++int MainWidget::note_arrow_handle_at(WindowPos pos) {
++    if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return 0;
++    const auto& arrow = doc()->get_bookmarks()[selected_bookmark_index].arrow;
++    if (!arrow) return 0;
++    for (const auto& handle : {std::pair<int, AbsoluteDocumentPos>{1, arrow->tip},
++                               {2, arrow->control1}, {3, arrow->control2}}) {
++        WindowPos window = handle.second.to_window(main_document_view);
++        int dx = pos.x - window.x;
++        int dy = pos.y - window.y;
++        if (dx * dx + dy * dy <= 100) return handle.first;
++    }
++    return 0;
++}
++
++int MainWidget::note_arrow_tip_at(WindowPos pos) {
++    if (!doc()) return -1;
++    const auto& bookmarks = doc()->get_bookmarks();
++    for (int index = static_cast<int>(bookmarks.size()) - 1; index >= 0; --index) {
++        if (!bookmarks[index].is_freetext() || bookmarks[index].is_box() || !bookmarks[index].arrow) continue;
++        WindowPos tip = bookmarks[index].arrow->tip.to_window(main_document_view);
++        int dx = pos.x - tip.x;
++        int dy = pos.y - tip.y;
++        if (dx * dx + dy * dy <= 100) return index;
++    }
++    return -1;
++}
++
++void MainWidget::move_note_arrow_handle(AbsoluteDocumentPos pos) {
++    if (!doc() || !note_arrow_drag) return;
++    int index = note_arrow_drag->bookmark_index;
++    if (index < 0 || index >= doc()->get_bookmarks().size()) return;
++    BookMark& bookmark = doc()->get_bookmarks()[index];
++    if (note_arrow_drag->part == NoteArrowDragPart::PlacingTip) {
++        bookmark.arrow = default_note_arrow(bookmark, pos);
++    }
++    else if (bookmark.arrow) {
++        switch (note_arrow_drag->part) {
++        case NoteArrowDragPart::Tip: bookmark.arrow->tip = pos; break;
++        case NoteArrowDragPart::Control1: bookmark.arrow->control1 = pos; break;
++        case NoteArrowDragPart::Control2: bookmark.arrow->control2 = pos; break;
++        case NoteArrowDragPart::PlacingTip: break;
++        }
++    }
++    validate_render();
++}
++
+ void MainWidget::change_selected_highlight_text_annot(const std::wstring& new_text) {
+
+     if (selected_highlight_index != -1) {
+@@ -8873,6 +9025,10 @@ bool MainWidget::eventFilter(QObject* obj, QEvent* event) {
+                 change_selected_bookmark_color();
+                 return true;
+             }
++            if ((key->modifiers() & Qt::ShiftModifier) && key->key() == Qt::Key_A) {
++                begin_note_arrow();
++                return true;
++            }
+             if (key->key() == Qt::Key_Plus || key->key() == Qt::Key_Equal || key->key() == Qt::Key_Minus) {
+                 update_selected_bookmark_font_size(key->key() == Qt::Key_Minus ? 1.0f / 1.1f : 1.1f);
+                 return true;
+@@ -9080,6 +9236,11 @@ TextToSpeechHandler* MainWidget::get_tts() {
+ void MainWidget::handle_bookmark_move_finish() {
+     BookMark& bm = doc()->get_bookmarks()[bookmark_move_data->index];
+     doc()->update_bookmark_position(bookmark_move_data->index, { bm.begin_x, bm.begin_y }, { bm.end_x, bm.end_y });
++    if (bm.arrow && bookmark_move_data->initial_arrow &&
++        (bm.arrow->control1.x != bookmark_move_data->initial_arrow->control1.x ||
++         bm.arrow->control1.y != bookmark_move_data->initial_arrow->control1.y)) {
++        doc()->update_bookmark_arrow(bookmark_move_data->index, bm.arrow);
++    }
+ }
+
+ void MainWidget::handle_portal_move_finish() {
+@@ -9104,12 +9265,28 @@ void MainWidget::handle_bookmark_move() {
+         if (edges & 2) bookmark.end_x = std::max(bookmark_move_data->initial_end_position.x + diff_x, bookmark.begin_x + min_size);
+         if (edges & 4) bookmark.begin_y = std::max(0.0f, std::min(bookmark_move_data->initial_begin_position.y + diff_y, bookmark.end_y - min_size));
+         if (edges & 8) bookmark.end_y = std::max(bookmark_move_data->initial_end_position.y + diff_y, bookmark.begin_y + min_size);
++        if (bookmark_move_data->initial_arrow && bookmark.arrow) {
++            BookMark original = bookmark;
++            original.begin_x = bookmark_move_data->initial_begin_position.x;
++            original.begin_y = bookmark_move_data->initial_begin_position.y;
++            original.end_x = bookmark_move_data->initial_end_position.x;
++            original.end_y = bookmark_move_data->initial_end_position.y;
++            AbsoluteDocumentPos old_anchor = note_arrow_anchor(original, bookmark_move_data->initial_arrow->control1);
++            AbsoluteDocumentPos new_anchor = note_arrow_anchor(bookmark, bookmark_move_data->initial_arrow->control1);
++            bookmark.arrow->control1.x = bookmark_move_data->initial_arrow->control1.x + new_anchor.x - old_anchor.x;
++            bookmark.arrow->control1.y = bookmark_move_data->initial_arrow->control1.y + new_anchor.y - old_anchor.y;
++        }
+         return;
+     }
+     diff_y = std::max(diff_y, -bookmark_move_data->initial_begin_position.y);
+     bookmark.begin_x = bookmark_move_data->initial_begin_position.x + diff_x;
+     bookmark.begin_y = bookmark_move_data->initial_begin_position.y + diff_y;
+
++    if (bookmark_move_data->initial_arrow && bookmark.arrow) {
++        bookmark.arrow->control1.x = bookmark_move_data->initial_arrow->control1.x + diff_x;
++        bookmark.arrow->control1.y = bookmark_move_data->initial_arrow->control1.y + diff_y;
++    }
++
+     if (bookmark.end_y >= 0) {
+         bookmark.end_x = bookmark_move_data->initial_end_position.x + diff_x;
+         bookmark.end_y = bookmark_move_data->initial_end_position.y + diff_y;
+@@ -9159,6 +9336,7 @@ void MainWidget::begin_bookmark_move(int index, AbsoluteDocumentPos begin_cursor
+     move_data.initial_end_position.y = doc()->get_bookmarks()[index].end_y;
+
+     move_data.initial_mouse_position = begin_cursor_pos;
++    move_data.initial_arrow = bookmark.arrow;
+     bookmark_move_data = move_data;
+ }
+
+@@ -11208,6 +11386,10 @@ void MainWidget::set_selected_highlight_index(int index) {
+ }
+
+ void MainWidget::set_selected_bookmark_index(int index) {
++    if (placing_note_arrow_index >= 0 && placing_note_arrow_index != index) {
++        placing_note_arrow_index = -1;
++        setCursor(Qt::ArrowCursor);
++    }
+     if (index != -1) {
+         selected_rectangle_point = {};
+     }
+diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
+index ae36190..f1ec801 100644
+--- a/pdf_viewer/main_widget.h
++++ b/pdf_viewer/main_widget.h
+@@ -88,6 +88,15 @@ struct BookmarkMoveData {
+     AbsoluteDocumentPos initial_begin_position;
+     AbsoluteDocumentPos initial_end_position;
+     AbsoluteDocumentPos initial_mouse_position;
++    std::optional<NoteArrow> initial_arrow;
++};
++
++enum class NoteArrowDragPart { Tip, Control1, Control2, PlacingTip };
++
++struct NoteArrowDragData {
++    int bookmark_index;
++    NoteArrowDragPart part;
++    std::optional<NoteArrow> original_arrow;
+ };
+
+ struct FixedVelocityState {
+@@ -245,6 +254,8 @@ public:
+     std::optional<AbsoluteDocumentPos> rect_select_end = {};
+
+     std::optional<BookmarkMoveData> bookmark_move_data = {};
++    int placing_note_arrow_index = -1;
++    std::optional<NoteArrowDragData> note_arrow_drag;
+     std::optional<PortalMoveData> portal_move_data = {};
+
+     // when set, mouse wheel moves the ruler
+@@ -456,6 +467,11 @@ public:
+     void change_selected_highlight_type(char new_type);
+     void change_selected_bookmark_text(const std::wstring& new_text);
+     void change_selected_bookmark_color();
++    void begin_note_arrow();
++    void delete_selected_note_arrow();
++    int note_arrow_handle_at(WindowPos pos);
++    int note_arrow_tip_at(WindowPos pos);
++    void move_note_arrow_handle(AbsoluteDocumentPos pos);
+     void change_selected_highlight_text_annot(const std::wstring& new_text);
+     char get_current_selected_highlight_type();
+     void show_textbar(const std::wstring& command_name, const std::wstring& initial_value = L"");
+diff --git a/pdf_viewer/pdf_view_opengl_widget.cpp b/pdf_viewer/pdf_view_opengl_widget.cpp
+index 1e5e4c6..e612b4b 100644
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp
+@@ -5,6 +5,7 @@
+ #include <qapplication.h>
+ #include <qdatetime.h>
+ #include <qfile.h>
++#include <QPainterPath>
+
+ #include "pdf_view_opengl_widget.h"
+ #include "path.h"
+@@ -1756,6 +1757,51 @@ void PdfViewOpenGLWidget::my_render(QPainter* painter) {
+                         }
+                     }
+                     else {
++                        if (bookmarks[i].arrow) {
++                            const NoteArrow& arrow = *bookmarks[i].arrow;
++                            WindowPos anchor = note_arrow_anchor(bookmarks[i], arrow.control1).to_window(document_view);
++                            WindowPos control1 = arrow.control1.to_window(document_view);
++                            WindowPos control2 = arrow.control2.to_window(document_view);
++                            WindowPos tip = arrow.tip.to_window(document_view);
++                            QPointF start_point(anchor.x, anchor.y);
++                            QPointF control1_point(control1.x, control1.y);
++                            QPointF control2_point(control2.x, control2.y);
++                            QPointF tip_point(tip.x, tip.y);
++
++                            painter->save();
++                            painter->setRenderHint(QPainter::Antialiasing, true);
++                            QColor arrow_color = convert_float3_to_qcolor(&bookmark_color[0]);
++                            painter->setPen(QPen(arrow_color, 2.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
++                            QPainterPath curve(start_point);
++                            curve.cubicTo(control1_point, control2_point, tip_point);
++                            painter->drawPath(curve);
++
++                            QPointF tangent = tip_point - control2_point;
++                            float tangent_length = std::hypot(tangent.x(), tangent.y());
++                            if (tangent_length < 1.0f) {
++                                tangent = tip_point - start_point;
++                                tangent_length = std::hypot(tangent.x(), tangent.y());
++                            }
++                            if (tangent_length >= 1.0f) {
++                                QPointF direction = tangent / tangent_length;
++                                QPointF normal(-direction.y(), direction.x());
++                                QPointF base = tip_point - direction * 12.0;
++                                painter->drawLine(tip_point, base + normal * 5.0);
++                                painter->drawLine(tip_point, base - normal * 5.0);
++                            }
++
++                            if (i == selected_bookmark_index) {
++                                painter->setPen(QPen(QColor(55, 122, 196), 1, Qt::DashLine));
++                                painter->drawLine(start_point, control1_point);
++                                painter->drawLine(control2_point, tip_point);
++                                painter->setPen(QColor(55, 122, 196));
++                                painter->setBrush(Qt::white);
++                                painter->drawEllipse(control1_point, 5, 5);
++                                painter->drawEllipse(control2_point, 5, 5);
++                                painter->drawEllipse(tip_point, 5, 5);
++                            }
++                            painter->restore();
++                        }
+                         painter->setPen(convert_float3_to_qcolor(&bookmark_color[0]));
+                         painter->drawText(window_qrect.adjusted(5, 5, -5, -5), flags, QString::fromStdWString(bookmarks[i].description));
+                         if (i == selected_bookmark_index) {

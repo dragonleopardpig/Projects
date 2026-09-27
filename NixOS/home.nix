@@ -424,9 +424,13 @@ in
     # Edit directly in the note: Shift+Enter for a new line, Escape to cancel.
     # Double-click or Ctrl+e to edit; drag to move; drag an edge to resize.
     # Ctrl +/- changes text size; click then d n deletes the selected note.
+    # Ctrl+Shift+A attaches an arrow: click or drag to place its tip. Drag the
+    # arrow tip and its two curve handles to reposition and orient it; d a removes it.
     add_freetext_bookmark <C-n>
     edit_selected_bookmark <C-e>
     change_selected_bookmark_color <C-C>
+    add_note_arrow <C-A>
+    delete_note_arrow da
     delete_selected_bookmark dn
     increase_freetext_font_size <C-=>
     increase_freetext_font_size <C-+>
