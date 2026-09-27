@@ -1,0 +1,219 @@
+diff --git a/pdf_viewer/database.cpp b/pdf_viewer/database.cpp
+index e95b28a..b4eb592 100644
+--- a/pdf_viewer/database.cpp
++++ b/pdf_viewer/database.cpp
+@@ -1888,6 +1888,18 @@ bool DatabaseManager::update_bookmark_change_text(const std::string& uuid, const
+             {"modification_time", "CURRENT_TIMESTAMP"},
+         });
+ }
++bool DatabaseManager::update_bookmark_change_color(const std::string& uuid, const float color[3]) {
++    return generic_update_run_query("bookmarks",
++        {
++            {"uuid", QString::fromStdString(uuid)},
++        },
++        {
++            {"color_red", color[0]},
++            {"color_green", color[1]},
++            {"color_blue", color[2]},
++            {"modification_time", "CURRENT_TIMESTAMP"},
++        });
++}
+ bool DatabaseManager::update_bookmark_change_position(const std::string& uuid, AbsoluteDocumentPos new_begin, AbsoluteDocumentPos new_end) {
+     std::wstringstream ss;
+
+diff --git a/pdf_viewer/database.h b/pdf_viewer/database.h
+index 592e7d0..a3896f5 100644
+--- a/pdf_viewer/database.h
++++ b/pdf_viewer/database.h
+@@ -73,6 +73,7 @@ public:
+     bool update_highlight_add_annotation(const std::string& uuid, const std::wstring& text_annot);
+     bool update_highlight_type(const std::string& uuid, char new_type);
+     bool update_bookmark_change_text(const std::string& uuid, const std::wstring& new_text, float new_font_size);
++    bool update_bookmark_change_color(const std::string& uuid, const float color[3]);
+     bool update_bookmark_change_position(const std::string& uuid, AbsoluteDocumentPos new_begin, AbsoluteDocumentPos new_end);
+     bool update_portal_change_src_position(const std::string& uuid, AbsoluteDocumentPos new_pos);
+     bool select_opened_books_path_values(std::vector<std::wstring>& out_result);
+@@ -145,4 +146,3 @@ public:
+         std::vector<std::pair<std::string, QVariant>> values);
+ };
+
+-
+diff --git a/pdf_viewer/document.cpp b/pdf_viewer/document.cpp
+index c02d3f4..fbc31c1 100644
+--- a/pdf_viewer/document.cpp
++++ b/pdf_viewer/document.cpp
+@@ -3866,6 +3866,17 @@ void Document::update_bookmark_text(int index, const std::wstring& new_text, flo
+     }
+ }
+
++void Document::update_bookmark_color(int index, const float color[3]) {
++    if (index >= 0 && index < bookmarks.size() &&
++        db_manager->update_bookmark_change_color(bookmarks[index].uuid, color)) {
++        for (int component = 0; component < 3; ++component) {
++            bookmarks[index].color[component] = color[component];
++        }
++        bookmarks[index].update_modification_time();
++        is_annotations_dirty = true;
++    }
++}
++
+ void Document::update_bookmark_position(int index, AbsoluteDocumentPos new_begin_position, AbsoluteDocumentPos new_end_position) {
+     if ((index >= 0) && (index < bookmarks.size())) {
+         if (db_manager->update_bookmark_change_position(bookmarks[index].uuid, new_begin_position, new_end_position)) {
+diff --git a/pdf_viewer/document.h b/pdf_viewer/document.h
+index dbe2897..727084d 100644
+--- a/pdf_viewer/document.h
++++ b/pdf_viewer/document.h
+@@ -357,6 +357,7 @@ public:
+     void update_highlight_type(const std::string& uuid, char new_type);
+     void update_highlight_type(int index, char new_type);
+     void update_bookmark_text(int index, const std::wstring& new_text, float new_font_size);
++    void update_bookmark_color(int index, const float color[3]);
+     void update_bookmark_position(int index, AbsoluteDocumentPos new_begin_position, AbsoluteDocumentPos new_end_position);
+     void update_portal_src_position(int index, AbsoluteDocumentPos new_position);
+
+diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
+index 71ad96f..095c56d 100644
+--- a/pdf_viewer/input.cpp
++++ b/pdf_viewer/input.cpp
+@@ -3600,6 +3600,16 @@ public:
+     }
+ };
+
++class ChangeSelectedBookmarkColorCommand : public Command {
++public:
++    static inline const std::string cname = "change_selected_bookmark_color";
++    static inline const std::string hname = "Choose the selected note's text color";
++    ChangeSelectedBookmarkColorCommand(MainWidget* w) : Command(cname, w) {};
++    void perform() override {
++        widget->change_selected_bookmark_color();
++    }
++};
++
+ class EditSelectedBookmarkCommand : public TextCommand {
+ public:
+     static inline const std::string cname = "edit_selected_bookmark";
+@@ -7095,6 +7105,7 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
+     register_command<GotoPageWithPageNumberCommand>();
+     register_command<EditSelectedBookmarkCommand>();
+     register_command<DeleteSelectedBookmarkCommand>();
++    register_command<ChangeSelectedBookmarkColorCommand>();
+     register_command<EditSelectedHighlightCommand>();
+     register_command<SearchCommand>();
+     register_command<DownloadPaperWithUrlCommand>();
+diff --git a/pdf_viewer/keys.config b/pdf_viewer/keys.config
+index 7c0ee19..41e1123 100644
+--- a/pdf_viewer/keys.config
++++ b/pdf_viewer/keys.config
+@@ -412,3 +412,4 @@ keyboard_smart_jump F
+ # increase_freetext_font_size <C-=>
+ # increase_freetext_font_size <C-+>
+ # decrease_freetext_font_size <C-->
++# change_selected_bookmark_color <C-C>
+diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
+index 3746a79..b5adb72 100644
+--- a/pdf_viewer/main_widget.cpp
++++ b/pdf_viewer/main_widget.cpp
+@@ -15,6 +15,7 @@
+
+ #include <QPlainTextEdit>
+ #include <QTextDocument>
++#include <QColorDialog>
+ #include <iostream>
+ #include <vector>
+ #include <string>
+@@ -974,9 +975,9 @@ MainWidget::MainWidget(fz_context* mupdf_context,
+     freetext_editor->hide();
+     freetext_editor->setCursorWidth(2);
+     freetext_editor->viewport()->setCursor(Qt::IBeamCursor);
+-    freetext_editor->setStyleSheet("QPlainTextEdit { background: #fffde7; color: #111111; border: 1px solid #377ac4; selection-background-color: #377ac4; selection-color: white; }");
++    freetext_editor->setStyleSheet("QPlainTextEdit { background: #fffde7; border: none; selection-background-color: #377ac4; selection-color: white; }");
+     freetext_editor->setWordWrapMode(QTextOption::WordWrap);
+-    freetext_editor->setToolTip("Enter: save · Shift+Enter: new line · Escape: cancel · Ctrl +/-: text size");
++    freetext_editor->setToolTip("Enter: save · Shift+Enter: new line · Escape: cancel · Ctrl +/-: text size · Ctrl+Shift+C: text color");
+     freetext_editor->installEventFilter(this);
+     QObject::connect(freetext_editor, &QPlainTextEdit::textChanged, this, [this]() {
+         if (freetext_editor->isVisible()) {
+@@ -8772,6 +8773,30 @@ void MainWidget::change_selected_bookmark_text(const std::wstring& new_text) {
+     }
+ }
+
++void MainWidget::change_selected_bookmark_color() {
++    if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
++    BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
++    if (!bookmark.is_freetext() || bookmark.is_box()) return;
++
++    QColor current = QColor::fromRgbF(bookmark.color[0], bookmark.color[1], bookmark.color[2]);
++    QColor chosen = QColorDialog::getColor(current, this, "Note text color");
++    if (!chosen.isValid()) return;
++
++    float color[3] = {static_cast<float>(chosen.redF()), static_cast<float>(chosen.greenF()), static_cast<float>(chosen.blueF())};
++    if (pending_command_instance && pending_command_instance->get_name() == "add_freetext_bookmark") {
++        // New notes are written to the database only when the text is saved.
++        for (int component = 0; component < 3; ++component) bookmark.color[component] = color[component];
++    }
++    else {
++        doc()->update_bookmark_color(selected_bookmark_index, color);
++    }
++    if (freetext_editor->isVisible()) {
++        update_freetext_editor_geometry();
++        freetext_editor->setFocus();
++    }
++    invalidate_render();
++}
++
+ void MainWidget::change_selected_highlight_text_annot(const std::wstring& new_text) {
+
+     if (selected_highlight_index != -1) {
+@@ -8844,6 +8869,10 @@ bool MainWidget::eventFilter(QObject* obj, QEvent* event) {
+             return true;
+         }
+         if (key->modifiers() & (Qt::ControlModifier | Qt::MetaModifier)) {
++            if ((key->modifiers() & Qt::ShiftModifier) && key->key() == Qt::Key_C) {
++                change_selected_bookmark_color();
++                return true;
++            }
+             if (key->key() == Qt::Key_Plus || key->key() == Qt::Key_Equal || key->key() == Qt::Key_Minus) {
+                 update_selected_bookmark_font_size(key->key() == Qt::Key_Minus ? 1.0f / 1.1f : 1.1f);
+                 return true;
+@@ -8878,6 +8907,9 @@ void MainWidget::update_freetext_editor_geometry() {
+     float size = bookmark.font_size > 0 ? bookmark.font_size : FREETEXT_BOOKMARK_FONT_SIZE;
+     font.setPointSizeF(size * main_document_view->get_zoom_level() * 0.75f);
+     freetext_editor->setFont(font);
++    QPalette palette = freetext_editor->palette();
++    palette.setColor(QPalette::Text, QColor::fromRgbF(bookmark.color[0], bookmark.color[1], bookmark.color[2]));
++    freetext_editor->setPalette(palette);
+ }
+
+ void MainWidget::finish_freetext_edit() {
+diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
+index a0eef3c..ae36190 100644
+--- a/pdf_viewer/main_widget.h
++++ b/pdf_viewer/main_widget.h
+@@ -455,6 +455,7 @@ public:
+     void set_command_textbox_text(const std::wstring& txt);
+     void change_selected_highlight_type(char new_type);
+     void change_selected_bookmark_text(const std::wstring& new_text);
++    void change_selected_bookmark_color();
+     void change_selected_highlight_text_annot(const std::wstring& new_text);
+     char get_current_selected_highlight_type();
+     void show_textbar(const std::wstring& command_name, const std::wstring& initial_value = L"");
+diff --git a/pdf_viewer/pdf_view_opengl_widget.cpp b/pdf_viewer/pdf_view_opengl_widget.cpp
+index d72e9ea..1e5e4c6 100644
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp
+@@ -1756,14 +1756,6 @@ void PdfViewOpenGLWidget::my_render(QPainter* painter) {
+                         }
+                     }
+                     else {
+-                        if (i == selected_bookmark_index) {
+-                            float temp_color[3] = {0.5f, 0.5f, 0.5f};
+-                            painter->setPen(convert_float3_to_qcolor(&temp_color[0]));
+-                            painter->setPen(Qt::DashLine);
+-                            QRect fill_rect(window_rect.x0, window_rect.y0, fz_irect_width(window_rect), fz_irect_height(window_rect));
+-                            painter->fillRect(fill_rect, QColor(255, 255, 0, 128));
+-                            painter->drawRect(window_rect.x0, window_rect.y0, fz_irect_width(window_rect), fz_irect_height(window_rect));
+-                        }
+                         painter->setPen(convert_float3_to_qcolor(&bookmark_color[0]));
+                         painter->drawText(window_qrect.adjusted(5, 5, -5, -5), flags, QString::fromStdWString(bookmarks[i].description));
+                         if (i == selected_bookmark_index) {

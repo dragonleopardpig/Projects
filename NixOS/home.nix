@@ -426,6 +426,7 @@ in
     # Ctrl +/- changes text size; click then d n deletes the selected note.
     add_freetext_bookmark <C-n>
     edit_selected_bookmark <C-e>
+    change_selected_bookmark_color <C-C>
     delete_selected_bookmark dn
     increase_freetext_font_size <C-=>
     increase_freetext_font_size <C-+>
@@ -443,8 +444,8 @@ in
   # reading, only an explicit settings change.
   xdg.configFile."sioyek/prefs_user.config".force = true;
   xdg.configFile."sioyek/prefs_user.config".text = ''
-    # Keep note boxes visible and their text readable at normal zoom.
-    render_freetext_borders 1
+    # Show notes as text on the page; selection still shows resize handles.
+    render_freetext_borders 0
     freetext_bookmark_font_size 12
     freetext_bookmark_font_face Caveat
 
