@@ -237,10 +237,26 @@ index 76da5a79..6b3377ff 100644
      void add_pixmap(QPixmap pixmap);
      AbsoluteRect get_bounding_box();
 diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
-index f811a964..e5438a54 100644
+index f811a964..9b9f2002 100644
 --- a/pdf_viewer/input.cpp
 +++ b/pdf_viewer/input.cpp
-@@ -6157,6 +6157,52 @@ public:
+@@ -3985,9 +3985,14 @@ class DeleteHighlightCommand : public GenericHighlightCommand {
+ 
+ public:
+     static inline const std::string cname = "delete_highlight";
+-    static inline const std::string hname = "Delete the selected highlight";
++    static inline const std::string hname = "Delete the selected highlight or rectangle";
+     DeleteHighlightCommand(MainWidget* w) : GenericHighlightCommand(cname, w) {};
+ 
++    int get_selected_item_index() override {
++        // A clicked rectangle needs no highlight tag prompt.
++        return widget->selected_rectangle_point ? 0 : GenericHighlightCommand::get_selected_item_index();
++    }
++
+     void perform_with_highlight_selected() override {
+         widget->handle_delete_selected_highlight();
+     }
+@@ -6157,6 +6162,52 @@ public:
  
  };
  
@@ -293,7 +309,7 @@ index f811a964..e5438a54 100644
  class ToggleTypingModeCommand : public Command {
  public:
      static inline const std::string cname = "toggle_typing_mode";
-@@ -7435,6 +7481,8 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
+@@ -7435,6 +7486,8 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
      register_command<OverviewRulerPortalCommand>();
      register_command<GotoRulerPortalCommand>();
      register_command<SelectRectCommand>();
@@ -303,9 +319,18 @@ index f811a964..e5438a54 100644
      register_command<DonateCommand>();
      register_command<OverviewNextItemCommand>();
 diff --git a/pdf_viewer/keys.config b/pdf_viewer/keys.config
-index 7f5c83da..f8c45910 100644
+index 7f5c83da..9e9a9963 100644
 --- a/pdf_viewer/keys.config
 +++ b/pdf_viewer/keys.config
+@@ -182,7 +182,7 @@ add_highlight h
+ goto_highlight gh
+ # Goto highlights of all documents
+ goto_highlight_g gH
+-# Left click on a highlight and then press the `delete_highlight` shortcut to delete it.
++# Left click on a highlight or inside a rectangle, then press `delete_highlight` to delete it.
+ delete_highlight dh
+ 
+ # Sets the highlight type to be used for other operations (the default highlight type is 'a')
 @@ -195,6 +195,11 @@ delete_highlight dh
  ## with highlight type set using `set_select_highlight_type`
  #toggle_select_highlight <unbound>
@@ -319,14 +344,36 @@ index 7f5c83da..f8c45910 100644
  goto_next_highlight gnh
  goto_prev_highlight gNh
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index c4aff899..4671e64d 100644
+index c4aff899..0f2e45b3 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
-@@ -8432,6 +8432,75 @@ void MainWidget::finish_drawing(QPoint pos) {
+@@ -2916,6 +2916,10 @@ void MainWidget::handle_click(WindowPos click_pos) {
+     set_selected_bookmark_index(doc()->get_bookmark_index_at_pos(mouse_abspos));
+     selected_portal_index = doc()->get_portal_index_at_pos(mouse_abspos);
+ 
++    if (selected_highlight_index == -1 && selected_bookmark_index == -1 && selected_portal_index == -1 && !link) {
++        select_rectangle_at(mouse_abspos);
++    }
++
+     if (selected_portal_index >= 0) {
+         Portal portal = doc()->get_portals()[selected_portal_index];
+ 
+@@ -6781,6 +6784,9 @@ void MainWidget::handle_delete_selected_highlight() {
+         main_document_view->delete_highlight_with_index(selected_highlight_index);
+         set_selected_highlight_index(-1);
+     }
++    else if (selected_rectangle_point) {
++        delete_rectangle(selected_rectangle_point.value());
++    }
+     validate_render();
+ }
+ 
+@@ -8432,6 +8438,92 @@ void MainWidget::finish_drawing(QPoint pos) {
      
  }
  
 +void MainWidget::draw_rectangle(AbsoluteRect rect) {
++    selected_rectangle_point = {};
 +    if (rect.x0 > rect.x1) {
 +        std::swap(rect.x0, rect.x1);
 +    }
@@ -380,7 +427,23 @@ index c4aff899..4671e64d 100644
 +    invalidate_render();
 +}
 +
++void MainWidget::select_rectangle_at(AbsoluteDocumentPos point) {
++    selected_rectangle_point = {};
++    const auto& drawings = doc()->get_page_drawings(doc()->absolute_to_page_pos_uncentered(point).page);
++
++    for (auto it = drawings.rbegin(); it != drawings.rend(); ++it) {
++        if (it->is_rectangle() && it->bbox().contains(point)) {
++            // Match delete_rectangle_at's choice when rectangles overlap.
++            if (it->type >= 'a' && it->type <= 'z' && opengl_widget->visible_drawing_mask[it->type - 'a']) {
++                selected_rectangle_point = point;
++            }
++            return;
++        }
++    }
++}
++
 +void MainWidget::delete_rectangle(AbsoluteDocumentPos point) {
++    selected_rectangle_point = {};
 +    bool deleted;
 +    if (opengl_widget->get_scratchpad()) {
 +        deleted = scratchpad->delete_rectangle_at(point);
@@ -398,16 +461,49 @@ index c4aff899..4671e64d 100644
  
  void MainWidget::delete_freehand_drawings(AbsoluteRect rect) {
      if (opengl_widget->get_scratchpad()) {
+@@ -10933,6 +11025,7 @@ bool MainWidget::is_scratchpad_mode(){
+ }
+ 
+ void MainWidget::toggle_scratchpad_mode(){
++    deselect_document_indices();
+     if (opengl_widget->get_scratchpad()) {
+         opengl_widget->set_scratchpad(nullptr);
+     }
+@@ -11109,11 +11202,15 @@ void MainWidget::clear_current_document_drawings() {
+ }
+ 
+ void MainWidget::set_selected_highlight_index(int index) {
++    selected_rectangle_point = {};
+     selected_highlight_index = index;
+     opengl_widget->set_selected_highlight_index(index);
+ }
+ 
+ void MainWidget::set_selected_bookmark_index(int index) {
++    if (index != -1) {
++        selected_rectangle_point = {};
++    }
+     selected_bookmark_index = index;
+     opengl_widget->set_selected_bookmark_index(index);
+ }
 diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
-index fdddb482..87766b13 100644
+index fdddb482..46ff9040 100644
 --- a/pdf_viewer/main_widget.h
 +++ b/pdf_viewer/main_widget.h
-@@ -776,6 +776,8 @@ public:
+@@ -304,6 +304,7 @@ public:
+     // the index of highlight in doc()->get_highlights() that is selected. This is used to
+     // delete/edit highlights e.g. by selecting a highlight by clicking on it and then executing `delete_highlight`
+     int selected_highlight_index = -1;
++    std::optional<AbsoluteDocumentPos> selected_rectangle_point = {};
+     int selected_bookmark_index = -1;
+     int selected_portal_index = -1;
+ 
+@@ -776,6 +777,9 @@ public:
      void handle_drawing_move(QPoint pos, float pressure);
      void start_drawing();
      void finish_drawing(QPoint pos);
 +    void draw_rectangle(AbsoluteRect rect);
 +    void delete_rectangle(AbsoluteDocumentPos point);
++    void select_rectangle_at(AbsoluteDocumentPos point);
      void handle_pen_drawing_event(QTabletEvent* te);
      void select_freehand_drawings(AbsoluteRect rect);
      void delete_freehand_drawings(AbsoluteRect rect);
