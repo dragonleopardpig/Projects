@@ -379,7 +379,7 @@ in
     save_filename_format=swappy-%Y%m%d-%H%M%S.png
   '';
 
-  # Sioyek keybindings. Upstream ships all three of these commands unbound.
+  # Sioyek keybindings.
   # force, because this replaces a hand-edited file that predates being managed.
   # Sioyek only ever writes prefs_user.config (via setconfig), never this file,
   # so a read-only store symlink is safe — but its built-in `keys_user` command
@@ -420,6 +420,17 @@ in
     # Delete the newest rectangle containing the point clicked after this shortcut.
     delete_rectangle <C-R>
 
+    # Add a note box: Ctrl+n, drag a rectangle, type the note, then Enter.
+    # Edit directly in the note: Shift+Enter for a new line, Escape to cancel.
+    # Double-click or Ctrl+e to edit; drag to move; drag an edge to resize.
+    # Ctrl +/- changes text size; click then d n deletes the selected note.
+    add_freetext_bookmark <C-n>
+    edit_selected_bookmark <C-e>
+    delete_selected_bookmark dn
+    increase_freetext_font_size <C-=>
+    increase_freetext_font_size <C-+>
+    decrease_freetext_font_size <C-->
+
     # Area snapshot: drag a box, get a cropped PNG. Sioyek ships no such command,
     # so _snip is defined in prefs_user.config below.
     _snip s
@@ -432,6 +443,11 @@ in
   # reading, only an explicit settings change.
   xdg.configFile."sioyek/prefs_user.config".force = true;
   xdg.configFile."sioyek/prefs_user.config".text = ''
+    # Keep note boxes visible and their text readable at normal zoom.
+    render_freetext_borders 1
+    freetext_bookmark_font_size 12
+    freetext_bookmark_font_face Caveat
+
     # Custom command names must begin with an underscore. Sioyek prompts for a
     # rectangle because the command mentions %{selected_rect}, then substitutes
     # "page,x0,y0,x1,y1" in page-relative points. It runs the command through

@@ -83,6 +83,8 @@
             # from ~/Projects/sioyek's feature/native-djvu branch, including
             # click selection for the usual delete_highlight (d h) command.
             ./patches/sioyek-rectangle-annotations.patch
+            # In-place note editing, persistent font size, dragging and resizing.
+            ./patches/sioyek-note-box-controls.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];

@@ -1167,6 +1167,7 @@ in
 
   fonts.packages = with pkgs; [
     corefonts
+    (callPackage ./packages/caveat.nix { })
     nerd-fonts.ubuntu
     nerd-fonts.ubuntu-sans
     nerd-fonts.ubuntu-mono
