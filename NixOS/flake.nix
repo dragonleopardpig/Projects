@@ -93,6 +93,8 @@
             ./patches/sioyek-note-keyboard-colors.patch
             # Searchable in-app list of all effective key bindings.
             ./patches/sioyek-keybinding-list.patch
+            # Put exact command-palette matches before prefix/fuzzy matches.
+            ./patches/sioyek-command-exact-match.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];
