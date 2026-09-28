@@ -95,6 +95,8 @@
             ./patches/sioyek-keybinding-list.patch
             # Put exact command-palette matches before prefix/fuzzy matches.
             ./patches/sioyek-command-exact-match.patch
+            # Open key/preference config files with $VISUAL or $EDITOR.
+            ./patches/sioyek-config-text-editor.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];

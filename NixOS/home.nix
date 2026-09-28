@@ -387,6 +387,9 @@ in
   # bindings here instead.
   xdg.configFile."sioyek/keys_user.config".force = true;
   xdg.configFile."sioyek/keys_user.config".text = ''
+    # Open the searchable list of all effective key bindings.
+    keys ?
+
     # Toggle two page (book spread) mode: pages side-by-side, earlier page on the left.
     # bare `d` is a prefix for db/dh/dp (delete commands), so use Ctrl+d.
     toggle_two_page_mode <C-d>
