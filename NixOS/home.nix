@@ -426,6 +426,8 @@ in
     # Ctrl +/- changes text size; click then d n deletes the selected note.
     # Ctrl+Shift+A attaches an arrow: click or drag to place its tip. Drag the
     # arrow tip and its two curve handles to reposition and orient it; d a removes it.
+    # With a note selected, h then Ctrl+a..z sets its text and arrow to the
+    # matching built-in highlight color. Ctrl+Shift+C then a..z is an alternative.
     add_freetext_bookmark <C-n>
     edit_selected_bookmark <C-e>
     change_selected_bookmark_color <C-C>

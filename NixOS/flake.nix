@@ -89,6 +89,8 @@
             ./patches/sioyek-note-color-border.patch
             # Curved arrows attached to note boxes, with draggable tip and controls.
             ./patches/sioyek-note-arrow.patch
+            # Keyboard-driven note colors from Sioyek's existing a-z palette.
+            ./patches/sioyek-note-keyboard-colors.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];
