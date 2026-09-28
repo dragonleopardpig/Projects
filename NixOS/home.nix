@@ -422,14 +422,15 @@ in
     # Drag a rectangle, then type a note.
     # Enter or clicking elsewhere saves it; empty text leaves a rectangle box.
     # Click a note/box, then h followed by a-z to recolor it, a to place an arrow,
-    # d n to delete the whole object, or d a to delete only its arrow.
+    # d n or Delete to delete it, or d a to delete only its arrow.
+    # +/- changes selected note text size; Ctrl+/- changes its border width.
     # Double-click edits; drag moves; dragging a selected edge/corner resizes.
     add_note_arrow a
     delete_note_arrow da
     delete_selected_bookmark dn
-    increase_freetext_font_size <C-=>
-    increase_freetext_font_size <C-+>
-    decrease_freetext_font_size <C-->
+    increase_freetext_border_width <C-=>
+    increase_freetext_border_width <C-+>
+    decrease_freetext_border_width <C-->
 
     # Area snapshot: drag a box, get a cropped PNG. Sioyek ships no such command,
     # so _snip is defined in prefs_user.config below.

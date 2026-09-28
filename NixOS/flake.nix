@@ -80,7 +80,7 @@
             # a Sioyek that builds fine and still cannot open a DjVu.
             ./patches/sioyek-native-djvu.patch
             # Persistent rectangle annotations backed by Sioyek's drawing model,
-            # from ~/Projects/sioyek's feature/native-djvu branch, including
+            # from ~/Projects/sioyek's feature/reader-enhancements branch, including
             # click selection for the usual delete_highlight (d h) command.
             ./patches/sioyek-rectangle-annotations.patch
             # In-place note editing, persistent font size, dragging and resizing.
@@ -103,6 +103,9 @@
             # Use one note object for text notes and empty rectangle boxes, with
             # selection-aware color, deletion, and arrow commands.
             ./patches/sioyek-unified-note-workflow.patch
+            # Persist adjustable note borders, match LaTeX to handwriting size,
+            # and add selection-aware size and Delete keys.
+            ./patches/sioyek-note-sizing-and-delete.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre prev.jkqtplotter ];
