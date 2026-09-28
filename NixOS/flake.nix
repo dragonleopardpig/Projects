@@ -79,43 +79,26 @@
             # the .pro's packagesExist(ddjvuapi) guard silently fails and you get
             # a Sioyek that builds fine and still cannot open a DjVu.
             ./patches/sioyek-native-djvu.patch
-            # Persistent rectangle annotations backed by Sioyek's drawing model,
-            # from ~/Projects/sioyek's feature/reader-enhancements branch, including
-            # click selection for the usual delete_highlight (d h) command.
-            ./patches/sioyek-rectangle-annotations.patch
-            # In-place note editing, persistent font size, dragging and resizing.
-            ./patches/sioyek-note-box-controls.patch
-            # Borderless note display and persistent per-note text color selection.
-            ./patches/sioyek-note-color-border.patch
-            # Curved arrows attached to note boxes, with draggable tip and controls.
-            ./patches/sioyek-note-arrow.patch
-            # Keyboard-driven note colors from Sioyek's existing a-z palette.
-            ./patches/sioyek-note-keyboard-colors.patch
-            # Searchable in-app list of all effective key bindings.
-            ./patches/sioyek-keybinding-list.patch
-            # Put exact command-palette matches before prefix/fuzzy matches.
-            ./patches/sioyek-command-exact-match.patch
-            # Open key/preference config files with $VISUAL or $EDITOR.
-            ./patches/sioyek-config-text-editor.patch
-            # Native LaTeX rendering for inline $...$ and display $$...$$ math
-            # in note boxes, without spawning TeX processes while painting.
-            ./patches/sioyek-note-latex.patch
-            # Use one note object for text notes and empty rectangle boxes, with
-            # selection-aware color, deletion, and arrow commands.
-            ./patches/sioyek-unified-note-workflow.patch
-            # Persist adjustable note borders, match LaTeX to handwriting size,
-            # and add selection-aware size and Delete keys.
-            ./patches/sioyek-note-sizing-and-delete.patch
-            # Audit fixes for all of the note patches above: a missing db_mutex,
-            # an unescaped font_face in SQL, an uninitialised annotation colour,
-            # a click on a note writing a position update every time, the
-            # per-page scale dropped from absolute_to_window_rect, plus border
-            # width and arrows now surviving embed_annotations. Also makes the
-            # context-sensitive shortcuts visible as %{mode_string} flags,
-            # defaults new notes to red with a thinner border, and snaps arrow
-            # tails to the note's eight handles. From
-            # ~/Projects/sioyek feature/reader-enhancements, f0c8c327..2abc22b5.
-            ./patches/sioyek-audit-fixes.patch
+            # Everything from ~/Projects/sioyek's feature/reader-enhancements
+            # branch, as one patch: persistent rectangle annotations, note boxes
+            # that can be edited in place, moved and resized, per-note color and
+            # border width, curved arrows that snap to the note's eight handles,
+            # keyboard note colors from the a-z palette, a searchable list of
+            # effective key bindings, exact-first command palette matching,
+            # opening config files with a text editor, native LaTeX for inline
+            # $...$ and display $$...$$ math, one unified note/rectangle object,
+            # and the correctness fixes found auditing all of the above.
+            #
+            # This replaces the eleven separate note patches plus the audit-fix
+            # patch. They were generated at different times from different branch
+            # states and had drifted apart, so `patch` was applying some hunks
+            # with fuzz — i.e. ignoring context and guessing the location.
+            # Regenerate this file against the *materialised* tree (nixpkgs
+            # source + dual-page + native-djvu, edited, then `diff -ruN`) and
+            # always dry-run with `patch -p1 -F0` before committing. Note that
+            # this nixpkgs snapshot is older than the branch's base, so branch
+            # code touching newer upstream (e.g. db_mutex) does not transfer.
+            ./patches/sioyek-reader-enhancements.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre prev.jkqtplotter ];
