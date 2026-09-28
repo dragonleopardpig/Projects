@@ -106,6 +106,16 @@
             # Persist adjustable note borders, match LaTeX to handwriting size,
             # and add selection-aware size and Delete keys.
             ./patches/sioyek-note-sizing-and-delete.patch
+            # Audit fixes for all of the note patches above: a missing db_mutex,
+            # an unescaped font_face in SQL, an uninitialised annotation colour,
+            # a click on a note writing a position update every time, the
+            # per-page scale dropped from absolute_to_window_rect, plus border
+            # width and arrows now surviving embed_annotations. Also makes the
+            # context-sensitive shortcuts visible as %{mode_string} flags,
+            # defaults new notes to red with a thinner border, and snaps arrow
+            # tails to the note's eight handles. From
+            # ~/Projects/sioyek feature/reader-enhancements, f0c8c327..2abc22b5.
+            ./patches/sioyek-audit-fixes.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre prev.jkqtplotter ];

@@ -1,0 +1,1122 @@
+diff -ruN ptree_before/pdf_viewer/book.cpp ptree/pdf_viewer/book.cpp
+--- a/pdf_viewer/book.cpp
++++ b/pdf_viewer/book.cpp
+@@ -37,17 +37,60 @@
+     return NoteArrow::from_json(QJsonDocument::fromJson(value.toUtf8()).object());
+ }
+ 
++void note_box_handles(const BookMark& bookmark, AbsoluteDocumentPos out_handles[NUM_NOTE_BOX_HANDLES]) {
++    AbsoluteRect rect = bookmark.get_rectangle();
++    float cx = (rect.x0 + rect.x1) * 0.5f;
++    float cy = (rect.y0 + rect.y1) * 0.5f;
++
++    // The same eight points that are drawn as selection handles: the four
++    // corners and the four edge midpoints, i.e. the 3x3 grid without its center.
++    out_handles[0] = { rect.x1, cy };
++    out_handles[1] = { rect.x1, rect.y1 };
++    out_handles[2] = { cx, rect.y1 };
++    out_handles[3] = { rect.x0, rect.y1 };
++    out_handles[4] = { rect.x0, cy };
++    out_handles[5] = { rect.x0, rect.y0 };
++    out_handles[6] = { cx, rect.y0 };
++    out_handles[7] = { rect.x1, rect.y0 };
++}
++
+ AbsoluteDocumentPos note_arrow_anchor(const BookMark& bookmark, AbsoluteDocumentPos toward) {
+     AbsoluteRect rect = bookmark.get_rectangle();
+     float cx = (rect.x0 + rect.x1) * 0.5f;
+     float cy = (rect.y0 + rect.y1) * 0.5f;
++
++    AbsoluteDocumentPos handles[NUM_NOTE_BOX_HANDLES];
++    note_box_handles(bookmark, handles);
++
+     float dx = toward.x - cx;
+     float dy = toward.y - cy;
+-    float half_width = std::max((rect.x1 - rect.x0) * 0.5f, 1.0f);
+-    float half_height = std::max((rect.y1 - rect.y0) * 0.5f, 1.0f);
+-    float scale = std::max(std::abs(dx) / half_width, std::abs(dy) / half_height);
+-    if (scale < 0.001f) return {rect.x1, cy};
+-    return {cx + dx / scale, cy + dy / scale};
++    float length = std::hypot(dx, dy);
++    if (length < 0.001f) return handles[0];
++
++    dx /= length;
++    dy /= length;
++
++    // Snap the tail to whichever handle lies closest to the direction the arrow
++    // was pointed, rather than to an arbitrary point along the border. Comparing
++    // directions rather than distances keeps the choice sensible on a wide box,
++    // where every corner is nearly the same distance from the center.
++    int best = 0;
++    float best_alignment = -2.0f;
++
++    for (int i = 0; i < NUM_NOTE_BOX_HANDLES; i++) {
++        float hx = handles[i].x - cx;
++        float hy = handles[i].y - cy;
++        float handle_length = std::hypot(hx, hy);
++        if (handle_length < 0.001f) continue;
++
++        float alignment = (dx * hx + dy * hy) / handle_length;
++        if (alignment > best_alignment) {
++            best_alignment = alignment;
++            best = i;
++        }
++    }
++
++    return handles[best];
+ }
+ 
+ bool operator==(const DocumentViewState& lhs, const DocumentViewState& rhs)
+@@ -390,7 +433,18 @@
+ }
+ 
+ AbsoluteRect BookMark::rect() {
+-    return AbsoluteRect(begin_pos(), end_pos());
++    // Older builds stored reverse drags with flipped ends, the same reason
++    // get_rectangle() normalizes; this keeps the two in agreement. Note that the
++    // current consumer, PDF annotation embedding, does not depend on it: mupdf's
++    // pdf_set_annot_rect runs the rect through fz_transform_rect, which swaps
++    // inverted edges itself. This is so callers need not rely on that.
++    AbsoluteDocumentPos begin = begin_pos();
++    AbsoluteDocumentPos end = end_pos();
++
++    return AbsoluteRect(
++        AbsoluteDocumentPos{ std::min(begin.x, end.x), std::min(begin.y, end.y) },
++        AbsoluteDocumentPos{ std::max(begin.x, end.x), std::max(begin.y, end.y) }
++    );
+ }
+ 
+ AbsoluteRect FreehandDrawing::bbox() const {
+diff -ruN ptree_before/pdf_viewer/book.h ptree/pdf_viewer/book.h
+--- a/pdf_viewer/book.h
++++ b/pdf_viewer/book.h
+@@ -100,6 +100,9 @@
+ 
+ QString note_arrow_to_db_string(const std::optional<NoteArrow>& arrow);
+ std::optional<NoteArrow> note_arrow_from_db_string(const QString& value);
++// The corners and edge midpoints drawn as a selected note's resize handles.
++constexpr int NUM_NOTE_BOX_HANDLES = 8;
++void note_box_handles(const BookMark& bookmark, AbsoluteDocumentPos out_handles[NUM_NOTE_BOX_HANDLES]);
+ AbsoluteDocumentPos note_arrow_anchor(const BookMark& bookmark, AbsoluteDocumentPos toward);
+ 
+ /*
+diff -ruN ptree_before/pdf_viewer/config.cpp ptree/pdf_viewer/config.cpp
+--- a/pdf_viewer/config.cpp
++++ b/pdf_viewer/config.cpp
+@@ -290,9 +290,12 @@
+ float DEFAULT_SYNCTEX_HIGHLIGHT_COLOR[3] = { 1.0f, 0.0f, 0.0f };
+ float HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT = 1.0f;
+ 
+-float FREETEXT_BOOKMARK_COLOR[3] = { 0.0f, 0.0f, 0.0f };
++float FREETEXT_BOOKMARK_COLOR[3] = { 1.0f, 0.0f, 0.0f };
++// 2.0 reduced by three 1.25x steps, the same step the border width commands use.
++float FREETEXT_BOOKMARK_BORDER_WIDTH = 1.024f;
+ float FREETEXT_BOOKMARK_FONT_SIZE = 8.0f;
+ std::wstring FREETEXT_BOOKMARK_FONT_FACE;
++std::wstring TEXT_EDITOR_COMMAND;
+ bool RENDER_FREETEXT_BORDERS = false;
+ bool REAL_PAGE_SEPARATION = false;
+ bool SAME_WIDTH = false;
+@@ -921,6 +924,7 @@
+     add_float(L"synctex_highlight_timeout", &HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT, FloatExtras{-1.0f, 100.0f});
+     add_float(L"dark_mode_contrast", &DARK_MODE_CONTRAST, FloatExtras{0.0f, 1.0f});
+     add_float(L"freetext_bookmark_font_size", &FREETEXT_BOOKMARK_FONT_SIZE, FloatExtras{0.0f, 100.0f});
++    add_float(L"freetext_bookmark_border_width", &FREETEXT_BOOKMARK_BORDER_WIDTH, FloatExtras{0.5f, 32.0f});
+     add_float(L"custom_color_contrast", &CUSTOM_COLOR_CONTRAST, FloatExtras{0.0f, 1.0f});
+     add_float(L"zoom_inc_factor", &ZOOM_INC_FACTOR, FloatExtras{1.0f, 2.0f});
+     add_float(L"scroll_zoom_inc_factor", &SCROLL_ZOOM_INC_FACTOR, FloatExtras{1.0f, 2.0f});
+@@ -1075,6 +1079,7 @@
+     add_string(L"epub_css", &EPUB_CSS);
+     add_string(L"tag_font_face", &TAG_FONT_FACE);
+     add_string(L"freetext_bookmark_font_face", &FREETEXT_BOOKMARK_FONT_FACE);
++    add_string(L"text_editor_command", &TEXT_EDITOR_COMMAND);
+     add_macro(L"startup_commands", &STARTUP_COMMANDS);
+     add_macro(L"shift_click_command", &SHIFT_CLICK_COMMAND);
+     add_macro(L"resize_command", &RESIZE_COMMAND);
+diff -ruN ptree_before/pdf_viewer/database.cpp ptree/pdf_viewer/database.cpp
+--- a/pdf_viewer/database.cpp
++++ b/pdf_viewer/database.cpp
+@@ -808,7 +808,7 @@
+         << bm.color[1] << ", "
+         << bm.color[2] << ", "
+         << bm.font_size << ", '"
+-        << bm.font_face << "', '"
++        << esc(bm.font_face) << "', '"
+         << esc(note_arrow_to_db_string(bm.arrow).toStdWString()) << "', "
+         << bm.border_width << ", '"
+         << esc(bm.uuid) << "', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);";
+diff -ruN ptree_before/pdf_viewer/document.cpp ptree/pdf_viewer/document.cpp
+--- a/pdf_viewer/document.cpp
++++ b/pdf_viewer/document.cpp
+@@ -55,6 +55,7 @@
+ extern bool VERBOSE;
+ extern float FREETEXT_BOOKMARK_COLOR[3];
+ extern float FREETEXT_BOOKMARK_FONT_SIZE;
++extern float FREETEXT_BOOKMARK_BORDER_WIDTH;
+ extern std::wstring FREETEXT_BOOKMARK_FONT_FACE;
+ extern std::wstring SHARED_DATABASE_PATH;
+ extern bool DEBUG;
+@@ -263,6 +264,7 @@
+     bookmark.color[2] = color[2];
+     bookmark.font_size = font_size < 0 ? FREETEXT_BOOKMARK_FONT_SIZE : font_size;
+     bookmark.font_face = FREETEXT_BOOKMARK_FONT_FACE;
++    bookmark.border_width = FREETEXT_BOOKMARK_BORDER_WIDTH;
+     bookmark.uuid = new_uuid_utf8();
+     bookmark.update_creation_time();
+ 
+@@ -2135,13 +2137,19 @@
+             if (annot_type == pdf_annot_type::PDF_ANNOT_SQUARE) {
+                 PagelessDocumentRect page_rect = pdf_bound_annot(context, annot);
+                 AbsoluteRect rect = to_absolute(p, page_rect);
+-                int n_channels;
+-                float color[4];
++                // pdf_annot_color leaves the buffer untouched when the annotation
++                // has no stroke color, which is common for rectangle tools that
++                // only set an interior color.
++                int n_channels = 0;
++                float color[4] = { 0, 0, 0, 0 };
+                 pdf_annot_color(context, annot, &n_channels, color);
++                if (n_channels == 1) {
++                    color[1] = color[2] = color[0];
++                }
+                 float thickness = pdf_annot_border(context, annot);
+ 
+                 FreehandDrawing drawing;
+-                drawing.type = get_highlight_color_type(color);
++                drawing.type = n_channels > 0 ? get_highlight_color_type(color) : 'a';
+                 drawing.points = {
+                     FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x0, rect.y0 }, thickness },
+                     FreehandDrawingPoint{ AbsoluteDocumentPos{ rect.x1, rect.y0 }, thickness },
+@@ -2386,7 +2394,16 @@
+         pdf_page* pdf_page = pdf_page_from_fz_page(context, page);
+         pdf_annot* bookmark_annot;
+         if (bookmark.is_freetext() && (!bookmark.is_box())) {
+-            bookmark_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_FREE_TEXT);
++            if (bookmark.description.empty()) {
++                // An empty note is drawn as a rectangle, and a FreeText annotation
++                // with no contents has no visible geometry in other viewers, so
++                // export it as the square it actually is.
++                bookmark_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_SQUARE);
++                pdf_set_annot_color(context, bookmark_annot, 3, bookmark.color);
++            }
++            else {
++                bookmark_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_FREE_TEXT);
++            }
+         }
+         else if (bookmark.is_box()) {
+             bookmark_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_SQUARE);
+@@ -2410,9 +2427,12 @@
+         if (bookmark.is_freetext()) {
+             annot_rect = bookmark.rect().to_document(this).rect;
+ 
+-            std::string encoded_font_face = utf8_encode(bookmark.font_face);
+-            const char* font_face = bookmark.font_face.size() == 0 ? "Times New Roman" : encoded_font_face.c_str();
+-            pdf_set_annot_default_appearance(context, bookmark_annot, font_face, bookmark.font_size, 3, bookmark.color);
++            if (!bookmark.description.empty()) {
++                std::string encoded_font_face = utf8_encode(bookmark.font_face);
++                const char* font_face = bookmark.font_face.size() == 0 ? "Times New Roman" : encoded_font_face.c_str();
++                pdf_set_annot_default_appearance(context, bookmark_annot, font_face, bookmark.font_size, 3, bookmark.color);
++            }
++            pdf_set_annot_border(context, bookmark_annot, bookmark.border_width);
+         }
+         else if (bookmark.is_marked()) {
+             //DocumentPos begin_page_pos = absolute_to_page_pos_uncentered({ bookmark.begin_x, bookmark.begin_y });
+@@ -2435,6 +2455,79 @@
+         pdf_update_annot(context, bookmark_annot);
+ 
+         created_annotations.push_back(std::make_pair(pdf_page, bookmark_annot));
++
++        // PDF has no curved-arrow annotation, so the cubic is flattened into an
++        // ink annotation. Without this the arrow is simply lost on export.
++        if (bookmark.arrow) {
++            const NoteArrow& arrow = bookmark.arrow.value();
++            AbsoluteDocumentPos start = note_arrow_anchor(bookmark, arrow.control1);
++
++            std::vector<fz_point> arrow_points;
++            std::vector<int> stroke_counts;
++
++            auto append_absolute_point = [&](AbsoluteDocumentPos abspos) {
++                DocumentPos docpos = absolute_to_page_pos_uncentered(abspos);
++                if (docpos.page != page_number) {
++                    return false;
++                }
++                arrow_points.push_back(fz_point{ docpos.x, docpos.y });
++                return true;
++            };
++
++            const int num_segments = 32;
++            int curve_point_count = 0;
++            for (int i = 0; i <= num_segments; i++) {
++                float t = static_cast<float>(i) / num_segments;
++                float u = 1.0f - t;
++                AbsoluteDocumentPos curve_point{
++                    u * u * u * start.x + 3 * u * u * t * arrow.control1.x + 3 * u * t * t * arrow.control2.x + t * t * t * arrow.tip.x,
++                    u * u * u * start.y + 3 * u * u * t * arrow.control1.y + 3 * u * t * t * arrow.control2.y + t * t * t * arrow.tip.y,
++                };
++                if (append_absolute_point(curve_point)) {
++                    curve_point_count++;
++                }
++            }
++
++            if (curve_point_count > 1) {
++                stroke_counts.push_back(curve_point_count);
++
++                float dx = arrow.tip.x - arrow.control2.x;
++                float dy = arrow.tip.y - arrow.control2.y;
++                if (std::hypot(dx, dy) < 0.001f) {
++                    dx = arrow.tip.x - start.x;
++                    dy = arrow.tip.y - start.y;
++                }
++                float length = std::hypot(dx, dy);
++
++                if (length >= 0.001f) {
++                    float dir_x = dx / length;
++                    float dir_y = dy / length;
++                    AbsoluteDocumentPos base{ arrow.tip.x - dir_x * 12.0f, arrow.tip.y - dir_y * 12.0f };
++
++                    for (float side : { 1.0f, -1.0f }) {
++                        size_t before = arrow_points.size();
++                        bool complete = append_absolute_point(arrow.tip);
++                        complete = append_absolute_point(AbsoluteDocumentPos{
++                            base.x - dir_y * 5.0f * side, base.y + dir_x * 5.0f * side }) && complete;
++                        if (complete) {
++                            stroke_counts.push_back(2);
++                        }
++                        else {
++                            arrow_points.resize(before);
++                        }
++                    }
++                }
++
++                pdf_annot* arrow_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_INK);
++                pdf_set_annot_ink_list(context, arrow_annot, static_cast<int>(stroke_counts.size()),
++                    &stroke_counts[0], &arrow_points[0]);
++                pdf_set_annot_border(context, arrow_annot, bookmark.border_width);
++                pdf_set_annot_color(context, arrow_annot, 3, bookmark.color);
++                pdf_update_annot(context, arrow_annot);
++
++                created_annotations.push_back(std::make_pair(pdf_page, arrow_annot));
++            }
++        }
+     }
+ 
+     for (auto [page_number, drawings] : page_freehand_drawings) {
+@@ -3364,17 +3457,25 @@
+     }
+ }
+ 
+-bool Document::delete_rectangle_at(AbsoluteDocumentPos point) {
++bool Document::delete_rectangle_at(AbsoluteDocumentPos point, const bool* visible_mask) {
+     int page = absolute_to_page_pos_uncentered(point).page;
+     std::lock_guard guard(drawings_mutex);
+     std::vector<FreehandDrawing>& drawings = page_freehand_drawings[page];
+ 
+     for (int i = static_cast<int>(drawings.size()) - 1; i >= 0; i--) {
+-        if (drawings[i].is_rectangle() && drawings[i].bbox().contains(point)) {
+-            drawings.erase(drawings.begin() + i);
+-            is_drawings_dirty = true;
+-            return true;
++        if (!drawings[i].is_rectangle() || !drawings[i].bbox().contains(point)) {
++            continue;
+         }
++        // Never delete something the user cannot currently see.
++        if (visible_mask) {
++            char type = drawings[i].type;
++            if (type < 'a' || type > 'z' || !visible_mask[type - 'a']) {
++                continue;
++            }
++        }
++        drawings.erase(drawings.begin() + i);
++        is_drawings_dirty = true;
++        return true;
+     }
+     return false;
+ }
+diff -ruN ptree_before/pdf_viewer/document.h ptree/pdf_viewer/document.h
+--- a/pdf_viewer/document.h
++++ b/pdf_viewer/document.h
+@@ -421,7 +421,7 @@
+     std::vector<SearchResult> search_regex(std::wstring query, SearchCaseSensitivity case_sensitive, int begin_page, int min_page, int max_page);
+     float max_y_offset();
+     void add_freehand_drawing(FreehandDrawing new_drawing);
+-    bool delete_rectangle_at(AbsoluteDocumentPos point);
++    bool delete_rectangle_at(AbsoluteDocumentPos point, const bool* visible_mask = nullptr);
+     void get_page_freehand_drawings_with_indices(int page, const std::vector<SelectedObjectIndex>& indices, std::vector<FreehandDrawing>& freehand_drawings, std::vector<PixmapDrawing>& pixmap_drawings);
+     void undo_freehand_drawing();
+     const std::vector<FreehandDrawing>& get_page_drawings(int page);
+diff -ruN ptree_before/pdf_viewer/document_view.cpp ptree/pdf_viewer/document_view.cpp
+--- a/pdf_viewer/document_view.cpp
++++ b/pdf_viewer/document_view.cpp
+@@ -401,17 +401,36 @@
+ 
+ NormalizedWindowRect DocumentView::absolute_to_window_rect(AbsoluteRect doc_rect) {
+     // An absolute rectangle may have endpoints on different pages in two-page
+-    // mode.  Converting both endpoints independently can then select the
+-    // wrong virtual page (the pages share a virtual y range but are separated
+-    // horizontally).  Keep the top-left anchor and apply the rectangle's
+-    // absolute dimensions so the selection follows the drag direction.
+-    float abs_width = doc_rect.width();
+-    float abs_height = doc_rect.height();
++    // mode.  Converting both endpoints independently then places the bottom
++    // right corner on the wrong virtual page (the pages share a virtual y
++    // range but are separated horizontally), so in that case both corners are
++    // anchored to the top left corner's page instead.  Note that the extent
++    // must not be derived from the raw absolute size: document_to_virtual_pos
++    // scales page local coordinates when `uniform_page_widths` is set, and
++    // virtual y additionally includes the inter-page gaps that absolute y
++    // does not.  Both corners therefore always go through the real transform.
++    if (!fast_coordinates() && current_document) {
++        fill_cached_virtual_rects();
++
++        if (cached_virtual_rects.size() > 0) {
++            DocumentPos top_left_docpos = doc_rect.top_left().to_document(current_document);
++            DocumentPos bottom_right_docpos = doc_rect.bottom_right().to_document(current_document);
++
++            if (top_left_docpos.page != bottom_right_docpos.page) {
++                bottom_right_docpos.page = top_left_docpos.page;
++                bottom_right_docpos.x = top_left_docpos.x + doc_rect.width();
++                bottom_right_docpos.y = top_left_docpos.y + doc_rect.height();
++            }
++
++            return NormalizedWindowRect(
++                virtual_to_window_pos(document_to_virtual_pos(top_left_docpos)).to_window_normalized(this),
++                virtual_to_window_pos(document_to_virtual_pos(bottom_right_docpos)).to_window_normalized(this)
++            );
++        }
++    }
+ 
+     NormalizedWindowPos top_left = doc_rect.top_left().to_window_normalized(this);
+-    NormalizedWindowPos bottom_right;
+-    bottom_right.x = top_left.x + abs_width * zoom_level / view_width * 2;
+-    bottom_right.y = top_left.y - abs_height * zoom_level / view_height * 2;
++    NormalizedWindowPos bottom_right = doc_rect.bottom_right().to_window_normalized(this);
+ 
+     return NormalizedWindowRect(top_left, bottom_right);
+ }
+@@ -1822,13 +1841,21 @@
+     delete_intersecting_pixmaps(selection);
+ }
+ 
+-bool ScratchPad::delete_rectangle_at(AbsoluteDocumentPos point) {
++bool ScratchPad::delete_rectangle_at(AbsoluteDocumentPos point, const bool* visible_mask) {
+     for (int i = static_cast<int>(all_drawings.size()) - 1; i >= 0; i--) {
+-        if (all_drawings[i].is_rectangle() && all_drawings[i].bbox().contains(point)) {
+-            all_drawings.erase(all_drawings.begin() + i);
+-            invalidate_compile(true);
+-            return true;
++        if (!all_drawings[i].is_rectangle() || !all_drawings[i].bbox().contains(point)) {
++            continue;
+         }
++        // Never delete something the user cannot currently see.
++        if (visible_mask) {
++            char type = all_drawings[i].type;
++            if (type < 'a' || type > 'z' || !visible_mask[type - 'a']) {
++                continue;
++            }
++        }
++        all_drawings.erase(all_drawings.begin() + i);
++        invalidate_compile(true);
++        return true;
+     }
+     return false;
+ }
+diff -ruN ptree_before/pdf_viewer/document_view.h ptree/pdf_viewer/document_view.h
+--- a/pdf_viewer/document_view.h
++++ b/pdf_viewer/document_view.h
+@@ -271,7 +271,7 @@
+     void delete_intersecting_drawings(AbsoluteRect selection);
+     void delete_intersecting_pixmaps(AbsoluteRect selection);
+     void delete_intersecting_objects(AbsoluteRect selection);
+-    bool delete_rectangle_at(AbsoluteDocumentPos point);
++    bool delete_rectangle_at(AbsoluteDocumentPos point, const bool* visible_mask = nullptr);
+     void get_selected_objects_with_indices(const std::vector<SelectedObjectIndex>& indices, std::vector<FreehandDrawing>& freehand_drawings, std::vector<PixmapDrawing>& pixmap_drawings);
+     void add_pixmap(QPixmap pixmap);
+     AbsoluteRect get_bounding_box();
+diff -ruN ptree_before/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
+--- a/pdf_viewer/input.cpp
++++ b/pdf_viewer/input.cpp
+@@ -51,6 +51,7 @@
+ extern bool VERBOSE;
+ extern float FREETEXT_BOOKMARK_COLOR[3];
+ extern float FREETEXT_BOOKMARK_FONT_SIZE;
++extern float FREETEXT_BOOKMARK_BORDER_WIDTH;
+ extern std::wstring FREETEXT_BOOKMARK_FONT_FACE;
+ extern bool FUZZY_SEARCHING;
+ extern bool TOC_JUMP_ALIGN_TOP;
+@@ -1330,6 +1331,11 @@
+             if (num_repeats == 0) num_repeats++;
+             widget->goto_search_result(num_repeats);
+         }
++        else if (num_repeats > 1) {
++            // Starting a note cannot be repeated, so refuse rather than silently
++            // discard a count the user typed on purpose.
++            show_error_message(L"A repeat count only applies while search results are active");
++        }
+         else {
+             widget->run_command_with_name("add_freetext_bookmark");
+         }
+@@ -2377,6 +2383,7 @@
+         incomplete_bookmark.end_y = std::max<float>(value.y0, value.y1);
+         incomplete_bookmark.font_size = FREETEXT_BOOKMARK_FONT_SIZE;
+         incomplete_bookmark.font_face = FREETEXT_BOOKMARK_FONT_FACE;
++        incomplete_bookmark.border_width = FREETEXT_BOOKMARK_BORDER_WIDTH;
+         incomplete_bookmark.color[0] = FREETEXT_BOOKMARK_COLOR[0];
+         incomplete_bookmark.color[1] = FREETEXT_BOOKMARK_COLOR[1];
+         incomplete_bookmark.color[2] = FREETEXT_BOOKMARK_COLOR[2];
+@@ -2640,13 +2647,13 @@
+     AddHighlightCommand(MainWidget* w) : SymbolCommand(cname, w) {};
+ 
+     void perform() {
+-        bool has_selected_note = false;
+-        if (widget->doc() && widget->selected_bookmark_index >= 0 &&
+-            widget->selected_bookmark_index < widget->doc()->get_bookmarks().size()) {
+-            const BookMark& bookmark = widget->doc()->get_bookmarks()[widget->selected_bookmark_index];
+-            has_selected_note = bookmark.is_freetext() && !bookmark.is_box();
+-        }
+-        if (has_selected_note || symbol_control_pressed) {
++        // With a note selected the palette letter recolors it, otherwise it
++        // highlights the selected text. The context comes from current_context()
++        // rather than a local predicate so that every overloaded shortcut agrees.
++        // Diverting on the control modifier alone used to silently discard the
++        // highlight, because change_selected_bookmark_color is a no-op with
++        // nothing selected.
++        if (widget->current_context() == UiContext::NoteSelected) {
+             widget->change_selected_bookmark_color(symbol);
+             return;
+         }
+@@ -3375,7 +3382,7 @@
+     static inline const std::string hname = "Zoom in, or enlarge selected note text";
+     ZoomInCommand(MainWidget* w) : Command(cname, w) {};
+     void perform() {
+-        if (widget->has_selected_freetext_note()) {
++        if (widget->current_context() == UiContext::NoteSelected) {
+             widget->update_selected_bookmark_font_size(1.1f);
+         }
+         else {
+@@ -3485,7 +3492,7 @@
+     ZoomOutCommand(MainWidget* w) : Command(cname, w) {};
+ 
+     void perform() {
+-        if (widget->has_selected_freetext_note()) {
++        if (widget->current_context() == UiContext::NoteSelected) {
+             widget->update_selected_bookmark_font_size(1.0f / 1.1f);
+         }
+         else {
+@@ -3954,7 +3961,9 @@
+ 
+     int get_selected_item_index() override {
+         // A clicked rectangle needs no highlight tag prompt.
+-        return widget->selected_rectangle_point ? 0 : GenericHighlightCommand::get_selected_item_index();
++        return widget->current_context() == UiContext::RectangleSelected
++            ? 0
++            : GenericHighlightCommand::get_selected_item_index();
+     }
+ 
+     void perform_with_highlight_selected() override {
+diff -ruN ptree_before/pdf_viewer/keys.config ptree/pdf_viewer/keys.config
+--- a/pdf_viewer/keys.config
++++ b/pdf_viewer/keys.config
+@@ -408,16 +408,33 @@
+ 
+ # Note boxes: draw, type in place, Enter or click elsewhere to save. Empty text
+ # creates a rectangle. Click to select; drag to move; drag the border to resize.
++#
++# ---------- CONTEXT SENSITIVE SHORTCUTS ----------
++# Several default bindings do double duty so that there are fewer shortcuts to
++# memorize. Which meaning is active depends on the current context, and the
++# context is shown by %{mode_string} in the status bar:
++#
++#   n   a note is selected      -> zoom_in / zoom_out resize the note's text,
++#                                  add_highlight + a-z recolors the note
++#   b   a rectangle is selected -> delete_highlight deletes that rectangle
++#   w   placing a note arrow    -> the next click sets the arrow tip
++#
++# Two rules keep this predictable. A context only counts while it is visible, so
++# scrolling a selected note off screen gives every shortcut its plain meaning
++# back; and when no context is active a shortcut always does its primary job,
++# never nothing. The same letters can be used in modal command definitions.
++#
+ # add_freetext_bookmark <unbound>
+ # edit_selected_bookmark <C-e>
+ # Delete the selected note or empty rectangle.
+ delete_selected_bookmark <delete>
+ # delete_selected_bookmark dn
++## Note text size. With a note selected, zoom_in/zoom_out already do this.
+ # increase_freetext_font_size <C-=>
+-# increase_freetext_font_size <C-+>
+ # decrease_freetext_font_size <C-->
+-# increase_freetext_border_width <C-+>
+-# decrease_freetext_border_width <C-->
++## Note border width. Inside the note editor this is already Ctrl +/-.
++# increase_freetext_border_width <C-S-=>
++# decrease_freetext_border_width <C-S-->
+ ## Set the selected note/box and arrow to one of the built-in a-z highlight colors
+ # change_selected_bookmark_color <C-C>
+ # add_note_arrow a
+diff -ruN ptree_before/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
+--- a/pdf_viewer/main_widget.cpp
++++ b/pdf_viewer/main_widget.cpp
+@@ -770,6 +770,10 @@
+         }
+         int edges = freetext_resize_edges_at(mpos);
+         int index = doc()->get_bookmark_index_at_pos(abs_mpos);
++        // Matches mousePressEvent: a point inside another note is not a resize.
++        if (edges && index >= 0 && index != selected_bookmark_index) {
++            edges = 0;
++        }
+         if (edges) {
+             if ((edges & 3) && (edges & 12)) setCursor((edges == 5 || edges == 10) ? Qt::SizeFDiagCursor : Qt::SizeBDiagCursor);
+             else setCursor((edges & 3) ? Qt::SizeHorCursor : Qt::SizeVerCursor);
+@@ -1672,15 +1676,18 @@
+         }
+     }
+ 
+-    if (bookmark_move_data && doc()) {
++    if (bookmark_move_data && doc() && bookmark_move_data->index >= 0 &&
++        bookmark_move_data->index < doc()->get_bookmarks().size()) {
+         BookMark& bookmark = doc()->get_bookmarks()[bookmark_move_data->index];
+         bookmark.begin_x = bookmark_move_data->initial_begin_position.x;
+         bookmark.begin_y = bookmark_move_data->initial_begin_position.y;
+         bookmark.end_x = bookmark_move_data->initial_end_position.x;
+         bookmark.end_y = bookmark_move_data->initial_end_position.y;
+         bookmark.arrow = bookmark_move_data->initial_arrow;
+-        bookmark_move_data = {};
+     }
++    bookmark_move_data = {};
++
++    restore_freetext_edit_appearance();
+     smooth_y_move_amount = {};
+     clear_selection_indicators();
+     typing_location = {};
+@@ -3318,8 +3325,15 @@
+         mevent->button() == Qt::LeftButton && mevent->modifiers() == Qt::NoModifier) {
+         WindowPos pos(mevent->pos());
+         if (!opengl_widget->is_window_point_in_overview(pos.to_window_normalized(main_document_view))) {
++            int index_under_cursor = doc()->get_bookmark_index_at_pos(pos.to_absolute(main_document_view));
+             int edges = freetext_resize_edges_at(pos);
+-            int index = edges ? selected_bookmark_index : doc()->get_bookmark_index_at_pos(pos.to_absolute(main_document_view));
++            // The resize margin reaches outside the selected note, so a click that
++            // lands inside a different note must select that note rather than
++            // resize this one -- otherwise an abutting note is unselectable.
++            if (edges && index_under_cursor >= 0 && index_under_cursor != selected_bookmark_index) {
++                edges = 0;
++            }
++            int index = edges ? selected_bookmark_index : index_under_cursor;
+             if (index >= 0 && doc()->get_bookmarks()[index].is_freetext() && !doc()->get_bookmarks()[index].is_box()) {
+                 set_selected_highlight_index(-1);
+                 set_selected_bookmark_index(index);
+@@ -8438,13 +8452,16 @@
+     const auto& drawings = doc()->get_page_drawings(doc()->absolute_to_page_pos_uncentered(point).page);
+ 
+     for (auto it = drawings.rbegin(); it != drawings.rend(); ++it) {
+-        if (it->is_rectangle() && it->bbox().contains(point)) {
+-            // Match delete_rectangle_at's choice when rectangles overlap.
+-            if (it->type >= 'a' && it->type <= 'z' && opengl_widget->visible_drawing_mask[it->type - 'a']) {
+-                selected_rectangle_point = point;
+-            }
+-            return;
++        if (!it->is_rectangle() || !it->bbox().contains(point)) {
++            continue;
+         }
++        // Skip hidden rectangles rather than stop at them, so that this picks
++        // exactly the rectangle delete_rectangle_at would remove.
++        if (it->type < 'a' || it->type > 'z' || !opengl_widget->visible_drawing_mask[it->type - 'a']) {
++            continue;
++        }
++        selected_rectangle_point = point;
++        return;
+     }
+ }
+ 
+@@ -8452,10 +8469,10 @@
+     selected_rectangle_point = {};
+     bool deleted;
+     if (opengl_widget->get_scratchpad()) {
+-        deleted = scratchpad->delete_rectangle_at(point);
++        deleted = scratchpad->delete_rectangle_at(point, opengl_widget->visible_drawing_mask);
+     }
+     else {
+-        deleted = doc()->delete_rectangle_at(point);
++        deleted = doc()->delete_rectangle_at(point, opengl_widget->visible_drawing_mask);
+     }
+ 
+     if (!deleted) {
+@@ -8547,6 +8564,12 @@
+     res += opengl_widget->get_scratchpad() ? "s" : "S";
+     res += (opengl_widget->get_is_searching(nullptr)) ? "f" : "F";
+     res += (is_menu_focused()) ? "m" : "M";
++    // Contexts that overload an existing shortcut. Without these the user has no
++    // way to tell why `+`/`-` resized a note instead of zooming.
++    UiContext context = current_context();
++    res += (context == UiContext::NoteSelected) ? "n" : "N";
++    res += (context == UiContext::RectangleSelected) ? "b" : "B";
++    res += (context == UiContext::PlacingNoteArrow) ? "w" : "W";
+ 
+     if (main_document_view) {
+         res += (main_document_view->selected_character_rects.size() > 0) ? "t" : "T";
+@@ -8847,11 +8870,9 @@
+ 
+     const float* palette_color = get_highlight_type_color(type);
+     float color[3] = {palette_color[0], palette_color[1], palette_color[2]};
+-    if (pending_command_instance && pending_command_instance->get_name() == "add_freetext_bookmark") {
+-        // New notes are written to the database only when the text is saved.
+-        for (int component = 0; component < 3; ++component) bookmark.color[component] = color[component];
+-    }
+-    else {
++    for (int component = 0; component < 3; ++component) bookmark.color[component] = color[component];
++    // Same rule as the font size: held in memory while the editor is open.
++    if (!freetext_edit_appearance) {
+         doc()->update_bookmark_color(selected_bookmark_index, color);
+     }
+     if (freetext_editor->isVisible()) {
+@@ -8878,12 +8899,8 @@
+     if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
+     const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
+     if (!bookmark.is_freetext() || bookmark.is_box()) return;
+-    std::string uuid = bookmark.uuid;
+-    finish_freetext_edit();
+-    int index = doc()->get_bookmark_index_with_uuid(uuid);
+-    if (index < 0) return;
+-    set_selected_bookmark_index(index);
+-    placing_note_arrow_index = index;
++    if (freetext_editor && freetext_editor->isVisible() && !finish_freetext_edit_keeping_selection()) return;
++    placing_note_arrow_index = selected_bookmark_index;
+     setCursor(Qt::CrossCursor);
+ }
+ 
+@@ -8991,8 +9008,9 @@
+         if (!bookmark.is_freetext()) return;
+         float size = bookmark.font_size > 0 ? bookmark.font_size : FREETEXT_BOOKMARK_FONT_SIZE;
+         bookmark.font_size = std::clamp(size * factor, 1.0f, 100.0f);
+-        // Pending edits are saved on Enter and restored on Escape.
+-        if (!pending_command_instance) {
++        // While the editor is open the change is held in memory, so that Enter
++        // persists it and Escape restores it. Otherwise it is committed now.
++        if (!freetext_edit_appearance) {
+             doc()->update_bookmark_text(selected_bookmark_index, bookmark.description, bookmark.font_size);
+         }
+         update_freetext_editor_geometry();
+@@ -9004,20 +9022,40 @@
+ }
+ 
+ bool MainWidget::has_selected_freetext_note() {
+-    return doc() && selected_bookmark_index >= 0 &&
+-        selected_bookmark_index < doc()->get_bookmarks().size() &&
+-        doc()->get_bookmarks()[selected_bookmark_index].is_freetext() &&
+-        !doc()->get_bookmarks()[selected_bookmark_index].is_box();
++    if (!doc() || !main_document_view) return false;
++    if (selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return false;
++
++    const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
++    if (!bookmark.is_freetext() || bookmark.is_box()) return false;
++
++    // The note is being typed into, so it stays the context regardless of the view.
++    if (freetext_editor && freetext_editor->isVisible()) return true;
++
++    // A context the user cannot see must not capture a shortcut: once the selected
++    // note has been scrolled off screen, `-` has to mean zoom out again.
++    return bookmark.get_rectangle().to_window_normalized(main_document_view).is_visible();
++}
++
++UiContext MainWidget::current_context() {
++    if (placing_note_arrow_index >= 0 || note_arrow_drag) {
++        return UiContext::PlacingNoteArrow;
++    }
++    if (has_selected_freetext_note()) {
++        return UiContext::NoteSelected;
++    }
++    if (selected_rectangle_point) {
++        return UiContext::RectangleSelected;
++    }
++    return UiContext::None;
+ }
+ 
+ void MainWidget::update_selected_bookmark_border_width(float factor) {
+     if (!has_selected_freetext_note()) return;
+     BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
+     float width = std::clamp(bookmark.border_width * factor, 0.5f, 32.0f);
+-    if (pending_command_instance && pending_command_instance->get_name() == "add_freetext_bookmark") {
+-        bookmark.border_width = width;
+-    }
+-    else {
++    bookmark.border_width = width;
++    // Same rule as the font size: held in memory while the editor is open.
++    if (!freetext_edit_appearance) {
+         doc()->update_bookmark_border_width(selected_bookmark_index, width);
+     }
+     invalidate_render();
+@@ -9036,8 +9074,12 @@
+         }
+         if (key->modifiers() & (Qt::ControlModifier | Qt::MetaModifier)) {
+             if ((key->modifiers() & Qt::ShiftModifier) && key->key() == Qt::Key_C) {
+-                finish_freetext_edit();
+-                run_command_with_name("change_selected_bookmark_color");
++                // The color letter is read by the main widget's key handling, so
++                // the editor has to close first -- but the note must stay
++                // selected or the command has nothing to act on.
++                if (finish_freetext_edit_keeping_selection()) {
++                    run_command_with_name("change_selected_bookmark_color");
++                }
+                 return true;
+             }
+             if ((key->modifiers() & Qt::ShiftModifier) && key->key() == Qt::Key_A) {
+@@ -9057,6 +9099,7 @@
+     if (TOUCH_MODE || !doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
+     const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
+     if (!bookmark.is_freetext() || bookmark.is_box()) return;
++    capture_freetext_edit_appearance();
+     text_command_line_edit_container->hide();
+     freetext_editor->setPlainText(text_command_line_edit->text());
+     freetext_editor->show();
+@@ -9088,10 +9131,94 @@
+     std::wstring text = freetext_editor->toPlainText().toStdWString();
+     freetext_editor->hide();
+     setFocus();
++
++    // Detach the captured appearance before running the command, so that nothing
++    // the command reaches can restore it and undo what is about to be saved.
++    std::optional<FreetextEditAppearance> appearance = freetext_edit_appearance;
++    freetext_edit_appearance = {};
++
+     handle_pending_text_command(text);
++
++    if (appearance) {
++        commit_freetext_edit_appearance(appearance.value());
++    }
+     invalidate_render();
+ }
+ 
++bool MainWidget::finish_freetext_edit_keeping_selection() {
++    // Saving a new note clears the selection, so commands that act on the
++    // selected note have to re-resolve it by uuid afterwards.
++    std::string uuid;
++    if (doc() && selected_bookmark_index >= 0 && selected_bookmark_index < doc()->get_bookmarks().size()) {
++        uuid = doc()->get_bookmarks()[selected_bookmark_index].uuid;
++    }
++
++    finish_freetext_edit();
++
++    if (!doc() || uuid.size() == 0) return false;
++
++    int index = doc()->get_bookmark_index_with_uuid(uuid);
++    if (index < 0) return false;
++
++    set_selected_bookmark_index(index);
++    return true;
++}
++
++void MainWidget::capture_freetext_edit_appearance() {
++    freetext_edit_appearance = {};
++    if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
++
++    const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
++
++    FreetextEditAppearance appearance;
++    appearance.uuid = bookmark.uuid;
++    appearance.font_size = bookmark.font_size;
++    appearance.border_width = bookmark.border_width;
++    for (int component = 0; component < 3; ++component) appearance.color[component] = bookmark.color[component];
++    appearance.is_new_note = pending_command_instance && pending_command_instance->get_name() == "add_freetext_bookmark";
++
++    freetext_edit_appearance = appearance;
++}
++
++void MainWidget::restore_freetext_edit_appearance() {
++    if (!freetext_edit_appearance) return;
++
++    FreetextEditAppearance appearance = freetext_edit_appearance.value();
++    freetext_edit_appearance = {};
++
++    // A cancelled new note is removed entirely, so there is nothing to restore.
++    if (!doc() || appearance.is_new_note) return;
++
++    int index = doc()->get_bookmark_index_with_uuid(appearance.uuid);
++    if (index < 0) return;
++
++    BookMark& bookmark = doc()->get_bookmarks()[index];
++    bookmark.font_size = appearance.font_size;
++    bookmark.border_width = appearance.border_width;
++    for (int component = 0; component < 3; ++component) bookmark.color[component] = appearance.color[component];
++}
++
++void MainWidget::commit_freetext_edit_appearance(const FreetextEditAppearance& appearance) {
++    // A new note is inserted carrying its in-memory appearance, so only an edit
++    // of an existing note needs the border width and color written back.
++    if (!doc() || appearance.is_new_note) return;
++
++    int index = doc()->get_bookmark_index_with_uuid(appearance.uuid);
++    if (index < 0) return;
++
++    const BookMark& bookmark = doc()->get_bookmarks()[index];
++
++    if (bookmark.border_width != appearance.border_width) {
++        doc()->update_bookmark_border_width(index, bookmark.border_width);
++    }
++    if (bookmark.color[0] != appearance.color[0] ||
++        bookmark.color[1] != appearance.color[1] ||
++        bookmark.color[2] != appearance.color[2]) {
++        float color[3] = { bookmark.color[0], bookmark.color[1], bookmark.color[2] };
++        doc()->update_bookmark_color(index, color);
++    }
++}
++
+ int MainWidget::freetext_resize_edges_at(WindowPos pos) {
+     if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return 0;
+     const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
+@@ -9249,6 +9376,11 @@
+ }
+ 
+ void MainWidget::handle_bookmark_move_finish() {
++    if (!bookmark_move_data->has_moved) {
++        // The gesture never left the drag threshold, so nothing changed and the
++        // bookmark's modification time must not be bumped.
++        return;
++    }
+     BookMark& bm = doc()->get_bookmarks()[bookmark_move_data->index];
+     doc()->update_bookmark_position(bookmark_move_data->index, { bm.begin_x, bm.begin_y }, { bm.end_x, bm.end_y });
+     if (bm.arrow && bookmark_move_data->initial_arrow &&
+@@ -9271,6 +9403,17 @@
+     float diff_x = current_mouse_abspos.x - bookmark_move_data->initial_mouse_position.x;
+     float diff_y = current_mouse_abspos.y - bookmark_move_data->initial_mouse_position.y;
+ 
++    // A plain left click on a note selects it, so a move must not begin until the
++    // cursor has actually travelled. Otherwise a click with a pixel of jitter
++    // permanently relocates the note.
++    if (!bookmark_move_data->has_moved) {
++        const float drag_threshold = 4.0f / main_document_view->get_zoom_level();
++        if (std::abs(diff_x) < drag_threshold && std::abs(diff_y) < drag_threshold) {
++            return;
++        }
++        bookmark_move_data->has_moved = true;
++    }
++
+     BookMark& bookmark = doc()->get_bookmarks()[bookmark_move_data->index];
+ 
+     int edges = bookmark_move_data->resize_edges;
+@@ -10923,6 +11066,10 @@
+ }
+ 
+ void MainWidget::hide_command_line_edit(){
++    // Dismissing the editor without saving is a cancel, so put the note's
++    // appearance back. A no-op when handle_escape already restored it, and it
++    // keeps freetext_edit_appearance from outliving the editor.
++    restore_freetext_edit_appearance();
+     freetext_editor->hide();
+     text_command_line_edit->setText("");
+     text_command_line_edit_container->hide();
+diff -ruN ptree_before/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
+--- a/pdf_viewer/main_widget.h
++++ b/pdf_viewer/main_widget.h
+@@ -85,12 +85,47 @@
+ struct BookmarkMoveData {
+     int index;
+     int resize_edges = 0; // left, right, top, bottom
++    // Set once the cursor has travelled past the drag threshold. Until then the
++    // gesture is still just a click, so the bookmark is left untouched and no
++    // position update is written.
++    bool has_moved = false;
+     AbsoluteDocumentPos initial_begin_position;
+     AbsoluteDocumentPos initial_end_position;
+     AbsoluteDocumentPos initial_mouse_position;
+     std::optional<NoteArrow> initial_arrow;
+ };
+ 
++// What an overloaded, context sensitive shortcut is currently acting on.
++//
++// Several default shortcuts deliberately do double duty to keep the number of
++// bindings a user has to memorize small (`+`/`-` resize a selected note's text,
++// the highlight letter recolors it, the highlight delete removes a rectangle).
++// That only stays predictable if every such shortcut derives the context from
++// one place, so the predicate cannot drift per command, and if the user can see
++// which context is live -- get_current_mode_string() exposes these as the `n`,
++// `b` and `w` flags for %{mode_string} and for modal command definitions.
++//
++// An active search is deliberately not part of this: it is orthogonal (a note
++// can be selected while a search is running, and `next_item` must still go to
++// the next result), and it already has its own `f` mode flag.
++enum class UiContext {
++    None,
++    NoteSelected,
++    RectangleSelected,
++    PlacingNoteArrow,
++};
++
++// Appearance of a note as its editor opened, so that Enter can persist what the
++// editor changed and Escape can put it back. Keyed by uuid because cancelling a
++// newly created note erases it from the bookmark vector.
++struct FreetextEditAppearance {
++    std::string uuid;
++    float font_size = -1;
++    float border_width = 2.0f;
++    float color[3] = { 0 };
++    bool is_new_note = false;
++};
++
+ enum class NoteArrowDragPart { Tip, Control1, Control2, PlacingTip };
+ 
+ struct NoteArrowDragData {
+@@ -256,6 +291,8 @@
+     std::optional<BookmarkMoveData> bookmark_move_data = {};
+     int placing_note_arrow_index = -1;
+     std::optional<NoteArrowDragData> note_arrow_drag;
++    // Set exactly while the note editor is open.
++    std::optional<FreetextEditAppearance> freetext_edit_appearance = {};
+     std::optional<PortalMoveData> portal_move_data = {};
+ 
+     // when set, mouse wheel moves the ruler
+@@ -459,10 +496,15 @@
+     void update_selected_bookmark_font_size(float factor);
+     void update_selected_bookmark_border_width(float factor);
+     bool has_selected_freetext_note();
++    UiContext current_context();
+     bool eventFilter(QObject* obj, QEvent* event) override;
+     void show_freetext_editor();
+     void update_freetext_editor_geometry();
+     void finish_freetext_edit();
++    bool finish_freetext_edit_keeping_selection();
++    void capture_freetext_edit_appearance();
++    void restore_freetext_edit_appearance();
++    void commit_freetext_edit_appearance(const FreetextEditAppearance& appearance);
+     int freetext_resize_edges_at(WindowPos pos);
+     //bool eventFilter(QObject* obj, QEvent* event) override;
+     void set_command_textbox_text(const std::wstring& txt);
+diff -ruN ptree_before/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_opengl_widget.cpp
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp
+@@ -3320,6 +3320,9 @@
+         if (drawing.points.size() <= 0) {
+             continue;
+         }
++        if (drawing.type < 'a' || drawing.type > 'z') {
++            continue;
++        }
+         if (!visible_drawing_mask[drawing.type - 'a']) {
+             continue;
+         }
+@@ -3674,6 +3677,9 @@
+         if (drawing.points.size() <= 0) {
+             continue;
+         }
++        if (drawing.type < 'a' || drawing.type > 'z') {
++            continue;
++        }
+         if (!visible_drawing_mask[drawing.type - 'a']) {
+             continue;
+         }
+diff -ruN ptree_before/pdf_viewer/prefs.config ptree/pdf_viewer/prefs.config
+--- a/pdf_viewer/prefs.config
++++ b/pdf_viewer/prefs.config
+@@ -282,3 +282,16 @@
+ 
+ # Font family for note boxes (empty uses the interface font).
+ # freetext_bookmark_font_face Caveat
++
++# Default color for new note boxes. This colors the text, the box border and any
++# attached arrow, which all follow the note's color.
++# freetext_bookmark_color	1.00 0.00 0.00
++
++# Default border width for new note boxes, in the same units as the
++# increase/decrease_freetext_border_width commands (which step by 1.25x).
++# freetext_bookmark_border_width 1.024
++
++# Command used to open config files for editing. When empty, config files are
++# handed to the desktop's default handler. A terminal editor needs a terminal,
++# for example `text_editor_command xterm -e vim`.
++# text_editor_command gedit
+diff -ruN ptree_before/pdf_viewer/utils.cpp ptree/pdf_viewer/utils.cpp
+--- a/pdf_viewer/utils.cpp
++++ b/pdf_viewer/utils.cpp
+@@ -73,6 +73,7 @@
+ extern std::wstring PAPER_SEARCH_CONTRIB_PATH;
+ extern std::wstring UI_FONT_FACE_NAME;
+ extern std::wstring STATUS_FONT_FACE_NAME;
++extern std::wstring TEXT_EDITOR_COMMAND;
+ extern bool OPEN_LAST_FILE_ON_STARTUP;
+ 
+ extern bool VERBOSE;
+@@ -1276,19 +1277,61 @@
+ 
+ }
+ 
+-void open_text_file(const std::wstring& path, bool show_fail_message) {
+-    QString editor = qEnvironmentVariable("VISUAL");
+-    if (editor.isEmpty()) {
+-        editor = qEnvironmentVariable("EDITOR");
++// QProcess::splitCommand only exists from Qt 5.15 onwards.
++static QStringList split_editor_command(const QString& command) {
++#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
++    return QProcess::splitCommand(command);
++#else
++    QStringList arguments;
++    QString current;
++    QChar quote = 0;
++
++    for (const QChar& character : command) {
++        if (quote != 0) {
++            if (character == quote) {
++                quote = 0;
++            }
++            else {
++                current += character;
++            }
++        }
++        else if (character == '\'' || character == '"') {
++            quote = character;
++        }
++        else if (character.isSpace()) {
++            if (!current.isEmpty()) {
++                arguments.push_back(current);
++                current.clear();
++            }
++        }
++        else {
++            current += character;
++        }
+     }
+ 
++    if (!current.isEmpty()) {
++        arguments.push_back(current);
++    }
++
++    return arguments;
++#endif
++}
++
++void open_text_file(const std::wstring& path, bool show_fail_message) {
+     QString canonical_path = QString::fromStdWString(get_canonical_path(path));
+-    QStringList arguments = QProcess::splitCommand(editor);
+-    if (!arguments.isEmpty()) {
+-        QString program = arguments.takeFirst();
+-        arguments.push_back(canonical_path);
+-        if (QProcess::startDetached(program, arguments)) {
+-            return;
++
++    // Only an explicitly configured editor is launched directly. $EDITOR and
++    // $VISUAL normally name a terminal editor, and starting one detached from a
++    // GUI process succeeds and then exits immediately with nothing shown to the
++    // user, so the desktop handler stays the default.
++    if (TEXT_EDITOR_COMMAND.size() > 0) {
++        QStringList arguments = split_editor_command(QString::fromStdWString(TEXT_EDITOR_COMMAND));
++        if (!arguments.isEmpty()) {
++            QString program = arguments.takeFirst();
++            arguments.push_back(canonical_path);
++            if (QProcess::startDetached(program, arguments)) {
++                return;
++            }
+         }
+     }
+ 
+@@ -3195,6 +3238,13 @@
+         }
+     }
+ 
++    if (min_index < 0) {
++        // No distance compared less than the initial bound, which happens when a
++        // color channel is NaN. Callers use the result to index 26 element
++        // arrays, so never return a type outside 'a'-'z'.
++        min_index = 0;
++    }
++
+     return 'a' + min_index;
+ }
+ 
