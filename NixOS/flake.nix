@@ -97,9 +97,15 @@
             ./patches/sioyek-command-exact-match.patch
             # Open key/preference config files with $VISUAL or $EDITOR.
             ./patches/sioyek-config-text-editor.patch
+            # Native LaTeX rendering for inline $...$ and display $$...$$ math
+            # in note boxes, without spawning TeX processes while painting.
+            ./patches/sioyek-note-latex.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
-          buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];
+          buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre prev.jkqtplotter ];
+          qmakeFlags = (old.qmakeFlags or [ ]) ++ [
+            "DEFINES+=SIOYEK_JKQT_MATHTEXT_SUPPORT"
+          ];
         });
 
         # nixpkgs nwg-drawer (0.7.5) preInstall copies desktop-directories +
