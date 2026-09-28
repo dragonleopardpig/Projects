@@ -91,6 +91,8 @@
             ./patches/sioyek-note-arrow.patch
             # Keyboard-driven note colors from Sioyek's existing a-z palette.
             ./patches/sioyek-note-keyboard-colors.patch
+            # Searchable in-app list of all effective key bindings.
+            ./patches/sioyek-keybinding-list.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre ];
