@@ -417,24 +417,14 @@ in
     next_page <pagedown>
     previous_page <pageup>
 
-    # Draw a persistent rectangle annotation using the current drawing style.
-    # Ctrl+r is free; bare r/R remain clockwise/counterclockwise rotation.
-    draw_rectangle <C-r>
-    # Delete the newest rectangle containing the point clicked after this shortcut.
-    delete_rectangle <C-R>
-
-    # Add a note box: Ctrl+n, drag a rectangle, type the note, then Enter.
-    # Edit directly in the note: Shift+Enter for a new line, Escape to cancel.
-    # Double-click or Ctrl+e to edit; drag to move; drag an edge to resize.
-    # Ctrl +/- changes text size; click then d n deletes the selected note.
-    # Ctrl+Shift+A attaches an arrow: click or drag to place its tip. Drag the
-    # arrow tip and its two curve handles to reposition and orient it; d a removes it.
-    # With a note selected, h then Ctrl+a..z sets its text and arrow to the
-    # matching built-in highlight color. Ctrl+Shift+C then a..z is an alternative.
-    add_freetext_bookmark <C-n>
-    edit_selected_bookmark <C-e>
-    change_selected_bookmark_color <C-C>
-    add_note_arrow <C-A>
+    # Unified note/rectangle workflow: outside an active search, n starts a note.
+    # While search results are active, the default next_item n advances the search.
+    # Drag a rectangle, then type a note.
+    # Enter or clicking elsewhere saves it; empty text leaves a rectangle box.
+    # Click a note/box, then h followed by a-z to recolor it, a to place an arrow,
+    # d n to delete the whole object, or d a to delete only its arrow.
+    # Double-click edits; drag moves; dragging a selected edge/corner resizes.
+    add_note_arrow a
     delete_note_arrow da
     delete_selected_bookmark dn
     increase_freetext_font_size <C-=>

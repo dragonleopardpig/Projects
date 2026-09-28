@@ -100,6 +100,9 @@
             # Native LaTeX rendering for inline $...$ and display $$...$$ math
             # in note boxes, without spawning TeX processes while painting.
             ./patches/sioyek-note-latex.patch
+            # Use one note object for text notes and empty rectangle boxes, with
+            # selection-aware color, deletion, and arrow commands.
+            ./patches/sioyek-unified-note-workflow.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre prev.jkqtplotter ];
