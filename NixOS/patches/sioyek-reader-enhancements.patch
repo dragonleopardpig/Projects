@@ -1178,7 +1178,43 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      void perform_with_highlight_selected() override {
          widget->handle_delete_selected_highlight();
      }
-@@ -5076,11 +5166,11 @@
+@@ -4032,12 +4122,35 @@
+     bool requires_document() { return false; }
+ };
+ 
++class CutCommand : public Command {
++public:
++    static inline const std::string cname = "cut";
++    static inline const std::string hname = "Cut the selected note's text";
++    CutCommand(MainWidget* w) : Command(cname, w) {};
++    void perform() {
++        widget->copy_selected_note_text(true);
++    }
++};
++
++class PasteCommand : public Command {
++public:
++    static inline const std::string cname = "paste";
++    static inline const std::string hname = "Paste the clipboard into the selected note";
++    PasteCommand(MainWidget* w) : Command(cname, w) {};
++    void perform() {
++        widget->paste_into_selected_note();
++    }
++};
++
+ class CopyCommand : public Command {
+ public:
+     static inline const std::string cname = "copy";
+     static inline const std::string hname = "Copy";
+     CopyCommand(MainWidget* w) : Command(cname, w) {};
+     void perform() {
++        // With a note selected (and not being edited) copy the note's text;
++        // otherwise copy the selected document text as before.
++        if (widget->copy_selected_note_text(false)) return;
+         copy_to_clipboard(widget->get_selected_text(ADD_NEWLINES_WHEN_COPYING_TEXT));
+     }
+ 
+@@ -5076,11 +5189,11 @@
  class KeysCommand : public Command {
  public:
      static inline const std::string cname = "keys";
@@ -1192,7 +1228,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  
      bool requires_document() { return false; }
-@@ -5095,7 +5185,7 @@
+@@ -5095,7 +5208,7 @@
      void perform() {
          std::optional<Path> key_file_path = widget->input_handler->get_or_create_user_keys_path();
          if (key_file_path) {
@@ -1201,7 +1237,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          }
      }
  
-@@ -5122,7 +5212,7 @@
+@@ -5122,7 +5235,7 @@
      PrefsCommand(MainWidget* w) : Command(cname, w) {};
  
      void perform() {
@@ -1210,7 +1246,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  
      bool requires_document() { return false; }
-@@ -5137,7 +5227,7 @@
+@@ -5137,7 +5250,7 @@
      void perform() {
          std::optional<Path> pref_file_path = widget->config_manager->get_or_create_user_config_file();
          if (pref_file_path) {
@@ -1219,7 +1255,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          }
      }
  
-@@ -6041,6 +6131,52 @@
+@@ -6041,6 +6154,52 @@
  
  };
  
@@ -1272,7 +1308,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  class ToggleTypingModeCommand : public Command {
  public:
      static inline const std::string cname = "toggle_typing_mode";
-@@ -7035,6 +7171,10 @@
+@@ -7035,6 +7194,10 @@
      register_command<GotoMark>();
      register_command<GotoPageWithPageNumberCommand>();
      register_command<EditSelectedBookmarkCommand>();
@@ -1283,7 +1319,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<EditSelectedHighlightCommand>();
      register_command<SearchCommand>();
      register_command<DownloadPaperWithUrlCommand>();
-@@ -7107,6 +7247,8 @@
+@@ -7107,6 +7270,8 @@
      register_command<GotoHighlightCommand>();
      register_command<IncreaseFreetextBookmarkFontSizeCommand>();
      register_command<DecreaseFreetextBookmarkFontSizeCommand>();
@@ -1292,7 +1328,16 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<GotoPortalListCommand>();
      register_command<ShowMarks>();
      register_command<GotoBookmarkCommand>();
-@@ -7246,6 +7388,8 @@
+@@ -7134,6 +7299,8 @@
+     register_command<OpenDocumentEmbeddedCommand>();
+     register_command<OpenDocumentEmbeddedFromCurrentPathCommand>();
+     register_command<CopyCommand>();
++    register_command<CutCommand>();
++    register_command<PasteCommand>();
+ #ifdef Q_OS_MACOS
+     register_command<MacosLookupCommand>();
+ #endif
+@@ -7246,6 +7413,8 @@
      register_command<OverviewRulerPortalCommand>();
      register_command<GotoRulerPortalCommand>();
      register_command<SelectRectCommand>();
@@ -1301,7 +1346,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<ToggleTypingModeCommand>();
      register_command<DonateCommand>();
      register_command<OverviewNextItemCommand>();
-@@ -7515,6 +7659,7 @@
+@@ -7515,6 +7684,7 @@
                  {L"left", Qt::Key::Key_Left},
                  {L"right", Qt::Key::Key_Right},
                  {L"backspace", Qt::Key::Key_Backspace},
@@ -1309,7 +1354,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
                  {L"space", Qt::Key::Key_Space},
                  {L"pageup", Qt::Key::Key_PageUp},
                  {L"pagedown", Qt::Key::Key_PageDown},
-@@ -8025,6 +8170,7 @@
+@@ -8025,6 +8195,7 @@
          {Qt::Key::Key_Left, "left"},
          {Qt::Key::Key_Right, "right"},
          {Qt::Key::Key_Backspace, "backspace"},
@@ -1317,7 +1362,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          {Qt::Key::Key_Space, "space"},
          {Qt::Key::Key_PageUp, "pageup"},
          {Qt::Key::Key_PageDown, "pagedown"},
-@@ -8101,6 +8247,10 @@
+@@ -8101,6 +8272,10 @@
  
  void Command::set_text_requirement(std::wstring value) {}
  void Command::set_symbol_requirement(char value) {}
@@ -1390,7 +1435,19 @@ diff -ruN baseA/pdf_viewer/keys.config ptree/pdf_viewer/keys.config
  # Goto next/previous highlight in current document
  goto_next_highlight gnh
  goto_prev_highlight gNh
-@@ -398,3 +405,37 @@
+@@ -241,6 +248,11 @@
+ 
+ # Copy selected text
+ copy <C-c>
++# With a note selected (not being edited) the clipboard keys act on the note:
++# copy/cut its text, or replace its text with the clipboard. Inside the note
++# editor the usual text editing behaviour applies instead.
++cut <C-x>
++paste <C-v>
+ 
+ toggle_fullscreen <f11>
+ 
+@@ -398,3 +410,37 @@
  ## ------------------------------------
  ## now you can bind _my_command_name to a keybind here:
  #_my_command_name <unbound>
@@ -1431,16 +1488,17 @@ diff -ruN baseA/pdf_viewer/keys.config ptree/pdf_viewer/keys.config
 diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
-@@ -13,6 +13,8 @@
+@@ -13,6 +13,9 @@
  // smartviewcandidates are not filled when right clicking on a link?
  
  
 +#include <QPlainTextEdit>
++#include <QClipboard>
 +#include <QTextDocument>
  #include <iostream>
  #include <vector>
  #include <string>
-@@ -201,6 +203,7 @@
+@@ -201,6 +204,7 @@
  extern std::wstring LEFT_CLICK_SCROLL_UP_COMMAND;
  extern std::wstring LEFT_CLICK_SCROLL_DOWN_COMMAND;
  extern float FREETEXT_BOOKMARK_FONT_SIZE;
@@ -1448,7 +1506,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  extern std::wstring BOOK_SCAN_PATH;
  extern bool USE_RULER_TO_HIGHLIGHT_SYNCTEX_LINE;
  extern std::wstring VOLUME_DOWN_COMMAND;
-@@ -610,6 +613,11 @@
+@@ -610,6 +614,11 @@
          return;
      }
  
@@ -1460,7 +1518,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (SHOW_STATUSBAR_ONLY_WHEN_MOUSE_OVER) {
          if (should_show_status_label(false)) {
              if (!status_label->isVisible()) {
-@@ -690,6 +698,7 @@
+@@ -690,6 +699,7 @@
      if (bookmark_move_data) {
          handle_bookmark_move();
          validate_render();
@@ -1468,7 +1526,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      }
      if (portal_move_data) {
          handle_portal_move();
-@@ -753,6 +762,29 @@
+@@ -753,6 +763,29 @@
  
      }
  
@@ -1498,7 +1556,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (!is_scratchpad_mode()){
          if (opengl_widget->is_window_point_in_overview(normal_mpos)) {
              link = doc()->get_link_in_pos(opengl_widget->window_pos_to_overview_pos(normal_mpos));
-@@ -950,6 +982,20 @@
+@@ -950,6 +983,20 @@
  
      text_command_line_edit_label = new QLabel(this);
      text_command_line_edit = new MyLineEdit(this);
@@ -1519,7 +1577,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      text_command_line_edit_label->setFont(label_font);
      text_command_line_edit->setFont(label_font);
-@@ -1595,6 +1641,18 @@
+@@ -1595,6 +1642,18 @@
  
  void MainWidget::handle_escape() {
  
@@ -1538,7 +1596,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      // add high escape priority to overview and search, if any of them are escaped, do not escape any further
      if (opengl_widget) {
          bool should_return = false;
-@@ -1618,6 +1676,18 @@
+@@ -1618,6 +1677,18 @@
          }
      }
  
@@ -1557,7 +1615,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      smooth_y_move_amount = {};
      clear_selection_indicators();
      typing_location = {};
-@@ -1698,6 +1768,7 @@
+@@ -1698,6 +1769,7 @@
  }
  
  void MainWidget::validate_render() {
@@ -1565,7 +1623,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      if (smooth_scroll_mode) {
          if (main_document_view_has_document()) {
-@@ -2045,6 +2116,10 @@
+@@ -2045,6 +2117,10 @@
  }
  
  void MainWidget::open_document(const std::wstring& path, std::optional<float> offset_x, std::optional<float> offset_y, std::optional<float> zoom_level) {
@@ -1576,7 +1634,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      opengl_widget->clear_all_selections();
  
      //save the previous document state
-@@ -2289,7 +2364,8 @@
+@@ -2289,7 +2365,8 @@
  
              char symb = get_symbol(kevent->key(), kevent->modifiers() & Qt::ShiftModifier, pending_command_instance->special_symbols());
              if (symb) {
@@ -1586,7 +1644,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
                  advance_command(std::move(pending_command_instance));
              }
              validate_render();
-@@ -2795,6 +2871,10 @@
+@@ -2795,6 +2872,10 @@
      set_selected_bookmark_index(doc()->get_bookmark_index_at_pos(mouse_abspos));
      selected_portal_index = doc()->get_portal_index_at_pos(mouse_abspos);
  
@@ -1597,7 +1655,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (selected_portal_index >= 0) {
          Portal portal = doc()->get_portals()[selected_portal_index];
  
-@@ -3000,6 +3080,21 @@
+@@ -3000,6 +3081,21 @@
  }
  
  void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
@@ -1619,7 +1677,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      bool is_shift_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ShiftModifier);
      bool is_control_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ControlModifier);
-@@ -3128,6 +3223,16 @@
+@@ -3128,6 +3224,16 @@
  }
  
  void MainWidget::mouseDoubleClickEvent(QMouseEvent* mevent) {
@@ -1636,7 +1694,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (!TOUCH_MODE) {
          WindowPos click_pos = { mevent->pos().x(), mevent->pos().y() };
          AbsoluteDocumentPos mouse_abspos = main_document_view->window_to_absolute_document_pos(click_pos);
-@@ -3172,16 +3277,78 @@
+@@ -3172,16 +3278,78 @@
  }
  
  void MainWidget::mousePressEvent(QMouseEvent* mevent) {
@@ -1715,7 +1773,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (!TOUCH_MODE && mevent->button() == Qt::MouseButton::LeftButton) {
          QPoint local_mpos = mapFromGlobal(QCursor::pos());
          AbsoluteDocumentPos current_pos = WindowPos(local_mpos).to_absolute(main_document_view);
-@@ -4721,6 +4888,7 @@
+@@ -4721,6 +4889,7 @@
  }
  
  void MainWidget::handle_close_event() {
@@ -1723,7 +1781,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      save_auto_config();
  #ifndef SIOYEK_ANDROID
      persist(true);
-@@ -5663,6 +5831,10 @@
+@@ -5663,6 +5832,10 @@
  
              if (pending_command_instance) {
                  pending_command_instance->pre_perform();
@@ -1734,7 +1792,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
              }
  
          }
-@@ -6419,7 +6591,7 @@
+@@ -6419,7 +6592,7 @@
          keys_paths_wstring,
          [&](std::wstring* path) {
              if (path) {
@@ -1743,7 +1801,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
              }
          },
          this));
-@@ -6439,7 +6611,7 @@
+@@ -6439,7 +6612,7 @@
          prefs_paths_wstring,
          [&](std::wstring* path) {
              if (path) {
@@ -1752,7 +1810,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
              }
          },
          this));
-@@ -6566,10 +6738,14 @@
+@@ -6566,10 +6739,14 @@
          main_document_view->delete_highlight_with_index(selected_highlight_index);
          set_selected_highlight_index(-1);
      }
@@ -1767,7 +1825,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (selected_bookmark_index != -1) {
          main_document_view->delete_bookmark_with_index(selected_bookmark_index);
          set_selected_bookmark_index(-1);
-@@ -8216,6 +8392,95 @@
+@@ -8216,6 +8393,95 @@
      
  }
  
@@ -1863,7 +1921,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
  void MainWidget::delete_freehand_drawings(AbsoluteRect rect) {
      if (opengl_widget->get_scratchpad()) {
-@@ -8299,6 +8564,12 @@
+@@ -8299,6 +8565,12 @@
      res += opengl_widget->get_scratchpad() ? "s" : "S";
      res += (opengl_widget->get_is_searching(nullptr)) ? "f" : "F";
      res += (is_menu_focused()) ? "m" : "M";
@@ -1876,7 +1934,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      if (main_document_view) {
          res += (main_document_view->selected_character_rects.size() > 0) ? "t" : "T";
-@@ -8584,14 +8855,109 @@
+@@ -8584,14 +8856,109 @@
  
  void MainWidget::change_selected_bookmark_text(const std::wstring& new_text) {
      if (selected_bookmark_index != -1) {
@@ -1992,7 +2050,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  }
  
  void MainWidget::change_selected_highlight_text_annot(const std::wstring& new_text) {
-@@ -8636,14 +9002,236 @@
+@@ -8636,16 +9003,267 @@
      }
  }
  
@@ -2015,15 +2073,15 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +    }
 +    invalidate_render();
 +}
++
++bool MainWidget::has_selected_freetext_note() {
++    if (!doc() || !main_document_view) return false;
++    if (selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return false;
  
 -    if (selected_bookmark_index != -1) {
 -        BookMark& selected_bookmark = doc()->get_bookmarks()[selected_bookmark_index];
 -        if (selected_bookmark.font_size != -1) {
 -            selected_bookmark.font_size = FREETEXT_BOOKMARK_FONT_SIZE;
-+bool MainWidget::has_selected_freetext_note() {
-+    if (!doc() || !main_document_view) return false;
-+    if (selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return false;
-+
 +    const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
 +    if (!bookmark.is_freetext() || bookmark.is_box()) return false;
 +
@@ -2033,6 +2091,35 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +    // A context the user cannot see must not capture a shortcut: once the selected
 +    // note has been scrolled off screen, `-` has to mean zoom out again.
 +    return bookmark.get_rectangle().to_window_normalized(main_document_view).is_visible();
++}
++
++// Clipboard actions on the selected note. Inside the note editor QPlainTextEdit
++// already handles cut/copy/paste itself; these cover the case where a note is
++// selected but not being edited, where the keys would otherwise do nothing.
++bool MainWidget::copy_selected_note_text(bool cut) {
++    if (current_context() != UiContext::NoteSelected) return false;
++
++    const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
++    copy_to_clipboard(bookmark.description);
++
++    if (cut) {
++        handle_delete_selected_bookmark();
++    }
++    return true;
++}
++
++bool MainWidget::paste_into_selected_note() {
++    if (current_context() != UiContext::NoteSelected) return false;
++
++    QClipboard* clipboard = QGuiApplication::clipboard();
++    if (!clipboard) return false;
++
++    std::wstring text = clipboard->text().toStdWString();
++    if (text.size() == 0) return true;
++
++    change_selected_bookmark_text(text);
++    invalidate_render();
++    return true;
 +}
 +
 +UiContext MainWidget::current_context() {
@@ -2070,7 +2157,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +        if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) && !(key->modifiers() & Qt::ShiftModifier)) {
 +            finish_freetext_edit();
 +            return true;
-+        }
+         }
 +        if (key->modifiers() & (Qt::ControlModifier | Qt::MetaModifier)) {
 +            if ((key->modifiers() & Qt::ShiftModifier) && key->key() == Qt::Key_C) {
 +                // The color letter is read by the main widget's key handling, so
@@ -2089,8 +2176,8 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +                update_selected_bookmark_border_width(key->key() == Qt::Key_Minus ? 1.0f / 1.25f : 1.25f);
 +                return true;
 +            }
-         }
-     }
++        }
++    }
 +    return QWidget::eventFilter(obj, event);
 +}
 +
@@ -2215,9 +2302,9 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +        bookmark.color[2] != appearance.color[2]) {
 +        float color[3] = { bookmark.color[0], bookmark.color[1], bookmark.color[2] };
 +        doc()->update_bookmark_color(index, color);
-+    }
-+}
-+
+     }
+ }
+ 
 +int MainWidget::freetext_resize_edges_at(WindowPos pos) {
 +    if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return 0;
 +    const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
@@ -2231,10 +2318,12 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +    if (std::abs(pos.y - rect.y0) <= margin) edges |= 4;
 +    else if (std::abs(pos.y - rect.y1) <= margin) edges |= 8;
 +    return edges;
- }
- 
++}
++
  TextToSpeechHandler* MainWidget::get_tts() {
-@@ -8788,8 +9376,18 @@
+     if (tts) return tts;
+ 
+@@ -8788,8 +9406,18 @@
  }
  
  void MainWidget::handle_bookmark_move_finish() {
@@ -2253,7 +2342,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  }
  
  void MainWidget::handle_portal_move_finish() {
-@@ -8805,11 +9403,48 @@
+@@ -8805,11 +9433,48 @@
      float diff_x = current_mouse_abspos.x - bookmark_move_data->initial_mouse_position.x;
      float diff_y = current_mouse_abspos.y - bookmark_move_data->initial_mouse_position.y;
  
@@ -2302,7 +2391,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (bookmark.end_y >= 0) {
          bookmark.end_x = bookmark_move_data->initial_end_position.x + diff_x;
          bookmark.end_y = bookmark_move_data->initial_end_position.y + diff_y;
-@@ -8842,6 +9477,14 @@
+@@ -8842,6 +9507,14 @@
  }
  
  void MainWidget::begin_bookmark_move(int index, AbsoluteDocumentPos begin_cursor_pos) {
@@ -2317,7 +2406,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      BookmarkMoveData move_data;
      move_data.index = index;
  
-@@ -8851,6 +9494,7 @@
+@@ -8851,6 +9524,7 @@
      move_data.initial_end_position.y = doc()->get_bookmarks()[index].end_y;
  
      move_data.initial_mouse_position = begin_cursor_pos;
@@ -2325,7 +2414,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      bookmark_move_data = move_data;
  }
  
-@@ -8974,6 +9618,70 @@
+@@ -8974,6 +9648,70 @@
      show_current_widget();
  }
  
@@ -2396,7 +2485,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  TouchTextSelectionButtons* MainWidget::get_text_selection_buttons() {
      if (text_selection_buttons_ == nullptr) {
          text_selection_buttons_ = new TouchTextSelectionButtons(this);
-@@ -10258,6 +10966,10 @@
+@@ -10258,6 +10996,10 @@
      opengl_widget->goto_search_result(nth_next_result, overview);
  }
  
@@ -2407,7 +2496,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  void MainWidget::set_should_highlight_words(bool should_highlight_words) {
      opengl_widget->set_should_highlight_words(should_highlight_words);
  }
-@@ -10354,6 +11066,11 @@
+@@ -10354,6 +11096,11 @@
  }
  
  void MainWidget::hide_command_line_edit(){
@@ -2419,7 +2508,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      text_command_line_edit->setText("");
      text_command_line_edit_container->hide();
      text_suggestion_index = 0;
-@@ -10716,6 +11433,7 @@
+@@ -10716,6 +11463,7 @@
  }
  
  void MainWidget::toggle_scratchpad_mode(){
@@ -2427,7 +2516,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (opengl_widget->get_scratchpad()) {
          opengl_widget->set_scratchpad(nullptr);
      }
-@@ -10892,11 +11610,19 @@
+@@ -10892,11 +11640,19 @@
  }
  
  void MainWidget::set_selected_highlight_index(int index) {
@@ -2540,7 +2629,7 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
      QLabel* status_label_left = nullptr;
      QLabel* status_label_right = nullptr;
      QWidget* status_label = nullptr;
-@@ -441,11 +493,29 @@
+@@ -441,11 +493,31 @@
      void set_main_document_view_state(DocumentViewState new_view_state);
      void handle_click(WindowPos pos);
  
@@ -2549,6 +2638,8 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
 +    void update_selected_bookmark_border_width(float factor);
 +    bool has_selected_freetext_note();
 +    UiContext current_context();
++    bool copy_selected_note_text(bool cut);
++    bool paste_into_selected_note();
 +    bool eventFilter(QObject* obj, QEvent* event) override;
 +    void show_freetext_editor();
 +    void update_freetext_editor_geometry();
@@ -2571,7 +2662,7 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
      void change_selected_highlight_text_annot(const std::wstring& new_text);
      char get_current_selected_highlight_type();
      void show_textbar(const std::wstring& command_name, const std::wstring& initial_value = L"");
-@@ -682,6 +752,7 @@
+@@ -682,6 +754,7 @@
      void hande_turn_off_all_drawings();
      void handle_toggle_drawing_mask(char symbol);
      void show_command_palette();
@@ -2579,7 +2670,7 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
  
      DocumentPos get_document_pos_under_window_pos(WindowPos window_pos);
      AbsoluteDocumentPos get_absolute_document_pos_under_window_pos(WindowPos window_pos);
-@@ -757,6 +828,9 @@
+@@ -757,6 +830,9 @@
      void handle_drawing_move(QPoint pos, float pressure);
      void start_drawing();
      void finish_drawing(QPoint pos);
@@ -2589,7 +2680,7 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
      void handle_pen_drawing_event(QTabletEvent* te);
      void select_freehand_drawings(AbsoluteRect rect);
      void delete_freehand_drawings(AbsoluteRect rect);
-@@ -939,6 +1013,7 @@
+@@ -939,6 +1015,7 @@
      void add_password(std::wstring path, std::string password);
      void handle_fit_to_page_width(bool smart);
      int current_document_page_count();
@@ -2605,11 +2696,12 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  #include <cmath>
  
  #include <qcolor.h>
-@@ -5,6 +6,11 @@
+@@ -5,6 +6,12 @@
  #include <qapplication.h>
  #include <qdatetime.h>
  #include <qfile.h>
 +#include <QPainterPath>
++#include <QFontDatabase>
 +
 +#ifdef SIOYEK_JKQT_MATHTEXT_SUPPORT
 +#include <jkqtmathtext/jkqtmathtext.h>
@@ -2617,7 +2709,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
  #include "pdf_view_opengl_widget.h"
  #include "path.h"
-@@ -63,6 +69,7 @@
+@@ -63,6 +70,7 @@
  //extern float BOOKMARK_RECT_SIZE;
  extern bool RENDER_FREETEXT_BORDERS;
  extern float FREETEXT_BOOKMARK_FONT_SIZE;
@@ -2625,7 +2717,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  extern float STRIKE_LINE_WIDTH;
  extern std::wstring RULER_DISPLAY_MODE;
  extern float RULER_COLOR[3];
-@@ -716,7 +723,8 @@
+@@ -716,7 +724,8 @@
       render_compiled_drawings();
       glEnableVertexAttribArray(0);
       glUseProgram(shared_gl_objects.line_program);
@@ -2635,7 +2727,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
       render_drawings(scratchpad, moving_drawings, true);
       render_drawings(scratchpad, moving_drawings, false);
       render_drawings(scratchpad, pending_drawing);
-@@ -755,6 +763,292 @@
+@@ -755,6 +764,323 @@
      //painter.drawText(-100, -100, "1234567890");
  }
  
@@ -2745,12 +2837,43 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
 +
 +}
 +
++// JKQTMathText defaults the \mathcal (caligraphic) logical font to Comic Sans MS,
++// and useXITS() only sets the roman and math fonts. Comic Sans is normally absent
++// on Linux, so \mathcal silently falls back to a plain sans face and renders as
++// upright sans text instead of script. Pick the first script face that is actually
++// installed; an empty result leaves JKQTMathText's own default in place.
++static QString note_math_caligraphic_font() {
++    static const QString cached = [] {
++        const QStringList candidates = {
++            "TeX Gyre Chorus", "URW Chancery L", "Z003",
++            "STIX Two Math", "XITS Math", "Comic Sans MS"
++        };
++#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
++        const QStringList families = QFontDatabase::families();
++#else
++        const QStringList families = QFontDatabase().families();
++#endif
++        for (const QString& candidate : candidates) {
++            if (families.contains(candidate, Qt::CaseInsensitive)) {
++                return candidate;
++            }
++        }
++        return QString();
++    }();
++    return cached;
++}
++
 +JKQTMathText* PdfViewOpenGLWidget::get_note_math_renderer(const QString& latex) {
 +    const std::string key = latex.toUtf8().toStdString();
 +    auto [entry, inserted] = note_math_cache.try_emplace(key);
 +    if (inserted) {
 +        auto renderer = std::make_unique<JKQTMathText>();
 +        renderer->useXITS();
++
++        const QString caligraphic = note_math_caligraphic_font();
++        if (!caligraphic.isEmpty()) {
++            renderer->setFontCaligraphic(caligraphic);
++        }
 +        const auto options = JKQTMathText::ParseOptions(JKQTMathText::StartWithMathMode);
 +        if (renderer->parse(latex, JKQTMathText::DefaultParser, options)) {
 +            entry->second = std::move(renderer);
@@ -2928,7 +3051,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRenderer* pdf_renderer, ConfigManager* config_manager, bool is_helper, QWidget* parent) :
      QOpenGLWidget(parent),
      document_view(document_view),
-@@ -1710,14 +2004,21 @@
+@@ -1710,14 +2036,21 @@
                      QRect window_qrect = QRect(window_rect.x0, window_rect.y0, fz_irect_width(window_rect), fz_irect_height(window_rect));
  
                      QFont font = painter->font();
@@ -2951,7 +3074,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                      int flags = Qt::TextWordWrap;
-@@ -1728,7 +2029,7 @@
+@@ -1728,7 +2061,7 @@
                          flags |= Qt::AlignLeft;
                      }
  
@@ -2960,7 +3083,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
                          QString box_text = QString::fromStdWString(bookmarks[i].description).split(' ')[0];
                          std::optional<char> bm_type = bookmarks[i].get_type();
-@@ -1752,15 +2053,68 @@
+@@ -1752,15 +2085,68 @@
                          }
                      }
                      else {
@@ -3036,7 +3159,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                  }
-@@ -2966,9 +3320,15 @@
+@@ -2966,9 +3352,15 @@
          if (drawing.points.size() <= 0) {
              continue;
          }
@@ -3052,7 +3175,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (drawing.points.size() == 1) {
              add_point_coords(drawing.points[0], drawing.type - 'a');
  
-@@ -3212,6 +3572,79 @@
+@@ -3212,6 +3604,79 @@
  }
  
  void PdfViewOpenGLWidget::render_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted) {
@@ -3132,7 +3255,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
      if (drawings.size() == 0) return;
  
-@@ -3231,6 +3664,9 @@
+@@ -3231,6 +3696,9 @@
      for (int i = drawings.size() - 1; i >= 0; i--) {
          auto drawing = drawings[i];
  
@@ -3142,7 +3265,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (DEBUG_SMOOTH_FREEHAND_DRAWINGS) {
              drawing = smoothen_drawing(drawing);
          }
-@@ -3241,6 +3677,9 @@
+@@ -3241,6 +3709,9 @@
          if (drawing.points.size() <= 0) {
              continue;
          }
