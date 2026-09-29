@@ -888,6 +888,7 @@ in
 
     # ── Image & Media Tools ──
     imagemagick                # Image conversion and manipulation (CLI)
+    potrace                    # Local raster-to-SVG tracing for Minder
     ffmpeg                     # Audio/video converter and streamer
     ffmpegthumbnailer          # Video thumbnails (used by Emacs Dirvish preview)
     mediainfo                  # Media metadata (used by Emacs Dirvish preview)
@@ -1139,6 +1140,7 @@ in
   # Set the default editor to vim
   environment.variables.EDITOR = "xed";
   environment.variables.MINDER_FORMULA_OCR = lib.getExe pkgs.formulaocr-offline;
+  environment.variables.MINDER_POTRACE = lib.getExe' pkgs.potrace "potrace";
   environment.variables.GTK_IM_MODULE = lib.mkForce "";
   environment.variables.QT_IM_MODULE = lib.mkForce "";
 
