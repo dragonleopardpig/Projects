@@ -1178,7 +1178,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      void perform_with_highlight_selected() override {
          widget->handle_delete_selected_highlight();
      }
-@@ -4032,12 +4122,35 @@
+@@ -4032,12 +4122,39 @@
      bool requires_document() { return false; }
  };
  
@@ -1188,7 +1188,9 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
 +    static inline const std::string hname = "Cut the selected note's text";
 +    CutCommand(MainWidget* w) : Command(cname, w) {};
 +    void perform() {
-+        widget->copy_selected_note_text(true);
++        if (!widget->copy_selected_note_text(true)) {
++            show_error_message(L"Select a note first: cut acts on the selected note");
++        }
 +    }
 +};
 +
@@ -1198,7 +1200,9 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
 +    static inline const std::string hname = "Paste the clipboard into the selected note";
 +    PasteCommand(MainWidget* w) : Command(cname, w) {};
 +    void perform() {
-+        widget->paste_into_selected_note();
++        if (!widget->paste_into_selected_note()) {
++            show_error_message(L"Select a note first: paste replaces the selected note's text");
++        }
 +    }
 +};
 +
@@ -1214,7 +1218,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          copy_to_clipboard(widget->get_selected_text(ADD_NEWLINES_WHEN_COPYING_TEXT));
      }
  
-@@ -5076,11 +5189,11 @@
+@@ -5076,11 +5193,11 @@
  class KeysCommand : public Command {
  public:
      static inline const std::string cname = "keys";
@@ -1228,7 +1232,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  
      bool requires_document() { return false; }
-@@ -5095,7 +5208,7 @@
+@@ -5095,7 +5212,7 @@
      void perform() {
          std::optional<Path> key_file_path = widget->input_handler->get_or_create_user_keys_path();
          if (key_file_path) {
@@ -1237,7 +1241,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          }
      }
  
-@@ -5122,7 +5235,7 @@
+@@ -5122,7 +5239,7 @@
      PrefsCommand(MainWidget* w) : Command(cname, w) {};
  
      void perform() {
@@ -1246,7 +1250,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  
      bool requires_document() { return false; }
-@@ -5137,7 +5250,7 @@
+@@ -5137,7 +5254,7 @@
      void perform() {
          std::optional<Path> pref_file_path = widget->config_manager->get_or_create_user_config_file();
          if (pref_file_path) {
@@ -1255,7 +1259,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          }
      }
  
-@@ -6041,6 +6154,52 @@
+@@ -6041,6 +6158,52 @@
  
  };
  
@@ -1308,7 +1312,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  class ToggleTypingModeCommand : public Command {
  public:
      static inline const std::string cname = "toggle_typing_mode";
-@@ -7035,6 +7194,10 @@
+@@ -7035,6 +7198,10 @@
      register_command<GotoMark>();
      register_command<GotoPageWithPageNumberCommand>();
      register_command<EditSelectedBookmarkCommand>();
@@ -1319,7 +1323,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<EditSelectedHighlightCommand>();
      register_command<SearchCommand>();
      register_command<DownloadPaperWithUrlCommand>();
-@@ -7107,6 +7270,8 @@
+@@ -7107,6 +7274,8 @@
      register_command<GotoHighlightCommand>();
      register_command<IncreaseFreetextBookmarkFontSizeCommand>();
      register_command<DecreaseFreetextBookmarkFontSizeCommand>();
@@ -1328,7 +1332,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<GotoPortalListCommand>();
      register_command<ShowMarks>();
      register_command<GotoBookmarkCommand>();
-@@ -7134,6 +7299,8 @@
+@@ -7134,6 +7303,8 @@
      register_command<OpenDocumentEmbeddedCommand>();
      register_command<OpenDocumentEmbeddedFromCurrentPathCommand>();
      register_command<CopyCommand>();
@@ -1337,7 +1341,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  #ifdef Q_OS_MACOS
      register_command<MacosLookupCommand>();
  #endif
-@@ -7246,6 +7413,8 @@
+@@ -7246,6 +7417,8 @@
      register_command<OverviewRulerPortalCommand>();
      register_command<GotoRulerPortalCommand>();
      register_command<SelectRectCommand>();
@@ -1346,7 +1350,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<ToggleTypingModeCommand>();
      register_command<DonateCommand>();
      register_command<OverviewNextItemCommand>();
-@@ -7515,6 +7684,7 @@
+@@ -7515,6 +7688,7 @@
                  {L"left", Qt::Key::Key_Left},
                  {L"right", Qt::Key::Key_Right},
                  {L"backspace", Qt::Key::Key_Backspace},
@@ -1354,7 +1358,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
                  {L"space", Qt::Key::Key_Space},
                  {L"pageup", Qt::Key::Key_PageUp},
                  {L"pagedown", Qt::Key::Key_PageDown},
-@@ -8025,6 +8195,7 @@
+@@ -8025,6 +8199,7 @@
          {Qt::Key::Key_Left, "left"},
          {Qt::Key::Key_Right, "right"},
          {Qt::Key::Key_Backspace, "backspace"},
@@ -1362,7 +1366,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          {Qt::Key::Key_Space, "space"},
          {Qt::Key::Key_PageUp, "pageup"},
          {Qt::Key::Key_PageDown, "pagedown"},
-@@ -8101,6 +8272,10 @@
+@@ -8101,6 +8276,10 @@
  
  void Command::set_text_requirement(std::wstring value) {}
  void Command::set_symbol_requirement(char value) {}
@@ -2696,12 +2700,13 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  #include <cmath>
  
  #include <qcolor.h>
-@@ -5,6 +6,12 @@
+@@ -5,6 +6,13 @@
  #include <qapplication.h>
  #include <qdatetime.h>
  #include <qfile.h>
 +#include <QPainterPath>
 +#include <QFontDatabase>
++#include <QHash>
 +
 +#ifdef SIOYEK_JKQT_MATHTEXT_SUPPORT
 +#include <jkqtmathtext/jkqtmathtext.h>
@@ -2709,7 +2714,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
  #include "pdf_view_opengl_widget.h"
  #include "path.h"
-@@ -63,6 +70,7 @@
+@@ -63,6 +71,7 @@
  //extern float BOOKMARK_RECT_SIZE;
  extern bool RENDER_FREETEXT_BORDERS;
  extern float FREETEXT_BOOKMARK_FONT_SIZE;
@@ -2717,7 +2722,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  extern float STRIKE_LINE_WIDTH;
  extern std::wstring RULER_DISPLAY_MODE;
  extern float RULER_COLOR[3];
-@@ -716,7 +724,8 @@
+@@ -716,7 +725,8 @@
       render_compiled_drawings();
       glEnableVertexAttribArray(0);
       glUseProgram(shared_gl_objects.line_program);
@@ -2727,7 +2732,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
       render_drawings(scratchpad, moving_drawings, true);
       render_drawings(scratchpad, moving_drawings, false);
       render_drawings(scratchpad, pending_drawing);
-@@ -755,6 +764,323 @@
+@@ -755,6 +765,429 @@
      //painter.drawText(-100, -100, "1234567890");
  }
  
@@ -2842,6 +2847,28 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
 +// on Linux, so \mathcal silently falls back to a plain sans face and renders as
 +// upright sans text instead of script. Pick the first script face that is actually
 +// installed; an empty result leaves JKQTMathText's own default in place.
++// LaTeX's \mathcal and the rest of its math typography come from Computer
++// Modern. Latin Modern Math is its OpenType successor and carries the same
++// glyphs, so prefer it when installed and fall back to the XITS fonts that
++// JKQTMathText embeds.
++static QString note_math_roman_font() {
++    static const QString cached = [] {
++        const QStringList candidates = { "Latin Modern Math", "XITS Math", "STIX Two Math" };
++#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
++        const QStringList families = QFontDatabase::families();
++#else
++        const QStringList families = QFontDatabase().families();
++#endif
++        for (const QString& candidate : candidates) {
++            if (families.contains(candidate, Qt::CaseInsensitive)) {
++                return candidate;
++            }
++        }
++        return QString();
++    }();
++    return cached;
++}
++
 +static QString note_math_caligraphic_font() {
 +    static const QString cached = [] {
 +        const QStringList candidates = {
@@ -2863,6 +2890,85 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
 +    return cached;
 +}
 +
++// JKQTMathText implements \mathcal by swapping the font family and drawing the
++// plain ASCII letter, so a math font yields an upright "E" and only a chancery
++// face yields script at all -- neither matches LaTeX's \mathcal. Rewriting
++// \mathcal{...} to the Unicode script letters instead lets the math font draw its
++// real script glyphs. Most live in Mathematical Alphanumeric Symbols, but a dozen
++// are "holes" there and live in Letterlike Symbols instead.
++static char32_t script_code_point(QChar letter) {
++    static const QHash<char16_t, char32_t> holes = {
++        {u'B', 0x212C}, {u'E', 0x2130}, {u'F', 0x2131}, {u'H', 0x210B},
++        {u'I', 0x2110}, {u'L', 0x2112}, {u'M', 0x2133}, {u'R', 0x211B},
++        {u'e', 0x212F}, {u'g', 0x210A}, {u'o', 0x2134},
++    };
++
++    const char16_t unit = letter.unicode();
++    const auto hole = holes.find(unit);
++    if (hole != holes.end()) return hole.value();
++
++    if (letter >= u'A' && letter <= u'Z') return 0x1D49C + (unit - u'A');
++    if (letter >= u'a' && letter <= u'z') return 0x1D4B6 + (unit - u'a');
++    return 0;
++}
++
++static QString substitute_mathcal(const QString& latex) {
++    static const QString macro = QStringLiteral("\\mathcal");
++    if (!latex.contains(macro)) return latex;
++
++    QString out;
++    out.reserve(latex.size());
++
++    int i = 0;
++    while (i < latex.size()) {
++        if (latex.mid(i, macro.size()) != macro) {
++            out += latex[i++];
++            continue;
++        }
++
++        int j = i + macro.size();
++        while (j < latex.size() && latex[j].isSpace()) j++;
++
++        QString body;
++        int after = -1;
++        if (j < latex.size() && latex[j] == '{') {
++            int depth = 0;
++            for (int k = j; k < latex.size(); k++) {
++                if (latex[k] == '{') depth++;
++                else if (latex[k] == '}') {
++                    depth--;
++                    if (depth == 0) { body = latex.mid(j + 1, k - j - 1); after = k + 1; break; }
++                }
++            }
++        }
++        else if (j < latex.size() && latex[j].isLetter()) {
++            body = latex.mid(j, 1);
++            after = j + 1;
++        }
++
++        if (after < 0) { out += latex[i++]; continue; }
++
++        // Only letters have script forms; leave anything else to JKQTMathText.
++        QString replaced;
++        bool all_mapped = true;
++        for (const QChar& c : body) {
++            const char32_t code = script_code_point(c);
++            if (code == 0) { all_mapped = false; break; }
++            replaced += QString::fromUcs4(&code, 1);
++        }
++
++        if (all_mapped && !replaced.isEmpty()) {
++            out += replaced;
++            i = after;
++        }
++        else {
++            out += latex[i++];
++        }
++    }
++
++    return out;
++}
++
 +JKQTMathText* PdfViewOpenGLWidget::get_note_math_renderer(const QString& latex) {
 +    const std::string key = latex.toUtf8().toStdString();
 +    auto [entry, inserted] = note_math_cache.try_emplace(key);
@@ -2870,12 +2976,17 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
 +        auto renderer = std::make_unique<JKQTMathText>();
 +        renderer->useXITS();
 +
++        const QString roman = note_math_roman_font();
++        if (!roman.isEmpty() && roman != "XITS Math") {
++            renderer->setFontRomanAndMath(roman, JKQTMathTextFontEncoding::MTFEUnicode);
++        }
++
 +        const QString caligraphic = note_math_caligraphic_font();
 +        if (!caligraphic.isEmpty()) {
 +            renderer->setFontCaligraphic(caligraphic);
 +        }
 +        const auto options = JKQTMathText::ParseOptions(JKQTMathText::StartWithMathMode);
-+        if (renderer->parse(latex, JKQTMathText::DefaultParser, options)) {
++        if (renderer->parse(substitute_mathcal(latex), JKQTMathText::DefaultParser, options)) {
 +            entry->second = std::move(renderer);
 +        }
 +    }
@@ -3051,7 +3162,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRenderer* pdf_renderer, ConfigManager* config_manager, bool is_helper, QWidget* parent) :
      QOpenGLWidget(parent),
      document_view(document_view),
-@@ -1710,14 +2036,21 @@
+@@ -1710,14 +2143,21 @@
                      QRect window_qrect = QRect(window_rect.x0, window_rect.y0, fz_irect_width(window_rect), fz_irect_height(window_rect));
  
                      QFont font = painter->font();
@@ -3074,7 +3185,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                      int flags = Qt::TextWordWrap;
-@@ -1728,7 +2061,7 @@
+@@ -1728,7 +2168,7 @@
                          flags |= Qt::AlignLeft;
                      }
  
@@ -3083,7 +3194,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
                          QString box_text = QString::fromStdWString(bookmarks[i].description).split(' ')[0];
                          std::optional<char> bm_type = bookmarks[i].get_type();
-@@ -1752,15 +2085,68 @@
+@@ -1752,15 +2192,68 @@
                          }
                      }
                      else {
@@ -3159,7 +3270,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                  }
-@@ -2966,9 +3352,15 @@
+@@ -2966,9 +3459,15 @@
          if (drawing.points.size() <= 0) {
              continue;
          }
@@ -3175,7 +3286,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (drawing.points.size() == 1) {
              add_point_coords(drawing.points[0], drawing.type - 'a');
  
-@@ -3212,6 +3604,79 @@
+@@ -3212,6 +3711,79 @@
  }
  
  void PdfViewOpenGLWidget::render_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted) {
@@ -3255,7 +3366,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
      if (drawings.size() == 0) return;
  
-@@ -3231,6 +3696,9 @@
+@@ -3231,6 +3803,9 @@
      for (int i = drawings.size() - 1; i >= 0; i--) {
          auto drawing = drawings[i];
  
@@ -3265,7 +3376,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (DEBUG_SMOOTH_FREEHAND_DRAWINGS) {
              drawing = smoothen_drawing(drawing);
          }
-@@ -3241,6 +3709,9 @@
+@@ -3241,6 +3816,9 @@
          if (drawing.points.size() <= 0) {
              continue;
          }

@@ -1178,6 +1178,9 @@ in
     noto-fonts-color-emoji
     wqy_microhei
     wqy_zenhei
+    # Latin Modern Math is the OpenType successor to Computer Modern, so LaTeX in
+    # Sioyek's note boxes (and \mathcal in particular) matches what TeX produces.
+    lmodern
   ];
 
   system.stateVersion = "25.11";
