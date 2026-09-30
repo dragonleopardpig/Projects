@@ -101,9 +101,26 @@
             ./patches/sioyek-reader-enhancements.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
-          buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre prev.jkqtplotter ];
+          # final, not prev: the jkqtplotter below is patched in this same
+          # overlay, and prev.* would silently pick up the unpatched one.
+          buildInputs = (old.buildInputs or [ ]) ++ [ prev.djvulibre final.jkqtplotter ];
           qmakeFlags = (old.qmakeFlags or [ ]) ++ [
             "DEFINES+=SIOYEK_JKQT_MATHTEXT_SUPPORT"
+          ];
+        });
+
+        # JKQTMathText draws every rule -- fraction and matrix rules, radicals,
+        # decorations like \vec and \overline, boxes, and the delimiters that
+        # \left..\right build -- with a pen whose width is the font's underline
+        # thickness. A text family such as Latin Modern Roman reports about
+        # 2.8% of the font size there, well under TeX's default rule thickness
+        # of 0.04em, so a big brace next to a two-line cases block comes out
+        # visibly lighter than the same formula set by TeX. The patch keeps the
+        # font's own value when it is already that heavy and otherwise falls
+        # back to 0.04em. Sioyek's note LaTeX is the only consumer here.
+        jkqtplotter = prev.jkqtplotter.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ./patches/jkqtplotter-tex-rule-thickness.patch
           ];
         });
 

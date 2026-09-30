@@ -1,0 +1,24 @@
+diff -ruN /nix/store/iggg5nxysm3fw85lylxl0qbsr4xxrihp-source/lib/jkqtmathtext/jkqtmathtexttools.cpp jk/lib/jkqtmathtext/jkqtmathtexttools.cpp
+--- a/lib/jkqtmathtext/jkqtmathtexttools.cpp
++++ b/lib/jkqtmathtext/jkqtmathtexttools.cpp
+@@ -1136,7 +1136,19 @@
+     static JKQTPDataCache<qreal,JKQTMathTextCacheKeyBase,JKQTPDataCacheThreadSafe,JKQTMathTextCacheKeyBaseExt> cache(
+         [](const JKQTMathTextCacheKeyBaseExt& key) {
+             const QFontMetricsF fm(key.f, key.pd);
+-            return fm.lineWidth();
++            const qreal reported=fm.lineWidth();
++            // Every drawn rule takes its stroke weight from here: fraction and
++            // matrix rules, radicals, decorations such as \vec and \overline,
++            // boxes, and the delimiters built by JKQTMathTextBraceNode. The
++            // value is the font's underline thickness, which for a text family
++            // can be well under TeX's default rule thickness (\fontdimen8 of
++            // the math extension font, 0.04em for Computer Modern). The result
++            // is delimiters and rules noticeably lighter than the same formula
++            // set by TeX. Keep whatever the font reports when it is already at
++            // least that heavy, and otherwise fall back to TeX's default.
++            const qreal pixelSize=QFontInfo(key.f).pixelSize();
++            if (pixelSize>0.0) return std::max(reported, 0.04*pixelSize);
++            return reported;
+         });
+ 
+     return cache.get_inline(f, pd);
