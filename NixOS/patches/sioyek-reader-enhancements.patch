@@ -1556,7 +1556,18 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (!is_scratchpad_mode()){
          if (opengl_widget->is_window_point_in_overview(normal_mpos)) {
              link = doc()->get_link_in_pos(opengl_widget->window_pos_to_overview_pos(normal_mpos));
-@@ -950,6 +984,20 @@
+@@ -893,6 +927,10 @@
+     window_id = next_window_id;
+     next_window_id++;
+ 
++    // The trace file is appended to across runs, so without this there is no
++    // way to tell which events belong to which process -- which matters when
++    // the question is whether a rebuilt binary is actually the one running.
++    ui_trace("startup", utf8_decode(std::string(__DATE__) + " " + std::string(__TIME__)));
+ 
+     setMouseTracking(true);
+     setAcceptDrops(true);
+@@ -950,6 +988,20 @@
  
      text_command_line_edit_label = new QLabel(this);
      text_command_line_edit = new MyLineEdit(this);
@@ -1577,7 +1588,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      text_command_line_edit_label->setFont(label_font);
      text_command_line_edit->setFont(label_font);
-@@ -1594,6 +1642,19 @@
+@@ -1594,6 +1646,19 @@
  }
  
  void MainWidget::handle_escape() {
@@ -1597,7 +1608,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      // add high escape priority to overview and search, if any of them are escaped, do not escape any further
      if (opengl_widget) {
-@@ -1618,6 +1679,18 @@
+@@ -1618,6 +1683,18 @@
          }
      }
  
@@ -1616,7 +1627,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      smooth_y_move_amount = {};
      clear_selection_indicators();
      typing_location = {};
-@@ -1698,6 +1771,7 @@
+@@ -1698,6 +1775,7 @@
  }
  
  void MainWidget::validate_render() {
@@ -1624,7 +1635,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      if (smooth_scroll_mode) {
          if (main_document_view_has_document()) {
-@@ -2045,6 +2119,10 @@
+@@ -2045,6 +2123,10 @@
  }
  
  void MainWidget::open_document(const std::wstring& path, std::optional<float> offset_x, std::optional<float> offset_y, std::optional<float> zoom_level) {
@@ -1635,7 +1646,18 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      opengl_widget->clear_all_selections();
  
      //save the previous document state
-@@ -2289,7 +2367,8 @@
+@@ -2188,6 +2270,10 @@
+     }
+ 
+     if (new_command) {
++        // Which command ran is the one thing the trace could not answer, and
++        // without it an unexpected UI state can only be guessed at from the
++        // mouse events around it.
++        ui_trace("command", utf8_decode(new_command->get_name()));
+         new_command->set_num_repeats(num_repeats);
+         if (new_command->pushes_state()) {
+             push_state();
+@@ -2289,7 +2375,8 @@
  
              char symb = get_symbol(kevent->key(), kevent->modifiers() & Qt::ShiftModifier, pending_command_instance->special_symbols());
              if (symb) {
@@ -1645,7 +1667,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
                  advance_command(std::move(pending_command_instance));
              }
              validate_render();
-@@ -2795,6 +2874,10 @@
+@@ -2795,6 +2882,10 @@
      set_selected_bookmark_index(doc()->get_bookmark_index_at_pos(mouse_abspos));
      selected_portal_index = doc()->get_portal_index_at_pos(mouse_abspos);
  
@@ -1656,7 +1678,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (selected_portal_index >= 0) {
          Portal portal = doc()->get_portals()[selected_portal_index];
  
-@@ -3000,6 +3083,22 @@
+@@ -3000,6 +3091,22 @@
  }
  
  void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
@@ -1679,7 +1701,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      bool is_shift_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ShiftModifier);
      bool is_control_pressed = QGuiApplication::keyboardModifiers().testFlag(Qt::KeyboardModifier::ControlModifier);
-@@ -3128,6 +3227,17 @@
+@@ -3128,6 +3235,17 @@
  }
  
  void MainWidget::mouseDoubleClickEvent(QMouseEvent* mevent) {
@@ -1697,7 +1719,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (!TOUCH_MODE) {
          WindowPos click_pos = { mevent->pos().x(), mevent->pos().y() };
          AbsoluteDocumentPos mouse_abspos = main_document_view->window_to_absolute_document_pos(click_pos);
-@@ -3172,16 +3282,79 @@
+@@ -3172,16 +3290,79 @@
  }
  
  void MainWidget::mousePressEvent(QMouseEvent* mevent) {
@@ -1777,7 +1799,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (!TOUCH_MODE && mevent->button() == Qt::MouseButton::LeftButton) {
          QPoint local_mpos = mapFromGlobal(QCursor::pos());
          AbsoluteDocumentPos current_pos = WindowPos(local_mpos).to_absolute(main_document_view);
-@@ -3492,6 +3665,7 @@
+@@ -3492,6 +3673,7 @@
  }
  
  void MainWidget::show_textbar(const std::wstring& command_name, const std::wstring& initial_value) {
@@ -1785,7 +1807,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      QString init = "";
      text_suggestion_index = 0;
  
-@@ -4721,6 +4895,7 @@
+@@ -4721,6 +4903,7 @@
  }
  
  void MainWidget::handle_close_event() {
@@ -1793,7 +1815,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      save_auto_config();
  #ifndef SIOYEK_ANDROID
      persist(true);
-@@ -5663,6 +5838,10 @@
+@@ -5663,6 +5846,10 @@
  
              if (pending_command_instance) {
                  pending_command_instance->pre_perform();
@@ -1804,7 +1826,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
              }
  
          }
-@@ -6419,7 +6598,7 @@
+@@ -6419,7 +6606,7 @@
          keys_paths_wstring,
          [&](std::wstring* path) {
              if (path) {
@@ -1813,7 +1835,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
              }
          },
          this));
-@@ -6439,7 +6618,7 @@
+@@ -6439,7 +6626,7 @@
          prefs_paths_wstring,
          [&](std::wstring* path) {
              if (path) {
@@ -1822,7 +1844,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
              }
          },
          this));
-@@ -6566,10 +6745,14 @@
+@@ -6566,10 +6753,14 @@
          main_document_view->delete_highlight_with_index(selected_highlight_index);
          set_selected_highlight_index(-1);
      }
@@ -1837,7 +1859,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (selected_bookmark_index != -1) {
          main_document_view->delete_bookmark_with_index(selected_bookmark_index);
          set_selected_bookmark_index(-1);
-@@ -8216,6 +8399,95 @@
+@@ -8216,6 +8407,95 @@
      
  }
  
@@ -1933,7 +1955,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
  void MainWidget::delete_freehand_drawings(AbsoluteRect rect) {
      if (opengl_widget->get_scratchpad()) {
-@@ -8299,6 +8571,17 @@
+@@ -8299,6 +8579,17 @@
      res += opengl_widget->get_scratchpad() ? "s" : "S";
      res += (opengl_widget->get_is_searching(nullptr)) ? "f" : "F";
      res += (is_menu_focused()) ? "m" : "M";
@@ -1951,7 +1973,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  
      if (main_document_view) {
          res += (main_document_view->selected_character_rects.size() > 0) ? "t" : "T";
-@@ -8584,14 +8867,109 @@
+@@ -8584,14 +8875,109 @@
  
  void MainWidget::change_selected_bookmark_text(const std::wstring& new_text) {
      if (selected_bookmark_index != -1) {
@@ -2067,7 +2089,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  }
  
  void MainWidget::change_selected_highlight_text_annot(const std::wstring& new_text) {
-@@ -8636,16 +9014,314 @@
+@@ -8636,16 +9022,314 @@
      }
  }
  
@@ -2387,7 +2409,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  TextToSpeechHandler* MainWidget::get_tts() {
      if (tts) return tts;
  
-@@ -8788,8 +9464,18 @@
+@@ -8788,8 +9472,18 @@
  }
  
  void MainWidget::handle_bookmark_move_finish() {
@@ -2406,7 +2428,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  }
  
  void MainWidget::handle_portal_move_finish() {
-@@ -8805,11 +9491,48 @@
+@@ -8805,11 +9499,48 @@
      float diff_x = current_mouse_abspos.x - bookmark_move_data->initial_mouse_position.x;
      float diff_y = current_mouse_abspos.y - bookmark_move_data->initial_mouse_position.y;
  
@@ -2455,7 +2477,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (bookmark.end_y >= 0) {
          bookmark.end_x = bookmark_move_data->initial_end_position.x + diff_x;
          bookmark.end_y = bookmark_move_data->initial_end_position.y + diff_y;
-@@ -8842,6 +9565,14 @@
+@@ -8842,6 +9573,14 @@
  }
  
  void MainWidget::begin_bookmark_move(int index, AbsoluteDocumentPos begin_cursor_pos) {
@@ -2470,7 +2492,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      BookmarkMoveData move_data;
      move_data.index = index;
  
-@@ -8851,6 +9582,7 @@
+@@ -8851,6 +9590,7 @@
      move_data.initial_end_position.y = doc()->get_bookmarks()[index].end_y;
  
      move_data.initial_mouse_position = begin_cursor_pos;
@@ -2478,7 +2500,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      bookmark_move_data = move_data;
  }
  
-@@ -8974,6 +9706,70 @@
+@@ -8974,6 +9714,70 @@
      show_current_widget();
  }
  
@@ -2549,7 +2571,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  TouchTextSelectionButtons* MainWidget::get_text_selection_buttons() {
      if (text_selection_buttons_ == nullptr) {
          text_selection_buttons_ = new TouchTextSelectionButtons(this);
-@@ -10258,6 +11054,10 @@
+@@ -10258,6 +11062,10 @@
      opengl_widget->goto_search_result(nth_next_result, overview);
  }
  
@@ -2560,7 +2582,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  void MainWidget::set_should_highlight_words(bool should_highlight_words) {
      opengl_widget->set_should_highlight_words(should_highlight_words);
  }
-@@ -10354,6 +11154,12 @@
+@@ -10354,6 +11162,12 @@
  }
  
  void MainWidget::hide_command_line_edit(){
@@ -2573,7 +2595,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      text_command_line_edit->setText("");
      text_command_line_edit_container->hide();
      text_suggestion_index = 0;
-@@ -10716,6 +11522,7 @@
+@@ -10716,6 +11530,7 @@
  }
  
  void MainWidget::toggle_scratchpad_mode(){
@@ -2581,7 +2603,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (opengl_widget->get_scratchpad()) {
          opengl_widget->set_scratchpad(nullptr);
      }
-@@ -10892,11 +11699,19 @@
+@@ -10892,11 +11707,19 @@
  }
  
  void MainWidget::set_selected_highlight_index(int index) {
