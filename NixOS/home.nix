@@ -417,14 +417,26 @@ in
     next_page <pagedown>
     previous_page <pageup>
 
-    # Unified note/rectangle workflow: outside an active search, n starts a note.
-    # While search results are active, the default next_item n advances the search.
+    # Unified note/rectangle workflow: i starts a note ("insert", as in vim).
+    #
+    # This used to be overloaded onto n, which advanced the search when results
+    # were active and started a note otherwise. Two problems in practice. The
+    # search is inactive far more often than it is active -- is_search_cancelled
+    # starts true and nothing re-arms it until you search again -- so n almost
+    # always meant "start a note", and the reading-position meaning was the rare
+    # one. Worse, a command waiting for a rectangle shows nothing at all: a Text
+    # requirement pops the text bar, a Rect requirement just sets rect_select
+    # mode silently. So n armed note-creation invisibly and the next drag over a
+    # line of text was eaten as the note's rectangle, leaving an empty box.
+    # Eight of those accumulated in one day before it was tracked down.
+    #
     # Drag a rectangle, then type a note.
     # Enter or clicking elsewhere saves it; empty text leaves a rectangle box.
     # Click a note/box, then h followed by a-z to recolor it, a to place an arrow,
     # d n or Delete to delete it, or d a to delete only its arrow.
     # +/- changes selected note text size; Ctrl+/- changes its border width.
     # Double-click edits; drag moves; dragging a selected edge/corner resizes.
+    add_freetext_bookmark i
     add_note_arrow a
     delete_note_arrow da
     delete_selected_bookmark dn
