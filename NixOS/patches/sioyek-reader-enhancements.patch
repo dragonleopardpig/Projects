@@ -3724,17 +3724,18 @@ diff -ruN baseA/pdf_viewer/ui.cpp ptree/pdf_viewer/ui.cpp
 diff -ruN baseA/pdf_viewer/utils.cpp ptree/pdf_viewer/utils.cpp
 --- a/pdf_viewer/utils.cpp
 +++ b/pdf_viewer/utils.cpp
-@@ -16,6 +16,9 @@
+@@ -16,6 +16,10 @@
  #include <string>
  #include <qclipboard.h>
  #include <qguiapplication.h>
 +#include <QTextStream>
 +#include <QDateTime>
 +#include <QFile>
++#include <QFileInfo>
  #include <qprocess.h>
  #include <qdesktopservices.h>
  #include <qurl.h>
-@@ -73,6 +76,7 @@
+@@ -73,6 +77,7 @@
  extern std::wstring PAPER_SEARCH_CONTRIB_PATH;
  extern std::wstring UI_FONT_FACE_NAME;
  extern std::wstring STATUS_FONT_FACE_NAME;
@@ -3742,13 +3743,25 @@ diff -ruN baseA/pdf_viewer/utils.cpp ptree/pdf_viewer/utils.cpp
  extern bool OPEN_LAST_FILE_ON_STARTUP;
  
  extern bool VERBOSE;
-@@ -321,12 +325,28 @@
+@@ -321,12 +326,40 @@
      return  num;
  }
  
 +void ui_trace(const char* event, const std::wstring& detail) {
 +    static const QString path = qEnvironmentVariable("SIOYEK_UI_TRACE");
 +    if (path.isEmpty()) return;
++
++    // Mouse events are traced, so the file grows for as long as Sioyek is
++    // used. Leaving the variable set permanently is the only way to catch a
++    // fault that shows up once a week, so roll the file over instead of
++    // letting it grow without bound: at a megabyte, keep it as .1 -- one
++    // previous run's worth of history -- and start again. Two megabytes total.
++    static const qint64 max_bytes = 1024 * 1024;
++    if (QFileInfo(path).size() > max_bytes) {
++        const QString previous = path + ".1";
++        QFile::remove(previous);
++        QFile::rename(path, previous);
++    }
 +
 +    QFile file(path);
 +    if (!file.open(QIODevice::Append | QIODevice::Text)) return;
@@ -3771,7 +3784,7 @@ diff -ruN baseA/pdf_viewer/utils.cpp ptree/pdf_viewer/utils.cpp
  }
  
  std::wstring utf8_decode(const std::string& encoded_str) {
-@@ -1276,6 +1296,67 @@
+@@ -1276,6 +1309,67 @@
  
  }
  
@@ -3839,7 +3852,7 @@ diff -ruN baseA/pdf_viewer/utils.cpp ptree/pdf_viewer/utils.cpp
  void get_text_from_flat_chars(const std::vector<fz_stext_char*>& flat_chars, std::wstring& string_res, std::vector<int>& indices) {
  
      string_res.clear();
-@@ -3176,6 +3257,13 @@
+@@ -3176,6 +3270,13 @@
          }
      }
  

@@ -620,11 +620,23 @@ in
 
   home.file.".face.icon".source = ./assets/face.png;
 
-  # Sioyek wrapper: force XWayland to avoid NVIDIA Wayland window mapping issues
+  # Sioyek wrapper: force XWayland to avoid NVIDIA Wayland window mapping issues.
+  # Both $mod+S and the desktop entry go through here, so it is the one place
+  # that catches every launch.
+  #
+  # SIOYEK_UI_TRACE records UI lifecycle events and, more usefully, note LaTeX
+  # that JKQTMathText only partly understood: parse() reports success for input
+  # it mangled and complains only through getErrorList(), so without this a note
+  # can silently lose a whole term. Worth leaving on permanently, because the
+  # faults it catches are the intermittent kind. ui_trace rolls the file over at
+  # 1 MiB and keeps one previous file, so it costs at most 2 MiB.
   home.file.".local/bin/sioyek-xcb" = {
     executable = true;
     text = ''
       #!/bin/sh
+      SIOYEK_UI_TRACE="''${XDG_STATE_HOME:-$HOME/.local/state}/sioyek/ui.log"
+      mkdir -p "$(dirname "$SIOYEK_UI_TRACE")"
+      export SIOYEK_UI_TRACE
       exec env QT_QPA_PLATFORM=xcb sioyek "$@"
     '';
   };
