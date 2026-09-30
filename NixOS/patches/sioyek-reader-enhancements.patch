@@ -2807,7 +2807,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
       render_drawings(scratchpad, moving_drawings, true);
       render_drawings(scratchpad, moving_drawings, false);
       render_drawings(scratchpad, pending_drawing);
-@@ -755,6 +766,585 @@
+@@ -755,6 +766,600 @@
      //painter.drawText(-100, -100, "1234567890");
  }
  
@@ -3217,7 +3217,22 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
 +            renderer->setFontCaligraphic(caligraphic);
 +        }
 +        const auto options = JKQTMathText::ParseOptions(JKQTMathText::StartWithMathMode);
-+        if (renderer->parse(prepare_note_latex(latex), JKQTMathText::DefaultParser, options)) {
++        const QString prepared = prepare_note_latex(latex);
++        if (renderer->parse(prepared, JKQTMathText::DefaultParser, options)) {
++            // parse() reports success for input it only partly understood: an
++            // unknown instruction is dropped, and a construct given the wrong
++            // number of arguments collapses along with its contents. The
++            // complaint goes to getErrorList() and nowhere else, so a note can
++            // lose a whole term with no sign of it. Rendering anyway is still
++            // the right call -- most of these are partial, and falling back to
++            // raw LaTeX would be worse -- but leave a trace for whoever is
++            // looking into why a formula came out wrong.
++            const QStringList errors = renderer->getErrorList();
++            if (!errors.isEmpty()) {
++                ui_trace("noteMathParseError",
++                    (latex + QStringLiteral("  ->  ") + prepared
++                           + QStringLiteral("  ||  ") + errors.join(QStringLiteral(" ; "))).toStdWString());
++            }
 +            entry->second = std::move(renderer);
 +        }
 +    }
@@ -3393,7 +3408,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRenderer* pdf_renderer, ConfigManager* config_manager, bool is_helper, QWidget* parent) :
      QOpenGLWidget(parent),
      document_view(document_view),
-@@ -1710,14 +2300,21 @@
+@@ -1710,14 +2315,21 @@
                      QRect window_qrect = QRect(window_rect.x0, window_rect.y0, fz_irect_width(window_rect), fz_irect_height(window_rect));
  
                      QFont font = painter->font();
@@ -3416,7 +3431,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                      int flags = Qt::TextWordWrap;
-@@ -1728,7 +2325,7 @@
+@@ -1728,7 +2340,7 @@
                          flags |= Qt::AlignLeft;
                      }
  
@@ -3425,7 +3440,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
                          QString box_text = QString::fromStdWString(bookmarks[i].description).split(' ')[0];
                          std::optional<char> bm_type = bookmarks[i].get_type();
-@@ -1752,15 +2349,68 @@
+@@ -1752,15 +2364,68 @@
                          }
                      }
                      else {
@@ -3501,7 +3516,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                  }
-@@ -2966,9 +3616,15 @@
+@@ -2966,9 +3631,15 @@
          if (drawing.points.size() <= 0) {
              continue;
          }
@@ -3517,7 +3532,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (drawing.points.size() == 1) {
              add_point_coords(drawing.points[0], drawing.type - 'a');
  
-@@ -3212,6 +3868,79 @@
+@@ -3212,6 +3883,79 @@
  }
  
  void PdfViewOpenGLWidget::render_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted) {
@@ -3597,7 +3612,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
      if (drawings.size() == 0) return;
  
-@@ -3231,6 +3960,9 @@
+@@ -3231,6 +3975,9 @@
      for (int i = drawings.size() - 1; i >= 0; i--) {
          auto drawing = drawings[i];
  
@@ -3607,7 +3622,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (DEBUG_SMOOTH_FREEHAND_DRAWINGS) {
              drawing = smoothen_drawing(drawing);
          }
-@@ -3241,6 +3973,9 @@
+@@ -3241,6 +3988,9 @@
          if (drawing.points.size() <= 0) {
              continue;
          }
