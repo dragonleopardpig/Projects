@@ -3044,7 +3044,12 @@ in
     xed-editor
     gtk3
     gobject-introspection
-    sioyek
+    # sioyek deliberately comes from systemPackages, where it is wrapped with
+    # QT_QPA_PLATFORM=xcb because native Wayland fails on NVIDIA
+    # (QEGLPlatformContext: Failed to create context: 3009). Installing the raw
+    # package here would shadow that wrapper, since the per-user profile
+    # precedes /run/current-system/sw on PATH, and a terminal launch would then
+    # start under Wayland and fail to create a GL context.
     poppler-utils
     wf-recorder
     mpv
