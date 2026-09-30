@@ -109,8 +109,8 @@
           ];
         });
 
-        # Three places where JKQTMathText's metrics fall short of TeX's, all of
-        # them visible when a formula is set beside the same one from a TeX
+        # Four places where JKQTMathText's typesetting falls short of TeX's, all
+        # of them visible when a formula is set beside the same one from a TeX
         # renderer. Sioyek's note LaTeX is the only consumer here.
         #
         # Rules: every rule -- fraction and matrix rules, radicals, decorations
@@ -133,6 +133,12 @@
         # name such as \cos with almost no room. TeX inserts a fixed skip that
         # does not depend on the glyph, 3mu next to an operator and 5mu next to
         # a relation.
+        #
+        # aligned/align: parsed as a plain matrix with an empty column spec, so
+        # every column is left aligned and each \& gets the generic matrix
+        # column separation. amsmath numbers the columns in pairs, right then
+        # left -- that is what stacks the relation signs of successive lines --
+        # and the \& inside a pair is an alignment point that adds no space.
         jkqtplotter = prev.jkqtplotter.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/jkqtplotter-tex-metrics.patch

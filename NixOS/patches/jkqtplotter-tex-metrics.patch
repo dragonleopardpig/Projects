@@ -112,3 +112,111 @@ diff -ruN /nix/store/iggg5nxysm3fw85lylxl0qbsr4xxrihp-source/lib/jkqtmathtext/no
          }
      } else {
          s.width=br.width();
+diff -ruN /nix/store/iggg5nxysm3fw85lylxl0qbsr4xxrihp-source/lib/jkqtmathtext/nodes/jkqtmathtextmatrixnode.h jk/lib/jkqtmathtext/nodes/jkqtmathtextmatrixnode.h
+--- a/lib/jkqtmathtext/nodes/jkqtmathtextmatrixnode.h
++++ b/lib/jkqtmathtext/nodes/jkqtmathtextmatrixnode.h
+@@ -58,6 +58,8 @@
+         };
+         JKQTMathTextMatrixNode(JKQTMathText* parent, const QVector<QVector<JKQTMathTextNode*> >& children, const QString& columnSpec=QString());
+         JKQTMathTextMatrixNode(JKQTMathText* parent, const QString& columnSpec=QString());
++        /** \copydoc alignedPairSpacing */
++        void setAlignedPairSpacing(bool enabled);
+         virtual ~JKQTMathTextMatrixNode() override;
+         /** \brief sets the child nodes  */
+         void setChildren(const QVector<QVector<JKQTMathTextNode*> >& children);
+@@ -149,6 +151,14 @@
+         static void drawHLine(QPainter& painter, double x, double y, double width, LineType lt, double linewidth, double linewidthHeavy, QColor color, double doublelineseparation);
+         /** \brief parses a column specifier */
+         void parseColumnSpec(const QString& columnspec);
++        /** \brief in an aligned/align environment the columns come in pairs, a
++         *         right-aligned one then a left-aligned one, and the \c & between
++         *         the two members of a pair is an alignment point that inserts no
++         *         space at all. Ordinary column separation still applies between
++         *         one pair and the next. \see setAlignedPairSpacing() */
++        bool alignedPairSpacing;
++        /** \brief separation to insert to the right of column \a column */
++        double columnSeparation(int column, double defaultSeparation) const;
+         /** \copydoc JKQTMathTextMultiChildNode::clearChildren() */
+         void clearChildrenImpl(bool deleteChildren);
+ };
+diff -ruN /nix/store/iggg5nxysm3fw85lylxl0qbsr4xxrihp-source/lib/jkqtmathtext/nodes/jkqtmathtextmatrixnode.cpp jk/lib/jkqtmathtext/nodes/jkqtmathtextmatrixnode.cpp
+--- a/lib/jkqtmathtext/nodes/jkqtmathtextmatrixnode.cpp
++++ b/lib/jkqtmathtext/nodes/jkqtmathtextmatrixnode.cpp
+@@ -46,6 +46,7 @@
+     verticalLineLeft(LTnone),
+     horizontalLineBottomRow(),
+     horizontalLineTop(LTnone),
++    alignedPairSpacing(false),
+     columns(0),
+     lines(0)
+ {
+@@ -59,6 +60,7 @@
+     verticalLineLeft(LTnone),
+     horizontalLineBottomRow(),
+     horizontalLineTop(LTnone),
++    alignedPairSpacing(false),
+     columns(0),
+     lines(0)
+ {
+@@ -261,6 +263,19 @@
+     }
+ }
+ 
++void JKQTMathTextMatrixNode::setAlignedPairSpacing(bool enabled)
++{
++    alignedPairSpacing=enabled;
++}
++
++double JKQTMathTextMatrixNode::columnSeparation(int column, double defaultSeparation) const
++{
++    // column 0 is the right-aligned half of the first pair, column 1 the
++    // left-aligned half, so an even index is the gap inside a pair.
++    if (alignedPairSpacing && column%2==0) return 0.0;
++    return defaultSeparation;
++}
++
+ void JKQTMathTextMatrixNode::parseColumnSpec(const QString &columnSpec)
+ {
+     int i=0;
+@@ -359,7 +374,8 @@
+ 
+ 
+     l.overallHeight=static_cast<double>(lines-1)*YSeparation+l.topPadding+l.bottomPadding;
+-    l.width=static_cast<double>(columns-1)*XSeparation+l.leftPadding+l.rightPadding;
++    l.width=l.leftPadding+l.rightPadding;
++    for (int i=0; i<columns-1; i++) l.width=l.width+columnSeparation(i, XSeparation);
+     for (int i=0; i<columns; i++) l.width=l.width+l.colwidth[i];
+     for (int i=0; i<lines; i++) l.overallHeight=l.overallHeight+l.rowheight[i];
+     l.baselineHeight=l.overallHeight/2.0+strikepos;
+@@ -414,8 +430,9 @@
+             if (columnAlignment.value(j, MTHALeft)==MTHACentered) xoffset=(l.colwidth[j]-cw)/2.0;
+             else if (columnAlignment.value(j, MTHALeft)==MTHARight) xoffset=(l.colwidth[j]-cw);
+             children[i].at(j)->draw(painter, xx+xoffset, yy, ev1);
+-            xx=xx+l.colwidth[j]+XSeparation;
+-            if (i==0 && j<columns-1) drawVLine(painter, xx-XSeparation/2.0, toplineY, bottomlineY-toplineY, verticalLineRHSColumn.value(j, LTnone), linewidth, linewidthThick, currentEv.color, lineSeparation);
++            const double sep=columnSeparation(j, XSeparation);
++            xx=xx+l.colwidth[j]+sep;
++            if (i==0 && j<columns-1) drawVLine(painter, xx-sep/2.0, toplineY, bottomlineY-toplineY, verticalLineRHSColumn.value(j, LTnone), linewidth, linewidthThick, currentEv.color, lineSeparation);
+             JKQTMathTextModifyEnvironmentNodeMixIn* modEnvNode=dynamic_cast<JKQTMathTextModifyEnvironmentNodeMixIn*>(children[i].at(j));
+             if (modEnvNode) {
+                 modEnvNode->modifyEnvironment(ev1);
+diff -ruN /nix/store/iggg5nxysm3fw85lylxl0qbsr4xxrihp-source/lib/jkqtmathtext/parsers/jkqtmathtextlatexparser.cpp jk/lib/jkqtmathtext/parsers/jkqtmathtextlatexparser.cpp
+--- a/lib/jkqtmathtext/parsers/jkqtmathtextlatexparser.cpp
++++ b/lib/jkqtmathtext/parsers/jkqtmathtextlatexparser.cpp
+@@ -877,7 +877,16 @@
+                         addToErrorList(tr("error @ ch. %1: expected {COLUMNSPEC} after '\\begin{%2}'").arg(currentTokenID).arg(envname));
+                     }
+                 }
++                // amsmath numbers the columns of aligned/align in pairs: the odd
++                // one is right aligned, the even one left aligned, and that is
++                // what puts the relation signs of successive lines under each
++                // other. Without a colspec every column would default to left.
++                // The & joining the two halves of a pair is an alignment point
++                // and inserts no space, unlike an ordinary matrix separator.
++                const bool isAlignedEnv=(envname=="aligned" || envname=="align");
++                if (isAlignedEnv) colspec=QStringLiteral("rl").repeated(32);
+                 JKQTMathTextMatrixNode* matrixNode=new JKQTMathTextMatrixNode(parentMathText, colspec);
++                if (isAlignedEnv) matrixNode->setAlignedPairSpacing(true);
+                 QVector< QVector<JKQTMathTextNode*> > items;
+                 //int lines=0;
+                 //int cols=0;
