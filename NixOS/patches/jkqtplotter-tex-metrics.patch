@@ -1,0 +1,114 @@
+diff -ruN /nix/store/iggg5nxysm3fw85lylxl0qbsr4xxrihp-source/lib/jkqtmathtext/jkqtmathtexttools.cpp jk/lib/jkqtmathtext/jkqtmathtexttools.cpp
+--- a/lib/jkqtmathtext/jkqtmathtexttools.cpp
++++ b/lib/jkqtmathtext/jkqtmathtexttools.cpp
+@@ -1136,7 +1136,19 @@
+     static JKQTPDataCache<qreal,JKQTMathTextCacheKeyBase,JKQTPDataCacheThreadSafe,JKQTMathTextCacheKeyBaseExt> cache(
+         [](const JKQTMathTextCacheKeyBaseExt& key) {
+             const QFontMetricsF fm(key.f, key.pd);
+-            return fm.lineWidth();
++            const qreal reported=fm.lineWidth();
++            // Every drawn rule takes its stroke weight from here: fraction and
++            // matrix rules, radicals, decorations such as \vec and \overline,
++            // boxes, and the delimiters built by JKQTMathTextBraceNode. The
++            // value is the font's underline thickness, which for a text family
++            // can be well under TeX's default rule thickness (\fontdimen8 of
++            // the math extension font, 0.04em for Computer Modern). The result
++            // is delimiters and rules noticeably lighter than the same formula
++            // set by TeX. Keep whatever the font reports when it is already at
++            // least that heavy, and otherwise fall back to TeX's default.
++            const qreal pixelSize=QFontInfo(key.f).pixelSize();
++            if (pixelSize>0.0) return std::max(reported, 0.04*pixelSize);
++            return reported;
+         });
+ 
+     return cache.get_inline(f, pd);
+diff -ruN /nix/store/iggg5nxysm3fw85lylxl0qbsr4xxrihp-source/lib/jkqtmathtext/nodes/jkqtmathtextbracenode.cpp jk/lib/jkqtmathtext/nodes/jkqtmathtextbracenode.cpp
+--- a/lib/jkqtmathtext/nodes/jkqtmathtextbracenode.cpp
++++ b/lib/jkqtmathtext/nodes/jkqtmathtextbracenode.cpp
+@@ -106,6 +106,18 @@
+     p.setJoinStyle(Qt::MiterJoin);
+     painter.setPen(p);
+     const double paren_fraction=0.75;
++    // A curly bracket is drawn as a filled outline whose stem thickness is the
++    // lineWidth handed to JKQTMathTextMakeHBracePath. Passing the text rule
++    // thickness leaves a brace around a multi-line block as a hairline, because
++    // the stem never grows with the brace. TeX's extensible brace keeps the
++    // stem of whichever delimiter variant it ended up with; measured against a
++    // TeX reference, that is about 0.037 of the brace height, settling at
++    // roughly 0.11em. Never go below the rule thickness itself.
++    const double curly_lw=[&]() {
++        const double em=QFontInfo(f).pixelSize();
++        if (em<=0.0) return lw;
++        return qMax(lw, qMin(0.11*em, 0.037*nodesize.overallHeight));
++    }();
+     const double absnorm_linewidth_factor=0.75;
+     const double paren_topwidth=lw*0.75;
+     const double paren_centerwidth=lw*1.75;
+@@ -183,7 +195,7 @@
+             path.lineTo(xbrace1, y1-dx);
+             painter.drawPath(path);
+         } else if (openbrace==MTBTCurlyBracket) {
+-            const QPainterPath path=JKQTMathTextMakeHBracePath(0,0,nodesize.overallHeight, nodesize.openBraceWidth*paren_fraction, p.widthF());
++            const QPainterPath path=JKQTMathTextMakeHBracePath(0,0,nodesize.overallHeight, nodesize.openBraceWidth*paren_fraction, curly_lw);
+             painter.save(); auto __finalpaint=JKQTPFinally([&painter]() {painter.restore();});
+             painter.translate(xbraceC, y-nodesize.baselineHeight+nodesize.overallHeight/2.0);
+             painter.rotate(90);
+@@ -312,7 +324,7 @@
+             path.lineTo(xbrace2, y1+dx);
+             painter.drawPath(path);
+         } else if (closebrace==MTBTCurlyBracket) {
+-            const QPainterPath path=JKQTMathTextMakeHBracePath(0,0,nodesize.overallHeight, nodesize.closeBraceWidth*paren_fraction, p.widthF());
++            const QPainterPath path=JKQTMathTextMakeHBracePath(0,0,nodesize.overallHeight, nodesize.closeBraceWidth*paren_fraction, curly_lw);
+             painter.save(); auto __finalpaint=JKQTPFinally([&painter]() {painter.restore();});
+             painter.translate(xbraceC, y-nodesize.baselineHeight+nodesize.overallHeight/2.0);
+             painter.rotate(270);
+@@ -495,5 +507,22 @@
+     const double overSizeFactor=braceHeight/JKQTMathTextGetFontHeight(f, pd);
+     if (overSizeFactor>1.2) braceWidth=braceWidth*sqrt(overSizeFactor);
+ 
++    // braceHeight follows the content, but braceWidth starts from a font metric
++    // and then only grows with sqrt(overSizeFactor), so the taller the enclosed
++    // block the thinner the drawn brace becomes. TeX has no such problem: it
++    // picks a wider delimiter size variant as the content grows and, once the
++    // largest variant is reached, extends that one with vertical bars, so the
++    // curls keep their size. Measured against a TeX reference at 54px, a curly
++    // brace around a two-line block is drawn 0.21 times as wide as it is tall
++    // and stops growing at about 0.63em. Only part of the node width reaches
++    // the drawn curls, so the floor is scaled up until the brace measures
++    // those figures on screen. Only the curly bracket is corrected; the other
++    // delimiters are much simpler shapes that survive being narrow. See draw()
++    // for the matching stroke weight.
++    if (bracetype==MTBTCurlyBracket) {
++        const double em=QFontInfo(f).pixelSize();
++        if (em>0.0) braceWidth=qMax(braceWidth, qMin(0.92*em, 0.31*braceHeight));
++    }
++
+     return QSizeF(braceWidth, braceHeight);
+ }
+diff -ruN /nix/store/iggg5nxysm3fw85lylxl0qbsr4xxrihp-source/lib/jkqtmathtext/nodes/jkqtmathtextsymbolnode.cpp jk/lib/jkqtmathtext/nodes/jkqtmathtextsymbolnode.cpp
+--- a/lib/jkqtmathtext/nodes/jkqtmathtextsymbolnode.cpp
++++ b/lib/jkqtmathtext/nodes/jkqtmathtextsymbolnode.cpp
+@@ -257,12 +257,23 @@
+ 
+     if (currentEv.insideMath) {
+         s.width=qMax(br.width(), mintbr.width());
++        // draw() centres the inked box (tbr) inside s.width, so the space left on
++        // either side of the glyph is (s.width-tbr.width())/2. The factors below
++        // are relative to the glyph, which leaves a wide relation such as \leq or
++        // a multi-letter operator name such as \cos with almost no room: TeX
++        // instead inserts a fixed skip that does not depend on the glyph at all,
++        // 3mu=1/6em next to a math operator and 5mu=5/18em next to a relation.
++        // Take whichever of the two is larger so an explicitly raised
++        // mathoperatorWidthFactor still widens the symbol.
++        const double em=QFontInfo(f).pixelSize();
+         if (has(globalFlags, SmallExtendWidthInMathmode)) {
+             if (!symprops.getSymbolSingleChar().isNull()) s.width=s.width*(1.0+(parentMathText->getMathoperatorWidthFactor()-1.0)/5.0);
+             else s.width=s.width+mintbr.width()*0.15;
++            if (em>0.0) s.width=qMax(s.width, tbr.width()+em/3.0);
+         } else if (has(globalFlags, ExtendWidthInMathmode)) {
+             if (!symprops.getSymbolSingleChar().isNull()) s.width=s.width*parentMathText->getMathoperatorWidthFactor();
+             else s.width=s.width+mintbr.width()*0.5;
++            if (em>0.0) s.width=qMax(s.width, tbr.width()+em*5.0/9.0);
+         }
+     } else {
+         s.width=br.width();

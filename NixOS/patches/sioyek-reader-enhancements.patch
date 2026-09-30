@@ -2774,13 +2774,14 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  #include <cmath>
  
  #include <qcolor.h>
-@@ -5,6 +6,13 @@
+@@ -5,6 +6,14 @@
  #include <qapplication.h>
  #include <qdatetime.h>
  #include <qfile.h>
 +#include <QPainterPath>
 +#include <QFontDatabase>
 +#include <QHash>
++#include <QRegularExpression>
 +
 +#ifdef SIOYEK_JKQT_MATHTEXT_SUPPORT
 +#include <jkqtmathtext/jkqtmathtext.h>
@@ -2788,7 +2789,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
  #include "pdf_view_opengl_widget.h"
  #include "path.h"
-@@ -63,6 +71,7 @@
+@@ -63,6 +72,7 @@
  //extern float BOOKMARK_RECT_SIZE;
  extern bool RENDER_FREETEXT_BORDERS;
  extern float FREETEXT_BOOKMARK_FONT_SIZE;
@@ -2796,7 +2797,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  extern float STRIKE_LINE_WIDTH;
  extern std::wstring RULER_DISPLAY_MODE;
  extern float RULER_COLOR[3];
-@@ -716,7 +725,8 @@
+@@ -716,7 +726,8 @@
       render_compiled_drawings();
       glEnableVertexAttribArray(0);
       glUseProgram(shared_gl_objects.line_program);
@@ -2806,7 +2807,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
       render_drawings(scratchpad, moving_drawings, true);
       render_drawings(scratchpad, moving_drawings, false);
       render_drawings(scratchpad, pending_drawing);
-@@ -755,6 +765,457 @@
+@@ -755,6 +766,485 @@
      //painter.drawText(-100, -100, "1234567890");
  }
  
@@ -2948,9 +2949,18 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
 +// upright glyphs and letters like "e" come out looking upright rather than the
 +// true italic TeX uses. Point math-roman at the matching *text* family, which
 +// does have a real italic face, while symbols keep coming from the math font.
++//
++// Name the 10pt optical master, not the "Latin Modern Roman" family. Latin
++// Modern ships a master per design size and Qt merges them all into that one
++// family, so asking for its Regular style can hand back the 5pt or 6pt cut.
++// Those are drawn wider and set much looser on purpose -- small optical sizes
++// are, that is what they are for -- and the result was an upright "cos" and a
++// word like "when" tracked about a third too wide, with the advances 1.34x
++// Computer Modern's while the glyph outlines stayed the right size. The 10pt
++// master measures M/x-height 2.13, the same as Latin Modern Math.
 +static QString note_math_variable_font() {
 +    static const QString cached = [] {
-+        const QStringList candidates = { "Latin Modern Roman", "STIX Two Text", "XITS" };
++        const QStringList candidates = { "LM Roman 10", "Latin Modern Roman", "STIX Two Text", "XITS" };
 +#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 +        const QStringList families = QFontDatabase::families();
 +#else
@@ -3066,6 +3076,25 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
 +    return out;
 +}
 +
++// amsmath's \boldsymbol and bm's \bm have no JKQTMathText instruction, so a note
++// that uses either loses its bold entirely and the error is only reported through
++// getErrorList(). JKQTMathText does know \mathbfit, which is the bold italic math
++// alphabet those two produce for letters, so rewrite them to it before parsing.
++static QString substitute_bold_math(const QString& latex) {
++    static const QRegularExpression macro(QStringLiteral("\\\\(?:boldsymbol|bm)(?![A-Za-z])"));
++    if (!latex.contains(QStringLiteral("\\boldsymbol")) && !latex.contains(QStringLiteral("\\bm"))) {
++        return latex;
++    }
++
++    QString out = latex;
++    out.replace(macro, QStringLiteral("\\mathbfit"));
++    return out;
++}
++
++static QString prepare_note_latex(const QString& latex) {
++    return substitute_bold_math(substitute_mathcal(latex));
++}
++
 +JKQTMathText* PdfViewOpenGLWidget::get_note_math_renderer(const QString& latex) {
 +    const std::string key = latex.toUtf8().toStdString();
 +    auto [entry, inserted] = note_math_cache.try_emplace(key);
@@ -3088,7 +3117,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
 +            renderer->setFontCaligraphic(caligraphic);
 +        }
 +        const auto options = JKQTMathText::ParseOptions(JKQTMathText::StartWithMathMode);
-+        if (renderer->parse(substitute_mathcal(latex), JKQTMathText::DefaultParser, options)) {
++        if (renderer->parse(prepare_note_latex(latex), JKQTMathText::DefaultParser, options)) {
 +            entry->second = std::move(renderer);
 +        }
 +    }
@@ -3264,7 +3293,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRenderer* pdf_renderer, ConfigManager* config_manager, bool is_helper, QWidget* parent) :
      QOpenGLWidget(parent),
      document_view(document_view),
-@@ -1710,14 +2171,21 @@
+@@ -1710,14 +2200,21 @@
                      QRect window_qrect = QRect(window_rect.x0, window_rect.y0, fz_irect_width(window_rect), fz_irect_height(window_rect));
  
                      QFont font = painter->font();
@@ -3287,7 +3316,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                      int flags = Qt::TextWordWrap;
-@@ -1728,7 +2196,7 @@
+@@ -1728,7 +2225,7 @@
                          flags |= Qt::AlignLeft;
                      }
  
@@ -3296,7 +3325,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
                          QString box_text = QString::fromStdWString(bookmarks[i].description).split(' ')[0];
                          std::optional<char> bm_type = bookmarks[i].get_type();
-@@ -1752,15 +2220,68 @@
+@@ -1752,15 +2249,68 @@
                          }
                      }
                      else {
@@ -3372,7 +3401,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                  }
-@@ -2966,9 +3487,15 @@
+@@ -2966,9 +3516,15 @@
          if (drawing.points.size() <= 0) {
              continue;
          }
@@ -3388,7 +3417,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (drawing.points.size() == 1) {
              add_point_coords(drawing.points[0], drawing.type - 'a');
  
-@@ -3212,6 +3739,79 @@
+@@ -3212,6 +3768,79 @@
  }
  
  void PdfViewOpenGLWidget::render_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted) {
@@ -3468,7 +3497,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
      if (drawings.size() == 0) return;
  
-@@ -3231,6 +3831,9 @@
+@@ -3231,6 +3860,9 @@
      for (int i = drawings.size() - 1; i >= 0; i--) {
          auto drawing = drawings[i];
  
@@ -3478,7 +3507,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (DEBUG_SMOOTH_FREEHAND_DRAWINGS) {
              drawing = smoothen_drawing(drawing);
          }
-@@ -3241,6 +3844,9 @@
+@@ -3241,6 +3873,9 @@
          if (drawing.points.size() <= 0) {
              continue;
          }

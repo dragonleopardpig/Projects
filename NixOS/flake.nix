@@ -109,18 +109,33 @@
           ];
         });
 
-        # JKQTMathText draws every rule -- fraction and matrix rules, radicals,
-        # decorations like \vec and \overline, boxes, and the delimiters that
-        # \left..\right build -- with a pen whose width is the font's underline
+        # Three places where JKQTMathText's metrics fall short of TeX's, all of
+        # them visible when a formula is set beside the same one from a TeX
+        # renderer. Sioyek's note LaTeX is the only consumer here.
+        #
+        # Rules: every rule -- fraction and matrix rules, radicals, decorations
+        # like \vec and \overline, boxes, and the delimiters that \left..\right
+        # build -- is drawn with a pen whose width is the font's underline
         # thickness. A text family such as Latin Modern Roman reports about
-        # 2.8% of the font size there, well under TeX's default rule thickness
-        # of 0.04em, so a big brace next to a two-line cases block comes out
-        # visibly lighter than the same formula set by TeX. The patch keeps the
-        # font's own value when it is already that heavy and otherwise falls
-        # back to 0.04em. Sioyek's note LaTeX is the only consumer here.
+        # 2.8% of the font size there, under TeX's default rule thickness of
+        # 0.04em, so the strokes come out light.
+        #
+        # Curly braces: the height of a \left\{ follows its contents, but its
+        # width comes from a font metric and grows only with the square root of
+        # the oversize factor, and the stem of the filled outline is simply the
+        # text rule thickness. A brace around a two-line block therefore comes
+        # out as a hairline a third of the width TeX gives it. TeX picks a wider
+        # delimiter variant as the content grows and then extends that one, so
+        # both now scale with the brace and saturate.
+        #
+        # Operator spacing: a math operator is padded by a factor of its own
+        # glyph, which leaves a wide relation such as \leq or a multi-letter
+        # name such as \cos with almost no room. TeX inserts a fixed skip that
+        # does not depend on the glyph, 3mu next to an operator and 5mu next to
+        # a relation.
         jkqtplotter = prev.jkqtplotter.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
-            ./patches/jkqtplotter-tex-rule-thickness.patch
+            ./patches/jkqtplotter-tex-metrics.patch
           ];
         });
 
