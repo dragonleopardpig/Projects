@@ -1710,6 +1710,17 @@ in
       esac
       want_off="$want_off $lid_off"
 
+      # Never leave the session with no screen at all.  Now that a named mode
+      # on a machine with no built-in panel falls through to here, `internal`
+      # would ask for a panel that does not exist and switch the only monitor
+      # there is OFF -- a black desktop whose only way back is display-rescue's
+      # watchdog.  Nothing to switch on means nothing to do.
+      if [ -z "$(echo $want_on)" ]; then
+        notify-send -a Display -i video-display -t 3000 \
+          "Display: no $next screen" "This machine has no screen to switch to."
+        exit 0
+      fi
+
       # Note what the screen we are keeping is currently showing, so the
       # workspace shuffle above can be undone.  Prefer the focused screen.
       keep_ws=""
