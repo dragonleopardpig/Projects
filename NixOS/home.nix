@@ -1542,12 +1542,40 @@ in
       externals=$(echo "$mons" | jq -r '.[] | select(.name | startswith("eDP-") | not) | .name')
       arg="''${1:-}"
 
-      # -- No built-in panel: this is the desktop, keep the DDC/CI input switch --
+      # -- No built-in panel: a desktop.  There is no second screen to cycle
+      # here, so F7/F8 are the shared monitor's DDC/CI input switch instead:
+      # the ASUS VP327Q sits between the X299 desktop (DisplayPort) and the
+      # Predator (HDMI), and the key hands it from one machine to the other.
+      #
+      # ONLY a deliberate key press may move that input.  This branch used to
+      # fire `setvcp 60 0x11` for EVERY argument, and `exec = display-cycle
+      # relayout` in the Hyprland config runs at each login and each config
+      # reload -- so booting the portable image on a machine with no built-in
+      # panel pushed the monitor to HDMI the instant the session started, while
+      # that machine's own picture was on DisplayPort.  Black screen right after
+      # the password, no way in.  Nothing else in the image was HDMI-specific:
+      # this line was the whole of it.
+      #
+      # A named mode (relayout, extend, external, ...) is a layout request, so
+      # it falls through to the layout code below, which copes with an empty
+      # $internals and is what gives a fresh session its positions, its
+      # XWayland DPI and its wallpaper.
       if [ -z "$internals" ]; then
-        if [ "$arg" = input ]; then ddcutil setvcp 60 "''${2:-0x0f}"
-        else                        ddcutil setvcp 60 0x11
-        fi
-        exit 0
+        case "$arg" in
+          input) ddcutil setvcp 60 "''${2:-0x0f}" || true; exit 0 ;;
+          "")
+            # Toggle, not an unconditional 0x11.  F7 is a bare function key,
+            # and a stray press left the screen on an input nothing drives --
+            # recoverable only by pressing F8 blind or walking the monitor's
+            # OSD.  Read what the monitor is showing and go the other way.
+            now=$(ddcutil --terse getvcp 60 2>/dev/null | awk '{print $4}' || true)
+            case "$now" in
+              x11|0x11|17) ddcutil setvcp 60 0x0f || true ;;
+              *)           ddcutil setvcp 60 0x11 || true ;;
+            esac
+            exit 0
+            ;;
+        esac
       fi
 
       # A laptop drives the external monitor itself, so there is no second
@@ -1753,12 +1781,19 @@ in
         x=0
         for m in $externals; do
           w=$(logical "$m" w); h=$(logical "$m" h)
+          # With no built-in panel there is no row to sit above or beside.  The
+          # auto-up rule would park a desktop's only monitor at 0x-2160, giving
+          # every window on it a negative origin for no reason.
+          if [ -z "$internals" ]; then
+            pos="''${x}x0"
+          else
           case "$side" in
             auto-down)  pos="''${x}x''${ih}"      ;;
             auto-left)  pos="-$(( x + w ))x0"   ;;
             auto-right) pos="$(( iw + x ))x0"   ;;
             *)          pos="''${x}x-''${h}"      ;;  # auto-up: bottom edge on y=0
           esac
+          fi
           hyprctl keyword monitor "$m,highres,$pos,$(scale_for "$m")" >/dev/null
           x=$(( x + w ))
         done
