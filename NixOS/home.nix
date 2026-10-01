@@ -1178,28 +1178,75 @@ in
     text = ''
       #!/usr/bin/env bash
       set -u
+
+      # A firmware framebuffer is not a screen.  With nvidia-drm.fbdev=0 the
+      # NVIDIA driver no longer evicts simpledrm, so its DRM device survives and
+      # Hyprland adopts it as a monitor ("Unknown-1", 1920x1080, no EDID).
+      # Counting that as a screen is what made this watchdog useless on the X299
+      # desktop (2026-10-01): the real DisplayPort output went away when the
+      # monitor's input was switched off DP, the ghost held the count at one, and
+      # the session went on drawing to a framebuffer nobody could see while every
+      # keybind still worked.  Same recognise-by-driver test as display-cycle --
+      # connector names are not stable, and note $c/device/driver does NOT
+      # resolve for a connector, only $c/device/device/driver.
+      is_firmware_fb() {
+        for c in /sys/class/drm/card*-"$1"; do
+          [ -e "$c" ] || continue
+          case "$(basename "$(readlink -f "$c/device/device/driver" 2>/dev/null)")" in
+            simple-framebuffer|simpledrm|efi-framebuffer|ofdrm) return 0 ;;
+          esac
+        done
+        return 1
+      }
+
+      # Enabled monitors that someone could actually look at.  Prints 0 when the
+      # compositor cannot be reached, so callers must check hyprctl themselves.
+      real_count() {
+        rc_mons=$(hyprctl monitors -j 2>/dev/null) || { echo 0; return; }
+        rc=0
+        for m in $(echo "$rc_mons" | jq -r '.[].name' 2>/dev/null); do
+          if ! is_firmware_fb "$m"; then rc=$(( rc + 1 )); fi
+        done
+        echo "$rc"
+      }
+
       empty=0
       while true; do
         sleep 2
-        n=$(hyprctl monitors -j 2>/dev/null | jq 'length' 2>/dev/null) || continue
-        case "$n" in ""|*[!0-9]*) continue ;; esac
+        # A failed hyprctl is not an empty screen -- the compositor may just be
+        # starting or stopping -- so that case must stay distinct from zero.
+        mons=$(hyprctl monitors -j 2>/dev/null) || continue
+        echo "$mons" | jq -e 'type == "array"' >/dev/null 2>&1 || continue
+        n=0
+        for m in $(echo "$mons" | jq -r '.[].name' 2>/dev/null); do
+          if ! is_firmware_fb "$m"; then n=$(( n + 1 )); fi
+        done
         if [ "$n" -gt 0 ]; then empty=0; continue; fi
         empty=$(( empty + 1 ))
         [ "$empty" -ge 2 ] || continue
         empty=0
-        # Switch on everything physically attached, whatever it is.  Getting a
-        # picture back matters more than getting the layout right.
+        # Switch on everything physically attached.  Getting a picture back
+        # matters more than getting the layout right -- but light the real
+        # outputs, and fall back to a ghost framebuffer only when there is
+        # nothing else attached at all, since drawing to one looks exactly like
+        # a dead screen.
+        real_c=""; ghost_c=""
         for c in /sys/class/drm/card[0-9]*-*; do
           [ -e "$c/status" ] || continue
           [ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
           name=''${c##*/}
           name=''${name#*-}
+          if is_firmware_fb "$name"; then ghost_c="$ghost_c $name"
+          else                           real_c="$real_c $name"
+          fi
+        done
+        for name in ''${real_c:-$ghost_c}; do
           hyprctl keyword monitor "$name,highres,auto,auto" >/dev/null 2>&1 || true
         done
         # Wait for the outputs to actually be up before dressing them.
         i=0
         while [ "$i" -lt 25 ]; do
-          [ "$(hyprctl monitors -j 2>/dev/null | jq 'length' 2>/dev/null)" != "0" ] && break
+          [ "$(real_count)" != "0" ] && break
           sleep 0.2
           i=$(( i + 1 ))
         done
