@@ -145,6 +145,76 @@
           ];
         });
 
+        # ahrm/sioyek-python-extensions, published to PyPI as "sioyek". It drives
+        # a *running* Sioyek over its local-socket command interface, so the
+        # scripts are run against the instance you already have open.
+        #
+        # Two of its declared dependencies, libgen-api and PyPaperBot, are not
+        # in nixpkgs. They are needed only by paper_downloader.py, which pulls
+        # papers from Library Genesis and Sci-Hub; that script is dropped rather
+        # than packaged. googletrans is pinned to an unmaintained alpha
+        # (3.1.0a0) that nixpkgs does not carry either, so translate.py goes
+        # with it. Everything else -- import_annotations, embed_annotations,
+        # extract_highlights, dual_panelify, add_text, remove_annotation --
+        # keeps working, and import_annotations is the one that matters here:
+        # it reads annotations Sioyek did not create (Acrobat's, say) and writes
+        # them into shared.db, matching each highlight's stroke colour to a
+        # Sioyek highlight type and skipping any it already has.
+        sioyek-python-extensions = prev.python3Packages.buildPythonApplication rec {
+          pname = "sioyek";
+          version = "0.31.11";
+          pyproject = true;
+
+          src = prev.fetchPypi {
+            inherit pname version;
+            hash = "sha256-KzrwK21CU80rT2Stns3Iuly2+83w6MXPUdTLkqu9S+M=";
+          };
+
+          build-system = [ prev.python3Packages.hatchling ];
+
+          dependencies = with prev.python3Packages; [
+            pymupdf
+            pypdf
+            numpy
+            pyqt5
+            appdirs
+            pyperclip
+            habanero
+            regex
+            python-slugify
+          ];
+
+          # The two unpackaged ones, plus the pinned googletrans alpha, plus
+          # PyPDF2 -- see postPatch.
+          pythonRemoveDeps = [ "pypaperbot" "libgen-api" "googletrans" "pypdf2" ];
+
+          # PyPDF2 is end-of-life and nixpkgs marks 3.0.1 insecure over six
+          # CVEs. Its maintained successor pypdf exposes the same four names
+          # these two scripts import -- PdfWriter, PdfReader, PageObject,
+          # Transformation -- so use that rather than whitelisting a package
+          # with known vulnerabilities or dropping the scripts.
+          postPatch = ''
+            substituteInPlace src/sioyek/extract_highlights.py src/sioyek/dual_panelify.py \
+              --replace-fail "from PyPDF2 import" "from pypdf import"
+          '';
+
+          postInstall = ''
+            rm -f $out/${prev.python3.sitePackages}/sioyek/paper_downloader.py
+            rm -f $out/${prev.python3.sitePackages}/sioyek/translate.py
+          '';
+
+          # Importing the package is the whole smoke test: it is a library plus
+          # a set of __main__ scripts, and there is no test suite.
+          pythonImportsCheck = [ "sioyek" "sioyek.sioyek" ];
+          doCheck = false;
+
+          meta = {
+            description = "Python tools and extensions for the Sioyek PDF reader";
+            homepage = "https://github.com/ahrm/sioyek-python-extensions";
+            license = prev.lib.licenses.gpl3Only;
+          };
+        };
+
         # nixpkgs nwg-drawer (0.7.5) preInstall copies desktop-directories +
         # drawer.css to $out/share/nwg-drawer but forgets img/ — the upstream
         # Makefile copies all three. Without img/{lock,sleep,reboot,exit,

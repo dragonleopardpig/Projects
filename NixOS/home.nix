@@ -467,6 +467,23 @@ in
     # QProcess with an argv list, not a shell, so %{file_path} survives spaces
     # in the filename without quoting.
     new_command _snip sioyek-snip %{selected_rect} %{file_path}
+
+    # sioyek-python-extensions. These act on the *running* instance over its
+    # local socket, so they see the document you have open.
+    #
+    # _import_annotations reads annotations Sioyek did not create -- an
+    # Acrobat-marked PDF, say -- and writes them into shared.db: Highlight
+    # annotations become highlights, Text and FreeText ones become bookmarks.
+    # Each highlight's stroke colour is matched to the nearest entry of the a-z
+    # palette, and anything Sioyek already has is skipped, so running it twice
+    # does not duplicate. Note that only Highlight is read: Acrobat's Underline,
+    # StrikeOut and Squiggly are ignored.
+    #
+    # _embed_annotations goes the other way, writing Sioyek's own annotations
+    # into the PDF file so other readers can see them.
+    new_command _import_annotations python3 -m sioyek.import_annotations %{sioyek_path} %{local_database} %{shared_database} %{file_path}
+    new_command _embed_annotations python3 -m sioyek.embed_annotations %{sioyek_path} %{local_database} %{shared_database} %{file_path}
+    new_command _extract_highlights python3 -m sioyek.extract_highlights %{sioyek_path} %{local_database} %{shared_database} %{file_path}
   '';
 
   services.cliphist = {
@@ -3133,6 +3150,13 @@ in
     # /etc/pam.d/swaylock stack.
     swaylock
     (python3.withPackages (ps: with ps; [ pygobject3 ]))
+    # ahrm/sioyek-python-extensions. Scripts are run as `python -m sioyek.<name>`
+    # and drive the *running* Sioyek over its local socket, so the instance you
+    # already have open is the one they act on. import_annotations is the useful
+    # one here: it reads annotations Sioyek did not create -- Acrobat's, for
+    # instance -- and writes them into shared.db. paper_downloader and translate
+    # are not included; see the flake overlay for why.
+    sioyek-python-extensions
     gtk3
     gobject-introspection
     # AGS v2 runner; uses astal libraries from nixpkgs. Config lives in
