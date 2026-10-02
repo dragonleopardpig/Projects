@@ -456,6 +456,25 @@ in
   # reading, only an explicit settings change.
   xdg.configFile."sioyek/prefs_user.config".force = true;
   xdg.configFile."sioyek/prefs_user.config".text = ''
+    # Do not draw the annotations embedded in a PDF. Importing an
+    # Acrobat-marked file with the built-in import_annotations leaves both sets
+    # present -- the originals in the file and Sioyek's copies in shared.db --
+    # drawn on top of each other. Keeping Sioyek's is the useful half: those are
+    # the ones it can search, list and recolour.
+    #
+    # The file itself is untouched, so the original marks still travel with it
+    # to any other reader. Deleting them from the PDF would be the wrong fix: it
+    # rewrites the file, and Sioyek keys its annotations on the file's MD5, so
+    # every imported highlight would orphan.
+    #
+    # This is global, and the trade-off is that a PDF whose annotations have NOT
+    # been imported now looks unmarked -- there is no cue that there is anything
+    # to import. toggle_pdf_annotations flips it for the session to check.
+    # Importing is unaffected either way: get_pdf_annotations() walks the
+    # annotation objects directly and never consults this flag, which is read
+    # only when choosing between mupdf's fz_run_page and fz_run_page_contents.
+    render_pdf_annotations 0
+
     # Show notes as text on the page; selection still shows resize handles.
     render_freetext_borders 0
     freetext_bookmark_font_size 12
