@@ -256,7 +256,19 @@ diff -ruN baseA/pdf_viewer/book.h ptree/pdf_viewer/book.h
 diff -ruN baseA/pdf_viewer/config.cpp ptree/pdf_viewer/config.cpp
 --- a/pdf_viewer/config.cpp
 +++ b/pdf_viewer/config.cpp
-@@ -290,8 +290,12 @@
+@@ -50,6 +50,11 @@
+ int NUM_V_SLICES = 5;
+ int NUM_H_SLICES = 1;
+ bool SHOULD_RENDER_PDF_ANNOTATIONS = true;
++// Sioyek's own annotations -- highlights, notes and freehand drawings -- as
++// opposed to the ones embedded in the PDF. After importing a marked-up PDF
++// both sets exist and are drawn on top of each other; this is the switch for
++// the Sioyek side, mirroring render_pdf_annotations for the embedded side.
++bool SHOULD_RENDER_SIOYEK_ANNOTATIONS = true;
+ bool AUTOMATICALLY_DOWNLOAD_MATCHING_PAPER_NAME = true;
+ bool NO_AUTO_CONFIG = false;
+ bool USE_RULER_TO_HIGHLIGHT_SYNCTEX_LINE = true;
+@@ -290,8 +295,12 @@
  float DEFAULT_SYNCTEX_HIGHLIGHT_COLOR[3] = { 1.0f, 0.0f, 0.0f };
  float HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT = 1.0f;
  
@@ -270,7 +282,7 @@ diff -ruN baseA/pdf_viewer/config.cpp ptree/pdf_viewer/config.cpp
  bool RENDER_FREETEXT_BORDERS = false;
  bool REAL_PAGE_SEPARATION = false;
  bool SAME_WIDTH = false;
-@@ -920,6 +924,7 @@
+@@ -920,6 +929,7 @@
      add_float(L"synctex_highlight_timeout", &HIDE_SYNCTEX_HIGHLIGHT_TIMEOUT, FloatExtras{-1.0f, 100.0f});
      add_float(L"dark_mode_contrast", &DARK_MODE_CONTRAST, FloatExtras{0.0f, 1.0f});
      add_float(L"freetext_bookmark_font_size", &FREETEXT_BOOKMARK_FONT_SIZE, FloatExtras{0.0f, 100.0f});
@@ -278,7 +290,15 @@ diff -ruN baseA/pdf_viewer/config.cpp ptree/pdf_viewer/config.cpp
      add_float(L"custom_color_contrast", &CUSTOM_COLOR_CONTRAST, FloatExtras{0.0f, 1.0f});
      add_float(L"zoom_inc_factor", &ZOOM_INC_FACTOR, FloatExtras{1.0f, 2.0f});
      add_float(L"scroll_zoom_inc_factor", &SCROLL_ZOOM_INC_FACTOR, FloatExtras{1.0f, 2.0f});
-@@ -1073,6 +1078,8 @@
+@@ -988,6 +998,7 @@
+     add_bool(L"linear_filter", &LINEAR_TEXTURE_FILTERING);
+     add_bool(L"collapsed_toc", &SMALL_TOC);
+     add_bool(L"render_pdf_annotations", &SHOULD_RENDER_PDF_ANNOTATIONS);
++    add_bool(L"render_sioyek_annotations", &SHOULD_RENDER_SIOYEK_ANNOTATIONS);
+     add_bool(L"ruler_mode", &RULER_MODE);
+     add_bool(L"use_ruler_to_highlight_synctex_line", &USE_RULER_TO_HIGHLIGHT_SYNCTEX_LINE);
+     add_bool(L"show_most_recent_commands_first", &SHOW_MOST_RECENT_COMMANDS_FIRST);
+@@ -1073,6 +1084,8 @@
      add_string(L"right_status_bar_format", &RIGHT_STATUS_BAR_FORMAT);
      add_string(L"epub_css", &EPUB_CSS);
      add_string(L"tag_font_face", &TAG_FONT_FACE);
@@ -908,7 +928,15 @@ diff -ruN baseA/pdf_viewer/document_view.h ptree/pdf_viewer/document_view.h
 diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
 --- a/pdf_viewer/input.cpp
 +++ b/pdf_viewer/input.cpp
-@@ -51,6 +51,8 @@
+@@ -28,6 +28,7 @@
+ extern "C" void showLookupForString(WId winId, const char* text, double x, double y);
+ #endif
+ 
++extern bool SHOULD_RENDER_SIOYEK_ANNOTATIONS;
+ extern bool SHOULD_WARN_ABOUT_USER_KEY_OVERRIDE;
+ extern bool USE_LEGACY_KEYBINDS;
+ extern std::map<std::wstring, std::wstring> ADDITIONAL_COMMANDS;
+@@ -51,6 +52,8 @@
  extern bool VERBOSE;
  extern float FREETEXT_BOOKMARK_COLOR[3];
  extern float FREETEXT_BOOKMARK_FONT_SIZE;
@@ -917,7 +945,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  extern bool FUZZY_SEARCHING;
  extern bool TOC_JUMP_ALIGN_TOP;
  extern bool FILL_TEXTBAR_WITH_SELECTED_TEXT;
-@@ -1136,6 +1138,7 @@
+@@ -1136,6 +1139,7 @@
  class SymbolCommand : public Command {
  public:
      char symbol = 0;
@@ -925,7 +953,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      SymbolCommand(std::string name, MainWidget* w) : Command(name, w) {}
      virtual std::optional<Requirement> next_requirement(MainWidget* widget) {
          if (symbol == 0) {
-@@ -1150,6 +1153,11 @@
+@@ -1150,6 +1154,11 @@
          this->symbol = value;
      }
  
@@ -937,7 +965,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      virtual std::string get_human_readable_name() {
          auto res = Command::get_human_readable_name();
          if (symbol != 0) {
-@@ -1319,8 +1327,16 @@
+@@ -1319,8 +1328,16 @@
      NextItemCommand(MainWidget* w) : Command(cname, w) {}
  
      void perform() {
@@ -956,7 +984,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  
      std::string get_name() {
-@@ -2359,10 +2375,13 @@
+@@ -2359,10 +2376,13 @@
          rect_ = value;
          BookMark incomplete_bookmark;
  
@@ -974,7 +1002,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          incomplete_bookmark.color[0] = FREETEXT_BOOKMARK_COLOR[0];
          incomplete_bookmark.color[1] = FREETEXT_BOOKMARK_COLOR[1];
          incomplete_bookmark.color[2] = FREETEXT_BOOKMARK_COLOR[2];
-@@ -2379,20 +2398,15 @@
+@@ -2379,20 +2399,15 @@
  
          if (pending_index != -1) {
              widget->doc()->undo_pending_bookmark(pending_index);
@@ -999,7 +1027,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  
          widget->clear_selected_rect();
          widget->invalidate_render();
-@@ -2453,11 +2467,7 @@
+@@ -2453,11 +2468,7 @@
      IncreaseFreetextBookmarkFontSizeCommand(MainWidget* w) : Command(cname, w) {};
  
      void perform() {
@@ -1012,7 +1040,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  
      }
  };
-@@ -2469,14 +2479,28 @@
+@@ -2469,14 +2480,28 @@
      DecreaseFreetextBookmarkFontSizeCommand(MainWidget* w) : Command(cname, w) {};
  
      void perform() {
@@ -1046,7 +1074,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  
  class GotoHighlightCommand : public GenericGotoLocationCommand {
  public:
-@@ -2617,10 +2641,20 @@
+@@ -2617,10 +2642,20 @@
  class AddHighlightCommand : public SymbolCommand {
  public:
      static inline const std::string cname = "add_highlight";
@@ -1068,7 +1096,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          result = widget->handle_add_highlight(symbol);
      }
  
-@@ -3343,11 +3377,16 @@
+@@ -3343,11 +3378,16 @@
  class ZoomInCommand : public Command {
  public:
      static inline const std::string cname = "zoom_in";
@@ -1088,7 +1116,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  };
  
-@@ -3447,12 +3486,17 @@
+@@ -3447,12 +3487,17 @@
  class ZoomOutCommand : public Command {
  public:
      static inline const std::string cname = "zoom_out";
@@ -1109,7 +1137,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  };
  
-@@ -3592,6 +3636,43 @@
+@@ -3592,6 +3637,43 @@
  
  };
  
@@ -1153,7 +1181,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  class EditSelectedBookmarkCommand : public TextCommand {
  public:
      static inline const std::string cname = "edit_selected_bookmark";
-@@ -3873,9 +3954,16 @@
+@@ -3873,9 +3955,16 @@
  
  public:
      static inline const std::string cname = "delete_highlight";
@@ -1171,7 +1199,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      void perform_with_highlight_selected() override {
          widget->handle_delete_selected_highlight();
      }
-@@ -4032,12 +4120,39 @@
+@@ -4032,12 +4121,39 @@
      bool requires_document() { return false; }
  };
  
@@ -1211,7 +1239,32 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          copy_to_clipboard(widget->get_selected_text(ADD_NEWLINES_WHEN_COPYING_TEXT));
      }
  
-@@ -5076,11 +5191,11 @@
+@@ -4742,6 +4858,24 @@
+     bool requires_document() { return true; }
+ };
+ 
++// The counterpart to toggle_pdf_annotations, for Sioyek's own highlights, notes
++// and drawings rather than the ones embedded in the file. Importing a marked-up
++// PDF leaves both sets present and drawn on top of each other, and until now
++// only the embedded side could be turned off.
++class ToggleSioyekAnnotationsCommand : public Command {
++public:
++    static inline const std::string cname = "toggle_sioyek_annotations";
++    static inline const std::string hname = "Toggle whether Sioyek's own annotations should be rendered";
++    ToggleSioyekAnnotationsCommand(MainWidget* w) : Command(cname, w) {};
++
++    void perform() {
++        SHOULD_RENDER_SIOYEK_ANNOTATIONS = !SHOULD_RENDER_SIOYEK_ANNOTATIONS;
++        widget->invalidate_render();
++    }
++
++    bool requires_document() { return true; }
++};
++
+ class OpenLinkCommand : public Command {
+ public:
+     static inline const std::string cname = "open_link";
+@@ -5076,11 +5210,11 @@
  class KeysCommand : public Command {
  public:
      static inline const std::string cname = "keys";
@@ -1225,7 +1278,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  
      bool requires_document() { return false; }
-@@ -5095,7 +5210,7 @@
+@@ -5095,7 +5229,7 @@
      void perform() {
          std::optional<Path> key_file_path = widget->input_handler->get_or_create_user_keys_path();
          if (key_file_path) {
@@ -1234,7 +1287,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          }
      }
  
-@@ -5122,7 +5237,7 @@
+@@ -5122,7 +5256,7 @@
      PrefsCommand(MainWidget* w) : Command(cname, w) {};
  
      void perform() {
@@ -1243,7 +1296,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      }
  
      bool requires_document() { return false; }
-@@ -5137,7 +5252,7 @@
+@@ -5137,7 +5271,7 @@
      void perform() {
          std::optional<Path> pref_file_path = widget->config_manager->get_or_create_user_config_file();
          if (pref_file_path) {
@@ -1252,7 +1305,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          }
      }
  
-@@ -6041,6 +6156,52 @@
+@@ -6041,6 +6175,52 @@
  
  };
  
@@ -1305,7 +1358,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  class ToggleTypingModeCommand : public Command {
  public:
      static inline const std::string cname = "toggle_typing_mode";
-@@ -7035,6 +7196,10 @@
+@@ -7035,6 +7215,10 @@
      register_command<GotoMark>();
      register_command<GotoPageWithPageNumberCommand>();
      register_command<EditSelectedBookmarkCommand>();
@@ -1316,7 +1369,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<EditSelectedHighlightCommand>();
      register_command<SearchCommand>();
      register_command<DownloadPaperWithUrlCommand>();
-@@ -7107,6 +7272,8 @@
+@@ -7107,6 +7291,8 @@
      register_command<GotoHighlightCommand>();
      register_command<IncreaseFreetextBookmarkFontSizeCommand>();
      register_command<DecreaseFreetextBookmarkFontSizeCommand>();
@@ -1325,7 +1378,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<GotoPortalListCommand>();
      register_command<ShowMarks>();
      register_command<GotoBookmarkCommand>();
-@@ -7134,6 +7301,8 @@
+@@ -7134,6 +7320,8 @@
      register_command<OpenDocumentEmbeddedCommand>();
      register_command<OpenDocumentEmbeddedFromCurrentPathCommand>();
      register_command<CopyCommand>();
@@ -1334,7 +1387,15 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
  #ifdef Q_OS_MACOS
      register_command<MacosLookupCommand>();
  #endif
-@@ -7246,6 +7415,8 @@
+@@ -7168,6 +7356,7 @@
+     register_command<QuitCommand>();
+     register_command<EscapeCommand>();
+     register_command<TogglePDFAnnotationsCommand>();
++    register_command<ToggleSioyekAnnotationsCommand>();
+     register_command<CloseWindowCommand>();
+     register_command<OpenLinkCommand>();
+     register_command<OverviewLinkCommand>();
+@@ -7246,6 +7435,8 @@
      register_command<OverviewRulerPortalCommand>();
      register_command<GotoRulerPortalCommand>();
      register_command<SelectRectCommand>();
@@ -1343,7 +1404,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
      register_command<ToggleTypingModeCommand>();
      register_command<DonateCommand>();
      register_command<OverviewNextItemCommand>();
-@@ -7515,6 +7686,7 @@
+@@ -7515,6 +7706,7 @@
                  {L"left", Qt::Key::Key_Left},
                  {L"right", Qt::Key::Key_Right},
                  {L"backspace", Qt::Key::Key_Backspace},
@@ -1351,7 +1412,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
                  {L"space", Qt::Key::Key_Space},
                  {L"pageup", Qt::Key::Key_PageUp},
                  {L"pagedown", Qt::Key::Key_PageDown},
-@@ -8025,6 +8197,7 @@
+@@ -8025,6 +8217,7 @@
          {Qt::Key::Key_Left, "left"},
          {Qt::Key::Key_Right, "right"},
          {Qt::Key::Key_Backspace, "backspace"},
@@ -1359,7 +1420,7 @@ diff -ruN baseA/pdf_viewer/input.cpp ptree/pdf_viewer/input.cpp
          {Qt::Key::Key_Space, "space"},
          {Qt::Key::Key_PageUp, "pageup"},
          {Qt::Key::Key_PageDown, "pagedown"},
-@@ -8101,6 +8274,10 @@
+@@ -8101,6 +8294,10 @@
  
  void Command::set_text_requirement(std::wstring value) {}
  void Command::set_symbol_requirement(char value) {}
@@ -2853,7 +2914,15 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
  #include "pdf_view_opengl_widget.h"
  #include "path.h"
-@@ -63,6 +72,7 @@
+@@ -23,6 +32,7 @@
+ #define GL_PRIMITIVE_RESTART_FIXED_INDEX  0x8D69
+ #endif
+ 
++extern bool SHOULD_RENDER_SIOYEK_ANNOTATIONS;
+ extern bool DEBUG_DISPLAY_FREEHAND_POINTS;
+ extern bool DEBUG_SMOOTH_FREEHAND_DRAWINGS;
+ extern Path shader_path;
+@@ -63,6 +73,7 @@
  //extern float BOOKMARK_RECT_SIZE;
  extern bool RENDER_FREETEXT_BORDERS;
  extern float FREETEXT_BOOKMARK_FONT_SIZE;
@@ -2861,7 +2930,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  extern float STRIKE_LINE_WIDTH;
  extern std::wstring RULER_DISPLAY_MODE;
  extern float RULER_COLOR[3];
-@@ -716,7 +726,8 @@
+@@ -716,7 +727,8 @@
       render_compiled_drawings();
       glEnableVertexAttribArray(0);
       glUseProgram(shared_gl_objects.line_program);
@@ -2871,7 +2940,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
       render_drawings(scratchpad, moving_drawings, true);
       render_drawings(scratchpad, moving_drawings, false);
       render_drawings(scratchpad, pending_drawing);
-@@ -755,6 +766,600 @@
+@@ -755,6 +767,600 @@
      //painter.drawText(-100, -100, "1234567890");
  }
  
@@ -3472,7 +3541,16 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  PdfViewOpenGLWidget::PdfViewOpenGLWidget(DocumentView* document_view, PdfRenderer* pdf_renderer, ConfigManager* config_manager, bool is_helper, QWidget* parent) :
      QOpenGLWidget(parent),
      document_view(document_view),
-@@ -1710,14 +2315,21 @@
+@@ -1684,7 +2290,7 @@
+             render_portal_rect(painter, pending_portal_rect.value(), true);
+         }
+ 
+-        for (int i = 0; i < bookmarks.size(); i++) {
++        for (int i = 0; SHOULD_RENDER_SIOYEK_ANNOTATIONS && i < bookmarks.size(); i++) {
+             if (bookmarks[i].begin_y > -1) {
+                 if (bookmarks[i].end_x == -1) {
+ 
+@@ -1710,14 +2316,21 @@
                      QRect window_qrect = QRect(window_rect.x0, window_rect.y0, fz_irect_width(window_rect), fz_irect_height(window_rect));
  
                      QFont font = painter->font();
@@ -3495,7 +3573,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                      int flags = Qt::TextWordWrap;
-@@ -1728,7 +2340,7 @@
+@@ -1728,7 +2341,7 @@
                          flags |= Qt::AlignLeft;
                      }
  
@@ -3504,7 +3582,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
                          QString box_text = QString::fromStdWString(bookmarks[i].description).split(' ')[0];
                          std::optional<char> bm_type = bookmarks[i].get_type();
-@@ -1752,15 +2364,68 @@
+@@ -1752,15 +2365,68 @@
                          }
                      }
                      else {
@@ -3580,7 +3658,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
                      }
  
                  }
-@@ -2966,9 +3631,15 @@
+@@ -2966,9 +3632,15 @@
          if (drawing.points.size() <= 0) {
              continue;
          }
@@ -3596,10 +3674,11 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (drawing.points.size() == 1) {
              add_point_coords(drawing.points[0], drawing.type - 'a');
  
-@@ -3212,6 +3883,79 @@
+@@ -3212,6 +3884,80 @@
  }
  
  void PdfViewOpenGLWidget::render_drawings(DocumentView* dv, const std::vector<FreehandDrawing>& drawings, bool highlighted) {
++    if (!SHOULD_RENDER_SIOYEK_ANNOTATIONS) return;
 +    render_rectangle_drawings(dv, drawings, highlighted);
 +    render_freehand_drawings(dv, drawings, highlighted);
 +}
@@ -3676,7 +3755,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
  
      if (drawings.size() == 0) return;
  
-@@ -3231,6 +3975,9 @@
+@@ -3231,6 +3977,9 @@
      for (int i = drawings.size() - 1; i >= 0; i--) {
          auto drawing = drawings[i];
  
@@ -3686,7 +3765,7 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (DEBUG_SMOOTH_FREEHAND_DRAWINGS) {
              drawing = smoothen_drawing(drawing);
          }
-@@ -3241,6 +3988,9 @@
+@@ -3241,6 +3990,9 @@
          if (drawing.points.size() <= 0) {
              continue;
          }
@@ -3696,6 +3775,14 @@ diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.cpp ptree/pdf_viewer/pdf_view_
          if (!visible_drawing_mask[drawing.type - 'a']) {
              continue;
          }
+@@ -3626,6 +4378,7 @@
+ }
+ 
+ void PdfViewOpenGLWidget::render_highlight_annotations(){
++    if (!SHOULD_RENDER_SIOYEK_ANNOTATIONS) return;
+     if (document_view->get_document()->can_use_highlights()) {
+         const std::vector<Highlight>& highlights = document_view->get_document()->get_highlights();
+         std::vector<int> visible_highlight_indices = document_view->get_visible_highlight_indices();
 diff -ruN baseA/pdf_viewer/pdf_view_opengl_widget.h ptree/pdf_viewer/pdf_view_opengl_widget.h
 --- a/pdf_viewer/pdf_view_opengl_widget.h
 +++ b/pdf_viewer/pdf_view_opengl_widget.h
