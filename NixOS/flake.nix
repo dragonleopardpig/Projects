@@ -151,6 +151,26 @@
         # from python3.withPackages, not merely present in the profile.
         pythonPackagesExtensions = (prev.pythonPackagesExtensions or [ ]) ++ [
           (pyfinal: pyprev: {
+            # undetected-chromedriver downloads a chromedriver at runtime and
+            # executes it. A binary fetched from the internet has no dynamic
+            # loader on NixOS, so PyPaperBot's Google Scholar path would die the
+            # moment it opened a browser. The patch makes it take the driver
+            # named by NIX_CHROMEDRIVER instead -- set in the wrapper below to
+            # the nixpkgs chromedriver, which matches the chromium installed
+            # beside it. It is still copied somewhere writable first, because
+            # the library byte-patches the binary to evade detection.
+            undetected-chromedriver = pyprev.undetected-chromedriver.overridePythonAttrs (old: {
+              patches = (old.patches or [ ]) ++ [
+                ./patches/undetected-chromedriver-use-system-driver.patch
+              ];
+              # The package installs no executable, so a wrapper could not
+              # carry the variable: bake the path in as the default instead.
+              postPatch = (old.postPatch or "") + ''
+                substituteInPlace undetected_chromedriver/patcher.py \
+                  --replace-fail "@NIX_CHROMEDRIVER@" "${final.chromedriver}/bin/chromedriver"
+              '';
+            });
+
           # Three small pure-Python packages that nixpkgs does not carry, needed
           # only so sioyek-python-extensions' paper_downloader.py can run.
           pychainedproxy = pyfinal.buildPythonPackage rec {

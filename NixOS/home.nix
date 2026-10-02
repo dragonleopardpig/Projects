@@ -3180,6 +3180,11 @@ in
     # built-in importer is the better one -- it carries freehand drawings over
     # too, which the Python version ignores.
     (python3.withPackages (ps: with ps; [ pygobject3 sioyek-python-extensions ]))
+    # For sioyek's _download_paper: PyPaperBot queries Google Scholar through
+    # undetected-chromedriver, which drives a real browser. The matching
+    # chromedriver is baked into that library in the flake overlay, since the
+    # one it downloads for itself has no dynamic loader here.
+    chromium
     gtk3
     gobject-introspection
     # AGS v2 runner; uses astal libraries from nixpkgs. Config lives in
