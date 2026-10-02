@@ -145,75 +145,185 @@
           ];
         });
 
-        # ahrm/sioyek-python-extensions, published to PyPI as "sioyek". It drives
-        # a *running* Sioyek over its local-socket command interface, so the
-        # scripts are run against the instance you already have open.
-        #
-        # Two of its declared dependencies, libgen-api and PyPaperBot, are not
-        # in nixpkgs. They are needed only by paper_downloader.py, which pulls
-        # papers from Library Genesis and Sci-Hub; that script is dropped rather
-        # than packaged. googletrans is pinned to an unmaintained alpha
-        # (3.1.0a0) that nixpkgs does not carry either, so translate.py goes
-        # with it. Everything else -- import_annotations, embed_annotations,
-        # extract_highlights, dual_panelify, add_text, remove_annotation --
-        # keeps working, and import_annotations is the one that matters here:
-        # it reads annotations Sioyek did not create (Acrobat's, say) and writes
-        # them into shared.db, matching each highlight's stroke colour to a
-        # Sioyek highlight type and skipping any it already has.
-        sioyek-python-extensions = prev.python3Packages.buildPythonApplication rec {
-          pname = "sioyek";
-          version = "0.31.11";
-          pyproject = true;
-
-          src = prev.fetchPypi {
-            inherit pname version;
-            hash = "sha256-KzrwK21CU80rT2Stns3Iuly2+83w6MXPUdTLkqu9S+M=";
+        # These four live in pythonPackagesExtensions rather than the top level
+        # so the modules land in python3Packages: the scripts are invoked as
+        # `python -m sioyek.<name>`, which needs them importable by a python
+        # from python3.withPackages, not merely present in the profile.
+        pythonPackagesExtensions = (prev.pythonPackagesExtensions or [ ]) ++ [
+          (pyfinal: pyprev: {
+          # Three small pure-Python packages that nixpkgs does not carry, needed
+          # only so sioyek-python-extensions' paper_downloader.py can run.
+          pychainedproxy = pyfinal.buildPythonPackage rec {
+            pname = "pychainedproxy";
+            version = "1.3";
+            src = pyfinal.fetchPypi {
+              inherit pname version;
+              hash = "sha256-CA8BP21TXtd6nMmBLLvPAoYZXdSEuNHuKGY63rl4FI0=";
+            };
+            pyproject = true;
+            build-system = [ pyfinal.setuptools ];
+            propagatedBuildInputs = [ pyfinal.six ];
+            doCheck = false;
+            pythonImportsCheck = [ "pyChainedProxy" ];
+            meta.description = "SOCKS proxy chaining for Python";
           };
 
-          build-system = [ prev.python3Packages.hatchling ];
-
-          dependencies = with prev.python3Packages; [
-            pymupdf
-            pypdf
-            numpy
-            pyqt5
-            appdirs
-            pyperclip
-            habanero
-            regex
-            python-slugify
-          ];
-
-          # The two unpackaged ones, plus the pinned googletrans alpha, plus
-          # PyPDF2 -- see postPatch.
-          pythonRemoveDeps = [ "pypaperbot" "libgen-api" "googletrans" "pypdf2" ];
-
-          # PyPDF2 is end-of-life and nixpkgs marks 3.0.1 insecure over six
-          # CVEs. Its maintained successor pypdf exposes the same four names
-          # these two scripts import -- PdfWriter, PdfReader, PageObject,
-          # Transformation -- so use that rather than whitelisting a package
-          # with known vulnerabilities or dropping the scripts.
-          postPatch = ''
-            substituteInPlace src/sioyek/extract_highlights.py src/sioyek/dual_panelify.py \
-              --replace-fail "from PyPDF2 import" "from pypdf import"
-          '';
-
-          postInstall = ''
-            rm -f $out/${prev.python3.sitePackages}/sioyek/paper_downloader.py
-            rm -f $out/${prev.python3.sitePackages}/sioyek/translate.py
-          '';
-
-          # Importing the package is the whole smoke test: it is a library plus
-          # a set of __main__ scripts, and there is no test suite.
-          pythonImportsCheck = [ "sioyek" "sioyek.sioyek" ];
-          doCheck = false;
-
-          meta = {
-            description = "Python tools and extensions for the Sioyek PDF reader";
-            homepage = "https://github.com/ahrm/sioyek-python-extensions";
-            license = prev.lib.licenses.gpl3Only;
+          crossref-commons = pyfinal.buildPythonPackage rec {
+            pname = "crossref_commons";
+            version = "0.0.7";
+            src = pyfinal.fetchPypi {
+              inherit pname version;
+              hash = "sha256-S4rjXUisxP5i2hZiUlOWR35PjHb9sAzULVM0xocTxLY=";
+            };
+            pyproject = true;
+            build-system = [ pyfinal.setuptools ];
+            # crossref_commons imports packaging at runtime but does not declare it.
+            propagatedBuildInputs = with pyfinal; [ ratelimit requests packaging ];
+            doCheck = false;
+            pythonImportsCheck = [ "crossref_commons" ];
+            meta.description = "Shared Crossref API utilities";
           };
-        };
+
+          libgen-api = pyfinal.buildPythonPackage rec {
+            pname = "libgen_api";
+            version = "1.0.1";
+            src = pyfinal.fetchPypi {
+              inherit pname version;
+              hash = "sha256-9WjbnDD11AvCiO1U46LeGJ0x3/DhqGA6CU0bHrasyeA=";
+            };
+            pyproject = true;
+            build-system = [ pyfinal.setuptools ];
+            propagatedBuildInputs = with pyfinal; [ beautifulsoup4 requests lxml ];
+            # The declared dependency is the "bs4" stub distribution; the real
+            # package is beautifulsoup4, which provides the same import.
+            pythonRemoveDeps = [ "bs4" ];
+            doCheck = false;
+            pythonImportsCheck = [ "libgen_api" ];
+            meta.description = "Search client for the Library Genesis catalogue";
+          };
+
+          # PyPaperBot declares its whole development environment as runtime
+          # dependencies -- pylint, isort, mccabe, wrapt, astroid<=2.5 (2021),
+          # idna<3, and HTMLParser, which is Python 2 only and does not install
+          # here at all. Its actual imports are far fewer: bs4, crossref_commons,
+          # bibtexparser, pandas, pyChainedProxy, selenium and
+          # undetected_chromedriver. Supply those and drop the rest.
+          #
+          # It drives a real browser through undetected-chromedriver, so running
+          # it needs a Chrome or Chromium on PATH as well.
+          pypaperbot = pyfinal.buildPythonPackage rec {
+            pname = "pypaperbot";
+            version = "1.4.1";
+            pyproject = true;
+            build-system = [ pyfinal.setuptools ];
+            src = pyfinal.fetchPypi {
+              inherit pname version;
+              hash = "sha256-O57AAoUETUZRAa2JehH2noJpdh8YnkyHyAwHGrMEluQ=";
+            };
+            propagatedBuildInputs = with pyfinal; [
+              beautifulsoup4
+              bibtexparser
+              pandas
+              numpy
+              requests
+              selenium
+              undetected-chromedriver
+              pyfinal.crossref-commons
+              pyfinal.pychainedproxy
+            ];
+            pythonRemoveDeps = [
+              "astroid" "HTMLParser" "idna" "isort" "mccabe" "pylint" "wrapt"
+              "lazy-object-proxy" "future" "chardet" "toml" "six" "soupsieve"
+              "certifi" "colorama" "pyparsing" "python-dateutil" "pytz" "urllib3"
+            ];
+            pythonRelaxDeps = true;
+            doCheck = false;
+            pythonImportsCheck = [ "PyPaperBot" ];
+            meta.description = "Command-line tool for downloading scientific papers";
+          };
+
+          # ahrm/sioyek-python-extensions, published to PyPI as "sioyek". It drives
+          # a *running* Sioyek over its local-socket command interface, so the
+          # scripts are run against the instance you already have open.
+          #
+          # import_annotations is the one that earns its keep: it reads
+          # annotations Sioyek did not create (Acrobat's, say) and writes them
+          # into shared.db, matching each highlight's stroke colour to a Sioyek
+          # highlight type and skipping any it already has. It only reads the
+          # PDF, never rewrites it.
+          #
+          # libgen-api, pyChainedProxy and crossref-commons are packaged above so
+          # paper_downloader.py works; it also needs a Chrome or Chromium on PATH,
+          # since PyPaperBot drives one through undetected-chromedriver.
+          #
+          # translate.py is written against googletrans 3.1.0a0, an unmaintained
+          # alpha. nixpkgs carries 4.0.2, whose Translator.translate is a
+          # coroutine, so calling it the old way yields a coroutine and then
+          # fails on .text. postPatch adapts the script instead of pinning a dead
+          # release.
+          sioyek-python-extensions = pyfinal.buildPythonPackage rec {
+            pname = "sioyek";
+            version = "0.31.11";
+            pyproject = true;
+
+            src = pyfinal.fetchPypi {
+              inherit pname version;
+              hash = "sha256-KzrwK21CU80rT2Stns3Iuly2+83w6MXPUdTLkqu9S+M=";
+            };
+
+            build-system = [ pyfinal.hatchling ];
+
+            dependencies = with pyfinal; [
+              pymupdf
+              pypdf
+              numpy
+              pyqt5
+              appdirs
+              pyperclip
+              habanero
+              regex
+              python-slugify
+              googletrans
+            ] ++ [
+              pyfinal.libgen-api
+              pyfinal.pypaperbot
+            ];
+
+            # PyPDF2 -- see postPatch. googletrans is supplied at 4.0.2 rather
+            # than the pinned dead alpha.
+            pythonRemoveDeps = [ "googletrans" "pypdf2" ];
+
+            # PyPDF2 is end-of-life and nixpkgs marks 3.0.1 insecure over six
+            # CVEs. Its maintained successor pypdf exposes the same four names
+            # these two scripts import -- PdfWriter, PdfReader, PageObject,
+            # Transformation -- so use that rather than whitelisting a package
+            # with known vulnerabilities or dropping the scripts.
+            postPatch = ''
+              substituteInPlace src/sioyek/extract_highlights.py src/sioyek/dual_panelify.py \
+                --replace-fail "from PyPDF2 import" "from pypdf import"
+
+              # googletrans 4 made translate() a coroutine.
+              substituteInPlace src/sioyek/translate.py \
+                --replace-fail "import sys" "import asyncio, sys" \
+                --replace-fail "translation = translator.translate(text, dest='en')" \
+                               "translation = asyncio.run(translator.translate(text, dest='en'))"
+            '';
+
+
+            # Importing the package is the whole smoke test: it is a library plus
+            # a set of __main__ scripts, and there is no test suite.
+            pythonImportsCheck = [ "sioyek" "sioyek.sioyek" ];
+            doCheck = false;
+
+            meta = {
+              description = "Python tools and extensions for the Sioyek PDF reader";
+              homepage = "https://github.com/ahrm/sioyek-python-extensions";
+              license = final.lib.licenses.gpl3Only;
+            };
+          };
+
+          })
+        ];
 
         # nixpkgs nwg-drawer (0.7.5) preInstall copies desktop-directories +
         # drawer.css to $out/share/nwg-drawer but forgets img/ — the upstream

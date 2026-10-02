@@ -471,19 +471,21 @@ in
     # sioyek-python-extensions. These act on the *running* instance over its
     # local socket, so they see the document you have open.
     #
-    # _import_annotations reads annotations Sioyek did not create -- an
-    # Acrobat-marked PDF, say -- and writes them into shared.db: Highlight
-    # annotations become highlights, Text and FreeText ones become bookmarks.
-    # Each highlight's stroke colour is matched to the nearest entry of the a-z
-    # palette, and anything Sioyek already has is skipped, so running it twice
-    # does not duplicate. Note that only Highlight is read: Acrobat's Underline,
-    # StrikeOut and Squiggly are ignored.
+    # Only the ones Sioyek cannot already do. import_annotations and
+    # embed_annotations are built-in commands, and the built-in importer is the
+    # better of the two: it brings freehand drawings across as well, which the
+    # Python version ignores entirely.
     #
-    # _embed_annotations goes the other way, writing Sioyek's own annotations
-    # into the PDF file so other readers can see them.
-    new_command _import_annotations python3 -m sioyek.import_annotations %{sioyek_path} %{local_database} %{shared_database} %{file_path}
-    new_command _embed_annotations python3 -m sioyek.embed_annotations %{sioyek_path} %{local_database} %{shared_database} %{file_path}
+    # _extract_highlights writes the highlights out to a file; _dual_panelify
+    # rebuilds the PDF two pages to a sheet; _translate sends the selected text
+    # through Google Translate and shows the result in the status bar;
+    # _download_paper looks a title up and fetches it. The last one drives a
+    # real browser through undetected-chromedriver, so it needs a Chromium on
+    # PATH, and the search goes to Library Genesis and Sci-Hub.
     new_command _extract_highlights python3 -m sioyek.extract_highlights %{sioyek_path} %{local_database} %{shared_database} %{file_path}
+    new_command _dual_panelify python3 -m sioyek.dual_panelify %{sioyek_path} %{local_database} %{shared_database} %{file_path}
+    new_command _translate python3 -m sioyek.translate %{sioyek_path} %{selected_text}
+    new_command _download_paper python3 -m sioyek.paper_downloader %{sioyek_path} %{selected_text}
   '';
 
   services.cliphist = {
@@ -3149,14 +3151,16 @@ in
     # mere overlay, and authenticates through libpam against the clean
     # /etc/pam.d/swaylock stack.
     swaylock
-    (python3.withPackages (ps: with ps; [ pygobject3 ]))
-    # ahrm/sioyek-python-extensions. Scripts are run as `python -m sioyek.<name>`
-    # and drive the *running* Sioyek over its local socket, so the instance you
-    # already have open is the one they act on. import_annotations is the useful
-    # one here: it reads annotations Sioyek did not create -- Acrobat's, for
-    # instance -- and writes them into shared.db. paper_downloader and translate
-    # are not included; see the flake overlay for why.
-    sioyek-python-extensions
+    # sioyek-python-extensions has to go in the python environment, not beside
+    # it: its scripts are run as `python -m sioyek.<name>`, so the module must
+    # be importable by the python3 on PATH. Installing the package on its own
+    # puts the files in the profile where no python looks for them.
+    #
+    # Only the scripts Sioyek cannot already do itself are worth having.
+    # import_annotations and embed_annotations are built-in commands, and the
+    # built-in importer is the better one -- it carries freehand drawings over
+    # too, which the Python version ignores.
+    (python3.withPackages (ps: with ps; [ pygobject3 sioyek-python-extensions ]))
     gtk3
     gobject-introspection
     # AGS v2 runner; uses astal libraries from nixpkgs. Config lives in
