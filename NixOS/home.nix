@@ -77,6 +77,9 @@ in
     recursive = true;
   };
 
+  # Prompt for newer devenv CLI releases on direct terminal invocations.
+  home.file.".local/bin/devenv".source = ./scripts/devenv-update/launch;
+
   home.file.".local/share/icons/hicolor/256x256/apps/euresys-studio.png" = {
     source = ./assets/euresys-studio.png;
   };

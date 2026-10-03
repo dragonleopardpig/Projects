@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+profile_bin="${HOME}/.nix-profile/bin/devenv"
+system_bin="/run/current-system/sw/bin/devenv"
+devenv_bin="${system_bin}"
+if [[ -x "${profile_bin}" ]]; then
+  devenv_bin="${profile_bin}"
+fi
+
+# direnv runs these commands while entering a directory. Keep its output and
+# noninteractive uses of devenv free of prompts and network checks.
+if [[ ! -t 0 || ! -t 2 || "${_DEVENV_CALLER:-}" == direnv ||
+      "${DEVENV_NO_UPDATE_CHECK:-}" == 1 ]]; then
+  exec "${devenv_bin}" "$@"
+fi
+case "${1:-}" in
+  direnvrc|direnv-export|hook)
+    exec "${devenv_bin}" "$@"
+    ;;
+esac
+
+state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/devenv-update"
+mkdir -p -- "${state_dir}"
+next_check_file="${state_dir}/next-check"
+now="$(date +%s)"
+next_check=0
+if [[ -f "${next_check_file}" ]]; then
+  read -r next_check <"${next_check_file}" || true
+  [[ "${next_check}" =~ ^[0-9]+$ ]] || next_check=0
+fi
+if (( now < next_check )) && [[ "${DEVENV_UPDATE_CHECK:-}" != 1 ]]; then
+  exec "${devenv_bin}" "$@"
+fi
+
+installed_output="$("${devenv_bin}" version 2>/dev/null || true)"
+if [[ ! "${installed_output}" =~ ^devenv\ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+  exec "${devenv_bin}" "$@"
+fi
+installed="${BASH_REMATCH[1]}"
+
+latest="$(curl --fail --silent --show-error --location \
+  --connect-timeout 3 --max-time 8 \
+  --header 'Accept: application/vnd.github+json' \
+  --header 'User-Agent: devenv-NixOS-update-prompt' \
+  https://api.github.com/repos/cachix/devenv/releases/latest \
+  2>/dev/null \
+  | jq -er '.tag_name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+  2>/dev/null)" || {
+    printf '%s\n' "$(( now + 3600 ))" >"${next_check_file}"
+    exec "${devenv_bin}" "$@"
+  }
+latest="${latest#v}"
+printf '%s\n' "$(( now + 86400 ))" >"${next_check_file}"
+
+if [[ "${latest}" != "${installed}" &&
+      "$(printf '%s\n%s\n' "${installed}" "${latest}" | sort -V | tail -n 1)" == "${latest}" ]]; then
+  printf 'devenv %s is available (installed: %s). Install now? [y/N] ' \
+    "${latest}" "${installed}" >&2
+  answer=
+  read -r answer || true
+  case "${answer}" in
+    y|Y|yes|YES|Yes)
+      if [[ -x "${profile_bin}" ]]; then
+        if ! nix profile upgrade --accept-flake-config --refresh devenv; then
+          printf 'devenv update failed; using %s.\n' "${installed}" >&2
+          printf '%s\n' "$(( now + 3600 ))" >"${next_check_file}"
+        fi
+      elif ! nix profile install --accept-flake-config github:cachix/devenv/latest; then
+        printf 'devenv installation failed; using %s.\n' "${installed}" >&2
+        printf '%s\n' "$(( now + 3600 ))" >"${next_check_file}"
+      fi
+      if [[ -x "${profile_bin}" ]]; then
+        devenv_bin="${profile_bin}"
+      fi
+      ;;
+  esac
+fi
+
+exec "${devenv_bin}" "$@"
