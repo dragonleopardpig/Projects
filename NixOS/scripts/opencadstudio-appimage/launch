@@ -11,9 +11,13 @@ if [[ -n "${latest}" ]]; then
   IFS=$'\t' read -r latest_tag _url _sha <<<"${latest}"
   if [[ "${latest_tag}" != "${installed_tag}" ||
         ! -f "${app_dir}/current.AppImage" ]]; then
+    cancel_label="Open current version"
+    if [[ ! -f "${app_dir}/current.AppImage" ]]; then
+      cancel_label="Cancel"
+    fi
     if zenity --question --title="Open CAD Studio update available" \
       --text="Open CAD Studio ${latest_tag} is available. Download and open it now?" \
-      --ok-label="Download and open" --cancel-label="Open current version" \
+      --ok-label="Download and open" --cancel-label="${cancel_label}" \
       --width=460; then
       mkdir -p -- "${state_dir}"
       log_file="$(mktemp "${state_dir}/update.XXXXXXXX")"
@@ -33,10 +37,16 @@ if [[ -n "${latest}" ]]; then
       status="$(cat -- "${status_file}")"
       rm -f -- "${status_file}"
       if [[ "${status}" != ok ]]; then
+        error_text="The download failed. Log: ${log_file}"
+        if [[ -f "${app_dir}/current.AppImage" ]]; then
+          error_text="The download failed. Opening the current version. Log: ${log_file}"
+        fi
         zenity --error --title="Open CAD Studio update failed" \
-          --text="The download failed. Opening the current version. Log: ${log_file}" \
+          --text="${error_text}" \
           --width=500 || true
       fi
+    elif [[ ! -f "${app_dir}/current.AppImage" ]]; then
+      exit 0
     fi
   fi
 fi

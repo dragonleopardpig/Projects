@@ -6,7 +6,8 @@ Home Manager installs these scripts on each configured NixOS host under
 release on GitHub, offers to download it, verifies the release's SHA-256 digest,
 and opens the downloaded AppImage through NixOS's `appimage-run`. If the network
 is unavailable or you decline an update, it opens the current download. Before
-the first download, it opens the existing NixOS package.
+the first download, an unavailable network produces an error instead of opening
+an older system package.
 
 To download an update manually, run
 `~/.local/libexec/opencadstudio-appimage/update`. To open the installed AppImage
@@ -14,9 +15,18 @@ without checking for updates, run
 `~/.local/libexec/opencadstudio-appimage/run`.
 
 The AppImages are stored under `~/.local/share/opencadstudio-appimage/` and
-update logs under `~/.local/state/opencadstudio-appimage/`. On M90aPro, activate
+update logs under `~/.local/state/opencadstudio-appimage/`. After each successful
+update, the updater keeps the current release and one previous release. It
+removes older Open CAD Studio AppImages and their matching `appimage-run` cache
+directories, unless an old cache is in use. On M90aPro, activate
 the NixOS and Home Manager changes with:
 
 ```sh
 sudo nixos-rebuild switch --flake /home/thinky/Projects/NixOS#M90aPro
 ```
+
+After switching, the Home Manager desktop entry in `~/.local/share/applications`
+should point to
+`~/.local/libexec/opencadstudio-appimage/launch`, and that file should be
+executable. The first launch offers to download the AppImage. Accept it once;
+later launches prompt only when a newer release is available.

@@ -28,6 +28,53 @@ latest_release() {
   printf '%s\t%s\t%s\n' "${tag}" "${url}" "${sha}"
 }
 
+cache_in_use() {
+  local cache_dir="$1" process executable working_dir
+  for process in /proc/[0-9]*; do
+    executable="$(readlink -f -- "${process}/exe" 2>/dev/null || true)"
+    working_dir="$(readlink -f -- "${process}/cwd" 2>/dev/null || true)"
+    if [[ "${executable}" == "${cache_dir}/"* ||
+          "${working_dir}" == "${cache_dir}/"* ]] ||
+       grep -Fq -- "${cache_dir}/" "${process}/maps" 2>/dev/null; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+prune_old_releases() {
+  local current="$1" candidate candidate_sha cache_dir
+  local previous_kept=false
+  local -a installed=()
+  mapfile -d '' -t installed < <(
+    find "${app_dir}" -maxdepth 1 -type f \
+      -name 'OpenCADStudio-v*-linux-x86_64.AppImage' -print0 | sort -z -V -r
+  )
+
+  for candidate in "${installed[@]}"; do
+    if [[ "${candidate}" == "${current}" ]]; then
+      continue
+    fi
+    if [[ "${previous_kept}" == false ]]; then
+      previous_kept=true
+      continue
+    fi
+
+    candidate_sha="$(sha256sum -- "${candidate}" | cut -d' ' -f1)"
+    cache_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/appimage-run/${candidate_sha}"
+    if [[ -d "${cache_dir}" ]] && cache_in_use "${cache_dir}"; then
+      printf 'Keeping %s while its AppImage cache is in use.\n' "${candidate}" >&2
+      continue
+    fi
+    if ! rm -f -- "${candidate}"; then
+      printf 'Could not remove old AppImage: %s\n' "${candidate}" >&2
+      continue
+    fi
+    rm -rf -- "${cache_dir}" || \
+      printf 'Could not remove old AppImage cache: %s\n' "${cache_dir}" >&2
+  done
+}
+
 if [[ "${1:-}" == --latest ]]; then
   latest_release
   exit
@@ -63,4 +110,5 @@ ln -sfn -- "${file_name}" "${app_dir}/.current.AppImage.new"
 mv -Tf -- "${app_dir}/.current.AppImage.new" "${app_dir}/current.AppImage"
 printf '%s\n' "${tag}" >"${app_dir}/.version.new"
 mv -f -- "${app_dir}/.version.new" "${app_dir}/version"
+prune_old_releases "${target}"
 printf 'Open CAD Studio %s is ready at %s\n' "${tag}" "${target}"

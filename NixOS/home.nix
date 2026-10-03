@@ -50,21 +50,27 @@ in
     terminal = false;
   };
 
-  # User-level entry with the same desktop ID as the system package. The
-  # launcher offers the latest official AppImage release when available.
-  xdg.desktopEntries."io.github.HakanSeven12.OpenCadStudio" = {
-    name = "Open CAD Studio";
-    exec = "/home/thinky/.local/libexec/opencadstudio-appimage/launch %F";
-    icon = "io.github.HakanSeven12.OpenCadStudio";
-    comment = "A CAD application for 2D/3D drawing and design";
-    categories = [ "Graphics" "Engineering" ];
-    mimeType = [ "image/vnd.dwg" "image/vnd.dxf" ];
-    terminal = false;
-    settings = {
-      StartupWMClass = "io.github.HakanSeven12.OpenCadStudio";
-      Keywords = "CAD;DWG;DXF;Drawing;Design;Engineering;2D;3D;";
+  # Install the launcher in the user's applications directory so Walker sees
+  # this entry before any system desktop entries from older generations.
+  home.file.".local/share/applications/io.github.HakanSeven12.OpenCadStudio.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Open CAD Studio
+    Exec=/home/thinky/.local/libexec/opencadstudio-appimage/launch %F
+    Icon=io.github.HakanSeven12.OpenCadStudio
+    Comment=A CAD application for 2D/3D drawing and design
+    Categories=Graphics;Engineering;
+    MimeType=image/vnd.dwg;image/vnd.dxf;
+    Terminal=false
+    StartupWMClass=io.github.HakanSeven12.OpenCadStudio
+    Keywords=CAD;DWG;DXF;Drawing;Design;Engineering;2D;3D;
+  '';
+
+  home.file.".local/share/icons/hicolor/scalable/apps/io.github.HakanSeven12.OpenCadStudio.svg".source =
+    pkgs.fetchurl {
+      url = "https://raw.githubusercontent.com/HakanSeven12/OpenCADStudio/88d6a5ec0874fa7a2e6769dec0586b5c507c5553/assets/logo.svg";
+      hash = "sha256-qDFkoFmO9Y+cftpUcPzs1d+GurHZub7VaKLcq8m4fMg=";
     };
-  };
 
   home.file.".local/libexec/opencadstudio-appimage" = {
     source = ./scripts/opencadstudio-appimage;
@@ -3653,12 +3659,14 @@ in
     mkdir -p "$HOME/Pictures/Screenshots"
   '';
 
-  home.activation.refreshWalkerIcons = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+  home.activation.refreshWalkerIcons = lib.hm.dag.entryAfter [ "linkGeneration" "installPackages" ] ''
     if [ -d "$HOME/.local/share/icons/hicolor" ]; then
       ${pkgs.gtk3}/bin/gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" || true
     fi
-    if ${pkgs.systemd}/bin/systemctl --user is-active walker >/dev/null 2>&1; then
-      ${pkgs.systemd}/bin/systemctl --user restart walker || true
+    user_runtime_dir="/run/user/$(${pkgs.coreutils}/bin/id -u)"
+    if [ -S "$user_runtime_dir/bus" ]; then
+      XDG_RUNTIME_DIR="$user_runtime_dir" ${pkgs.systemd}/bin/systemctl --user try-restart elephant || true
+      XDG_RUNTIME_DIR="$user_runtime_dir" ${pkgs.systemd}/bin/systemctl --user try-restart walker || true
     fi
   '';
   # ── Nemo "Open Terminal Here" ──
