@@ -50,6 +50,27 @@ in
     terminal = false;
   };
 
+  # User-level entry with the same desktop ID as the system package. The
+  # launcher offers the latest official AppImage release when available.
+  xdg.desktopEntries."io.github.HakanSeven12.OpenCadStudio" = {
+    name = "Open CAD Studio";
+    exec = "/home/thinky/.local/libexec/opencadstudio-appimage/launch %F";
+    icon = "io.github.HakanSeven12.OpenCadStudio";
+    comment = "A CAD application for 2D/3D drawing and design";
+    categories = [ "Graphics" "Engineering" ];
+    mimeType = [ "image/vnd.dwg" "image/vnd.dxf" ];
+    terminal = false;
+    settings = {
+      StartupWMClass = "io.github.HakanSeven12.OpenCadStudio";
+      Keywords = "CAD;DWG;DXF;Drawing;Design;Engineering;2D;3D;";
+    };
+  };
+
+  home.file.".local/libexec/opencadstudio-appimage" = {
+    source = ./scripts/opencadstudio-appimage;
+    recursive = true;
+  };
+
   home.file.".local/share/icons/hicolor/256x256/apps/euresys-studio.png" = {
     source = ./assets/euresys-studio.png;
   };

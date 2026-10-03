@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/opencadstudio-appimage"
+release_api="https://api.github.com/repos/HakanSeven12/OpenCADStudio/releases/latest"
+
+latest_release() {
+  local release parsed tag url digest sha
+  release="$(curl --fail --silent --show-error --location \
+    --connect-timeout 5 --max-time 12 \
+    --header 'Accept: application/vnd.github+json' \
+    --header 'User-Agent: OpenCADStudio-NixOS-AppImage-Updater' \
+    "${release_api}")" || return 1
+  parsed="$(jq -er '
+      . as $release
+      | ($release.assets | map(select(.name | endswith("-linux-x86_64.AppImage"))) | first) as $asset
+      | select($release.tag_name and $asset.browser_download_url and $asset.digest)
+      | [$release.tag_name, $asset.browser_download_url, $asset.digest] | @tsv
+    ' <<<"${release}")" || return 1
+  IFS=$'\t' read -r tag url digest <<<"${parsed}"
+  sha="${digest#sha256:}"
+  if ! [[ "${tag}" =~ ^[A-Za-z0-9._-]+$ &&
+          "${url}" == "https://github.com/HakanSeven12/OpenCADStudio/releases/download/${tag}/OpenCADStudio-${tag}-linux-x86_64.AppImage" &&
+          "${digest}" == sha256:* && "${sha}" =~ ^[a-f0-9]{64}$ ]]; then
+    printf 'Invalid AppImage release metadata.\n' >&2
+    return 1
+  fi
+  printf '%s\t%s\t%s\n' "${tag}" "${url}" "${sha}"
+}
+
+if [[ "${1:-}" == --latest ]]; then
+  latest_release
+  exit
+fi
+
+if [[ $# -ne 0 ]]; then
+  printf 'Usage: %s [--latest]\n' "$0" >&2
+  exit 2
+fi
+
+release="$(latest_release)"
+IFS=$'\t' read -r tag url sha <<<"${release}"
+mkdir -p -- "${app_dir}"
+exec 9>"${app_dir}/.update.lock"
+flock 9
+file_name="OpenCADStudio-${tag}-linux-x86_64.AppImage"
+target="${app_dir}/${file_name}"
+
+if [[ ! -f "${target}" ]] || \
+   ! printf '%s  %s\n' "${sha}" "${target}" | sha256sum --check --status; then
+  temporary="$(mktemp "${app_dir}/.download.XXXXXXXX")"
+  trap 'rm -f -- "${temporary}"' EXIT
+  curl --fail --show-error --location --retry 2 \
+    --connect-timeout 10 --max-time 300 \
+    --output "${temporary}" "${url}"
+  printf '%s  %s\n' "${sha}" "${temporary}" | sha256sum --check
+  chmod 755 "${temporary}"
+  mv -f -- "${temporary}" "${target}"
+  trap - EXIT
+fi
+
+ln -sfn -- "${file_name}" "${app_dir}/.current.AppImage.new"
+mv -Tf -- "${app_dir}/.current.AppImage.new" "${app_dir}/current.AppImage"
+printf '%s\n' "${tag}" >"${app_dir}/.version.new"
+mv -f -- "${app_dir}/.version.new" "${app_dir}/version"
+printf 'Open CAD Studio %s is ready at %s\n' "${tag}" "${target}"

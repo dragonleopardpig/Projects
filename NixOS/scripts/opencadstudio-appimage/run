@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/opencadstudio-appimage"
+appimage="${app_dir}/current.AppImage"
+
+if [[ -f "${appimage}" ]]; then
+  if ! command -v appimage-run >/dev/null 2>&1; then
+    zenity --error --title="Open CAD Studio" \
+      --text="The AppImage is downloaded, but NixOS AppImage support is not active yet. Opening the system version." \
+      --width=460 || true
+  else
+    exec appimage-run "${appimage}" "$@"
+  fi
+fi
+
+exec /run/current-system/sw/bin/OpenCADStudio "$@"

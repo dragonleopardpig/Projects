@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+app_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/opencadstudio-appimage"
+state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/opencadstudio-appimage"
+installed_tag="$(cat -- "${app_dir}/version" 2>/dev/null || true)"
+latest="$("${script_dir}/update" --latest 2>/dev/null || true)"
+
+if [[ -n "${latest}" ]]; then
+  IFS=$'\t' read -r latest_tag _url _sha <<<"${latest}"
+  if [[ "${latest_tag}" != "${installed_tag}" ||
+        ! -f "${app_dir}/current.AppImage" ]]; then
+    if zenity --question --title="Open CAD Studio update available" \
+      --text="Open CAD Studio ${latest_tag} is available. Download and open it now?" \
+      --ok-label="Download and open" --cancel-label="Open current version" \
+      --width=460; then
+      mkdir -p -- "${state_dir}"
+      log_file="$(mktemp "${state_dir}/update.XXXXXXXX")"
+      status_file="$(mktemp "${state_dir}/status.XXXXXXXX")"
+      {
+        if "${script_dir}/update" >"${log_file}" 2>&1; then
+          printf 'ok\n' >"${status_file}"
+        else
+          printf 'failed\n' >"${status_file}"
+        fi
+        printf '100\n'
+      } | zenity --progress --pulsate --auto-close --no-cancel \
+        --title="Downloading Open CAD Studio" \
+        --text="Downloading and verifying the official AppImage…" \
+        --width=460 >/dev/null || true
+
+      status="$(cat -- "${status_file}")"
+      rm -f -- "${status_file}"
+      if [[ "${status}" != ok ]]; then
+        zenity --error --title="Open CAD Studio update failed" \
+          --text="The download failed. Opening the current version. Log: ${log_file}" \
+          --width=500 || true
+      fi
+    fi
+  fi
+fi
+
+exec "${script_dir}/run" "$@"

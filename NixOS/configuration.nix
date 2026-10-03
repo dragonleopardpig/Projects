@@ -530,6 +530,8 @@ in
     xwayland.enable = true; # Xwayland can be disabled.
   };
 
+  programs.appimage.enable = true;
+
   xdg.portal = {
     enable = true;
     xdgOpenUsePortal = false;
