@@ -467,6 +467,11 @@ in
     # Ctrl +/- changes the note's text size and works while typing, where you
     # can see the result; a bare +/- on a selected note changes its border width.
     # Double-click edits; drag moves; dragging a selected edge/corner resizes.
+    # Restore the note just deleted. Sioyek binds nothing to Ctrl+Z and has no
+    # undo for annotations -- only freehand strokes and marked data have one --
+    # so deleting a note used to be final.
+    undo_delete_annotation <C-z>
+
     add_freetext_bookmark i
     # Shrink the box to the text it holds. Sized to the drawn ink, not the line
     # box, so a single character ends up centred in its own box -- the resize
