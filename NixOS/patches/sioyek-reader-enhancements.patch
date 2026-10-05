@@ -355,16 +355,36 @@ diff -ruN baseA/pdf_viewer/config.cpp ptree/pdf_viewer/config.cpp
 diff -ruN baseA/pdf_viewer/database.cpp ptree/pdf_viewer/database.cpp
 --- a/pdf_viewer/database.cpp
 +++ b/pdf_viewer/database.cpp
-@@ -241,7 +241,7 @@
+@@ -238,10 +238,27 @@
+     return 0;
+ }
+ 
++// The column list and the callback's arity have to agree. They sat in two
++// places hundreds of lines apart, and adding a column to one of them aborted
++// the process on the first document that had a bookmark. Derive the count from
++// the list so they cannot drift again.
++static constexpr const char* BOOKMARK_SELECT_COLUMNS =
++    "desc, offset_y, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, uuid, creation_time, modification_time, arrow_json, border_width, text_offset_x, text_offset_y";
++
++static constexpr int count_select_columns(const char* columns) {
++    int count = 1;
++    for (; *columns; ++columns) {
++        if (*columns == ',') count++;
++    }
++    return count;
++}
++
++static constexpr int BOOKMARK_SELECT_COLUMN_COUNT = count_select_columns(BOOKMARK_SELECT_COLUMNS);
++
  static int bookmark_select_callback(void* res_vector, int argc, char** argv, char** col_name) {
  
      std::vector<BookMark>* res = (std::vector<BookMark>*)res_vector;
 -    assert(argc == 14);
-+    assert(argc == 16);
++    assert(argc == BOOKMARK_SELECT_COLUMN_COUNT);
  
      std::wstring desc = utf8_decode(argv[0]);
      float offset_y = -1;
-@@ -308,6 +308,10 @@
+@@ -308,6 +325,10 @@
      bm.color[2] = color_blue;
      bm.font_size = font_size;
      bm.font_face = font_face;
@@ -375,7 +395,7 @@ diff -ruN baseA/pdf_viewer/database.cpp ptree/pdf_viewer/database.cpp
  
      res->push_back(bm);
      return 0;
-@@ -579,6 +583,10 @@
+@@ -579,6 +600,10 @@
          "color_green real DEFAULT 0,"\
          "color_blue real DEFAULT 0,"\
          "font_face TEXT,"\
@@ -386,7 +406,7 @@ diff -ruN baseA/pdf_viewer/database.cpp ptree/pdf_viewer/database.cpp
          "begin_x real DEFAULT -1,"\
          "begin_y real DEFAULT -1,"\
          "end_x real DEFAULT -1,"\
-@@ -793,7 +801,7 @@
+@@ -793,7 +818,7 @@
  bool DatabaseManager::insert_bookmark_freetext(const std::string& document_path, const BookMark& bm) {
  
      std::wstringstream ss;
@@ -395,7 +415,7 @@ diff -ruN baseA/pdf_viewer/database.cpp ptree/pdf_viewer/database.cpp
          << esc(document_path) << "', '"
          << esc(bm.description) << "', "
          << bm.begin_x << " , "
-@@ -804,7 +812,11 @@
+@@ -804,7 +829,11 @@
          << bm.color[1] << ", "
          << bm.color[2] << ", "
          << bm.font_size << ", '"
@@ -408,16 +428,16 @@ diff -ruN baseA/pdf_viewer/database.cpp ptree/pdf_viewer/database.cpp
          << esc(bm.uuid) << "', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);";
      char* error_message = nullptr;
  
-@@ -1105,7 +1117,7 @@
+@@ -1105,7 +1134,7 @@
  
  bool DatabaseManager::select_bookmark(const std::string& book_path, std::vector<BookMark>& out_result) {
      std::wstringstream ss;
 -    ss << "select desc, offset_y, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, uuid, creation_time, modification_time from bookmarks where document_path='" << esc(book_path) << "';";
-+    ss << "select desc, offset_y, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, uuid, creation_time, modification_time, arrow_json, border_width, text_offset_x, text_offset_y from bookmarks where document_path='" << esc(book_path) << "';";
++    ss << "select " << utf8_decode(BOOKMARK_SELECT_COLUMNS) << " from bookmarks where document_path='" << esc(book_path) << "';";
  
      char* error_message = nullptr;
      int error_code = sqlite3_exec(global_db, utf8_encode(ss.str()).c_str(), bookmark_select_callback, &out_result, &error_message);
-@@ -1542,7 +1554,15 @@
+@@ -1542,7 +1571,15 @@
          }
  
          for (const auto& bm : new_bookmarks) {
@@ -434,7 +454,7 @@ diff -ruN baseA/pdf_viewer/database.cpp ptree/pdf_viewer/database.cpp
          }
  
          for (const auto& mark : new_marks) {
-@@ -1676,6 +1696,27 @@
+@@ -1676,6 +1713,27 @@
  
          set_version();
      }
@@ -462,7 +482,7 @@ diff -ruN baseA/pdf_viewer/database.cpp ptree/pdf_viewer/database.cpp
  }
  
  bool DatabaseManager::run_schema_query(const char* query) {
-@@ -1888,6 +1929,28 @@
+@@ -1888,6 +1946,28 @@
              {"modification_time", "CURRENT_TIMESTAMP"},
          });
  }
