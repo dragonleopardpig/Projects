@@ -2276,8 +2276,8 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +            int dx = pos.x - tip.x;
 +            int dy = pos.y - tip.y;
 +            if (dx * dx + dy * dy <= 100) return index;
-         }
-     }
++        }
++    }
 +    return -1;
 +}
 +
@@ -2304,13 +2304,13 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +        case NoteArrowDragPart::Control1: arrow.control1 = pos; break;
 +        case NoteArrowDragPart::Control2: arrow.control2 = pos; break;
 +        case NoteArrowDragPart::PlacingTip: break;
-+        }
-+    }
+         }
+     }
 +    validate_render();
  }
  
  void MainWidget::change_selected_highlight_text_annot(const std::wstring& new_text) {
-@@ -8636,14 +9067,317 @@
+@@ -8636,16 +9067,319 @@
      }
  }
  
@@ -2333,7 +2333,11 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +    }
 +    invalidate_render();
 +}
-+
+ 
+-    if (selected_bookmark_index != -1) {
+-        BookMark& selected_bookmark = doc()->get_bookmarks()[selected_bookmark_index];
+-        if (selected_bookmark.font_size != -1) {
+-            selected_bookmark.font_size = FREETEXT_BOOKMARK_FONT_SIZE;
 +bool MainWidget::has_selected_freetext_note() {
 +    if (!doc() || !main_document_view) return false;
 +    if (selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return false;
@@ -2367,11 +2371,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +    style.border_width = bookmark.border_width;
 +    for (int i = 0; i < 3; i++) style.color[i] = bookmark.color[i];
 +    copied_note_style = style;
- 
--    if (selected_bookmark_index != -1) {
--        BookMark& selected_bookmark = doc()->get_bookmarks()[selected_bookmark_index];
--        if (selected_bookmark.font_size != -1) {
--            selected_bookmark.font_size = FREETEXT_BOOKMARK_FONT_SIZE;
++
 +    if (cut) {
 +        handle_delete_selected_bookmark();
 +    }
@@ -2417,7 +2417,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +    if (index >= 0) {
 +        if (copied_note_style) {
 +            doc()->update_bookmark_border_width(index, copied_note_style->border_width);
-         }
++        }
 +        set_selected_highlight_index(-1);
 +        set_selected_bookmark_index(index);
 +    }
@@ -2447,7 +2447,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +    // Same rule as the font size: held in memory while the editor is open.
 +    if (!freetext_edit_appearance) {
 +        doc()->update_bookmark_border_width(selected_bookmark_index, width);
-     }
++    }
 +    invalidate_render();
 +}
 +
@@ -2461,7 +2461,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +        if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter) && !(key->modifiers() & Qt::ShiftModifier)) {
 +            finish_freetext_edit();
 +            return true;
-+        }
+         }
 +        if (key->modifiers() & (Qt::ControlModifier | Qt::MetaModifier)) {
 +            if ((key->modifiers() & Qt::ShiftModifier) && key->key() == Qt::Key_C) {
 +                // The color letter is read by the main widget's key handling, so
@@ -2614,9 +2614,9 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +        bookmark.color[2] != appearance.color[2]) {
 +        float color[3] = { bookmark.color[0], bookmark.color[1], bookmark.color[2] };
 +        doc()->update_bookmark_color(index, color);
-+    }
-+}
-+
+     }
+ }
+ 
 +int MainWidget::freetext_resize_edges_at(WindowPos pos) {
 +    if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return 0;
 +    const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
@@ -2630,9 +2630,11 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +    if (std::abs(pos.y - rect.y0) <= margin) edges |= 4;
 +    else if (std::abs(pos.y - rect.y1) <= margin) edges |= 8;
 +    return edges;
- }
- 
++}
++
  TextToSpeechHandler* MainWidget::get_tts() {
+     if (tts) return tts;
+ 
 @@ -8788,8 +9522,21 @@
  }
  
@@ -2655,7 +2657,58 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  }
  
  void MainWidget::handle_portal_move_finish() {
-@@ -8805,11 +9552,68 @@
+@@ -8799,17 +9546,122 @@
+     }
+ }
+ 
++// How far the drawn ink sits inside the text's layout box, in absolute document
++// units. A line box runs from the ascent line to the descent line, but a
++// lowercase "x" only inks the x-height band, so clamping a resize at the layout
++// box leaves a conspicuous gap above the glyph before the text starts moving --
++// far larger than the gap on the left, where the layout box and the ink nearly
++// coincide. Measuring the ink lets the edge come up to the glyph itself.
++void MainWidget::note_text_ink_inset(const BookMark& bookmark, float* out_top, float* out_left) {
++    *out_top = 0.0f;
++    *out_left = 0.0f;
++    const float zoom = main_document_view ? main_document_view->get_zoom_level() : 1.0f;
++    if (zoom <= 0.0f) return;
++
++    // The same font the renderer builds for a note.
++    QFont font = this->font();
++    const float size = bookmark.font_size == -1 ? FREETEXT_BOOKMARK_FONT_SIZE : bookmark.font_size;
++    font.setPointSizeF(size * zoom * 0.75);
++    const QFontMetricsF metrics(font);
++
++    const QString text = QString::fromStdWString(bookmark.description);
++    const QStringList lines = text.split('\n');
++
++    // The top inset comes from the first line, which is what the top edge meets.
++    qreal ink_top = metrics.ascent();
++    if (!lines.isEmpty() && !lines.front().trimmed().isEmpty()) {
++        const QRectF tight = metrics.tightBoundingRect(lines.front());
++        // tight.top() is measured from the baseline and is negative above it.
++        ink_top = metrics.ascent() + tight.top();
++    }
++
++    // The left inset is the nearest any line's ink comes to the layout edge.
++    qreal ink_left = 0.0;
++    bool have_left = false;
++    for (const QString& line : lines) {
++        if (line.trimmed().isEmpty()) continue;
++        const qreal left = metrics.tightBoundingRect(line).left();
++        ink_left = have_left ? std::min(ink_left, left) : left;
++        have_left = true;
++    }
++    if (!have_left) ink_left = 0.0;
++
++    // render_note_text insets the text by 5 window pixels on each side.
++    *out_top = static_cast<float>((ink_top + 5.0) / zoom);
++    *out_left = static_cast<float>((ink_left + 5.0) / zoom);
++}
++
+ void MainWidget::handle_bookmark_move() {
+     AbsoluteDocumentPos current_mouse_abspos = get_cursor_abspos();
+ 
      float diff_x = current_mouse_abspos.x - bookmark_move_data->initial_mouse_position.x;
      float diff_y = current_mouse_abspos.y - bookmark_move_data->initial_mouse_position.y;
  
@@ -2686,13 +2739,16 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
 +        // keeps the text on the same spot on the page whichever handle is used.
 +        // Clamped at zero: once the edge catches up with the text, the text has
 +        // to move rather than spill outside the box.
++        float ink_top = 0.0f;
++        float ink_left = 0.0f;
++        note_text_ink_inset(bookmark, &ink_top, &ink_left);
 +        if (edges & 1) {
 +            const float moved = bookmark.begin_x - bookmark_move_data->initial_begin_position.x;
-+            bookmark.text_offset_x = std::max(0.0f, bookmark_move_data->initial_text_offset_x - moved);
++            bookmark.text_offset_x = std::max(-ink_left, bookmark_move_data->initial_text_offset_x - moved);
 +        }
 +        if (edges & 4) {
 +            const float moved = bookmark.begin_y - bookmark_move_data->initial_begin_position.y;
-+            bookmark.text_offset_y = std::max(0.0f, bookmark_move_data->initial_text_offset_y - moved);
++            bookmark.text_offset_y = std::max(-ink_top, bookmark_move_data->initial_text_offset_y - moved);
 +        }
 +        if (bookmark.arrows.size() == bookmark_move_data->initial_arrows.size()) {
 +            BookMark original = bookmark;
@@ -2724,7 +2780,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (bookmark.end_y >= 0) {
          bookmark.end_x = bookmark_move_data->initial_end_position.x + diff_x;
          bookmark.end_y = bookmark_move_data->initial_end_position.y + diff_y;
-@@ -8842,6 +9646,14 @@
+@@ -8842,6 +9694,14 @@
  }
  
  void MainWidget::begin_bookmark_move(int index, AbsoluteDocumentPos begin_cursor_pos) {
@@ -2739,7 +2795,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      BookmarkMoveData move_data;
      move_data.index = index;
  
-@@ -8849,8 +9661,11 @@
+@@ -8849,8 +9709,11 @@
      move_data.initial_begin_position.y = doc()->get_bookmarks()[index].begin_y;
      move_data.initial_end_position.x = doc()->get_bookmarks()[index].end_x;
      move_data.initial_end_position.y = doc()->get_bookmarks()[index].end_y;
@@ -2751,7 +2807,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      bookmark_move_data = move_data;
  }
  
-@@ -8974,6 +9789,70 @@
+@@ -8974,6 +9837,70 @@
      show_current_widget();
  }
  
@@ -2822,7 +2878,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  TouchTextSelectionButtons* MainWidget::get_text_selection_buttons() {
      if (text_selection_buttons_ == nullptr) {
          text_selection_buttons_ = new TouchTextSelectionButtons(this);
-@@ -10258,6 +11137,10 @@
+@@ -10258,6 +11185,10 @@
      opengl_widget->goto_search_result(nth_next_result, overview);
  }
  
@@ -2833,7 +2889,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
  void MainWidget::set_should_highlight_words(bool should_highlight_words) {
      opengl_widget->set_should_highlight_words(should_highlight_words);
  }
-@@ -10354,6 +11237,12 @@
+@@ -10354,6 +11285,12 @@
  }
  
  void MainWidget::hide_command_line_edit(){
@@ -2846,7 +2902,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      text_command_line_edit->setText("");
      text_command_line_edit_container->hide();
      text_suggestion_index = 0;
-@@ -10716,6 +11605,7 @@
+@@ -10716,6 +11653,7 @@
  }
  
  void MainWidget::toggle_scratchpad_mode(){
@@ -2854,7 +2910,7 @@ diff -ruN baseA/pdf_viewer/main_widget.cpp ptree/pdf_viewer/main_widget.cpp
      if (opengl_widget->get_scratchpad()) {
          opengl_widget->set_scratchpad(nullptr);
      }
-@@ -10892,11 +11782,19 @@
+@@ -10892,11 +11830,19 @@
  }
  
  void MainWidget::set_selected_highlight_index(int index) {
@@ -2983,7 +3039,7 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
      QLabel* status_label_left = nullptr;
      QLabel* status_label_right = nullptr;
      QWidget* status_label = nullptr;
-@@ -441,11 +509,31 @@
+@@ -441,11 +509,32 @@
      void set_main_document_view_state(DocumentViewState new_view_state);
      void handle_click(WindowPos pos);
  
@@ -3011,12 +3067,13 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
 +    void begin_note_arrow();
 +    void delete_selected_note_arrow();
 +    int note_arrow_handle_at(WindowPos pos, int* out_arrow_index = nullptr);
++    void note_text_ink_inset(const BookMark& bookmark, float* out_top, float* out_left);
 +    int note_arrow_tip_at(WindowPos pos);
 +    void move_note_arrow_handle(AbsoluteDocumentPos pos);
      void change_selected_highlight_text_annot(const std::wstring& new_text);
      char get_current_selected_highlight_type();
      void show_textbar(const std::wstring& command_name, const std::wstring& initial_value = L"");
-@@ -682,6 +770,7 @@
+@@ -682,6 +771,7 @@
      void hande_turn_off_all_drawings();
      void handle_toggle_drawing_mask(char symbol);
      void show_command_palette();
@@ -3024,7 +3081,7 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
  
      DocumentPos get_document_pos_under_window_pos(WindowPos window_pos);
      AbsoluteDocumentPos get_absolute_document_pos_under_window_pos(WindowPos window_pos);
-@@ -757,6 +846,9 @@
+@@ -757,6 +847,9 @@
      void handle_drawing_move(QPoint pos, float pressure);
      void start_drawing();
      void finish_drawing(QPoint pos);
@@ -3034,7 +3091,7 @@ diff -ruN baseA/pdf_viewer/main_widget.h ptree/pdf_viewer/main_widget.h
      void handle_pen_drawing_event(QTabletEvent* te);
      void select_freehand_drawings(AbsoluteRect rect);
      void delete_freehand_drawings(AbsoluteRect rect);
-@@ -939,6 +1031,7 @@
+@@ -939,6 +1032,7 @@
      void add_password(std::wstring path, std::string password);
      void handle_fit_to_page_width(bool smart);
      int current_document_page_count();
