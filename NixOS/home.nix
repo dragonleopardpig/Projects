@@ -464,15 +464,20 @@ in
     # Enter or clicking elsewhere saves it; empty text leaves a rectangle box.
     # Click a note/box, then h followed by a-z to recolor it, a to place an arrow,
     # d n or Delete to delete it, or d a to delete only its arrow.
-    # +/- changes selected note text size; Ctrl+/- changes its border width.
+    # Ctrl +/- changes the note's text size and works while typing, where you
+    # can see the result; a bare +/- on a selected note changes its border width.
     # Double-click edits; drag moves; dragging a selected edge/corner resizes.
     add_freetext_bookmark i
+    # Shrink the box to the text it holds. Sized to the drawn ink, not the line
+    # box, so a single character ends up centred in its own box -- the resize
+    # floor alone cannot close that gap, a line being far taller than a glyph.
+    fit_note_to_text w
     add_note_arrow a
     delete_note_arrow da
     delete_selected_bookmark dn
-    increase_freetext_border_width <C-=>
-    increase_freetext_border_width <C-+>
-    decrease_freetext_border_width <C-->
+    increase_freetext_font_size <C-=>
+    increase_freetext_font_size <C-+>
+    decrease_freetext_font_size <C-->
 
     # Area snapshot: drag a box, get a cropped PNG. Sioyek ships no such command,
     # so _snip is defined in prefs_user.config below.
@@ -2355,39 +2360,21 @@ in
             else
               echo "Warning: Could not parse NASA APOD image URL"
             fi
-          else
-            echo "NASA APOD is a video today; attempting to download"
-            NASA_URL=$(echo "$NASA_JSON" | jq -r '.url // empty')
+          elif [ "$MEDIA_TYPE" = "video" ]; then
+            echo "NASA APOD is a video today; downloading its thumbnail only"
             NASA_THUMB=$(echo "$NASA_JSON" | jq -r '.thumbnail_url // empty')
-            NASA_VIDEO_FILE="$WALLPAPER_DIR/nasa-apod-$NASA_DATE.mp4"
-            if command -v yt-dlp >/dev/null 2>&1 && [ -n "$NASA_URL" ]; then
-              if [ ! -f "$NASA_VIDEO_FILE" ]; then
-                if yt-dlp -o "$NASA_VIDEO_FILE" "$NASA_URL"; then
-                  echo "Saved: $NASA_VIDEO_FILE"
-                else
-                  echo "Warning: Failed to download NASA APOD video from $NASA_URL"
-                  rm -f "$NASA_VIDEO_FILE"
-                  NASA_URL=""
-                fi
+            if [ -n "$NASA_THUMB" ]; then
+              if curl -sf --retry 2 --retry-delay 5 "$NASA_THUMB" -o "$NASA_FILE"; then
+                echo "Saved thumbnail: $NASA_FILE"
               else
-                echo "NASA APOD video already exists: $NASA_VIDEO_FILE"
+                echo "Warning: Failed to download NASA APOD thumbnail"
+                rm -f "$NASA_FILE"
               fi
+            else
+              echo "Skipping NASA APOD video: no thumbnail available"
             fi
-            if [ -n "$NASA_THUMB" ] && [ -z "$NASA_URL" ]; then
-              NASA_FILE="$WALLPAPER_DIR/nasa-apod-$NASA_DATE.jpg"
-              if [ ! -f "$NASA_FILE" ]; then
-                if curl -sf --retry 2 --retry-delay 5 "$NASA_THUMB" -o "$NASA_FILE"; then
-                  echo "Saved thumbnail: $NASA_FILE"
-                else
-                  echo "Warning: Failed to download NASA APOD thumbnail"
-                  rm -f "$NASA_FILE"
-                fi
-              else
-                echo "NASA APOD thumbnail already exists: $NASA_FILE"
-              fi
-            elif [ -z "$NASA_URL" ]; then
-              echo "Warning: No video URL or thumbnail available for NASA APOD"
-            fi
+          else
+            echo "Skipping NASA APOD media type: $MEDIA_TYPE"
           fi
         else
           echo "NASA APOD already exists: $NASA_FILE"
