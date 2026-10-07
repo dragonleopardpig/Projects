@@ -464,6 +464,8 @@ in
     # Enter or clicking elsewhere saves it; empty text leaves a rectangle box.
     # Click a note/box, then h followed by a-z to recolor it, a to place an arrow,
     # d n or Delete to delete it, or d a to delete only its arrow.
+    # Copying a note remembers its size, color and border, so pasting reproduces
+    # it -- including an empty one, which is how a box gets drawn around a figure.
     # Ctrl +/- changes the note's text size and works while typing, where you
     # can see the result; a bare +/- on a selected note changes its border width.
     # Double-click edits; drag moves; dragging a selected edge/corner resizes.
@@ -478,6 +480,12 @@ in
     # floor alone cannot close that gap, a line being far taller than a glyph.
     fit_note_to_text w
     add_note_arrow a
+    # An arrow with no note on it: press, then drag from where it should start
+    # to what it should point at. a does this too when no note is selected, so
+    # the one key points at something either way. Click the curve to pick an
+    # arrow out, double-click it to straighten it or curve it again, and d a to
+    # remove it -- the last arrow takes its invisible note with it.
+    add_free_arrow A
     delete_note_arrow da
     delete_selected_bookmark dn
     increase_freetext_font_size <C-=>
