@@ -55,6 +55,7 @@ window.Bar {
     .ScrambleStatus.ok { color: #4ade80; }
     .ScrambleStatus.busy, .ScrambleStatus.pending { color: #ffd700; }
     .ScrambleStatus.error { color: #ff5555; }
+    .ScrambleStatus .health { padding: 0 2px 0 0; font-size: 12px; }
     .PrintQueue        { color: #00bfff; font-weight: bold; }
     .PrintQueue:hover  { color: #ff69b4; }
 

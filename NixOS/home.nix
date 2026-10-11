@@ -377,6 +377,7 @@ in
     mkdir -p $out/lib
     cat > $out/lib/paths.ts <<'TS'
     export const HOST = "${osConfig.networking.hostName}";
+    export const SCRAMBLE_ICON = "${./ags/assets/scramble-desktop.png}";
     // Per-monitor display scaling (Windows-style). Absolute, so it does not
     // depend on the bar inheriting ~/.local/bin on PATH.
     export const DISPLAY_SCALE_CMD = "${config.home.homeDirectory}/.local/bin/display-scale";

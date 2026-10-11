@@ -1,5 +1,6 @@
 import { Variable, exec } from "astal"
-import { ICON } from "../lib/icons"
+import Gio from "gi://Gio"
+import { SCRAMBLE_ICON } from "../lib/paths"
 
 type Status = { state: string; message: string }
 
@@ -11,12 +12,13 @@ const status = Variable<Status>({ state: "pending", message: "Checking encrypted
         return { state: "error", message: "Encrypted sync status unavailable" }
     }
 })
+const scrambleIcon = Gio.FileIcon.new(Gio.File.new_for_path(SCRAMBLE_ICON))
 
 export default function ScrambleStatus() {
     return <box
         className={status().as(s => `ScrambleStatus ${s.state}`)}
-        tooltipText={status().as(s => s.message)}>
-        <label label={status().as(s =>
-            `Sync ${s.state === "ok" ? ICON.check : s.state === "busy" ? ICON.refresh : ICON.warning}`)} />
+        tooltipText={status().as(s => `Scramble Cloud — ${s.message}`)}>
+        <icon gicon={scrambleIcon} pixelSize={20} />
+        <label className="health" label="●" />
     </box>
 }
