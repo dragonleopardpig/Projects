@@ -3646,6 +3646,7 @@ in
 
   imports = [
     inputs.walker.homeManagerModules.default
+    ./modules/scramble-sync-home.nix
   ];
 
   programs.walker = {

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+if [[ $# -ne 1 ]]; then
+    echo 'Usage: scramble-transfer-crypt SSH_HOST' >&2
+    exit 2
+fi
+host=$1
+temp=$(mktemp "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/scramble-crypt.XXXXXXXX")
+trap 'rm -f "$temp"' EXIT
+
+python3 - "$temp" <<'PY'
+from configparser import RawConfigParser
+from pathlib import Path
+import os
+import sys
+
+source = RawConfigParser()
+source.read(Path.home() / '.config/rclone/rclone.conf')
+if not source.has_section('scramble_private'):
+    raise SystemExit('The local scramble_private crypt remote is missing')
+if source.get('scramble_private', 'remote') != 'scramble_drive:EncryptedSync':
+    raise SystemExit('Unexpected crypt destination; refusing to transfer keys')
+dest = RawConfigParser()
+dest.add_section('scramble_private')
+for key, value in source.items('scramble_private'):
+    dest.set('scramble_private', key, value)
+with open(sys.argv[1], 'w') as file:
+    dest.write(file)
+os.chmod(sys.argv[1], 0o600)
+PY
+
+ssh -o StrictHostKeyChecking=yes "$host" 'umask 077; mkdir -p ~/.config/rclone'
+scp -o StrictHostKeyChecking=yes -p "$temp" "$host":.config/rclone/scramble-private-import.conf
+ssh -o StrictHostKeyChecking=yes "$host" 'chmod 600 ~/.config/rclone/scramble-private-import.conf'
+echo "Transferred only the encrypted-folder key to $host. Run scramble-sync-init there."

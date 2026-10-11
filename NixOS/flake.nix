@@ -564,7 +564,7 @@
       # Standalone home-manager configurations (optional)
       homeConfigurations."thinky@X299" = home-manager.lib.homeManagerConfiguration {
         # you need this line
-        extraSpecialArgs = { inherit inputs; };
+        extraSpecialArgs = { inherit inputs; scrambleHostName = "X299"; };
         modules = [
           ./home.nix
         ];
@@ -572,7 +572,7 @@
 
       homeConfigurations."thinky@M90aPro" = home-manager.lib.homeManagerConfiguration {
         # you need this line
-        extraSpecialArgs = { inherit inputs; };
+        extraSpecialArgs = { inherit inputs; scrambleHostName = "M90aPro"; };
         modules = [
           ./home.nix
         ];

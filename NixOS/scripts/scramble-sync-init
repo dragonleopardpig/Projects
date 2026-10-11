@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+config="$HOME/.config/rclone/rclone.conf"
+export RCLONE_CONFIG="$config"
+import="$HOME/.config/rclone/scramble-private-import.conf"
+ready="$HOME/.config/rclone/scramble-ready"
+local_folder="$HOME/Documents/Scramble Sync"
+
+if [[ -e "$ready" ]]; then
+    echo 'This host is already initialized.'
+    exit 0
+fi
+
+if [[ ! -f "$config" ]]; then
+    echo 'Configure local Scramble WebDAV first with scramble-host-prepare.' >&2
+    exit 1
+fi
+if ! rclone listremotes | grep -qx 'scramble_drive:'; then
+    echo 'The scramble_drive remote is missing; run scramble-host-prepare first.' >&2
+    exit 1
+fi
+
+if [[ -e "$import" ]]; then
+    python3 - "$config" "$import" <<'PY'
+from configparser import RawConfigParser
+from pathlib import Path
+import os
+import sys
+import tempfile
+
+target_path, import_path = map(Path, sys.argv[1:])
+target = RawConfigParser()
+target.read(target_path)
+source = RawConfigParser()
+source.read(import_path)
+if source.sections() != ['scramble_private']:
+    raise SystemExit('The import must contain only the scramble_private section')
+if source.get('scramble_private', 'remote') != 'scramble_drive:EncryptedSync':
+    raise SystemExit('Unexpected crypt destination')
+if target.has_section('scramble_private'):
+    if dict(target.items('scramble_private')) != dict(source.items('scramble_private')):
+        raise SystemExit('A different crypt key already exists; refusing to overwrite it')
+else:
+    target.add_section('scramble_private')
+    for key, value in source.items('scramble_private'):
+        target.set('scramble_private', key, value)
+    fd, temp = tempfile.mkstemp(dir=target_path.parent, prefix='.rclone-conf-')
+    try:
+        with os.fdopen(fd, 'w') as file:
+            target.write(file)
+        os.chmod(temp, 0o600)
+        os.replace(temp, target_path)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+import_path.unlink()
+PY
+fi
+
+rclone lsf scramble_drive: --max-depth 1 >/dev/null
+rclone cat scramble_private:Current/RCLONE_TEST >/dev/null
+
+if [[ -L "$local_folder" ]]; then
+    echo 'The local sync folder is a symlink; refusing to initialize.' >&2
+    exit 1
+fi
+mkdir -p "$local_folder"
+chmod 700 "$local_folder"
+if [[ -n $(find "$local_folder" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
+    echo 'The local sync folder contains files; move them aside before the first sync.' >&2
+    exit 1
+fi
+
+rclone copyto scramble_private:Current/RCLONE_TEST "$local_folder/RCLONE_TEST"
+rclone bisync "$local_folder" scramble_private:Current \
+    --resync --check-access --max-delete 50 \
+    --resilient --recover --max-lock 10m \
+    --compare size,checksum --download-hash --color NEVER
+
+touch "$ready"
+chmod 600 "$ready"
+systemctl --user enable --now scramble-private-sync.timer scramble-private-mount.service
+echo "Ready: $local_folder and $HOME/Scramble Private"

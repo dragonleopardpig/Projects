@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+rclone=@RCLONE@
+export RCLONE_CONFIG="$HOME/.config/rclone/rclone.conf"
+local_folder="$HOME/Documents/Scramble Sync"
+local_history="$HOME/Documents/.Scramble Sync History"
+remote_folder='scramble_private:Current'
+
+# Scramble's WebDAV server is local to this host and may still be starting.
+for attempt in {1..30}; do
+    if "$rclone" lsf scramble_drive: --max-depth 1 >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+"$rclone" lsf scramble_drive: --max-depth 1 >/dev/null
+
+mkdir -p "$local_history"
+stamp="$(date +%Y%m%d-%H%M%S)-$(hostname)"
+
+exec "$rclone" bisync "$local_folder" "$remote_folder" \
+    --check-access \
+    --max-delete 50 \
+    --resilient --recover --max-lock 10m \
+    --compare size,checksum --download-hash \
+    --backup-dir1 "$local_history/$stamp" \
+    --backup-dir2 "scramble_private:History/$stamp" \
+    --color NEVER

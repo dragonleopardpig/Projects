@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+if [[ $(hostname) == M90aPro ]]; then
+    echo 'M90aPro already uses Scramble Desktop. Run this only on another host.' >&2
+    exit 1
+fi
+
+prefix="$HOME/.local/share/scramble-cli"
+cli="$prefix/node_modules/.bin/scramble-cli"
+export RCLONE_CONFIG="$HOME/.config/rclone/rclone.conf"
+mkdir -p "$prefix" "$HOME/.config/rclone"
+npm install --prefix "$prefix" @scramble-cloud/cli@0.0.18 --no-audit --no-fund
+
+"$cli" ls >/dev/null 2>&1 || "$cli" login
+"$cli" ls >/dev/null
+
+python3 - <<'PY'
+from configparser import RawConfigParser
+from pathlib import Path
+import os
+import secrets
+import subprocess
+
+home = Path.home()
+envfile = home / '.config/scramble-webdav.env'
+config = home / '.config/rclone/rclone.conf'
+parser = RawConfigParser()
+parser.read(config)
+if envfile.exists() or parser.has_section('scramble_drive'):
+    if envfile.exists() and parser.has_section('scramble_drive'):
+        print('Existing local WebDAV credentials and rclone remote found.')
+        raise SystemExit(0)
+    raise SystemExit('Only one of the WebDAV credentials and rclone remote exists; inspect both before retrying')
+
+password = secrets.token_urlsafe(48)
+fd = os.open(envfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, 'w') as file:
+    file.write('SCRAMBLE_WEBDAV_PASSWORD=' + password + '\n')
+
+cmd = [
+    'rclone', 'config', 'create', 'scramble_drive', 'webdav',
+    'url', 'http://127.0.0.1:1900/', 'vendor', 'other',
+    'user', 'scramble', 'pass', password, '--obscure',
+]
+result = subprocess.run(cmd, capture_output=True, text=True)
+if result.returncode:
+    envfile.unlink()
+    raise SystemExit('Could not create the local rclone WebDAV remote: ' + result.stderr[:300])
+os.chmod(config, 0o600)
+print('Created local WebDAV credentials and rclone remote.')
+PY
+
+systemctl --user enable --now scramble-webdav.service
+for attempt in {1..30}; do
+    if rclone lsf scramble_drive: --max-depth 1 >/dev/null 2>&1; then
+        echo 'Scramble WebDAV is ready. Transfer the crypt key, then run scramble-sync-init.'
+        exit 0
+    fi
+    sleep 1
+done
+echo 'WebDAV did not become ready. Check: journalctl --user -u scramble-webdav.service -n 50' >&2
+exit 1
