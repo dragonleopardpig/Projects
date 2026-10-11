@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -gt 1 || ( $# -eq 1 && $1 != --brief ) ]]; then
+    echo 'Usage: scramble-sync-status [--brief]' >&2
+    exit 2
+fi
+
+ready="$HOME/.config/rclone/scramble-ready"
+mounted="$HOME/Scramble Private"
+if [[ $(hostname) == M90aPro ]]; then
+    backend=scramble-desktop.service
+    backend_name='Scramble Desktop'
+else
+    backend=scramble-webdav.service
+    backend_name='Scramble CLI WebDAV'
+fi
+
+state=ok
+summary='Encrypted sync is healthy'
+last=''
+
+if [[ ! -f $ready ]]; then
+    state=pending
+    summary='Encrypted sync needs initial setup'
+elif ! systemctl --user is-active --quiet "$backend"; then
+    state=error
+    summary="$backend_name is stopped"
+elif ! systemctl --user is-active --quiet scramble-private-sync.timer; then
+    state=error
+    summary='The five-minute sync timer is stopped'
+elif ! systemctl --user is-active --quiet scramble-private-mount.service || \
+     [[ $(findmnt -n -T "$mounted" -o TARGET 2>/dev/null || true) != "$mounted" ]]; then
+    state=error
+    summary='The decrypted cloud view is not mounted'
+else
+    sync_state=$(systemctl --user show --value -p ActiveState scramble-private-sync.service)
+    result=$(systemctl --user show --value -p Result scramble-private-sync.service)
+    exit_status=$(systemctl --user show --value -p ExecMainStatus scramble-private-sync.service)
+    last_us=$(systemctl --user show --value -p ExecMainExitTimestampMonotonic scramble-private-sync.service)
+
+    if [[ $sync_state == active || $sync_state == activating ]]; then
+        state=busy
+        summary='Encrypted sync is running now'
+    elif [[ $result != success || $exit_status != 0 ]]; then
+        state=error
+        summary='The last encrypted sync failed'
+    elif [[ ! $last_us =~ ^[0-9]+$ || $last_us -eq 0 ]]; then
+        state=pending
+        summary='Waiting for the first encrypted sync'
+    else
+        read -r uptime _ < /proc/uptime
+        age=$(( ${uptime%%.*} - last_us / 1000000 ))
+        if (( age < 0 )); then age=0; fi
+        last="Last successful sync $((age / 60)) minute(s) ago"
+        if (( age > 900 )); then
+            state=error
+            summary='Encrypted sync is overdue by more than 15 minutes'
+        fi
+    fi
+fi
+
+if [[ ${1:-} == --brief ]]; then
+    if [[ -n $last ]]; then
+        printf '%s|%s. %s.\n' "$state" "$summary" "$last"
+    else
+        printf '%s|%s.\n' "$state" "$summary"
+    fi
+else
+    printf 'Scramble: %s\n' "$summary"
+    printf 'Connection: %s (%s)\n' "$backend_name" "$(systemctl --user is-active "$backend" 2>/dev/null || true)"
+    printf 'Sync timer: %s\n' "$(systemctl --user is-active scramble-private-sync.timer 2>/dev/null || true)"
+    printf 'Decrypted view: %s\n' "$(systemctl --user is-active scramble-private-mount.service 2>/dev/null || true)"
+    if [[ -n $last ]]; then printf '%s\n' "$last"; fi
+    printf 'Local folder: %s\n' "$HOME/Documents/Scramble Sync"
+fi

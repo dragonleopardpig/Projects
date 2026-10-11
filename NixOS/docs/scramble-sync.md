@@ -38,6 +38,17 @@ edits and deletions in both directions. Browse `~/Scramble Private` to see
 the cloud copy decrypted. Check the timer with
 `systemctl --user list-timers scramble-private-sync.timer`, or run a sync
 immediately with `systemctl --user start scramble-private-sync.service`.
+The AGS bar shows a green `Sync ✓` when the connection, timer, decrypted mount,
+and last sync are healthy. Yellow means setup is pending or a sync is running;
+red means a service stopped, the last sync failed, or no sync succeeded in 15
+minutes. Hover over it for details, or run `scramble-sync-status` in a terminal.
+The indicator checks local service state; a new network failure appears after
+the next sync attempt.
+
+These are user services. They start automatically when you log in; M90aPro's
+Scramble Desktop and the decrypted mount need a graphical session. They do not
+sync before login. There is no separate crypt daemon: rclone encrypts uploads
+and decrypts downloads as each sync or mount request runs.
 
 If two hosts edit the same file before syncing, rclone may preserve both as
 conflict copies. The timer uses downloaded hashes because this WebDAV

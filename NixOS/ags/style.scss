@@ -52,6 +52,9 @@ window.Bar {
     .Disk           { color: #00ffff; }
     .Temperature    { color: #ff4500; }
     .SystemdFailed  { color: #ff4500; font-weight: bold; }
+    .ScrambleStatus.ok { color: #4ade80; }
+    .ScrambleStatus.busy, .ScrambleStatus.pending { color: #ffd700; }
+    .ScrambleStatus.error { color: #ff5555; }
     .PrintQueue        { color: #00bfff; font-weight: bold; }
     .PrintQueue:hover  { color: #ff69b4; }
 

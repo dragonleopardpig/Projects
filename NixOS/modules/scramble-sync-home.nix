@@ -28,6 +28,10 @@ in
     source = ../scripts/scramble-transfer-crypt;
     executable = true;
   };
+  home.file.".local/bin/scramble-sync-status" = {
+    source = ../scripts/scramble-sync-status;
+    executable = true;
+  };
 
   systemd.user.services.scramble-private-sync = {
     Unit = {

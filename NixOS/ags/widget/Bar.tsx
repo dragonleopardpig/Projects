@@ -11,6 +11,7 @@ import Memory from "./Memory"
 import Disk from "./Disk"
 import Temperature from "./Temperature"
 import SystemdFailed from "./SystemdFailed"
+import ScrambleStatus from "./ScrambleStatus"
 import KeyboardState from "./KeyboardState"
 import Mpris from "./Mpris"
 import Power from "./Power"
@@ -51,6 +52,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor, index: number) {
             <Window />
             <box halign={Gtk.Align.END} spacing={6}>
                 <Network />
+                <ScrambleStatus />
                 <Battery />
                 <KeyboardState />
                 <Weather />
