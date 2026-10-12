@@ -18,7 +18,7 @@ function readStatus(): Status {
 const scrambleIcon = Gio.FileIcon.new(Gio.File.new_for_path(SCRAMBLE_ICON))
 
 export default function ScrambleStatus() {
-    const status = Variable(readStatus()).poll(15000, readStatus)
+    const status = Variable(readStatus()).poll(5000, readStatus)
 
     return <overlay
         halign={Gtk.Align.CENTER}
@@ -26,7 +26,7 @@ export default function ScrambleStatus() {
         className={status().as(currentStatus => `ScrambleStatus ${currentStatus.state}`)}
         tooltipText={status().as(currentStatus => `Scramble Cloud — ${currentStatus.message}\nRight-click for folders, sync, status, and quit`)}
         onDestroy={() => status.drop()}>
-        <icon gicon={scrambleIcon} pixelSize={20} />
-        <label className="health" label="●" halign={Gtk.Align.END} valign={Gtk.Align.END} />
+        <icon className="scramble-icon" gicon={scrambleIcon} />
+        <box className="health" halign={Gtk.Align.END} valign={Gtk.Align.END} />
     </overlay>
 }

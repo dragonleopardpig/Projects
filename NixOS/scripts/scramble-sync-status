@@ -20,6 +20,7 @@ state=ok
 summary='Public and private sync are healthy'
 last=''
 oldest_age=0
+setup_summary=''
 
 if [[ -f $HOME/.local/state/scramble/stopped ]] &&
    ! systemctl --user is-active --quiet scramble-desktop.service &&
@@ -42,17 +43,22 @@ elif [[ $(systemctl --user show --value -p ActiveState scramble-session.service)
 elif ! systemctl --user is-active --quiet "$backend"; then
     state=error
     summary="$backend_name is stopped"
-elif [[ ! -f $ready || ! -f $public_ready ]]; then
-    state=pending
-    if [[ -f $public_ready ]]; then
-        summary='Public sync is initialized; import the existing private crypt key and relaunch Scramble'
-    elif [[ -f $ready ]]; then
-        summary='Private sync is initialized; launch Scramble Desktop to initialize public sync'
-    else
-        summary='Launch Scramble Desktop to initialize public sync; private sync needs its existing crypt key'
-    fi
 else
-    for scope in private public; do
+    if [[ ! -f $ready || ! -f $public_ready ]]; then
+        state=pending
+        if [[ -f $public_ready ]]; then
+            setup_summary='Private sync is not configured; import its existing crypt key and relaunch Scramble'
+        elif [[ -f $ready ]]; then
+            setup_summary='Public sync is not initialized; launch Scramble Desktop to initialize it'
+        else
+            setup_summary='Launch Scramble Desktop to initialize public sync; private sync needs its existing crypt key'
+        fi
+        summary=$setup_summary
+    fi
+    for scope in public private; do
+        if [[ $scope == public && ! -f $public_ready ]] || [[ $scope == private && ! -f $ready ]]; then
+            continue
+        fi
         mounted="$HOME/Scramble ${scope^}"
         if ! systemctl --user is-active --quiet "scramble-$scope-sync.timer"; then
             state=error
@@ -80,9 +86,10 @@ else
             summary="The last $scope sync failed"
             break
         elif [[ ! $last_us =~ ^[0-9]+$ || $last_us -eq 0 ]]; then
-            state=pending
-            summary="Waiting for the first $scope sync"
-            break
+            if [[ $state != busy ]]; then
+                state=pending
+                summary="Waiting for the first $scope sync"
+            fi
         else
             read -r uptime _ < /proc/uptime
             age=$(( ${uptime%%.*} - last_us / 1000000 ))
@@ -96,6 +103,10 @@ else
             fi
         fi
     done
+fi
+
+if [[ -n $setup_summary && $summary != "$setup_summary" ]]; then
+    summary="$summary; $setup_summary"
 fi
 
 if [[ ${1:-} == --brief ]]; then

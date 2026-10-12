@@ -98,6 +98,10 @@ Yellow means setup is
 pending or a sync is running; red means a service stopped, the last sync failed,
 or no sync succeeded in 15 minutes. Hover over it for details, or run
 `scramble-sync-status` in a terminal.
+The dot refreshes every five seconds. It stays yellow until both public and
+private sync are initialized; a missing private crypt key does not mean the
+public sync is broken. Failures in an initialized sync still show red, even
+while the other folder's setup is pending.
 The indicator checks local service state; a new network failure appears after
 the next sync attempt.
 
