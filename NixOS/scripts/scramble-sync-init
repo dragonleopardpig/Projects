@@ -107,6 +107,8 @@ if [[ $scope != public && ! -e "$ready" ]]; then
     rclone bisync "$local_folder" scramble_private:Current \
         --resync --check-access --max-delete 50 \
         --resilient --recover --max-lock 10m \
+        --header-upload 'Content-Type: application/octet-stream' \
+        --transfers 1 --checkers 2 --tpslimit 2 --retries-sleep 30s \
         --compare size,checksum --download-hash --color NEVER
 
     touch "$ready"
@@ -134,6 +136,8 @@ if [[ $scope != private && ! -e "$public_ready" ]]; then
     rclone bisync "$public_folder" scramble_drive:PublicSync/Current \
         --resync --check-access --max-delete 50 \
         --resilient --recover --max-lock 10m \
+        --header-upload 'Content-Type: application/octet-stream' \
+        --transfers 1 --checkers 2 --tpslimit 2 --retries-sleep 30s \
         --compare size,checksum --download-hash --color NEVER
 
     touch "$public_ready"

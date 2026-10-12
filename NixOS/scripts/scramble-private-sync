@@ -40,6 +40,8 @@ exec "$rclone" bisync "$local_folder" "$remote_folder" \
     --max-delete 50 \
     --resilient --recover --max-lock 10m \
     --compare size,checksum --download-hash \
+    --header-upload 'Content-Type: application/octet-stream' \
+    --transfers 1 --checkers 2 --tpslimit 2 --retries-sleep 30s \
     --backup-dir1 "$local_history/$stamp" \
     --backup-dir2 "$remote_history/$stamp" \
     --color NEVER

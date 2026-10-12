@@ -78,6 +78,17 @@ dedicated `PublicSync/Current` local-sync folder. Existing files outside that
 folder are browsable but are not automatically downloaded into public local
 sync. Desktop login alone does not start the CLI, create rclone configuration,
 or initialize either local sync.
+
+In the Scramble browser, public local files appear under **PublicSync → Current**,
+not at the account root. For example, a local `trident-optics-attachment` folder
+appears at `PublicSync/Current/trident-optics-attachment`. Keep its real files
+inside the local sync folder and link the project path to that folder, not the
+other way around: rclone does not follow symlinks inside the sync folder.
+
+Uploads use binary request bodies so Scramble's JSON middleware does not consume
+JSON files before the WebDAV upload handler reads them. Transfers run one at a
+time with limited request rates to reduce cloud rate-limit errors.
+
 Check the timers with `systemctl --user list-timers 'scramble-*-sync.timer'`,
 or run both syncs immediately with
 `systemctl --user start scramble-public-sync.service scramble-private-sync.service`.
