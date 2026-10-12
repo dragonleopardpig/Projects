@@ -81,18 +81,19 @@ or initialize either local sync.
 Check the timers with `systemctl --user list-timers 'scramble-*-sync.timer'`,
 or run both syncs immediately with
 `systemctl --user start scramble-public-sync.service scramble-private-sync.service`.
-The AGS bar shows the Scramble icon with a green dot when the connection,
-timers, cloud mounts, and last syncs are healthy. Click it to open Scramble
-Desktop. Minimize hides the desktop window to its tray icon. Choose
-**Open Scramble Desktop** in its tray menu, click the Scramble status icon,
-or launch the app again to restore the existing window. The tray's **Quit**
+The AGS bar shows Scramble in the system tray alongside ProtonVPN, Remmina,
+and Filen. A small bottom-right green dot means the connection, timers,
+cloud mounts, and last syncs are healthy. Minimize hides the desktop window
+to this tray icon. Choose **Open Scramble Desktop** in its tray menu or
+launch the app again to restore the existing window. The tray's **Quit**
 action stops the timers, waits for any active sync to finish, unmounts the
 read-only views, stops the CLI backend when used, and shuts down the app.
-Right-click either the native tray icon or the Scramble status icon for
+Right-click the Scramble tray icon for
 **Open Scramble Desktop**, **Open Public Sync Folder**, **Open Private Sync
 Folder**, **Browse Cloud Files**, **Sync Now**, **Sync Status**, and **Quit**.
 The launcher brings the stopped services back automatically after quitting;
-stored logins and crypt keys are retained. A grey dot means Scramble was quit.
+stored logins and crypt keys are retained. The icon disappears when Scramble
+quits and returns when the app is launched again.
 Yellow means setup is
 pending or a sync is running; red means a service stopped, the last sync failed,
 or no sync succeeded in 15 minutes. Hover over it for details, or run
