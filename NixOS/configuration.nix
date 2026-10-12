@@ -763,6 +763,7 @@ in
         "nvidia-settings"
         "nvidia-x11"
         "proton-vpn"
+        "scramble-desktop"
         "zoom"
         # Unfree firmware pulled in by hardware.enableAllFirmware on the
         # PortableSSD host (broad device coverage for booting any machine).

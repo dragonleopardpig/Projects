@@ -11,6 +11,13 @@ export default function SysTray() {
                 usePopover={false}
                 actionGroup={bind(item, "actionGroup").as(g => ["dbusmenu", g])}
                 menuModel={bind(item, "menuModel")}
+                onButtonPressEvent={(self, event) => {
+                    if (event.get_button()[1] !== 3) return false
+                    const menu = self.get_popup()
+                    if (!menu) return false
+                    menu.popup_at_pointer(event)
+                    return true
+                }}
             >
                 <icon gicon={bind(item, "gicon")} pixelSize={18} />
             </menubutton>

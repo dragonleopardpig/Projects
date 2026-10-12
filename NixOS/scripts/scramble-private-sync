@@ -4,9 +4,24 @@ umask 077
 
 rclone=@RCLONE@
 export RCLONE_CONFIG="$HOME/.config/rclone/rclone.conf"
-local_folder="$HOME/Documents/Scramble Sync"
-local_history="$HOME/Documents/.Scramble Sync History"
-remote_folder='scramble_private:Current'
+case "${1:-private}" in
+    private)
+        local_folder="$HOME/Documents/Scramble Sync"
+        local_history="$HOME/Documents/.Scramble Sync History"
+        remote_folder='scramble_private:Current'
+        remote_history='scramble_private:History'
+        ;;
+    public)
+        local_folder="$HOME/Documents/Scramble Public"
+        local_history="$HOME/Documents/.Scramble Public History"
+        remote_folder='scramble_drive:PublicSync/Current'
+        remote_history='scramble_drive:PublicSync/History'
+        ;;
+    *)
+        echo 'Usage: scramble-private-sync [private|public]' >&2
+        exit 2
+        ;;
+esac
 
 # Scramble's WebDAV server is local to this host and may still be starting.
 for attempt in {1..30}; do
@@ -26,5 +41,5 @@ exec "$rclone" bisync "$local_folder" "$remote_folder" \
     --resilient --recover --max-lock 10m \
     --compare size,checksum --download-hash \
     --backup-dir1 "$local_history/$stamp" \
-    --backup-dir2 "scramble_private:History/$stamp" \
+    --backup-dir2 "$remote_history/$stamp" \
     --color NEVER

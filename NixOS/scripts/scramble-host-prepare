@@ -13,7 +13,14 @@ export RCLONE_CONFIG="$HOME/.config/rclone/rclone.conf"
 mkdir -p "$prefix" "$HOME/.config/rclone"
 npm install --prefix "$prefix" @scramble-cloud/cli@0.0.18 --no-audit --no-fund
 
-"$cli" ls >/dev/null 2>&1 || "$cli" login
+if ! "$cli" ls >/dev/null 2>&1; then
+    read -r -p 'Scramble email: ' username
+    if [[ -z "$username" ]]; then
+        echo 'A Scramble email is required.' >&2
+        exit 1
+    fi
+    "$cli" login --username "$username"
+fi
 "$cli" ls >/dev/null
 
 python3 - <<'PY'
@@ -55,7 +62,9 @@ PY
 systemctl --user enable --now scramble-webdav.service
 for attempt in {1..30}; do
     if rclone lsf scramble_drive: --max-depth 1 >/dev/null 2>&1; then
-        echo 'Scramble WebDAV is ready. Transfer the crypt key, then run scramble-sync-init.'
+        systemctl --user enable --now scramble-public-mount.service
+        echo 'Existing cloud files are now available in Nemo: Scramble Public Cloud (read-only).'
+        echo 'Run scramble-sync-init public for local public sync. Transfer the existing crypt key, then run scramble-sync-init private for private sync.'
         exit 0
     fi
     sleep 1

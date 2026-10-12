@@ -1,0 +1,79 @@
+--- a/electron/main.js
++++ b/electron/main.js
+@@ -1,1 +1,1 @@
+-const {app, BrowserWindow, nativeImage, dialog, ipcMain} = require('electron');
++const {app, BrowserWindow, nativeImage, dialog, ipcMain, Menu, Tray} = require('electron');
+@@ -8,0 +9,1 @@
++const { execFile } = require('child_process');
+@@ -12,0 +14,5 @@
++let tray;
++
++if (!app.requestSingleInstanceLock() || process.argv.includes('--scramble-quit')) {
++  app.exit(0);
++}
+@@ -44,0 +51,25 @@
++function showMainWindow() {
++  if (!global.win || global.win.isDestroyed()) return;
++  if (global.win.isMinimized()) global.win.restore();
++  global.win.show();
++  global.win.focus();
++}
++
++function runControl(action) {
++  const controller = process.env.SCRAMBLE_CONTROL;
++  if (!controller || !fs.existsSync(controller)) return Promise.resolve();
++  return new Promise((resolve, reject) => {
++    execFile(controller, [action], (error) => error ? reject(error) : resolve());
++  });
++}
++
++function controlAction(action) {
++  void runControl(action).catch((error) => log.error('Scramble tray action failed:', error));
++}
++
++app.on('second-instance', (_event, commandLine) => {
++  if (commandLine.includes('--scramble-quit')) app.quit();
++  else if (!shutdownStarted) showMainWindow();
++});
++app.on('activate', showMainWindow);
++
+@@ -63,0 +95,15 @@
++	tray = new Tray(getIconPath());
++	tray.setToolTip(appName);
++	tray.setContextMenu(Menu.buildFromTemplate([
++		{ label: 'Open Scramble Desktop', click: showMainWindow },
++		{ label: 'Open Public Sync Folder', click: () => controlAction('open-public') },
++		{ label: 'Open Private Sync Folder', click: () => controlAction('open-private') },
++		{ label: 'Browse Cloud Files', click: () => controlAction('open-cloud') },
++		{ type: 'separator' },
++		{ label: 'Sync Now', click: () => controlAction('sync-now') },
++		{ label: 'Sync Status', click: () => controlAction('status') },
++		{ type: 'separator' },
++		{ label: 'Quit', click: () => app.quit() },
++	]));
++	tray.on('click', showMainWindow);
++
+@@ -107,0 +154,3 @@
++	if (process.env.NOTIFY_SOCKET) {
++		controlAction('ready');
++	}
+@@ -124,1 +173,2 @@
+-  void webdavSupervisor.shutdown()
++  void runControl('stop-sync')
++    .then(() => webdavSupervisor.shutdown())
+@@ -128,1 +178,1 @@
+-      log.error('Failed to stop WebDAV during app shutdown:', error);
++      log.error('Failed to stop Scramble during app shutdown:', error);
+@@ -131,2 +181,2 @@
+-        title: 'WebDAV drive is still mounted',
+-        message: 'Scramble could not safely unmount the WebDAV drive.',
++        title: 'Scramble is still running',
++        message: 'Scramble could not safely stop sync or unmount its drives.',
+@@ -157,1 +207,1 @@
+-			'Exec=' + process.execPath,
++			'Exec=' + (process.env.SCRAMBLE_LAUNCHER || process.execPath),
+--- a/electron/window.js
++++ b/electron/window.js
+@@ -9,1 +9,1 @@
+-    if (win) win.minimize();
++    if (win) win.hide();

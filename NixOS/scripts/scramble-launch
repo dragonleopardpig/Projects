@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+systemctl=@SYSTEMCTL@
+if "$systemctl" --user is-active --quiet scramble-desktop.service; then
+    "$systemctl" --user start --no-block scramble-session.service
+    exec @DESKTOP@ "$@"
+fi
+
+"$systemctl" --user start scramble-desktop.service
+"$systemctl" --user start --no-block scramble-session.service
+exec @DESKTOP@ "$@"

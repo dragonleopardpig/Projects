@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+export PATH="@PATH@:$PATH"
+export RCLONE_CONFIG="$HOME/.config/rclone/rclone.conf"
+
+backend=@BACKEND@
+rclone=@RCLONE@
+state_folder="$HOME/.local/state/scramble"
+stopped="$state_folder/stopped"
+public_ready="$HOME/.config/rclone/scramble-public-ready"
+private_ready="$HOME/.config/rclone/scramble-ready"
+
+lock_session() {
+    mkdir -p "$state_folder"
+    exec 9>"$state_folder/session.lock"
+    flock --exclusive 9
+}
+
+open_folder() {
+    if [[ -x "$HOME/.local/bin/nemo-x11" ]]; then
+        exec "$HOME/.local/bin/nemo-x11" "$1"
+    fi
+    exec xdg-open "$1"
+}
+
+case "${1:-}" in
+    ready)
+        exec systemd-notify --ready
+        ;;
+    start-sync)
+        lock_session
+        rm -f "$stopped"
+        if [[ $backend == scramble-webdav.service && ! -f "$HOME/.config/scramble-webdav.env" ]]; then
+            kitty --title 'Scramble folder sync setup' bash -c "
+                \"\$HOME/.local/bin/scramble-host-prepare\" && systemctl --user start --no-block scramble-session.service
+                printf '\\nPress Enter to close this setup terminal.\\n'
+                read -r
+            " 9>&- >/dev/null 2>&1 &
+            exit 0
+        fi
+        if [[ $backend == scramble-webdav.service ]]; then
+            systemctl --user start "$backend"
+        fi
+        connected=false
+        for attempt in {1..30}; do
+            if "$rclone" lsf scramble_drive: --max-depth 1 --contimeout 5s --timeout 10s >/dev/null 2>&1; then
+                connected=true
+                break
+            fi
+            sleep 1
+        done
+        if [[ $connected != true ]]; then
+            notify-send 'Scramble connection is not ready' 'Check your login and local WebDAV settings. Use the tray menu to view sync status.'
+            exit 1
+        fi
+        systemctl --user start scramble-public-mount.service
+        if [[ ! -f "$public_ready" ]]; then
+            "$HOME/.local/bin/scramble-sync-init" public
+        fi
+        if [[ ! -f "$private_ready" ]] && {
+            [[ -f "$HOME/.config/rclone/scramble-private-import.conf" ]] ||
+            "$rclone" listremotes | grep -qx 'scramble_private:';
+        }; then
+            "$HOME/.local/bin/scramble-sync-init" private
+        fi
+        units=(scramble-public-sync.timer scramble-public-mount.service)
+        sync_units=(scramble-public-sync.service)
+        if [[ -f "$private_ready" ]]; then
+            units+=(scramble-private-sync.timer scramble-private-mount.service)
+            sync_units+=(scramble-private-sync.service)
+        fi
+        systemctl --user start "${units[@]}"
+        systemctl --user start --no-block "${sync_units[@]}"
+        ;;
+    stop-sync)
+        lock_session
+        systemctl --user stop scramble-public-sync.timer scramble-private-sync.timer
+        for scope in public private; do
+            while [[ $(systemctl --user show --value -p ActiveState "scramble-$scope-sync.service") =~ ^(active|activating|deactivating)$ ]]; do
+                sleep 1
+            done
+        done
+        systemctl --user stop scramble-public-mount.service scramble-private-mount.service
+        if [[ $backend == scramble-webdav.service ]]; then
+            systemctl --user stop "$backend"
+        fi
+        touch "$stopped"
+        ;;
+    sync-now)
+        systemctl --user start --no-block scramble-session.service
+        ;;
+    quit)
+        if systemctl --user is-active --quiet scramble-desktop.service; then
+            exec @DESKTOP@ --scramble-quit
+        fi
+        "$HOME/.local/bin/scramble-control" stop-sync
+        ;;
+    open-public)
+        open_folder "$HOME/Documents/Scramble Public"
+        ;;
+    open-private)
+        open_folder "$HOME/Documents/Scramble Sync"
+        ;;
+    open-cloud)
+        open_folder "$HOME/Scramble Public"
+        ;;
+    status)
+        exec kitty --title 'Scramble sync status' bash -c "
+            \"\$HOME/.local/bin/scramble-sync-status\"
+            printf '\\nPress Enter to close this status terminal.\\n'
+            read -r
+        "
+        ;;
+    *)
+        echo 'Usage: scramble-control {ready|start-sync|stop-sync|sync-now|quit|open-public|open-private|open-cloud|status}' >&2
+        exit 2
+        ;;
+esac

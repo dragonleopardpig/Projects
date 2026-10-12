@@ -7,7 +7,7 @@ if [[ $# -gt 1 || ( $# -eq 1 && $1 != --brief ) ]]; then
 fi
 
 ready="$HOME/.config/rclone/scramble-ready"
-mounted="$HOME/Scramble Private"
+public_ready="$HOME/.config/rclone/scramble-public-ready"
 if [[ $(hostname) == M90aPro ]]; then
     backend=scramble-desktop.service
     backend_name='Scramble Desktop'
@@ -17,47 +17,85 @@ else
 fi
 
 state=ok
-summary='Encrypted sync is healthy'
+summary='Public and private sync are healthy'
 last=''
+oldest_age=0
 
-if [[ ! -f $ready ]]; then
+if [[ -f $HOME/.local/state/scramble/stopped ]] &&
+   ! systemctl --user is-active --quiet scramble-desktop.service &&
+   ! systemctl --user is-active --quiet "$backend"; then
+    state=stopped
+    summary='Scramble is stopped; launch Scramble Desktop to reconnect'
+elif [[ ! -f $HOME/.config/rclone/rclone.conf ]]; then
     state=pending
-    summary='Encrypted sync needs initial setup'
+    if [[ $backend == scramble-webdav.service ]]; then
+        summary='Complete the folder-sync login terminal (Desktop login is separate)'
+    else
+        summary='Configure the local WebDAV rclone remote before initializing folder sync'
+    fi
+elif systemctl --user is-failed --quiet scramble-session.service; then
+    state=error
+    summary='Automatic startup failed; check journalctl --user -u scramble-session.service'
+elif [[ $(systemctl --user show --value -p ActiveState scramble-session.service) =~ ^(active|activating)$ ]]; then
+    state=busy
+    summary='Connecting cloud views and initializing available sync folders'
 elif ! systemctl --user is-active --quiet "$backend"; then
     state=error
     summary="$backend_name is stopped"
-elif ! systemctl --user is-active --quiet scramble-private-sync.timer; then
-    state=error
-    summary='The five-minute sync timer is stopped'
-elif ! systemctl --user is-active --quiet scramble-private-mount.service || \
-     [[ $(findmnt -n -T "$mounted" -o TARGET 2>/dev/null || true) != "$mounted" ]]; then
-    state=error
-    summary='The decrypted cloud view is not mounted'
-else
-    sync_state=$(systemctl --user show --value -p ActiveState scramble-private-sync.service)
-    result=$(systemctl --user show --value -p Result scramble-private-sync.service)
-    exit_status=$(systemctl --user show --value -p ExecMainStatus scramble-private-sync.service)
-    last_us=$(systemctl --user show --value -p ExecMainExitTimestampMonotonic scramble-private-sync.service)
-
-    if [[ $sync_state == active || $sync_state == activating ]]; then
-        state=busy
-        summary='Encrypted sync is running now'
-    elif [[ $result != success || $exit_status != 0 ]]; then
-        state=error
-        summary='The last encrypted sync failed'
-    elif [[ ! $last_us =~ ^[0-9]+$ || $last_us -eq 0 ]]; then
-        state=pending
-        summary='Waiting for the first encrypted sync'
+elif [[ ! -f $ready || ! -f $public_ready ]]; then
+    state=pending
+    if [[ -f $public_ready ]]; then
+        summary='Public sync is initialized; import the existing private crypt key and relaunch Scramble'
+    elif [[ -f $ready ]]; then
+        summary='Private sync is initialized; launch Scramble Desktop to initialize public sync'
     else
-        read -r uptime _ < /proc/uptime
-        age=$(( ${uptime%%.*} - last_us / 1000000 ))
-        if (( age < 0 )); then age=0; fi
-        last="Last successful sync $((age / 60)) minute(s) ago"
-        if (( age > 900 )); then
-            state=error
-            summary='Encrypted sync is overdue by more than 15 minutes'
-        fi
+        summary='Launch Scramble Desktop to initialize public sync; private sync needs its existing crypt key'
     fi
+else
+    for scope in private public; do
+        mounted="$HOME/Scramble ${scope^}"
+        if ! systemctl --user is-active --quiet "scramble-$scope-sync.timer"; then
+            state=error
+            summary="The $scope sync timer is stopped"
+            break
+        fi
+        if ! systemctl --user is-active --quiet "scramble-$scope-mount.service" || \
+           [[ $(findmnt -n -T "$mounted" -o TARGET 2>/dev/null || true) != "$mounted" ]]; then
+            state=error
+            summary="The $scope cloud view is not mounted"
+            break
+        fi
+
+        unit="scramble-$scope-sync.service"
+        sync_state=$(systemctl --user show --value -p ActiveState "$unit")
+        result=$(systemctl --user show --value -p Result "$unit")
+        exit_status=$(systemctl --user show --value -p ExecMainStatus "$unit")
+        last_us=$(systemctl --user show --value -p ExecMainExitTimestampMonotonic "$unit")
+
+        if [[ $sync_state == active || $sync_state == activating ]]; then
+            state=busy
+            summary="The $scope sync is running now"
+        elif [[ $result != success || $exit_status != 0 ]]; then
+            state=error
+            summary="The last $scope sync failed"
+            break
+        elif [[ ! $last_us =~ ^[0-9]+$ || $last_us -eq 0 ]]; then
+            state=pending
+            summary="Waiting for the first $scope sync"
+            break
+        else
+            read -r uptime _ < /proc/uptime
+            age=$(( ${uptime%%.*} - last_us / 1000000 ))
+            if (( age < 0 )); then age=0; fi
+            if (( age > oldest_age )); then oldest_age=$age; fi
+            last="Oldest completed sync $((oldest_age / 60)) minute(s) ago"
+            if (( age > 900 )); then
+                state=error
+                summary="The $scope sync is overdue by more than 15 minutes"
+                break
+            fi
+        fi
+    done
 fi
 
 if [[ ${1:-} == --brief ]]; then
@@ -69,8 +107,13 @@ if [[ ${1:-} == --brief ]]; then
 else
     printf 'Scramble: %s\n' "$summary"
     printf 'Connection: %s (%s)\n' "$backend_name" "$(systemctl --user is-active "$backend" 2>/dev/null || true)"
-    printf 'Sync timer: %s\n' "$(systemctl --user is-active scramble-private-sync.timer 2>/dev/null || true)"
-    printf 'Decrypted view: %s\n' "$(systemctl --user is-active scramble-private-mount.service 2>/dev/null || true)"
+    printf 'Desktop: %s\n' "$(systemctl --user is-active scramble-desktop.service 2>/dev/null || true)"
+    printf 'Automatic startup: %s\n' "$(systemctl --user is-active scramble-session.service 2>/dev/null || true)"
+    for scope in public private; do
+        printf '%s sync timer: %s\n' "${scope^}" "$(systemctl --user is-active "scramble-$scope-sync.timer" 2>/dev/null || true)"
+        printf '%s cloud view: %s\n' "${scope^}" "$(systemctl --user is-active "scramble-$scope-mount.service" 2>/dev/null || true)"
+    done
     if [[ -n $last ]]; then printf '%s\n' "$last"; fi
-    printf 'Local folder: %s\n' "$HOME/Documents/Scramble Sync"
+    printf 'Public local folder: %s\n' "$HOME/Documents/Scramble Public"
+    printf 'Private local folder: %s\n' "$HOME/Documents/Scramble Sync"
 fi
