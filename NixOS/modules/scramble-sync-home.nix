@@ -195,7 +195,7 @@ in
       Type = "notify";
       Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
       ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${mounted}'";
-      ExecStart = "${rclone} mount scramble_private:Current '${mounted}' --read-only --vfs-cache-mode=off --umask=077 --poll-interval=0 --dir-cache-time=30s";
+      ExecStart = "${rclone} mount scramble_private:Current '${mounted}' --webdav-encoding=Colon --read-only --vfs-cache-mode=off --umask=077 --poll-interval=0 --dir-cache-time=30s";
       ExecStop = "/run/wrappers/bin/fusermount3 -u '${mounted}'";
       Restart = "on-failure";
       RestartSec = 10;
@@ -239,7 +239,7 @@ in
       Type = "notify";
       Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
       ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${publicMounted}'";
-      ExecStart = "${rclone} mount scramble_drive: '${publicMounted}' --read-only --vfs-cache-mode=off --umask=077 --poll-interval=0 --dir-cache-time=30s";
+      ExecStart = "${rclone} mount scramble_drive: '${publicMounted}' --webdav-encoding=Colon --read-only --vfs-cache-mode=off --umask=077 --poll-interval=0 --dir-cache-time=30s";
       ExecStop = "/run/wrappers/bin/fusermount3 -u '${publicMounted}'";
       Restart = "on-failure";
       RestartSec = 10;

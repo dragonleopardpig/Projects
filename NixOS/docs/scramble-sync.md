@@ -88,6 +88,8 @@ other way around: rclone does not follow symlinks inside the sync folder.
 Uploads use binary request bodies so Scramble's JSON middleware does not consume
 JSON files before the WebDAV upload handler reads them. Transfers run one at a
 time with limited request rates to reduce cloud rate-limit errors.
+Colons in filenames, including Windows `:Zone.Identifier` metadata files, are
+encoded as full-width colons in the cloud and decoded by the sync and mounts.
 
 Check the timers with `systemctl --user list-timers 'scramble-*-sync.timer'`,
 or run both syncs immediately with

@@ -41,6 +41,7 @@ exec "$rclone" bisync "$local_folder" "$remote_folder" \
     --resilient --recover --max-lock 10m \
     --compare size,checksum --download-hash \
     --header-upload 'Content-Type: application/octet-stream' \
+    --webdav-encoding Colon \
     --transfers 1 --checkers 2 --tpslimit 2 --retries-sleep 30s \
     --backup-dir1 "$local_history/$stamp" \
     --backup-dir2 "$remote_history/$stamp" \

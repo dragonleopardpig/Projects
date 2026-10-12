@@ -108,6 +108,7 @@ if [[ $scope != public && ! -e "$ready" ]]; then
         --resync --check-access --max-delete 50 \
         --resilient --recover --max-lock 10m \
         --header-upload 'Content-Type: application/octet-stream' \
+        --webdav-encoding Colon \
         --transfers 1 --checkers 2 --tpslimit 2 --retries-sleep 30s \
         --compare size,checksum --download-hash --color NEVER
 
@@ -137,6 +138,7 @@ if [[ $scope != private && ! -e "$public_ready" ]]; then
         --resync --check-access --max-delete 50 \
         --resilient --recover --max-lock 10m \
         --header-upload 'Content-Type: application/octet-stream' \
+        --webdav-encoding Colon \
         --transfers 1 --checkers 2 --tpslimit 2 --retries-sleep 30s \
         --compare size,checksum --download-hash --color NEVER
 
