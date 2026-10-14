@@ -205,11 +205,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1788056099,
-        "narHash": "sha256-C+JLiRzcxIXOL4sCV0Ig3Po7lp5R9nBz3cbg0WblJxQ=",
+        "lastModified": 1791967702,
+        "narHash": "sha256-pZsva3A64hW4K6yz7QZHDXPwpimSBCr8NXU3H8QCGYk=",
         "owner": "dragonleopardpig",
         "repo": "pdf-prep",
-        "rev": "a3351e48ea5a4cd91c9b4a8d5f9267f73e82d2df",
+        "rev": "0d6c20b760e226c66b09409bec000120b6d81489",
         "type": "github"
       },
       "original": {

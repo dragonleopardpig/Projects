@@ -94,6 +94,18 @@ upstream in `proton-vpn` v4.15.x / v4.16.1 and were deleted:
 - Menu state aligned with window visibility (commit `0d6aa810`,
   follow-up `2151ab40 [VPNLINUX-1638]`).
 
+### `sioyek-reader-performance-selection.patch`
+
+Ports Sioyek fork commit `717d67f7` to the system package. Visible pages take
+priority over speculative rendering, and pre-rendered slices match the visible
+render cache. Desktop builds explicitly request desktop OpenGL on Wayland.
+Document canvases opt out of Kvantum window dragging so a text-selection drag
+is not interrupted by a synthetic mouse release. Real click timestamps prevent
+old clicks from being counted as a later triple-click selection.
+
+The PDF files, OCR layers, annotation databases and reader preferences are not
+changed. Reopen Sioyek after installing the rebuilt package.
+
 ## Rebuilding
 
 ```bash
