@@ -108,6 +108,9 @@ fi
 if [[ -n $setup_summary && $summary != "$setup_summary" ]]; then
     summary="$summary; $setup_summary"
 fi
+if [[ -n $setup_summary && $state != error ]]; then
+    state=pending
+fi
 
 if [[ ${1:-} == --brief ]]; then
     if [[ -n $last ]]; then

@@ -1071,15 +1071,7 @@ in
     gh                         # GitHub CLI
 
     # ── PDF & Document Viewers ──
-    # Sioyek wrapped to use XWayland (native Wayland has issues with NVIDIA)
-    (pkgs.symlinkJoin {
-      name = "sioyek-wrapped";
-      paths = [ pkgs.sioyek ];
-      buildInputs = [ pkgs.makeWrapper ];
-      postBuild = ''
-        wrapProgram $out/bin/sioyek --set QT_QPA_PLATFORM xcb
-      '';
-    })
+    pkgs.sioyek
     djvuToPdf                  # djvu2pdf: DjVu → searchable PDF for Sioyek
     pdfPrep                    # pdf-prep: whiten, speed up and OCR a scanned PDF
     sioyekSnip                 # sioyek-snip: crop a dragged rectangle out of a page
@@ -1141,7 +1133,7 @@ in
 
   # Set the default editor to vim
   environment.variables.EDITOR = "xed";
-  environment.variables.MINDER_FORMULA_OCR = lib.getExe pkgs.formulaocr-offline;
+  environment.variables.MINDER_FORMULA_OCR = "/run/current-system/sw/bin/formulaocr-offline";
   environment.variables.MINDER_POTRACE = lib.getExe' pkgs.potrace "potrace";
   environment.variables.GTK_IM_MODULE = lib.mkForce "";
   environment.variables.QT_IM_MODULE = lib.mkForce "";

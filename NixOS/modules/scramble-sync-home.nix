@@ -91,6 +91,7 @@ in
   home.file.".local/bin/scramble-sync-status" = {
     source = ../scripts/scramble-sync-status;
     executable = true;
+    force = true;
   };
   home.file.".local/bin/scramble-control" = {
     source = controlScript;
@@ -240,12 +241,40 @@ in
       Type = "notify";
       Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
       ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${publicMounted}'";
-      ExecStart = "${rclone} mount scramble_drive: '${publicMounted}' --webdav-encoding=Colon --read-only --vfs-cache-mode=off --umask=077 --poll-interval=0 --dir-cache-time=30s";
+      ExecStart = "${rclone} mount scramble_drive: '${publicMounted}' --webdav-encoding=Colon --read-only --vfs-cache-mode=full --vfs-cache-max-size=1G --vfs-cache-max-age=24h --umask=077 --poll-interval=0 --dir-cache-time=30s";
       ExecStop = "/run/wrappers/bin/fusermount3 -u '${publicMounted}'";
       Restart = "on-failure";
       RestartSec = 10;
     };
     Install.WantedBy = [ "graphical-session.target" ];
+  };
+
+  xdg.configFile."systemd/user/scramble-references-download.service".force = true;
+  xdg.configFile."systemd/user/scramble-references-download.timer".force = true;
+
+  systemd.user.services.scramble-references-download = {
+    Unit = {
+      Description = "Download missing Scramble reference books for offline reading";
+      Wants = [ "network-online.target" backend ];
+      After = [ "network-online.target" backend ];
+      ConditionPathExists = "${home}/.config/rclone/rclone.conf";
+    };
+    Service = {
+      Type = "oneshot";
+      Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
+      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${home}/Documents/Scramble References'";
+      ExecStart = "${rclone} copy scramble_drive:References '${home}/Documents/Scramble References' --webdav-encoding=Colon --ignore-existing --transfers=1 --checkers=2 --tpslimit=2 --contimeout=10s --timeout=1m --retries=3 --low-level-retries=3";
+    };
+  };
+
+  systemd.user.timers.scramble-references-download = {
+    Unit.Description = "Keep Scramble reference books available offline";
+    Timer = {
+      OnActiveSec = "1min";
+      OnUnitInactiveSec = "30min";
+      Unit = "scramble-references-download.service";
+    };
+    Install.WantedBy = [ "timers.target" ];
   };
 
   systemd.user.services.scramble-webdav = lib.mkIf cliHost {

@@ -86,9 +86,9 @@ in
 
   xdg.desktopEntries.sioyek-xcb = {
     name = "Sioyek";
-    exec = "/home/thinky/.local/bin/sioyek-xcb --new-window %f";
+    exec = "/home/thinky/.local/bin/sioyek --new-window %f";
     icon = "sioyek";
-    comment = "Sioyek document viewer in a separate window (XWayland)";
+    comment = "Sioyek document viewer in a separate window";
     # Sioyek renders through MuPDF, so EPUB is native -- no conversion involved.
     # It has to be declared here or Sioyek never appears as a choice for one.
     mimeType = [
@@ -362,6 +362,7 @@ in
   # per-file xdg.configFile entries each land in their own store path
   # and break relative imports. package.json is generated here because
   # it pins astal-gjs to a nix store path that varies by revision.
+  xdg.configFile."ags".force = true;
   xdg.configFile."ags".source = pkgs.runCommand "ags-config" { } ''
     mkdir -p $out
     cp -r ${./ags}/. $out/
@@ -418,6 +419,9 @@ in
   # bindings here instead.
   xdg.configFile."sioyek/keys_user.config".force = true;
   xdg.configFile."sioyek/keys_user.config".text = ''
+    open_document_embedded_from_current_path <C-o>
+    open_document_embedded <C-O>
+
     # Open the searchable list of all effective key bindings.
     keys ?
 
@@ -719,7 +723,7 @@ in
 
   home.file.".face.icon".source = ./assets/face.png;
 
-  # Sioyek wrapper: force XWayland to avoid NVIDIA Wayland window mapping issues.
+  # Sioyek selects the available display backend; sioyek-xcb explicitly uses X11.
   # Both $mod+S and the desktop entry go through here, so it is the one place
   # that catches every launch.
   #
@@ -731,12 +735,21 @@ in
   # 1 MiB and keeps one previous file, so it costs at most 2 MiB.
   home.file.".local/bin/sioyek-xcb" = {
     executable = true;
+    force = true;
     text = ''
       #!/bin/sh
-      SIOYEK_UI_TRACE="''${XDG_STATE_HOME:-$HOME/.local/state}/sioyek/ui.log"
-      mkdir -p "$(dirname "$SIOYEK_UI_TRACE")"
-      export SIOYEK_UI_TRACE
-      exec env QT_QPA_PLATFORM=xcb sioyek "$@"
+      export QT_QPA_PLATFORM=xcb
+      exec "${config.home.homeDirectory}/.local/bin/sioyek" "$@"
+    '';
+  };
+
+  home.file.".local/bin/sioyek" = {
+    executable = true;
+    force = true;
+    text = ''
+      #!/bin/sh
+      export SIOYEK_BINARY="${pkgs.sioyek}/bin/sioyek"
+      exec ${pkgs.python3}/bin/python3 ${./scripts/sioyek-offline.py} "$@"
     '';
   };
 
@@ -2594,7 +2607,7 @@ in
           "$mod, W, exec, walker"
           "$mod, B, exec, kitty -e btop"
           "$mod, N, exec, /home/thinky/.local/bin/nemo-x11"
-          "$mod, S, exec, ~/.local/bin/sioyek-xcb --new-window"
+          "$mod, S, exec, ~/.local/bin/sioyek --new-window"
           "$mod, Y, exec, kitty -e yazi"
           "$mod, Escape, exit,"
           "$mod, K, killactive,"
@@ -3244,12 +3257,6 @@ in
     xed-editor
     gtk3
     gobject-introspection
-    # sioyek deliberately comes from systemPackages, where it is wrapped with
-    # QT_QPA_PLATFORM=xcb because native Wayland fails on NVIDIA
-    # (QEGLPlatformContext: Failed to create context: 3009). Installing the raw
-    # package here would shadow that wrapper, since the per-user profile
-    # precedes /run/current-system/sw on PATH, and a terminal launch would then
-    # start under Wayland and fail to create a GL context.
     poppler-utils
     wf-recorder
     mpv

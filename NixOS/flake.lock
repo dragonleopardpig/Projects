@@ -66,11 +66,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1789305548,
-        "narHash": "sha256-ksYecIZrEemmJFlrHwm86toiTTsD6ozQ0Xd5uimrpVk=",
+        "lastModified": 1791443663,
+        "narHash": "sha256-9sslepOJGgfEFDfIKNOf1dpqzeZdg9pSYdGaU0kI2fQ=",
         "owner": "dragonleopardpig",
         "repo": "formulaocr-offline",
-        "rev": "7f155b23efe06bea0ee1b9786e022215d9aa1690",
+        "rev": "e1e377be09fb64439c0c340728b7cac72178293e",
         "type": "github"
       },
       "original": {
@@ -120,11 +120,11 @@
     "minder-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1790667757,
-        "narHash": "sha256-FnRFkFu6cf2BmHhNU5j2/GqwBL8gLMlP0Q8ILS+B2YA=",
+        "lastModified": 1791441709,
+        "narHash": "sha256-HCi9XuXEk0TA3+FwN3dURLxaXNblpS55r/1RRvEpYqg=",
         "owner": "dragonleopardpig",
         "repo": "Minder",
-        "rev": "6bd37707d83bb267a7c2e801776691cc7a537bc8",
+        "rev": "3d9e65f2ac9efd4b38f412e5c2113d2661126e2d",
         "type": "github"
       },
       "original": {

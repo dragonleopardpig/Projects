@@ -103,13 +103,15 @@ NixOS/
 - hypridle: Auto-lock at 15min, DPMS off at 20min
 - hyprlock: Lock screen
 - udiskie: Auto-mount removable drives
-- Wallpaper timer: Daily fetch from Bing and NASA APOD
+- Wallpaper timer: Daily images from Bing and NASA APOD (still thumbnails on video days; no video downloads)
 
 **Helper scripts** (installed to `~/.local/bin`):
-- `sioyek-xcb`: Forces Sioyek PDF viewer to use XWayland
+- `sioyek`: Uses native Wayland when its display socket is available, otherwise X11;
+  respects an explicit `QT_QPA_PLATFORM` override.
+- `sioyek-xcb`: Explicitly selects X11/XWayland for troubleshooting.
 - `screenshot`: grim + slurp + swappy pipeline
 - `brightness-ctl`: Unified brightness (intel_backlight or ddcci fallback)
-- `wallpaper-of-the-day`: Fetches Bing daily + NASA APOD wallpapers
+- `wallpaper-of-the-day`: Fetches Bing daily + NASA APOD images, using only still thumbnails for videos
 
 **Desktop entries**: eGrabber Studio (Qt6 XWayland wrapper), Sioyek PDF viewer
 
@@ -157,6 +159,30 @@ sudo nixos-rebuild switch --flake .#M90aPro
    ```bash
    lspci | grep VGA
    ```
+
+## Scramble Offline Reading
+
+- `~/Scramble Public` and `~/Scramble Private` are live cloud mounts. Reading an
+  uncached file through these paths needs a working Scramble connection.
+- `~/Documents/Scramble Public` is the local two-way sync of
+  `PublicSync/Current`; `~/Documents/Scramble Sync` is the local private sync.
+- `~/Documents/Scramble References` holds offline copies of the cloud
+  `References` folder. Missing books download after login and every 30 minutes.
+  Existing local files are preserved; the downloader does not upload or delete.
+- The `sioyek` and `sioyek-xcb` launchers redirect cloud document paths to downloaded local
+  copies and updates saved session paths and matching history entries. A missing
+  offline copy produces a notification instead of opening the cloud mount.
+- Check downloads with `systemctl --user status scramble-references-download`
+  or `journalctl --user -u scramble-references-download -f`.
+
+## Sioyek File Picker
+
+- `Ctrl+O` opens the current document's folder; `Ctrl+Shift+O` opens the configured
+  default folder. With no document open, `Ctrl+O` uses the default folder too.
+- `/` enters the highlighted folder, including a fuzzy match.
+- `Ctrl+N` and `Ctrl+P` move down and up through matching entries.
+- Backspace goes up one folder, even with a partial name typed. Other text-editing
+  shortcuts, including Delete and `Ctrl+Backspace`, remain available.
 
 ## NVIDIA Notes
 

@@ -9,3 +9,4 @@ modules/egrabber/memento-drivers/
 # AGS generated at build time (do not commit overlay copies)
 ags/package.json
 ags/lib/paths.ts
+result-*

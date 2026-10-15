@@ -27,6 +27,10 @@ export default function ScrambleStatus() {
         tooltipText={status().as(currentStatus => `Scramble Cloud — ${currentStatus.message}\nRight-click for folders, sync, status, and quit`)}
         onDestroy={() => status.drop()}>
         <icon className="scramble-icon" gicon={scrambleIcon} />
-        <box className="health" halign={Gtk.Align.END} valign={Gtk.Align.END} />
+        <box
+            className="health"
+            visible={status().as(currentStatus => currentStatus.state !== "ok" && currentStatus.state !== "stopped")}
+            halign={Gtk.Align.END}
+            valign={Gtk.Align.END} />
     </overlay>
 }

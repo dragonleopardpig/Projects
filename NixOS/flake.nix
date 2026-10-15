@@ -98,6 +98,7 @@
             # code touching newer upstream (e.g. db_mutex) does not transfer.
             ./patches/sioyek-reader-enhancements.patch
             ./patches/sioyek-reader-performance-selection.patch
+            ./patches/sioyek-file-picker-navigation.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           # final, not prev: the jkqtplotter below is patched in this same
