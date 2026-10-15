@@ -147,7 +147,7 @@ in
   systemd.user.services.scramble-desktop = {
     Unit = {
       Description = "Scramble Desktop with tray controls";
-      After = [ "graphical-session-pre.target" ];
+      After = [ "graphical-session.target" ];
       PartOf = [ "graphical-session.target" ];
       Wants = [ "scramble-session.service" ];
     };
@@ -190,7 +190,7 @@ in
     Unit = {
       Description = "Decrypted read-only view of the encrypted Scramble folder";
       Wants = [ "network-online.target" backend ];
-      After = [ "network-online.target" backend ];
+      After = [ "graphical-session.target" "network-online.target" backend ];
       ConditionPathExists = ready;
     };
     Service = {
@@ -234,7 +234,7 @@ in
     Unit = {
       Description = "Read-only view of the existing Scramble cloud files";
       Wants = [ "network-online.target" backend ];
-      After = [ "network-online.target" backend ];
+      After = [ "graphical-session.target" "network-online.target" backend ];
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";
     };
     Service = {

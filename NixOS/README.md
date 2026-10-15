@@ -162,6 +162,8 @@ sudo nixos-rebuild switch --flake .#M90aPro
 
 ## Scramble Offline Reading
 
+- Scramble Desktop and cloud mounts start after the graphical session is ready,
+  so display initialization and cloud connection delays do not hold up the desktop.
 - `~/Scramble Public` and `~/Scramble Private` are live cloud mounts. Reading an
   uncached file through these paths needs a working Scramble connection.
 - `~/Documents/Scramble Public` is the local two-way sync of
