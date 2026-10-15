@@ -137,7 +137,7 @@ diff -ruN n3/pdf_viewer/book.h nwork/pdf_viewer/book.h
  
 diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
 --- a/pdf_viewer/database.cpp	2026-10-15 10:59:58.238609095 +0800
-+++ b/pdf_viewer/database.cpp	2026-10-15 10:59:40.034616438 +0800
++++ b/pdf_viewer/database.cpp	2026-10-15 11:01:15.999602830 +0800
 @@ -243,7 +243,7 @@
  // the process on the first document that had a bookmark. Derive the count from
  // the list so they cannot drift again.
@@ -204,12 +204,11 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
      }
  }
  
-@@ -1958,6 +1964,13 @@
+@@ -1958,6 +1964,12 @@
              {"modification_time", "CURRENT_TIMESTAMP"},
          });
  }
 +bool DatabaseManager::update_bookmark_shape(const std::string& uuid, int shape) {
-+    std::lock_guard<std::recursive_mutex> lock(db_mutex);
 +    return generic_update_run_query("bookmarks",
 +        {{"uuid", QString::fromStdString(uuid)}},
 +        {{"shape", shape}, {"modification_time", "CURRENT_TIMESTAMP"}});
