@@ -153,11 +153,12 @@ in
     Service = {
       Type = "notify";
       NotifyAccess = "all";
-      ExecStart = "${scrambleDesktop}/bin/scramble-desktop";
+      ExecStart = "${scrambleDesktop}/bin/scramble-desktop --start-in-tray";
       TimeoutStartSec = "60s";
       Restart = "on-failure";
       RestartSec = 10;
     };
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   systemd.user.services.scramble-session = {

@@ -8,6 +8,9 @@ Launching it reconnects the local WebDAV backend, restores the cloud views,
 initializes empty local sync folders when their credentials are available, and
 starts their timers and an immediate sync. Launching it again restores the
 same window rather than creating a duplicate.
+At graphical login, Scramble Desktop starts in the background with its tray
+icon. Its window stays hidden until opened from the launcher or tray menu.
+Quitting keeps it stopped for the current session; the next login starts it again.
 
 Nemo has bookmarks for two editable local folders and their read-only cloud
 views:

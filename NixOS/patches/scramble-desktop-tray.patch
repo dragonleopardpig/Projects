@@ -33,11 +33,13 @@
 +
 +app.on('second-instance', (_event, commandLine) => {
 +  if (commandLine.includes('--scramble-quit')) app.quit();
-+  else if (!shutdownStarted) showMainWindow();
++  else if (!shutdownStarted && !commandLine.includes('--start-in-tray')) showMainWindow();
 +});
 +app.on('activate', showMainWindow);
 +
-@@ -63,0 +95,15 @@
+@@ -46,0 +78,1 @@
++		show: !process.argv.includes('--start-in-tray'),
+@@ -63,0 +96,15 @@
 +	tray = new Tray(getIconPath());
 +	tray.setToolTip(appName);
 +	tray.setContextMenu(Menu.buildFromTemplate([
@@ -53,25 +55,25 @@
 +	]));
 +	tray.on('click', showMainWindow);
 +
-@@ -107,0 +154,3 @@
+@@ -107,0 +155,3 @@
 +	if (process.env.NOTIFY_SOCKET) {
 +		controlAction('ready');
 +	}
-@@ -124,1 +173,2 @@
+@@ -124,1 +174,2 @@
 -  void webdavSupervisor.shutdown()
 +  void runControl('stop-sync')
 +    .then(() => webdavSupervisor.shutdown())
-@@ -128,1 +178,1 @@
+@@ -128,1 +179,1 @@
 -      log.error('Failed to stop WebDAV during app shutdown:', error);
 +      log.error('Failed to stop Scramble during app shutdown:', error);
-@@ -131,2 +181,2 @@
+@@ -131,2 +182,2 @@
 -        title: 'WebDAV drive is still mounted',
 -        message: 'Scramble could not safely unmount the WebDAV drive.',
 +        title: 'Scramble is still running',
 +        message: 'Scramble could not safely stop sync or unmount its drives.',
-@@ -157,1 +207,1 @@
+@@ -157,1 +208,1 @@
 -			'Exec=' + process.execPath,
-+			'Exec=' + (process.env.SCRAMBLE_LAUNCHER || process.execPath),
++			'Exec=' + (process.env.SCRAMBLE_LAUNCHER || process.execPath) + ' --start-in-tray',
 --- a/electron/window.js
 +++ b/electron/window.js
 @@ -9,1 +9,1 @@
