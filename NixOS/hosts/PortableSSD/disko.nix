@@ -33,6 +33,9 @@
         };
         data = {
           size = "100%";
+          # Microsoft basic data; without this disko defaults to "Linux
+          # filesystem", which Windows ignores (won't assign a drive letter).
+          type = "0700";
           content = {
             type = "filesystem";
             format = "vfat";
