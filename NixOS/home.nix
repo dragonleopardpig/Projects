@@ -491,6 +491,12 @@ in
     # arrow out, double-click it to straighten it or curve it again, and d a to
     # remove it -- the last arrow takes its invisible note with it.
     add_free_arrow A
+    # Drag a rectangle and get a curly brace filling it, for gathering a few
+    # lines together rather than boxing them in. Drawn down a margin it braces
+    # what is beside it; drawn along a line it braces what is above. Press c
+    # again with one selected to move it to the opposite side. It is a shape
+    # and holds no text, so double-clicking does not open an editor.
+    add_brace c
     delete_note_arrow da
     delete_selected_bookmark dn
     increase_freetext_font_size <C-=>

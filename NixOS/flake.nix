@@ -99,6 +99,9 @@
             ./patches/sioyek-reader-enhancements.patch
             ./patches/sioyek-reader-performance-selection.patch
             ./patches/sioyek-file-picker-navigation.patch
+            # A note drawn as a curly brace rather than a rectangle, for
+            # gathering a few lines rather than boxing them in.
+            ./patches/sioyek-note-brace.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           # final, not prev: the jkqtplotter below is patched in this same

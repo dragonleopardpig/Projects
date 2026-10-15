@@ -1,0 +1,476 @@
+diff -ruN n3/pdf_viewer/book.cpp nwork/pdf_viewer/book.cpp
+--- a/pdf_viewer/book.cpp	2026-10-15 10:59:58.237868438 +0800
++++ b/pdf_viewer/book.cpp	2026-10-15 10:58:59.853743760 +0800
+@@ -220,6 +220,7 @@
+         res["border_width"] = border_width;
+         res["text_offset_x"] = text_offset_x;
+         res["text_offset_y"] = text_offset_y;
++        res["shape"] = shape;
+         res["font_face"] = QString::fromStdWString(font_face);
+         if (!arrows.empty()) {
+             QJsonArray arrow_array;
+@@ -271,6 +272,7 @@
+         border_width = json_object["border_width"].toDouble(2.0);
+         text_offset_x = json_object["text_offset_x"].toDouble(0.0);
+         text_offset_y = json_object["text_offset_y"].toDouble(0.0);
++        shape = json_object["shape"].toInt(NOTE_SHAPE_RECT);
+         font_face = json_object["font_face"].toString().toStdWString();
+     }
+     arrows.clear();
+@@ -316,6 +318,69 @@
+         std::abs(end_x - begin_x) < 0.01f && std::abs(end_y - begin_y) < 0.01f;
+ }
+ 
++bool BookMark::is_brace() const {
++    return shape >= NOTE_SHAPE_BRACE_LEFT && shape <= NOTE_SHAPE_BRACE_BOTTOM;
++}
++
++std::vector<AbsoluteDocumentPos> note_brace_points(const BookMark& bookmark) {
++    std::vector<AbsoluteDocumentPos> points;
++    if (!bookmark.is_brace()) return points;
++
++    const AbsoluteRect rect = bookmark.get_rectangle();
++    const bool vertical = bookmark.shape == NOTE_SHAPE_BRACE_LEFT ||
++                          bookmark.shape == NOTE_SHAPE_BRACE_RIGHT;
++    const float length = vertical ? (rect.y1 - rect.y0) : (rect.x1 - rect.x0);
++    const float depth = vertical ? (rect.x1 - rect.x0) : (rect.y1 - rect.y0);
++    if (length < 0.001f || depth < 0.001f) return points;
++
++    // The brace is described once, in its own terms: `a` runs from 0 to 1 along
++    // its length and `c` across it, 0 at the point and 1 at the two ends. Which
++    // edge that lands on is the only difference between the four orientations.
++    auto place = [&](float a, float c) {
++        const float along = (vertical ? rect.y0 : rect.x0) + a * length;
++        float across = 0.0f;
++        switch (bookmark.shape) {
++        case NOTE_SHAPE_BRACE_LEFT: across = rect.x0 + c * depth; break;
++        case NOTE_SHAPE_BRACE_RIGHT: across = rect.x1 - c * depth; break;
++        case NOTE_SHAPE_BRACE_TOP: across = rect.y0 + c * depth; break;
++        default: across = rect.y1 - c * depth; break;
++        }
++        return vertical ? AbsoluteDocumentPos{ across, along }
++                        : AbsoluteDocumentPos{ along, across };
++    };
++    auto push = [&](float a, float c) { points.push_back(place(a, c)); };
++
++    // Each turn of a brace is a quarter circle, so it is drawn as one: a cubic
++    // with its controls pulled 0.5523 of the way to the corner, the usual
++    // approximation.
++    auto turn = [&](float sa, float sc, float ka, float kc, float ea, float ec) {
++        const float k = 0.5523f;
++        const float p1a = sa + (ka - sa) * k, p1c = sc + (kc - sc) * k;
++        const float p2a = ea + (ka - ea) * k, p2c = ec + (kc - ec) * k;
++        const int steps = 10;
++        for (int i = 1; i <= steps; i++) {
++            const float t = static_cast<float>(i) / steps;
++            const float u = 1.0f - t;
++            push(u*u*u*sa + 3*u*u*t*p1a + 3*u*t*t*p2a + t*t*t*ea,
++                 u*u*u*sc + 3*u*u*t*p1c + 3*u*t*t*p2c + t*t*t*ec);
++        }
++    };
++
++    // How much of the length each turn takes. Half the depth keeps the turns
++    // round; a quarter of the length is the most that fits, four of them being
++    // needed, and is what a brace dragged short and wide ends up using.
++    const float turn_length = std::min(depth * 0.5f, length * 0.25f) / length;
++
++    push(0.0f, 1.0f);
++    turn(0.0f, 1.0f, 0.0f, 0.5f, turn_length, 0.5f);
++    push(0.5f - turn_length, 0.5f);
++    turn(0.5f - turn_length, 0.5f, 0.5f, 0.5f, 0.5f, 0.0f);
++    turn(0.5f, 0.0f, 0.5f, 0.5f, 0.5f + turn_length, 0.5f);
++    push(1.0f - turn_length, 0.5f);
++    turn(1.0f - turn_length, 0.5f, 1.0f, 0.5f, 1.0f, 1.0f);
++    return points;
++}
++
+ bool BookMark::is_marked() const {
+     return (begin_y > -1) && (end_y == -1);
+ }
+diff -ruN n3/pdf_viewer/book.h nwork/pdf_viewer/book.h
+--- a/pdf_viewer/book.h	2026-10-15 10:59:58.238105749 +0800
++++ b/pdf_viewer/book.h	2026-10-15 10:58:59.853807724 +0800
+@@ -103,10 +103,24 @@
+ // one-element list -- notes made before this keep their arrow.
+ QString note_arrows_to_db_string(const std::vector<NoteArrow>& arrows);
+ std::vector<NoteArrow> note_arrows_from_db_string(const QString& value);
++// A note's rectangle is normally drawn as a rectangle. A brace replaces that
++// border with a curly brace filling the rectangle: its point sits on the named
++// edge and its two ends curl toward the opposite one, so NOTE_SHAPE_BRACE_LEFT
++// is a `{` down the left edge, opening right.
++constexpr int NOTE_SHAPE_RECT = 0;
++constexpr int NOTE_SHAPE_BRACE_LEFT = 1;
++constexpr int NOTE_SHAPE_BRACE_RIGHT = 2;
++constexpr int NOTE_SHAPE_BRACE_TOP = 3;
++constexpr int NOTE_SHAPE_BRACE_BOTTOM = 4;
++
+ // The corners and edge midpoints drawn as a selected note's resize handles.
+ constexpr int NUM_NOTE_BOX_HANDLES = 8;
+ void note_box_handles(const BookMark& bookmark, AbsoluteDocumentPos out_handles[NUM_NOTE_BOX_HANDLES]);
+ AbsoluteDocumentPos note_arrow_anchor(const BookMark& bookmark, AbsoluteDocumentPos toward);
++// The brace as a flattened outline in absolute document coordinates. The screen
++// and the PDF export both draw this one polyline, so an exported brace cannot
++// drift from the one on screen.
++std::vector<AbsoluteDocumentPos> note_brace_points(const BookMark& bookmark);
+ 
+ /*
+     A bookmark is similar to mark but instead of being indexed by a symbol, it has a description.
+@@ -130,6 +144,9 @@
+     // its place on the page whichever handle is used.
+     float text_offset_x = 0.0f;
+     float text_offset_y = 0.0f;
++    // NOTE_SHAPE_*: what the rectangle is drawn as. Older notes have no column
++    // for it and read back as 0, a plain rectangle.
++    int shape = NOTE_SHAPE_RECT;
+     std::wstring font_face;
+     std::vector<NoteArrow> arrows;
+ 
+@@ -146,6 +163,9 @@
+     // An arrow standing on its own, with no box: the note's rectangle has
+     // collapsed onto the point the arrow grows from.
+     bool is_free_arrow() const;
++    // Drawn as a curly brace rather than a rectangle. A brace is a shape and
++    // holds no text.
++    bool is_brace() const;
+     bool is_marked() const;
+     std::optional<char> get_type() const;
+ 
+diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
+--- a/pdf_viewer/database.cpp	2026-10-15 10:59:58.238609095 +0800
++++ b/pdf_viewer/database.cpp	2026-10-15 10:59:40.034616438 +0800
+@@ -243,7 +243,7 @@
+ // the process on the first document that had a bookmark. Derive the count from
+ // the list so they cannot drift again.
+ static constexpr const char* BOOKMARK_SELECT_COLUMNS =
+-    "desc, offset_y, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, uuid, creation_time, modification_time, arrow_json, border_width, text_offset_x, text_offset_y";
++    "desc, offset_y, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, uuid, creation_time, modification_time, arrow_json, border_width, text_offset_x, text_offset_y, shape";
+ 
+ static constexpr int count_select_columns(const char* columns) {
+     int count = 1;
+@@ -329,6 +329,7 @@
+     if (argv[15]) bm.border_width = atof(argv[15]);
+     if (argv[16]) bm.text_offset_x = atof(argv[16]);
+     if (argv[17]) bm.text_offset_y = atof(argv[17]);
++    if (argv[18]) bm.shape = atoi(argv[18]);
+ 
+     res->push_back(bm);
+     return 0;
+@@ -604,6 +605,7 @@
+         "border_width REAL DEFAULT 2.0,"\
+         "text_offset_x REAL DEFAULT 0,"\
+         "text_offset_y REAL DEFAULT 0,"\
++        "shape INTEGER DEFAULT 0,"\
+         "begin_x real DEFAULT -1,"\
+         "begin_y real DEFAULT -1,"\
+         "end_x real DEFAULT -1,"\
+@@ -818,7 +820,7 @@
+ bool DatabaseManager::insert_bookmark_freetext(const std::string& document_path, const BookMark& bm) {
+ 
+     std::wstringstream ss;
+-    ss << "INSERT INTO bookmarks (document_path, desc, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, arrow_json, border_width, text_offset_x, text_offset_y, uuid, creation_time, modification_time) VALUES ('"
++    ss << "INSERT INTO bookmarks (document_path, desc, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, arrow_json, border_width, text_offset_x, text_offset_y, shape, uuid, creation_time, modification_time) VALUES ('"
+         << esc(document_path) << "', '"
+         << esc(bm.description) << "', "
+         << bm.begin_x << " , "
+@@ -833,7 +835,8 @@
+         << esc(note_arrows_to_db_string(bm.arrows).toStdWString()) << "', "
+         << bm.border_width << ", "
+         << bm.text_offset_x << ", "
+-        << bm.text_offset_y << ", '"
++        << bm.text_offset_y << ", "
++        << bm.shape << ", '"
+         << esc(bm.uuid) << "', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);";
+     char* error_message = nullptr;
+ 
+@@ -1720,11 +1723,13 @@
+         bool has_arrow_column = false;
+         bool has_border_width_column = false;
+         bool has_text_offset_columns = false;
++        bool has_shape_column = false;
+         while (sqlite3_step(columns) == SQLITE_ROW) {
+             const unsigned char* name = sqlite3_column_text(columns, 1);
+             if (name && std::string(reinterpret_cast<const char*>(name)) == "arrow_json") has_arrow_column = true;
+             if (name && std::string(reinterpret_cast<const char*>(name)) == "border_width") has_border_width_column = true;
+             if (name && std::string(reinterpret_cast<const char*>(name)) == "text_offset_y") has_text_offset_columns = true;
++            if (name && std::string(reinterpret_cast<const char*>(name)) == "shape") has_shape_column = true;
+         }
+         sqlite3_finalize(columns);
+         if (!has_arrow_column) run_schema_query("ALTER TABLE bookmarks ADD COLUMN arrow_json TEXT;");
+@@ -1733,6 +1738,7 @@
+             run_schema_query("ALTER TABLE bookmarks ADD COLUMN text_offset_x REAL DEFAULT 0;");
+             run_schema_query("ALTER TABLE bookmarks ADD COLUMN text_offset_y REAL DEFAULT 0;");
+         }
++        if (!has_shape_column) run_schema_query("ALTER TABLE bookmarks ADD COLUMN shape INTEGER DEFAULT 0;");
+     }
+ }
+ 
+@@ -1958,6 +1964,13 @@
+             {"modification_time", "CURRENT_TIMESTAMP"},
+         });
+ }
++bool DatabaseManager::update_bookmark_shape(const std::string& uuid, int shape) {
++    std::lock_guard<std::recursive_mutex> lock(db_mutex);
++    return generic_update_run_query("bookmarks",
++        {{"uuid", QString::fromStdString(uuid)}},
++        {{"shape", shape}, {"modification_time", "CURRENT_TIMESTAMP"}});
++}
++
+ bool DatabaseManager::update_bookmark_border_width(const std::string& uuid, float border_width) {
+     return generic_update_run_query("bookmarks",
+         {{"uuid", QString::fromStdString(uuid)}},
+diff -ruN n3/pdf_viewer/database.h nwork/pdf_viewer/database.h
+--- a/pdf_viewer/database.h	2026-10-15 10:59:58.238864170 +0800
++++ b/pdf_viewer/database.h	2026-10-15 10:58:59.854017753 +0800
+@@ -76,6 +76,7 @@
+     bool update_bookmark_change_color(const std::string& uuid, const float color[3]);
+     bool update_bookmark_border_width(const std::string& uuid, float border_width);
+     bool update_bookmark_arrow(const std::string& uuid, const std::vector<NoteArrow>& arrows);
++    bool update_bookmark_shape(const std::string& uuid, int shape);
+     bool update_bookmark_change_position(const std::string& uuid, AbsoluteDocumentPos new_begin, AbsoluteDocumentPos new_end);
+     bool update_portal_change_src_position(const std::string& uuid, AbsoluteDocumentPos new_pos);
+     bool select_opened_books_path_values(std::vector<std::wstring>& out_result);
+diff -ruN n3/pdf_viewer/document.cpp nwork/pdf_viewer/document.cpp
+--- a/pdf_viewer/document.cpp	2026-10-15 10:59:58.239203067 +0800
++++ b/pdf_viewer/document.cpp	2026-10-15 10:58:59.854175373 +0800
+@@ -2423,6 +2423,10 @@
+             // Nothing to export for a box that has collapsed to a point; only
+             // the ink arrow below carries any of this note's geometry.
+         }
++        else if (bookmark.is_brace()) {
++            // Likewise: a brace is carried by the ink below, and a square here
++            // would export as a box nobody drew.
++        }
+         else if (bookmark.is_freetext() && (!bookmark.is_box())) {
+             if (bookmark.description.empty()) {
+                 // An empty note is drawn as a rectangle, and a FreeText annotation
+@@ -2488,6 +2492,30 @@
+             created_annotations.push_back(std::make_pair(pdf_page, bookmark_annot));
+         }
+ 
++        // PDF has no brace annotation either, so the same outline that is drawn
++        // on screen is exported as ink.
++        if (bookmark.is_brace()) {
++            std::vector<fz_point> brace_points;
++            bool brace_complete = true;
++            for (const AbsoluteDocumentPos& point : note_brace_points(bookmark)) {
++                DocumentPos docpos = absolute_to_page_pos_uncentered(point);
++                if (docpos.page != page_number) {
++                    brace_complete = false;
++                    break;
++                }
++                brace_points.push_back(fz_point{ docpos.x, docpos.y });
++            }
++            if (brace_complete && brace_points.size() > 1) {
++                int brace_count = static_cast<int>(brace_points.size());
++                pdf_annot* brace_annot = pdf_create_annot(context, pdf_page, PDF_ANNOT_INK);
++                pdf_set_annot_ink_list(context, brace_annot, 1, &brace_count, &brace_points[0]);
++                pdf_set_annot_border(context, brace_annot, bookmark.border_width);
++                pdf_set_annot_color(context, brace_annot, 3, bookmark.color);
++                pdf_update_annot(context, brace_annot);
++                created_annotations.push_back(std::make_pair(pdf_page, brace_annot));
++            }
++        }
++
+         // PDF has no curved-arrow annotation, so the cubic is flattened into an
+         // ink annotation. Without this the arrow is simply lost on export.
+         for (const NoteArrow& arrow : bookmark.arrows) {
+@@ -4007,6 +4035,15 @@
+         bookmarks[index].update_modification_time();
+         is_annotations_dirty = true;
+     }
++}
++
++void Document::update_bookmark_shape(int index, int shape) {
++    if (index >= 0 && index < bookmarks.size() &&
++        db_manager->update_bookmark_shape(bookmarks[index].uuid, shape)) {
++        bookmarks[index].shape = shape;
++        bookmarks[index].update_modification_time();
++        is_annotations_dirty = true;
++    }
+ }
+ 
+ void Document::update_bookmark_border_width(int index, float border_width) {
+diff -ruN n3/pdf_viewer/document.h nwork/pdf_viewer/document.h
+--- a/pdf_viewer/document.h	2026-10-15 10:59:58.239670840 +0800
++++ b/pdf_viewer/document.h	2026-10-15 10:58:59.854332220 +0800
+@@ -365,6 +365,7 @@
+     void update_bookmark_color(int index, const float color[3]);
+     void update_bookmark_border_width(int index, float border_width);
+     void update_bookmark_arrow(int index, const std::vector<NoteArrow>& arrows);
++    void update_bookmark_shape(int index, int shape);
+     void update_bookmark_position(int index, AbsoluteDocumentPos new_begin_position, AbsoluteDocumentPos new_end_position);
+     void update_portal_src_position(int index, AbsoluteDocumentPos new_position);
+ 
+diff -ruN n3/pdf_viewer/input.cpp nwork/pdf_viewer/input.cpp
+--- a/pdf_viewer/input.cpp	2026-10-15 10:59:58.250541040 +0800
++++ b/pdf_viewer/input.cpp	2026-10-15 10:58:59.854592065 +0800
+@@ -3671,6 +3671,37 @@
+     void perform() override { widget->begin_note_arrow(); }
+ };
+ 
++class AddBraceCommand : public Command {
++public:
++    static inline const std::string cname = "add_brace";
++    static inline const std::string hname = "Draw a curly brace, or move the selected one to the opposite side";
++    std::optional<AbsoluteRect> rect_;
++
++    AddBraceCommand(MainWidget* w) : Command(cname, w) {};
++
++    // With a brace already selected the command flips it, which needs nothing
++    // from the user; otherwise it asks for the rectangle to draw one in.
++    std::optional<Requirement> next_requirement(MainWidget* widget) {
++        if (widget->has_selected_brace()) return {};
++        if (!rect_.has_value()) {
++            Requirement req = { RequirementType::Rect, "Brace Location" };
++            return req;
++        }
++        return {};
++    }
++
++    void set_rect_requirement(AbsoluteRect value) { rect_ = value; }
++
++    void perform() override {
++        if (rect_.has_value()) widget->add_brace_note(rect_.value());
++        else widget->flip_selected_brace();
++        widget->clear_selected_rect();
++        widget->invalidate_render();
++    }
++
++    bool requires_document() { return true; }
++};
++
+ class AddFreeArrowCommand : public Command {
+ public:
+     static inline const std::string cname = "add_free_arrow";
+@@ -7260,6 +7291,7 @@
+     register_command<ChangeSelectedBookmarkColorCommand>();
+     register_command<AddNoteArrowCommand>();
+     register_command<AddFreeArrowCommand>();
++    register_command<AddBraceCommand>();
+     register_command<UndoDeleteAnnotationCommand>();
+     register_command<ToggleNoteArrowStraightCommand>();
+     register_command<FitNoteToTextCommand>();
+diff -ruN n3/pdf_viewer/main_widget.cpp nwork/pdf_viewer/main_widget.cpp
+--- a/pdf_viewer/main_widget.cpp	2026-10-15 10:59:58.247655935 +0800
++++ b/pdf_viewer/main_widget.cpp	2026-10-15 10:58:59.855235874 +0800
+@@ -9138,6 +9138,55 @@
+     setCursor(Qt::CrossCursor);
+ }
+ 
++bool MainWidget::has_selected_brace() {
++    if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return false;
++    return doc()->get_bookmarks()[selected_bookmark_index].is_brace();
++}
++
++// A curly brace over the dragged rectangle. Like a free arrow it is an ordinary
++// note underneath -- only drawn differently -- so resizing, colour, border
++// width, delete, undo and copy all work on it without knowing what it is.
++void MainWidget::add_brace_note(AbsoluteRect rect) {
++    if (!doc()) return;
++    AbsoluteRect drawn;
++    drawn.x0 = std::min(rect.x0, rect.x1);
++    drawn.x1 = std::max(rect.x0, rect.x1);
++    drawn.y0 = std::max(0.0f, std::min(rect.y0, rect.y1));
++    drawn.y1 = std::max(rect.y0, rect.y1);
++    // A brace needs a size to be drawn in at all, and a stray click is not a drag.
++    if (drawn.width() < 2.0f || drawn.height() < 2.0f) return;
++
++    float color[3] = { FREETEXT_BOOKMARK_COLOR[0], FREETEXT_BOOKMARK_COLOR[1], FREETEXT_BOOKMARK_COLOR[2] };
++    doc()->add_freetext_bookmark_with_color(L"", drawn, color, -1);
++    const int index = static_cast<int>(doc()->get_bookmarks().size()) - 1;
++    if (index < 0) return;
++    // The shape of the drag picks the orientation: drawn down a margin it braces
++    // the lines beside it, drawn along a line it braces what sits above.
++    doc()->update_bookmark_shape(index, drawn.height() >= drawn.width()
++        ? NOTE_SHAPE_BRACE_LEFT : NOTE_SHAPE_BRACE_BOTTOM);
++    set_selected_highlight_index(-1);
++    set_selected_bookmark_index(index);
++    invalidate_render();
++}
++
++// Move the selected brace to the opposite edge, for one drawn on the wrong
++// side. It stays on the axis it was drawn on: a brace turned onto the other
++// axis would be as long as the rectangle is thin, which draws as a stretched
++// mess -- the shape of the drag decides the axis, and this decides the side.
++void MainWidget::flip_selected_brace() {
++    if (!has_selected_brace()) return;
++    const int shape = doc()->get_bookmarks()[selected_bookmark_index].shape;
++    int flipped = shape;
++    switch (shape) {
++    case NOTE_SHAPE_BRACE_LEFT: flipped = NOTE_SHAPE_BRACE_RIGHT; break;
++    case NOTE_SHAPE_BRACE_RIGHT: flipped = NOTE_SHAPE_BRACE_LEFT; break;
++    case NOTE_SHAPE_BRACE_TOP: flipped = NOTE_SHAPE_BRACE_BOTTOM; break;
++    default: flipped = NOTE_SHAPE_BRACE_TOP; break;
++    }
++    doc()->update_bookmark_shape(selected_bookmark_index, flipped);
++    invalidate_render();
++}
++
+ // An arrow with no box. The press that follows makes the note, so unlike
+ // begin_note_arrow() there is no index to remember here.
+ void MainWidget::begin_free_note_arrow() {
+@@ -9473,7 +9522,9 @@
+     ui_trace("freetext_editor.show.enter", std::to_wstring(selected_bookmark_index));
+     if (TOUCH_MODE || !doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
+     const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
+-    if (!bookmark.is_freetext() || bookmark.is_box()) return;
++    // A brace is a shape and holds no text, so the one place that opens the
++    // editor refuses it -- double click, menu and command alike.
++    if (!bookmark.is_freetext() || bookmark.is_box() || bookmark.is_brace()) return;
+     capture_freetext_edit_appearance();
+     text_command_line_edit_container->hide();
+     freetext_editor->setPlainText(text_command_line_edit->text());
+@@ -9522,7 +9573,7 @@
+ void MainWidget::fit_note_to_text() {
+     if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
+     BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
+-    if (!bookmark.is_freetext() || bookmark.is_box() || bookmark.is_free_arrow()) return;
++    if (!bookmark.is_freetext() || bookmark.is_box() || bookmark.is_free_arrow() || bookmark.is_brace()) return;
+     if (freetext_editor && freetext_editor->isVisible() && !finish_freetext_edit_keeping_selection()) return;
+ 
+     const QString text = QString::fromStdWString(bookmark.description);
+diff -ruN n3/pdf_viewer/main_widget.h nwork/pdf_viewer/main_widget.h
+--- a/pdf_viewer/main_widget.h	2026-10-15 10:59:58.243538635 +0800
++++ b/pdf_viewer/main_widget.h	2026-10-15 10:58:59.855640756 +0800
+@@ -539,6 +539,9 @@
+     void change_selected_bookmark_color(char type);
+     void begin_note_arrow();
+     void begin_free_note_arrow();
++    void add_brace_note(AbsoluteRect rect);
++    void flip_selected_brace();
++    bool has_selected_brace();
+     void delete_selected_note_arrow();
+     int note_arrow_handle_at(WindowPos pos, int* out_arrow_index = nullptr);
+     void note_text_ink_inset(const BookMark& bookmark, float* out_top, float* out_left);
+diff -ruN n3/pdf_viewer/pdf_view_opengl_widget.cpp nwork/pdf_viewer/pdf_view_opengl_widget.cpp
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp	2026-10-15 10:59:58.248653891 +0800
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp	2026-10-15 10:58:59.855812438 +0800
+@@ -2331,9 +2331,27 @@
+ 
+                     std::array<float, 3> bookmark_color = cc3(bookmarks[i].color);
+                     painter->setPen(convert_float3_to_qcolor(&bookmark_color[0]));
++                    if (bookmarks[i].is_brace()) {
++                        // The brace stands in for the border: same colour and
++                        // stroke width, drawn from the shared outline.
++                        painter->save();
++                        painter->setRenderHint(QPainter::Antialiasing, true);
++                        painter->setPen(QPen(convert_float3_to_qcolor(&bookmark_color[0]),
++                            std::max(0.5f, bookmarks[i].border_width * document_view->get_zoom_level()),
++                            Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
++                        const std::vector<AbsoluteDocumentPos> outline = note_brace_points(bookmarks[i]);
++                        QPainterPath brace;
++                        for (size_t point_index = 0; point_index < outline.size(); point_index++) {
++                            WindowPos at = outline[point_index].to_window(document_view);
++                            if (point_index == 0) brace.moveTo(at.x, at.y);
++                            else brace.lineTo(at.x, at.y);
++                        }
++                        painter->drawPath(brace);
++                        painter->restore();
++                    }
+                     // An empty note is still drawn as a rectangle so it can be
+                     // found, but a free arrow is meant to have no box at all.
+-                    if (!bookmarks[i].is_box() && !bookmarks[i].is_free_arrow() &&
++                    else if (!bookmarks[i].is_box() && !bookmarks[i].is_free_arrow() &&
+                         (RENDER_FREETEXT_BORDERS || bookmarks[i].description.empty())) {
+                         painter->save();
+                         painter->setRenderHint(QPainter::Antialiasing, true);
