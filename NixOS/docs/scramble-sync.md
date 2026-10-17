@@ -107,6 +107,8 @@ read-only views, stops the CLI backend when used, and shuts down the app.
 Right-click the Scramble tray icon for
 **Open Scramble Desktop**, **Open Public Sync Folder**, **Open Private Sync
 Folder**, **Browse Cloud Files**, **Sync Now**, **Sync Status**, and **Quit**.
+**Sync Status** shows a desktop notification instead of opening a terminal.
+For a terminal report, run `scramble-sync-status` directly.
 The launcher brings the stopped services back automatically after quitting;
 stored logins and crypt keys are retained. The icon disappears when Scramble
 quits and returns when the app is launched again.

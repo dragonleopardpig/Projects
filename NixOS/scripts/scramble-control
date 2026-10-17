@@ -106,11 +106,9 @@ case "${1:-}" in
         open_folder "$HOME/Scramble Public"
         ;;
     status)
-        exec kitty --title 'Scramble sync status' bash -c "
-            \"\$HOME/.local/bin/scramble-sync-status\"
-            printf '\\nPress Enter to close this status terminal.\\n'
-            read -r
-        "
+        status_message="$("$HOME/.local/bin/scramble-sync-status")"
+        exec notify-send --app-name=Scramble --icon=scramble-desktop --expire-time=15000 \
+            'Scramble sync status' "$status_message"
         ;;
     *)
         echo 'Usage: scramble-control {ready|start-sync|stop-sync|sync-now|quit|open-public|open-private|open-cloud|status}' >&2
