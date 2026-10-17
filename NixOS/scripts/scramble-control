@@ -2,6 +2,7 @@
 set -euo pipefail
 umask 077
 export PATH="@PATH@:$PATH"
+unset LD_LIBRARY_PATH LD_PRELOAD
 export RCLONE_CONFIG="$HOME/.config/rclone/rclone.conf"
 
 backend=@BACKEND@
