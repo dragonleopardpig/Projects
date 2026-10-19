@@ -56,6 +56,10 @@
         # building rusty-v8 from source when cache.nixos.org doesn't have it.
         yt-dlp = prev.yt-dlp.override { javascriptSupport = false; };
 
+        pinta = prev.pinta.overrideAttrs (old: {
+          dotnetRuntimeDeps = old.dotnetRuntimeDeps ++ [ (prev.lib.getLib prev.pango) ];
+        });
+
         swappy = prev.swappy.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/swappy-multi-mime-clipboard.patch
