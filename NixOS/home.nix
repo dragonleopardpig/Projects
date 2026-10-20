@@ -2466,6 +2466,14 @@ in
     }
 
     windowrule {
+      name = onlyoffice-dialogs
+      match:class = ^(DesktopEditors|ONLYOFFICE|onlyoffice-desktopeditors)$
+      match:modal = true
+      float = yes
+      center = yes
+    }
+
+    windowrule {
       name = filen-desktop-float
       match:class = ^(filen-desktop|Filen Desktop)$
       float = yes
