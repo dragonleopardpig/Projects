@@ -2459,11 +2459,10 @@ in
     }
 
     windowrule {
-      name = onlyoffice-float
+      name = onlyoffice-tile
       match:class = ^(DesktopEditors|ONLYOFFICE|onlyoffice-desktopeditors)$
-      float = yes
-      center = yes
-      size = 1600 960
+      match:modal = false
+      tile = yes
     }
 
     windowrule {
