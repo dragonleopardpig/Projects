@@ -252,9 +252,15 @@ in
   xdg.configFile."systemd/user/scramble-references-download.service".force = true;
   xdg.configFile."systemd/user/scramble-references-download.timer".force = true;
 
+  # THE REFERENCE LIBRARY, both ways but ADD-ONLY: books new in the cloud come down, books new
+  # here go up (2026-10-21: seven added locally had never reached the cloud). Not a bisync like
+  # Scramble Public's -- that one hashes every file each run, downloading what the WebDAV side
+  # cannot hash, which for a multi-gigabyte library is the whole library every half hour; and
+  # it carries deletions. Here nothing is ever deleted or overwritten on either side: to drop
+  # or rename a book, do it in the cloud too, or the next run brings the old one back.
   systemd.user.services.scramble-references-download = {
     Unit = {
-      Description = "Download missing Scramble reference books for offline reading";
+      Description = "Keep the Scramble reference books in step both ways (add-only)";
       Wants = [ "network-online.target" backend ];
       After = [ "network-online.target" backend ];
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";
@@ -263,7 +269,10 @@ in
       Type = "oneshot";
       Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
       ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${home}/Documents/Scramble References'";
-      ExecStart = "${rclone} copy scramble_drive:References '${home}/Documents/Scramble References' --webdav-encoding=Colon --ignore-existing --transfers=1 --checkers=2 --tpslimit=2 --contimeout=10s --timeout=1m --retries=3 --low-level-retries=3";
+      ExecStart = [
+        "${rclone} copy scramble_drive:References '${home}/Documents/Scramble References' --webdav-encoding=Colon --ignore-existing --transfers=1 --checkers=2 --tpslimit=2 --contimeout=10s --timeout=1m --retries=3 --low-level-retries=3"
+        "${rclone} copy '${home}/Documents/Scramble References' scramble_drive:References --webdav-encoding=Colon --ignore-existing --transfers=1 --checkers=2 --tpslimit=2 --contimeout=10s --timeout=1m --retries=3 --low-level-retries=3"
+      ];
     };
   };
 
