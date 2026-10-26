@@ -106,6 +106,7 @@
             # A note drawn as a curly brace rather than a rectangle, for
             # gathering a few lines rather than boxing them in.
             ./patches/sioyek-note-brace.patch
+            ./patches/sioyek-lettered-section-references.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           # final, not prev: the jkqtplotter below is patched in this same
