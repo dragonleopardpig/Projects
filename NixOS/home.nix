@@ -881,8 +881,12 @@ in
         find "$APP_DIR/usr/bin" -type f -exec sed -i '1s|^#!/bin/bash|#!/usr/bin/env bash|' {} + 2>/dev/null || true
       fi
 
+      if [ -z "''${NIX_LD_LIBRARY_PATH:-}" ] && [ -d /run/current-system/sw/share/nix-ld/lib ]; then
+        export NIX_LD_LIBRARY_PATH=/run/current-system/sw/share/nix-ld/lib
+      fi
+
       export PATH="$APP_DIR/usr/bin:/run/wrappers/bin:$PATH"
-      export LD_LIBRARY_PATH="${pkgs.fuse}/lib:$APP_DIR/opt/megacmd/lib:''${LD_LIBRARY_PATH:-}"
+      export LD_LIBRARY_PATH="${pkgs.fuse.out}/lib:$APP_DIR/opt/megacmd/lib:''${LD_LIBRARY_PATH:-}"
 
       if [ "$cmd_name" = "mega-runner" ]; then
         cmd="$1"
@@ -902,6 +906,9 @@ in
     };
     Service = {
       Type = "simple";
+      Environment = [
+        "NIX_LD_LIBRARY_PATH=/run/current-system/sw/share/nix-ld/lib"
+      ];
       ExecStart = "${config.home.homeDirectory}/.local/bin/mega-runner mega-cmd-server";
       Restart = "on-failure";
       RestartSec = 10;
