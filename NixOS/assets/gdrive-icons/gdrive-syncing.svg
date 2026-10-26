@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <path fill="#FFC107" d="M 22 4 L 42 4 L 62 39 L 42 39 Z" />
+  <path fill="#4285F4" d="M 22 4 L 2 39 L 12 56 L 32 21 Z" />
+  <path fill="#0F9D58" d="M 23 41 L 13 58 L 52 58 L 62 41 Z" />
+  <!-- Sync badge: circle + arrows -->
+  <circle cx="48" cy="48" r="15" fill="#1A73E8" stroke="#FFFFFF" stroke-width="2" />
+  <path fill="#FFFFFF" d="M 48 39 A 9 9 0 0 0 40 45 L 38 41 L 38 48 L 45 48 L 42 45 A 6 6 0 0 1 54 48 L 57 48 A 9 9 0 0 0 48 39 Z M 48 57 A 9 9 0 0 0 56 51 L 58 55 L 58 48 L 51 48 L 54 51 A 6 6 0 0 1 42 48 L 39 48 A 9 9 0 0 0 48 57 Z" />
+</svg>

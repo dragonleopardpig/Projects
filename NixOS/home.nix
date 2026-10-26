@@ -199,6 +199,36 @@ in
   home.file.".local/share/icons/hicolor/256x256/apps/megasync.png".source = megasyncWalkerIcon;
   home.file.".local/share/icons/hicolor/256x256/apps/MEGAsync.png".source = megasyncWalkerIcon;
 
+  home.file.".local/bin/mega-nemo-action" = {
+    source = ./scripts/mega-nemo-action.py;
+    executable = true;
+    force = true;
+  };
+
+  xdg.dataFile."nemo/actions/mega_upload.nemo_action".text = ''
+    [Nemo Action]
+    Active=true
+    Name=Upload to MEGA
+    Comment=Upload selected file(s) or folder(s) to your MEGA account
+    Exec=/home/thinky/.local/bin/mega-nemo-action upload %F
+    Icon-Name=megasync
+    Selection=notnone
+    Extensions=any;
+    Quote=double
+  '';
+
+  xdg.dataFile."nemo/actions/mega_sync.nemo_action".text = ''
+    [Nemo Action]
+    Active=true
+    Name=Sync with MEGA
+    Comment=Set up folder synchronization in MEGAsync
+    Exec=/home/thinky/.local/bin/mega-nemo-action sync "%F"
+    Icon-Name=megasync
+    Selection=s
+    Extensions=dir;
+    Quote=double
+  '';
+
   home.file.".local/bin/nemo-x11" = {
     executable = true;
     text = ''
@@ -323,6 +353,24 @@ in
     };
     terminal = false;
   };
+
+  home.file.".local/bin/filen-nemo-action" = {
+    source = ./scripts/filen-nemo-action.py;
+    executable = true;
+    force = true;
+  };
+
+  xdg.dataFile."nemo/actions/filen_sync.nemo_action".text = ''
+    [Nemo Action]
+    Active=true
+    Name=Sync with Filen
+    Comment=Configure folder synchronization in Filen Desktop
+    Exec=/home/thinky/.local/bin/filen-nemo-action sync "%F"
+    Icon-Name=filen-desktop
+    Selection=s
+    Extensions=dir;
+    Quote=double
+  '';
 
   xdg.mimeApps = {
     enable = true;
@@ -816,6 +864,58 @@ in
     categories = [ "Network" "Chat" "Office" ];
     terminal = false;
   };
+
+  # MEGAcmd runner: extracted from deb and run natively with FUSE support via nix-ld
+  home.file.".local/bin/mega-runner" = {
+    executable = true;
+    force = true;
+    text = ''
+      #!/usr/bin/env bash
+      cmd_name="$(basename "$0")"
+      DEB_PATH="$HOME/Downloads/megacmd-Debian_13_amd64.deb"
+      APP_DIR="$HOME/.local/opt/megacmd"
+
+      if [ ! -d "$APP_DIR/usr/bin" ] && [ -f "$DEB_PATH" ]; then
+        mkdir -p "$APP_DIR"
+        ${pkgs.dpkg}/bin/dpkg -x "$DEB_PATH" "$APP_DIR"
+        find "$APP_DIR/usr/bin" -type f -exec sed -i '1s|^#!/bin/bash|#!/usr/bin/env bash|' {} + 2>/dev/null || true
+      fi
+
+      export PATH="$APP_DIR/usr/bin:/run/wrappers/bin:$PATH"
+      export LD_LIBRARY_PATH="${pkgs.fuse}/lib:$APP_DIR/opt/megacmd/lib:''${LD_LIBRARY_PATH:-}"
+
+      if [ "$cmd_name" = "mega-runner" ]; then
+        cmd="$1"
+        shift
+        exec "$APP_DIR/usr/bin/$cmd" "$@"
+      else
+        exec "$APP_DIR/usr/bin/$cmd_name" "$@"
+      fi
+    '';
+  };
+
+  systemd.user.services.mega-cmd = {
+    Unit = {
+      Description = "MEGAcmd Background Server and FUSE Mount";
+      After = [ "network-online.target" ];
+      Wants = [ "network-online.target" ];
+    };
+    Service = {
+      Type = "simple";
+      ExecStart = "${config.home.homeDirectory}/.local/bin/mega-runner mega-cmd-server";
+      Restart = "on-failure";
+      RestartSec = 10;
+    };
+    Install = {
+      WantedBy = [ "graphical-session.target" ];
+    };
+  };
+
+  home.activation.megaCmdLinks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    for cmd in mega-cmd mega-exec mega-login mega-logout mega-whoami mega-ls mega-fuse-add mega-fuse-show mega-fuse-remove mega-fuse-enable mega-fuse-disable mega-sync mega-webdav mega-help; do
+      ln -sf "$HOME/.local/bin/mega-runner" "$HOME/.local/bin/$cmd"
+    done
+  '';
 
   # Hide system .desktop entries that duplicate our wrappers in Walker.
   # Each override shadows the system entry by sharing the same desktop ID.
@@ -3711,6 +3811,7 @@ in
   imports = [
     inputs.walker.homeManagerModules.default
     ./modules/scramble-sync-home.nix
+    ./modules/gdrive-sync-home.nix
   ];
 
   programs.walker = {
