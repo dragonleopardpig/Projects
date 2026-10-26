@@ -316,10 +316,25 @@ window.ControlCenterWindow {
         color: #eee;
     }
     button.ApRow:hover { background: rgba(255, 105, 180, 0.12); color: #eee; }
+    button.ApRow.ApSelected { background: rgba(0, 255, 255, 0.11); }
     .ApLock   { color: #ffd700; font-size: 11px; }
     .ApSsid   { color: #eee;    font-size: 12px; }
     .ApActive { color: #00ffff; font-size: 11px; }
     .ApSignal { color: #00ffff; font-size: 12px; }
+
+    .ApDetails {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 8px;
+    }
+    button.ApAction, button.ApAuto {
+        background: rgba(0, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 4px 9px;
+        color: #00ffff;
+    }
+    button.ApAction:hover, button.ApAuto:hover { background: rgba(255, 105, 180, 0.16); }
+    button.ApAuto.Off { color: #888; background: rgba(255, 255, 255, 0.06); }
 
     .ApPassword { padding: 2px; }
     .ApPwEntry {

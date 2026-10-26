@@ -1,6 +1,7 @@
 import { App, Astal, Gtk, Gdk } from "astal/gtk3"
 import { Variable, exec, execAsync } from "astal"
 import Apps from "gi://AstalApps"
+import Gio from "gi://Gio"
 
 // Launch an app pinned to the currently-focused Hyprland workspace.
 // Hyprland's PID-based initial_workspace_tracking can't follow the
@@ -48,7 +49,7 @@ export default function AppDrawer() {
 
     function makeTile(app: Apps.Application): Gtk.Widget {
         const icon = new Gtk.Image({
-            icon_name: app.iconName || "application-x-executable",
+            gicon: Gio.icon_new_for_string(app.iconName || "application-x-executable"),
             pixel_size: 72,
         })
         const name = new Gtk.Label({
@@ -120,8 +121,10 @@ export default function AppDrawer() {
         anchor={TOP | BOTTOM | LEFT | RIGHT}
         layer={Astal.Layer.OVERLAY}
         onShow={() => {
+            apps.reload()
             searchEntry.set_text("")
             query.set("")
+            repopulate("")
             searchEntry.grab_focus()
         }}
         onKeyPressEvent={(self, ev) => {

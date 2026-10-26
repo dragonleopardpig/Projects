@@ -1,0 +1,14 @@
+diff --git a/pdf_viewer/pdf_view_opengl_widget.cpp b/pdf_viewer/pdf_view_opengl_widget.cpp
+index 819c0127..c63d6d69 100644
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp
+@@ -4474,7 +4474,8 @@ void PdfViewOpenGLWidget::render_highlight_annotations(){
+
+                     //glUniform3fv(shared_gl_objects.highlight_color_uniform_location, 1, get_highlight_type_color(highlights[i].type));
+                     glUniform3fv(shared_gl_objects.highlight_color_uniform_location, 1, &adjusted_highlight_color[0]);
+-                    glUniform1f(shared_gl_objects.highlight_opacity_uniform_location, 0.3f);
++                    const bool is_line_annotation = std::isupper(highlights[i].type) || highlights[i].type == '_';
++                    glUniform1f(shared_gl_objects.highlight_opacity_uniform_location, is_line_annotation ? 1.0f : 0.3f);
+
+                     int flags = 0;
+                     if (std::isupper(highlights[i].type)) {

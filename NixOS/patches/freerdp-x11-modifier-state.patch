@@ -1,0 +1,26 @@
+diff --git a/client/X11/xf_keyboard.c b/client/X11/xf_keyboard.c
+--- a/client/X11/xf_keyboard.c
++++ b/client/X11/xf_keyboard.c
+@@ -1154,0 +1155 @@
++	char keymap[32] = WINPR_C_ARRAY_INIT;
+@@ -1158,10 +1159,10 @@
+-	const int state = xf_keyboard_read_keyboard_state(xfc);
+-
+-	for (size_t i = 0; i < ARRAYSIZE(keysyms); i++)
+-	{
+-		if (xf_keyboard_get_key_state(xfc, state, keysyms[i]))
+-		{
+-			const KeyCode keycode = XKeysymToKeycode(xfc->display, keysyms[i]);
+-			WINPR_ASSERT(keycode < ARRAYSIZE(xfc->KeyboardState));
+-			xfc->KeyboardState[keycode] = TRUE;
+-		}
++	if (!XQueryKeymap(xfc->display, keymap))
++		return;
++
++	for (size_t index = 0; index < ARRAYSIZE(keysyms); index++)
++	{
++		const KeyCode keycode = XKeysymToKeycode(xfc->display, keysyms[index]);
++		if (keycode == NoSymbol)
++			continue;
++		WINPR_ASSERT(keycode < ARRAYSIZE(xfc->KeyboardState));
++		xfc->KeyboardState[keycode] = ((BYTE)keymap[keycode / 8] & (1U << (keycode % 8))) != 0;

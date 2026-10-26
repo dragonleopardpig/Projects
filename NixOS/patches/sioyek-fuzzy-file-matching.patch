@@ -1,0 +1,175 @@
+diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
+index 46d5c83e..c4a1173f 100644
+--- a/pdf_viewer/main_widget.cpp
++++ b/pdf_viewer/main_widget.cpp
+@@ -6815,6 +6815,12 @@ void MainWidget::handle_open_prev_doc() {
+         }
+         );
+
++    if (auto* selector = dynamic_cast<BaseSelectorWidget*>(current_widget_stack.back())) {
++        if (auto* proxy = dynamic_cast<MySortFilterProxyModel*>(selector->get_view()->model())) {
++            proxy->file_names_only = true;
++            selector->set_filter_column_index(0);
++        }
++    }
+     make_current_menu_columns_equal();
+     show_current_widget();
+ }
+diff --git a/pdf_viewer/mysortfilterproxymodel.cpp b/pdf_viewer/mysortfilterproxymodel.cpp
+index 33d1795a..ab8ad901 100644
+--- a/pdf_viewer/mysortfilterproxymodel.cpp
++++ b/pdf_viewer/mysortfilterproxymodel.cpp
+@@ -1,8 +1,7 @@
+ #include "mysortfilterproxymodel.h"
++#include <QFileInfo>
+ #include <string>
+
+-#include "rapidfuzz_amalgamated.hpp"
+-
+ bool MySortFilterProxyModel::filter_accepts_row_column(int row, int col, const QModelIndex& source_parent) const {
+     if (filterString.size() == 0 || filterString == "<NULL>") return true;
+
+@@ -12,7 +11,7 @@ bool MySortFilterProxyModel::filter_accepts_row_column(int row, int col, const Q
+         return scores[index_map[current_index]];
+     }
+     else {
+-        return scores[row] > 50;
++        return scores[row] > 0;
+     }
+ }
+
+@@ -86,8 +85,32 @@ MySortFilterProxyModel::~MySortFilterProxyModel() {
+     fzf_free_slab(slab);
+ }
+
++int MySortFilterProxyModel::compute_file_score(const QString& filter_string, const QString& item_string) const {
++    const QString file_name = QFileInfo(item_string).fileName();
++    const QStringList terms = filter_string.simplified().split(' ', Qt::SkipEmptyParts);
++    int score = 1;
++    for (const QString& term : terms) {
++        auto position = file_name.indexOf(term, 0, Qt::CaseInsensitive);
++        if (position < 0) {
++            return 0;
++        }
++        score += term.size();
++        if (position == 0) {
++            score += 2 * term.size();
++        }
++        else if (!file_name.at(position - 1).isLetterOrNumber()) {
++            score += term.size();
++        }
++    }
++    return score;
++}
++
+ int MySortFilterProxyModel::compute_score(QString filter_string, QString item_string) const{
+-    return static_cast<int>(rapidfuzz::fuzz::partial_ratio(filter_string.toStdWString(), item_string.toStdWString()));
++    std::string filter_str = filter_string.simplified().toStdString();
++    fzf_pattern_t* pattern = fzf_parse_pattern(CaseSmart, false, filter_str.data(), true);
++    int score = compute_score(pattern, item_string);
++    fzf_free_pattern(pattern);
++    return score;
+ }
+
+ int MySortFilterProxyModel::compute_score(fzf_pattern_t* pattern, QString item_string) const{
+@@ -126,12 +149,21 @@ void MySortFilterProxyModel::ensure_scores() const {
+
+ void MySortFilterProxyModel::update_scores() const{
+     scores.clear();
++    index_map.clear();
+
+     int n_rows = sourceModel()->rowCount();
+     int n_cols = sourceModel()->columnCount();
+     int filter_column_index = filterKeyColumn();
+-    std::string filter_str = filterString.toStdString();
+-    fzf_pattern_t* pattern = fzf_parse_pattern(CaseSmart, false, (char*)filter_str.c_str(), true);
++    if (file_names_only) {
++        for (int row = 0; row < n_rows; row++) {
++            QModelIndex index = sourceModel()->index(row, 0);
++            scores.push_back(compute_file_score(filterString, sourceModel()->data(index).toString()));
++            index_map[index] = scores.size() - 1;
++        }
++        return;
++    }
++    std::string filter_str = filterString.simplified().toStdString();
++    fzf_pattern_t* pattern = fzf_parse_pattern(CaseSmart, false, filter_str.data(), true);
+
+     if (is_tree) {
+         for (int i = 0; i < n_rows; i++) {
+@@ -145,7 +177,7 @@ void MySortFilterProxyModel::update_scores() const{
+                 QModelIndex current_index = sourceModel()->index(i, filter_column_index);
+
+                 QString row_data = sourceModel()->data(current_index).toString();
+-                int score = compute_score(filterString, row_data);
++                int score = compute_score(pattern, row_data);
+                 scores.push_back(score);
+                 index_map[current_index] = scores.size() - 1;
+
+@@ -157,7 +189,7 @@ void MySortFilterProxyModel::update_scores() const{
+
+                 for (int col_index = 0; col_index < n_cols; col_index++) {
+                     QString rowcol_data = sourceModel()->data(sourceModel()->index(i, col_index)).toString();
+-                    int col_score = compute_score(filterString, rowcol_data);
++                    int col_score = compute_score(pattern, rowcol_data);
+                     if (col_score > score) score = col_score;
+                 }
+
+diff --git a/pdf_viewer/mysortfilterproxymodel.h b/pdf_viewer/mysortfilterproxymodel.h
+index f2441779..2f856813 100644
+--- a/pdf_viewer/mysortfilterproxymodel.h
++++ b/pdf_viewer/mysortfilterproxymodel.h
+@@ -16,6 +16,7 @@ public:
+     mutable std::vector<int> scores;
+     mutable QString last_update_string;
+     bool is_fuzzy = false;
++    bool file_names_only = false;
+     fzf_slab_t* slab;
+     mutable QMap<QModelIndex, int> index_map;
+     bool is_tree = false;
+@@ -30,6 +31,7 @@ public:
+     bool lessThan(const QModelIndex& left, const QModelIndex& right) const;
+
+     int compute_score(QString filter_string, QString item_string) const;
++    int compute_file_score(const QString& filter_string, const QString& item_string) const;
+     int compute_score(fzf_pattern_t* pattern, QString item_string) const;
+     int update_scores_for_index(fzf_pattern_t* pattern, const QModelIndex& index, int col) const;
+     void ensure_scores() const;
+diff --git a/pdf_viewer/ui.h b/pdf_viewer/ui.h
+index 01866603..402fa121 100644
+--- a/pdf_viewer/ui.h
++++ b/pdf_viewer/ui.h
+@@ -741,16 +752,17 @@ public:
+                 result.push_back(entry.fileName());
+             }
+         }
+-        if (result.size() == 0) {
++        if (result.size() == 0 || is_fuzzy) {
++            result.clear();
+             const std::string encoded_prefix = utf8_encode(prefix.toStdWString());
+-            const QFileInfoList all_directory_files = directory.entryInfoList();
++            const QFileInfoList all_directory_files = directory.entryInfoList(QDir::NoDot|QDir::Dirs|QDir::Files|QDir::Readable);
+             std::vector<std::pair<QString, int>> file_scores;
+
+             for (const auto& file : all_directory_files) {
+                 std::string encoded_file = utf8_encode(file.fileName().toStdWString());
+                 int score = 0;
+                 if (is_fuzzy) {
+-                    score = static_cast<int>(rapidfuzz::fuzz::partial_ratio(encoded_prefix, encoded_file));
++                    score = proxy_model->compute_file_score(prefix, file.fileName());
+                 }
+                 else {
+                     fts::fuzzy_match(encoded_prefix.c_str(), encoded_file.c_str(), score);
+@@ -758,7 +770,12 @@ public:
+                 const auto filename = (file.isDir() ? (file.fileName() + sep) : file.fileName());
+                 file_scores.push_back(std::make_pair(filename, score));
+             }
+-            std::sort(file_scores.begin(), file_scores.end(), [](std::pair<QString, int> lhs, std::pair<QString, int> rhs) {
++            std::stable_sort(file_scores.begin(), file_scores.end(), [&prefix](const std::pair<QString, int>& lhs, const std::pair<QString, int>& rhs) {
++                bool left_prefix = lhs.first.startsWith(prefix, Qt::CaseInsensitive);
++                bool right_prefix = rhs.first.startsWith(prefix, Qt::CaseInsensitive);
++                if (left_prefix != right_prefix) {
++                    return left_prefix;
++                }
+                 return lhs.second > rhs.second;
+                 });
+             for (const auto& [file, score] : file_scores) {

@@ -4,8 +4,9 @@ import Wp from "gi://AstalWp"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalBluetooth from "gi://AstalBluetooth"
 import AstalPowerProfiles from "gi://AstalPowerProfiles"
+import GLib from "gi://GLib"
 import { ICON } from "../lib/icons"
-import { WEATHER_CMD, DISPLAY_SCALE_CMD } from "../lib/paths"
+import { WEATHER_CMD, DISPLAY_SCALE_CMD, MOUSE_SPEED_CMD } from "../lib/paths"
 
 // ── Audio card ────────────────────────────────────────────────────
 function AudioCard() {
@@ -171,6 +172,77 @@ function ScaleCard() {
     </box>
 }
 
+function WindowsResourcesCard() {
+    const command = GLib.find_program_in_path("winapps-settings")
+    if (!command) return <box />
+    const summary = Variable("Shared by all Windows apps")
+    const refresh = () => execAsync([command, "status"])
+        .then(output => {
+            const details = JSON.parse(output)
+            const saved = `${details.configured_cpus} vCPUs · ${details.configured_gib} GiB`
+            summary.set(details.running_gib === null || details.running_cpus === null
+                ? `Next start: ${saved} (${details.state})`
+                : `${details.state}: ${details.running_cpus} vCPUs · ${details.running_gib} GiB` +
+                    (details.pending ? `\nNext start: ${saved}` : ""))
+        })
+        .catch(() => summary.set("VM status unavailable"))
+
+    return <box className="Card" vertical spacing={4}
+        onMap={() => { refresh() }}
+        onDestroy={() => summary.drop()}>
+        <label className="CardTitle" label="WinApps" xalign={0} />
+        <box spacing={8}>
+            <label hexpand xalign={0} wrap label={bind(summary)} />
+            <button tooltipText="Manage Windows apps, CPU/RAM, desktop scale, and shutdown"
+                onClicked={() => {
+                    App.get_window("control-center")?.hide()
+                    execAsync([command, "gui"])
+                        .then(() => refresh())
+                        .catch(error => console.error("WinApps:", error))
+                }}>
+                <label label="Manage…" />
+            </button>
+        </box>
+    </box>
+}
+
+function MouseSpeedCard() {
+    const current = () => {
+        try {
+            const value = Number(exec(`${MOUSE_SPEED_CMD} get`))
+            return Number.isFinite(value) ? value : 0
+        } catch { return 0 }
+    }
+    const speed = Variable(current())
+
+    const setSpeed = (value: number) => {
+        const next = Math.round(Math.max(-1, Math.min(1, value)) * 20) / 20
+        if (next === speed.get()) return
+        try {
+            exec(`${MOUSE_SPEED_CMD} set ${next.toFixed(2)}`)
+            speed.set(next)
+        } catch (error) { console.error("mouse speed:", error) }
+    }
+
+    return <box className="Card" vertical spacing={4}>
+        <label className="CardTitle" label="Mouse speed" xalign={0} />
+        <box spacing={8}>
+            <label label="Slow" />
+            <slider
+                hexpand
+                min={-1}
+                max={1}
+                step={0.05}
+                value={bind(speed)}
+                onDragged={({ value }) => setSpeed(value)}
+            />
+            <label label="Fast" />
+            <label widthChars={5}
+                label={bind(speed).as(value => value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2))} />
+        </box>
+    </box>
+}
+
 // ── Network (Wi-Fi / Ethernet) card ───────────────────────────────
 // Wi-Fi signal as a 4-segment block bar. Uses U+2588/U+2591 (full/light
 // shade) so it renders in any font — no reliance on optional Nerd-Font
@@ -216,9 +288,32 @@ function NetworkCard() {
 
     // Picker state (this component is constructed once).
     const expanded = Variable(false)
+    const selectedSsid = Variable<string | null>(null)
+    const profiles = Variable<{ uuid: string, ssid: string, autoConnect: boolean }[]>([])
     const pwFor = Variable<AstalNetwork.AccessPoint | null>(null)  // AP awaiting a password
     const password = Variable("")
     const status = Variable("")                                    // transient connect feedback
+
+    async function refreshProfiles() {
+        try {
+            const rows = await execAsync(["nmcli", "-t", "-f", "UUID,TYPE", "connection", "show"])
+            const uuids = rows.split("\n")
+                .filter(row => row.endsWith(":802-11-wireless"))
+                .map(row => row.slice(0, row.indexOf(":")))
+            const saved = await Promise.all(uuids.map(async uuid => {
+                const details = await execAsync(["nmcli", "-g",
+                    "802-11-wireless.ssid,connection.autoconnect",
+                    "connection", "show", "uuid", uuid])
+                const [ssid, autoConnect] = details.trimEnd().split("\n")
+                return { uuid, ssid, autoConnect: autoConnect === "yes" }
+            }))
+            profiles.set(saved.filter(profile => !!profile.ssid))
+        } catch (error) {
+            console.error("wifi saved profiles:", error)
+        }
+    }
+
+    refreshProfiles()
 
     function rescan() {
         if (!wifi!.get_enabled()) return
@@ -231,20 +326,74 @@ function NetworkCard() {
         status.set(`Connecting to ${ap.ssid}…`)
         try {
             (ap as any).activate(pw, (_src: any, res: any) => {
-                try { (ap as any).activate_finish(res); status.set(`Connected to ${ap.ssid}`) }
+                try {
+                    (ap as any).activate_finish(res)
+                    status.set(`Connected to ${ap.ssid}`)
+                    refreshProfiles()
+                }
                 catch (e) { status.set(`Failed: ${ap.ssid}`); console.error("wifi connect:", e) }
             })
         } catch (e) { status.set(`Failed: ${ap.ssid}`); console.error("wifi activate:", e) }
     }
 
-    function onApClicked(ap: AstalNetwork.AccessPoint) {
-        const active = wifi!.get_active_access_point()
-        if (active && ap.bssid === active.bssid) return            // already connected
-        const saved = ((ap.get_connections() as any[]) ?? []).length > 0
-        if (ap.get_requires_password() && !saved) {
+    function connectSelected(ssid: string) {
+        const saved = profiles.get().find(profile => profile.ssid === ssid)
+        if (saved) {
+            status.set(`Connecting to ${ssid}…`)
+            execAsync(["nmcli", "connection", "up", "uuid", saved.uuid])
+                .then(() => { status.set(`Connected to ${ssid}`); refreshProfiles() })
+                .catch(error => { status.set(`Could not connect to ${ssid}`); console.error("wifi connect:", error) })
+            return
+        }
+        const ap = (wifi!.accessPoints ?? []).find(candidate => candidate.ssid === ssid)
+        if (!ap) { status.set(`${ssid} is no longer in range`); return }
+        if (ap.get_requires_password()) {
             password.set(""); pwFor.set(ap)                        // prompt only when needed
         } else {
             connect(ap, null)
+        }
+    }
+
+    async function setAutoConnect(uuids: string[], enabled: boolean, ssid: string) {
+        try {
+            for (const uuid of uuids) {
+                await execAsync(["nmcli", "connection", "modify", "uuid", uuid,
+                                 "connection.autoconnect", enabled ? "yes" : "no"])
+            }
+            status.set(`Auto-connect ${enabled ? "on" : "off"} for ${ssid}`)
+        } catch (error) {
+            status.set(`Could not change auto-connect for ${ssid}`)
+            console.error("wifi auto-connect:", error)
+        } finally {
+            await refreshProfiles()
+        }
+    }
+
+    async function disconnect(ssid: string): Promise<boolean> {
+        const iface = wifi!.get_device()?.get_iface()
+        if (!iface) { status.set("Wi-Fi device unavailable"); return false }
+        try {
+            await execAsync(["nmcli", "device", "disconnect", iface])
+            status.set(`Disconnected from ${ssid}`)
+            return true
+        } catch (error) {
+            status.set(`Could not disconnect from ${ssid}`)
+            console.error("wifi disconnect:", error)
+            return false
+        }
+    }
+
+    async function forget(uuids: string[], ssid: string, active: boolean) {
+        try {
+            if (active && !await disconnect(ssid)) return
+            for (const uuid of uuids)
+                await execAsync(["nmcli", "connection", "delete", "uuid", uuid])
+            status.set(`Forgot ${ssid}`)
+        } catch (error) {
+            status.set(`Could not forget ${ssid}`)
+            console.error("wifi forget:", error)
+        } finally {
+            await refreshProfiles()
         }
     }
 
@@ -256,13 +405,23 @@ function NetworkCard() {
     }
 
     function ApRow(ap: AstalNetwork.AccessPoint, active: AstalNetwork.AccessPoint | null) {
+        const ssid = ap.ssid
         const isActive = active != null && ap.bssid === active.bssid
         const secured = ap.get_requires_password()
-        return <button className="ApRow" onClicked={() => onApClicked(ap)}
-            tooltipText={`${ap.ssid} · ${ap.strength}%` + (secured ? " · secured" : " · open")}>
+        return <button className={selectedSsid().as(selected => selected === ssid ? "ApRow ApSelected" : "ApRow")}
+            onClicked={() => { selectedSsid.set(ssid); pwFor.set(null) }}
+            onButtonPressEvent={(_self, event) => {
+                if (event.get_button()[1] !== 3) return false
+                selectedSsid.set(ssid)
+                pwFor.set(null)
+                status.set(`Actions for ${ssid}`)
+                return true
+            }}
+            tooltipText={`${ssid} · ${ap.strength}%` + (secured ? " · secured" : " · open")
+                + " · right-click for actions"}>
             <box spacing={8}>
                 <label className="ApLock" label={secured ? ICON.lock : " "} />
-                <label className="ApSsid" xalign={0} hexpand label={ap.ssid} />
+                <label className="ApSsid" xalign={0} hexpand label={ssid} />
                 <label className="ApActive" label={isActive ? ICON.check : " "} />
                 <label className="ApSignal" label={signalBars(ap.strength)} />
             </box>
@@ -277,7 +436,8 @@ function NetworkCard() {
             const seen = new Set<string>()
             const list = (aps ?? [])
                 .filter(ap => !!ap.ssid)
-                .sort((a, b) => b.strength - a.strength)
+                .sort((a, b) => Number(b.bssid === active?.bssid) - Number(a.bssid === active?.bssid)
+                    || b.strength - a.strength)
                 .filter(ap => { if (seen.has(ap.ssid)) return false; seen.add(ap.ssid); return true })
                 .slice(0, 16)
             if (!list.length) {
@@ -288,10 +448,26 @@ function NetworkCard() {
         }
     )
 
+    const selectedDetails = derive(
+        [selectedSsid, bind(wifi, "accessPoints"), bind(wifi, "activeAccessPoint"), profiles],
+        (ssid: string | null, aps: AstalNetwork.AccessPoint[], active: AstalNetwork.AccessPoint | null,
+         availableProfiles: { uuid: string, ssid: string, autoConnect: boolean }[]) => {
+            if (!ssid) return null
+            const ap = (aps ?? []).find(candidate => candidate.ssid === ssid && candidate.bssid === active?.bssid)
+                ?? (aps ?? []).filter(candidate => candidate.ssid === ssid)
+                    .sort((a, b) => b.strength - a.strength)[0]
+            if (!ap) return { ssid, ap: null, active: false, uuids: [], autoConnect: false }
+            const saved = availableProfiles.filter(profile => profile.ssid === ssid)
+            const uuids = saved.map(profile => profile.uuid)
+            return { ssid, ap, active: ap.bssid === active?.bssid, uuids,
+                     autoConnect: saved.some(profile => profile.autoConnect) }
+        }
+    )
+
     return <box className="Card NetCard" vertical spacing={6}>
         <box spacing={6}>
             <button className="NetHeader" hexpand
-                onClicked={() => { const e = !expanded.get(); expanded.set(e); if (e) rescan() }}
+                onClicked={() => { const e = !expanded.get(); expanded.set(e); if (e) { rescan(); refreshProfiles() } }}
                 tooltipText="Show nearby Wi-Fi networks">
                 <box spacing={8}>
                     <label label={summary().as(s => s.glyph)} />
@@ -328,6 +504,39 @@ function NetworkCard() {
                     vscroll={Gtk.PolicyType.AUTOMATIC} hscroll={Gtk.PolicyType.NEVER}>
                     <box vertical spacing={2}>{apRows()}</box>
                 </scrollable>
+                <box visible={selectedDetails().as(detail => detail !== null)}>
+                    {selectedDetails().as(detail => {
+                        if (!detail) return <box />
+                        if (!detail.ap) return <label className="Subtle" xalign={0}
+                            label={`${detail.ssid} is no longer in range`} />
+                        return <box className="ApDetails" vertical spacing={5}>
+                            <label className="ApSsid" xalign={0} label={detail.ssid} />
+                            <box spacing={6}>
+                                <button className="ApAction" hexpand
+                                    onClicked={() => detail.active
+                                        ? disconnect(detail.ssid) : connectSelected(detail.ssid)}>
+                                    <label label={detail.active ? "Disconnect" : "Connect"} />
+                                </button>
+                                <button className="ApAction"
+                                    visible={detail.uuids.length > 0}
+                                    onClicked={() => forget(detail.uuids, detail.ssid, detail.active)}>
+                                    <label label="Forget" />
+                                </button>
+                            </box>
+                            <box spacing={6} visible={detail.uuids.length > 0}>
+                                <label className="Subtle" xalign={0} hexpand label="Auto-connect" />
+                                <button className={detail.autoConnect ? "ApAuto On" : "ApAuto Off"}
+                                    onClicked={() => setAutoConnect(detail.uuids,
+                                        !detail.autoConnect, detail.ssid)}>
+                                    <label label={detail.autoConnect ? "ON" : "OFF"} />
+                                </button>
+                            </box>
+                            <label className="Subtle" xalign={0}
+                                visible={detail.uuids.length === 0}
+                                label="Connect first to save this network and set auto-connect." />
+                        </box>
+                    })}
+                </box>
                 <revealer revealChild={pwFor().as(ap => ap !== null)}
                     transitionType={Gtk.RevealerTransitionType.SLIDE_DOWN}>
                     <box className="ApPassword" spacing={6}>
@@ -757,6 +966,8 @@ export default function ControlCenter() {
             <MicCard />
             <BrightnessCard />
             <ScaleCard />
+            <MouseSpeedCard />
+            <WindowsResourcesCard />
             <NetworkCard />
             <BluetoothCard />
             <PowerProfileCard />

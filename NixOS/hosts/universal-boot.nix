@@ -21,8 +21,8 @@
   # sensible DHCP default.
   networking.useDHCP = lib.mkDefault true;
 
-  # Avoid a large disk-backed swap file on portable roots.
-  swapDevices = lib.mkForce [];
+  # Leave swap disabled by default while allowing hosts to opt in.
+  swapDevices = lib.mkDefault [];
 
   # Install GRUB at EFI/BOOT/BOOTX64.EFI, the standard UEFI fallback path, and
   # never add an entry to whichever computer's firmware happens to be active.
@@ -60,7 +60,6 @@
   boot.consoleLogLevel = lib.mkForce 7;
   boot.kernelParams = [
     "rd.systemd.show_status=yes"
-    "systemd.swap=0"
   ];
   boot.initrd.verbose = lib.mkForce true;
   boot.plymouth.enable = lib.mkForce false;

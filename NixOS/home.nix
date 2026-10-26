@@ -382,6 +382,7 @@ in
     // Per-monitor display scaling (Windows-style). Absolute, so it does not
     // depend on the bar inheriting ~/.local/bin on PATH.
     export const DISPLAY_SCALE_CMD = "${config.home.homeDirectory}/.local/bin/display-scale";
+    export const MOUSE_SPEED_CMD = "${config.home.homeDirectory}/.local/bin/mouse-speed";
     export const WEATHER_CMD =
         "${pkgs.curl}/bin/curl -sf 'https://wttr.in/Singapore?format=%c+%t'";
     // Detailed forecast fetcher for the Weather popup; emits slim JSON.
@@ -421,6 +422,8 @@ in
   xdg.configFile."sioyek/keys_user.config".text = ''
     open_document_embedded_from_current_path <C-o>
     open_document_embedded <C-O>
+    [m]control_menu(down) <C-n>
+    [m]control_menu(up) <C-p>
 
     # Open the searchable list of all effective key bindings.
     keys ?
@@ -515,6 +518,8 @@ in
   # reading, only an explicit settings change.
   xdg.configFile."sioyek/prefs_user.config".force = true;
   xdg.configFile."sioyek/prefs_user.config".text = ''
+    fuzzy_searching 1
+
     # Do not draw the annotations embedded in a PDF. Importing an
     # Acrobat-marked file with the built-in import_annotations leaves both sets
     # present -- the originals in the file and Sioyek's copies in shared.db --
@@ -1538,6 +1543,41 @@ in
                 apply "$(nearest "$want")" ;;
         *)      echo "usage: display-scale {get|percent|steps|up|down|set <scale>} [monitor]" >&2
                 exit 2 ;;
+      esac
+    '';
+  };
+
+  home.file.".local/bin/mouse-speed" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}"
+      state="$state_dir/hypr-mouse-speed"
+
+      valid() {
+        [[ "''${1:-}" =~ ^-?(0(\.[0-9]+)?|1(\.0+)?)$ ]]
+      }
+
+      case "''${1:-get}" in
+        get)
+          hyprctl -j getoption input:sensitivity | jq -r '.float'
+          ;;
+        set)
+          value="''${2:-}"
+          valid "$value" || exit 2
+          hyprctl keyword input:sensitivity "$value" >/dev/null
+          mkdir -p "$state_dir"
+          printf '%s\n' "$value" > "$state"
+          ;;
+        restore)
+          [ -r "$state" ] || exit 0
+          value=$(cat "$state")
+          valid "$value" || exit 2
+          hyprctl keyword input:sensitivity "$value" >/dev/null
+          ;;
+        *) exit 2 ;;
       esac
     '';
   };
@@ -2730,7 +2770,10 @@ in
       # re-applies the mode already in use rather than forcing extend, so a
       # rebuild while on a single screen does not yank the other one back on.
       # SKIP_AGS: at login the bars are still starting, so leave them alone.
-      exec = [ "env DISPLAY_CYCLE_SKIP_AGS=1 ~/.local/bin/display-cycle relayout" ];
+      exec = [
+        "env DISPLAY_CYCLE_SKIP_AGS=1 ~/.local/bin/display-cycle relayout"
+        "~/.local/bin/mouse-speed restore"
+      ];
 
       exec-once = [ "~/.local/bin/display-rescue"
                     "uwsm app -- pypr"

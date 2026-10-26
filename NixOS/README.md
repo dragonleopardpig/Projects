@@ -179,12 +179,160 @@ sudo nixos-rebuild switch --flake .#M90aPro
 
 ## Sioyek File Picker
 
+- File matching uses case-insensitive, contiguous filename fragments in any
+  order. For example, `op en` or `en op` finds `Optical Engineering`, while `fund`
+  matches `Fundamentals` but not scattered `f...u...n...d` letters. Every fragment
+  must match. PDF titles/metadata and parent paths are not searched.
 - `Ctrl+O` opens the current document's folder; `Ctrl+Shift+O` opens the configured
   default folder. With no document open, `Ctrl+O` uses the default folder too.
-- `/` enters the highlighted folder, including a fuzzy match.
+- `/` enters the highlighted folder, including a fragment match.
 - `Ctrl+N` and `Ctrl+P` move down and up through matching entries.
-- Backspace goes up one folder, even with a partial name typed. Other text-editing
-  shortcuts, including Delete and `Ctrl+Backspace`, remain available.
+- `Shift+O` opens recent documents and also supports `Ctrl+N` / `Ctrl+P`, including
+  while filtering the list.
+- Backspace deletes typed text normally. At the end of a folder path with no text
+  selected, it goes up one folder. Other text-editing shortcuts, including Delete
+  and `Ctrl+Backspace`, remain available.
+
+## WinApps
+
+`X299-SSD` installs WinApps from the local fork at `~/Projects/winapps`, with
+the upstream graphical launcher. The Windows VM uses rootless Podman, initially
+four vCPUs and 4 GiB RAM, and a
+64 GiB sparse disk. Its container image is pinned by digest. The browser console
+and RDP ports listen on localhost only, at `http://127.0.0.1:8006` and port 3389.
+
+Start Windows with `systemctl --user start winapps-vm`, then open its desktop
+with `winapps windows`. Stop it with `systemctl --user stop winapps-vm`.
+`winapps-vm ps` shows the container state; `winapps-vm logs --tail=50` shows its
+installation output. WinApps pauses Windows after five minutes without an
+application session and resumes it when an app is opened.
+
+Change CPU and RAM together through **AGS Control Center → WinApps →
+Manage…**, the **WinApps** app in AGS/Walker, or
+`winapps-settings set 8 --cpus 6` (8 GiB RAM and 6 vCPUs).
+The same dialog has **Fullscreen Windows desktop** and **Open Windows**. Opening
+reuses and focuses an existing full-desktop viewer, or starts Windows if needed;
+it does not create a second viewer when one is already open. The fullscreen
+checkbox is remembered, including for launches through the separate Windows
+shortcut. **Open Windows** saves all form settings before launching; **Save
+settings** saves them without opening Windows. If Windows is already running,
+opening or reconnecting its viewer does not change its CPU/RAM allocation.
+The manager shows the running allocation separately from saved settings and
+flags pending CPU/RAM changes: save your work, use **Shut down all WinApps**,
+then **Open Windows** to apply them. Windows' Restart does not apply them.
+Fullscreen covers AGS
+only on Windows' workspace; other workspaces keep their normal bar. The bar
+stays on the top layer rather than the overlay layer, and host workspace
+shortcuts remain available while Windows is fullscreen. Uncheck fullscreen and
+use **Open Windows** to restore windowed mode without disconnecting or restarting
+Windows. CLI equivalents: `winapps-settings set --fullscreen on` (or `off`) and
+`winapps-settings windows`.
+Opening waits for the viewer to actually appear before reporting success. Startup
+progress and launch failures stay in the manager. Private diagnostic logs are
+stored at `~/.local/state/winapps/windows-launch.log` and
+`~/.local/share/winapps/freerdp-windows.log`.
+For headless GUI checks, use an explicitly unused high-numbered Xvfb display,
+not automatic display selection, which can disturb Xwayland's display socket.
+Use `winapps-settings set --cpus 6` to change only CPU allocation.
+`winapps-settings status` shows the running and next-start allocations. The
+settings are stored in `~/.config/winapps/memory.env` and survive NixOS rebuilds.
+Existing RAM-only settings are preserved, with CPU allocation defaulting to four;
+`winapps-memory` remains a compatible command alias. All Office
+apps share this one VM allocation. Saving never stops Windows: save your Windows
+work, choose **Start → Power → Shut down**, and launch Windows again to apply it.
+Closing the viewer, pausing the VM, or using Windows' Restart does not apply it.
+The same dialog also sets **Windows desktop scale (%)**. Windows' own Display
+Scale control is restricted in RDP sessions, so the client requests this scale
+on the next full-desktop connection. Close the viewer and reopen **Windows** to
+apply scaling without shutting down the VM; some apps may need reopening.
+`winapps-settings set --desktop-scale 125` saves 125% without changing RAM/CPU.
+This does not alter NixOS scaling or the separate Office RemoteApp scaling.
+The control leaves at least 4 GiB RAM for NixOS, limits vCPUs to the host's
+available logical CPU count, and warns about memory pressure or assigning nearly
+all CPUs. vCPUs share host CPU time; they do not pin or reserve physical cores.
+Use **Shut down all WinApps** in the same dialog, or
+`winapps-settings shutdown` in an interactive terminal, to request a normal
+Windows shutdown. The graphical action shows its warning, progress, elapsed
+waiting time, and completion or error message inside the same WinApps window,
+without confirmation/completion popups or closing the manager. The CLI asks for
+confirmation in the terminal. This closes background Windows apps and releases the VM's RAM once
+shutdown completes. Save Windows/Office work first; answer any Windows prompts
+in the viewer. A paused VM is resumed first. The controller waits up to three
+minutes, but never force-stops Windows on timeout or deletes its disk. If updates
+or unsaved-work prompts block shutdown, resolve them inside Windows. Viewer
+clients are closed only after Windows stops. Closing the viewer alone does not
+shut down Windows. This action does not save pending edits in the settings form.
+The fork tracks the actual FreeRDP child under Podman (not its wrapper),
+including children created by Podman's worker threads, so active viewers are
+not incorrectly treated as idle and auto-paused. It also uses Compose `up`
+for stopped containers so changed RAM settings are picked up.
+After editing the fork, run `nix flake update winapps` in `~/Projects/NixOS`
+before rebuilding; no Git commit is needed to build local changes.
+
+In the same **WinApps** app, click **Choose Windows apps…** to select
+Windows Start-menu apps, including Microsoft Teams, for independent AGS/Walker
+launchers. Click **Refresh from Windows** after installing an app; refreshing
+briefly reconnects an existing Windows viewer without closing Windows apps.
+Selected shortcuts are named **App name (Windows)**, so they remain distinct
+from Linux alternatives. Unchecking removes only picker-managed Linux shortcuts;
+it does not uninstall Windows software or remove existing Office launchers.
+The picker uses Windows application IDs rather than version-specific MSIX paths,
+so packaged-app updates do not invalidate their shortcuts. Not every Windows
+app supports RemoteApp; use the full desktop for incompatible apps.
+
+RDP uses 100% display scaling and starts at the current monitor's resolution.
+The full Windows desktop also resizes its resolution with the client window.
+Office RemoteApps float and use click-to-focus without compositor animations.
+Their automatic maximize/fullscreen requests are ignored to avoid focus-driven
+resize loops; use `Super+Shift+F` to maximize through Hyprland. Only the named
+RemoteApp marker window is prevented from taking focus; untitled sign-in dialogs
+remain usable. Opening another RemoteApp reconnects the shared
+Windows session, which can briefly redraw the other Windows app windows.
+
+Keyboard input uses scancodes rather than forced Unicode events so Windows
+shortcuts such as `Ctrl+C`, `Ctrl+V`, and `Win+R` work normally. Clipboard
+redirection is explicitly enabled in both directions. Use the Windows input
+method for non-English typing inside Windows; pasted Unicode text is supported.
+The WinApps FreeRDP client is patched to restore individual physical modifier
+keys on focus return, rather than marking both left and right modifiers down.
+This prevents workspace switches with `Ctrl+Alt` held from leaving phantom
+modifiers that consume letters such as `M` as client shortcuts. Reconnect the
+viewer to load the patched client; Windows and its applications can stay running.
+After changing RDP flags, reconnect the viewer without shutting down Windows.
+
+Configuration is managed through `modules/winapps.nix` and written to
+`~/.config/winapps/`. A generated Windows password is stored separately in
+`~/.config/winapps/credentials.env`, with mode `0600`; it is not in the Nix store
+or the repository. The Windows username is `thinky`. After installing apps in
+Windows, run `winapps-setup --user --setupAllOfficiallySupportedApps` to register
+supported app launchers and file associations. Existing generated launchers are
+refreshed during Home Manager activation when the package changes, without
+rescanning applications or interrupting Windows.
+
+For the first installation, `systemctl --user start --no-block winapps-register`
+waits for the Windows RDP port, then verifies app launching and shared-folder
+access before registering available apps. It retries startup-related failures
+up to five times, but stops if Windows rejects the login or certificate.
+Check it with `systemctl --user status winapps-register` or
+`journalctl --user -u winapps-register`. This does not install Microsoft Office;
+the Office edition must match the user's license.
+
+Microsoft Office is not included or automatically installed. Removing a Linux
+app shortcut does not uninstall its Windows application; uninstall the program
+inside Windows before removing its generated WinApps shortcuts.
+
+### VM Storage
+
+On `X299-SSD`, the 100 GiB ext4 partition labelled `Virtual Windows` is mounted
+at `/mnt/winapps` by UUID `fe0516c1-a263-495f-b22d-ef205ead9203`.
+The `winapps-storage` service verifies the mounted filesystem and creates
+`/mnt/winapps/windows` with mode `0700`, owned by `thinky:users`.
+Use that directory as the Windows container's `/storage` bind mount.
+
+Check the mount with `findmnt /mnt/winapps` and initialization with
+`systemctl status winapps-storage`. The WinApps commands and VM service verify
+the mounted UUID before accessing storage. The partition is optional for boot;
+if it is unavailable, startup fails instead of creating a VM on `/`.
 
 ## NVIDIA Notes
 

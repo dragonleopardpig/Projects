@@ -9,6 +9,10 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    winapps = {
+      url = "path:/home/thinky/Projects/winapps";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -106,6 +110,8 @@
             # A note drawn as a curly brace rather than a rectangle, for
             # gathering a few lines rather than boxing them in.
             ./patches/sioyek-note-brace.patch
+            ./patches/sioyek-annotation-opacity.patch
+            ./patches/sioyek-fuzzy-file-matching.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           # final, not prev: the jkqtplotter below is patched in this same

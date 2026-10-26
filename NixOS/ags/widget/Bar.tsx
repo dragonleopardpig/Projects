@@ -29,6 +29,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor, index: number) {
         name={`bar-${index}`}
         className="Bar"
         gdkmonitor={gdkmonitor}
+        layer={Astal.Layer.TOP}
         exclusivity={Astal.Exclusivity.EXCLUSIVE}
         anchor={TOP | LEFT | RIGHT}
         application={App}>

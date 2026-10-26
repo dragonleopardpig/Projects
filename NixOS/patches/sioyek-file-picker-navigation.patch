@@ -32,7 +32,7 @@ index 2ab1f08b..01866603 100644
              root_path += QDir::separator();
          }
  
-@@ -662,6 +670,40 @@ public:
+@@ -662,6 +670,51 @@ public:
              dynamic_cast<QListView*>(get_view())->setCurrentIndex(list_model->index(0, 0));
          }
          //dynamic_cast<QListView*>(get_view())->setCurrentIndex();
@@ -50,6 +50,17 @@ index 2ab1f08b..01866603 100644
 +                return true;
 +            }
 +            if (key_event->key() == Qt::Key_Backspace && key_event->modifiers() == Qt::NoModifier) {
++                if (object == get_view()) {
++                    line_edit->setFocus();
++                    QCoreApplication::postEvent(line_edit,
++                        new QKeyEvent(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier));
++                    return true;
++                }
++                if (line_edit->hasSelectedText() ||
++                    line_edit->cursorPosition() != line_edit->text().size() ||
++                    !line_edit->text().endsWith(QDir::separator())) {
++                    return BaseSelectorWidget::eventFilter(object, event);
++                }
 +                QDir directory(last_root);
 +                directory.cdUp();
 +                QString parent_path = directory.absolutePath();
@@ -73,7 +84,7 @@ index 2ab1f08b..01866603 100644
      }
  
      virtual bool on_text_change(const QString& text) {
-@@ -669,12 +711,7 @@ public:
+@@ -669,12 +722,7 @@ public:
          QString partial_name;
          split_root_file(text, root_path, partial_name);
  
@@ -87,7 +98,7 @@ index 2ab1f08b..01866603 100644
  
          QStringList match_list = get_dir_contents(root_path, partial_name);
          QStringListModel* new_list_model = new QStringListModel(match_list);
-@@ -734,9 +771,12 @@ public:
+@@ -734,9 +782,12 @@ public:
      }
  
      void on_select(const QModelIndex& index) {
@@ -101,7 +112,7 @@ index 2ab1f08b..01866603 100644
  
          if (QFileInfo(full_path).isFile()) {
              on_done(full_path.toStdWString());
-@@ -745,7 +785,13 @@ public:
+@@ -745,7 +796,13 @@ public:
          }
          else {
              QString canonical_path { QDir(full_path).canonicalPath() };
