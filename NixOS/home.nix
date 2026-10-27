@@ -886,7 +886,7 @@ in
         chmod +x "$APP_DIR/FileLuSync.bin"
       fi
 
-      exec fhs -c 'export LD_LIBRARY_PATH="${pkgs.zstd}/lib:''${LD_LIBRARY_PATH:-}"; exec "$@"' _ "$APP_DIR/FileLuSync.bin" "$@"
+      exec fhs -c 'export LD_LIBRARY_PATH="${pkgs.zstd.out}/lib:''${LD_LIBRARY_PATH:-}"; exec "$@"' _ "$APP_DIR/FileLuSync.bin" "$@"
     '';
   };
 
