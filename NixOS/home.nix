@@ -912,6 +912,56 @@ in
     terminal = false;
   };
 
+  # FileLu Cloud FUSE mount wrapper using bundled rclone backend
+  home.file.".local/bin/filelu-mount" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      CONF="$HOME/.FileLuSync/rcfslu.conf"
+      BIN="$HOME/.local/opt/filelusync/filelu-rclone"
+      MNT="$HOME/FileLu"
+
+      if [ ! -f "$CONF" ] || [ ! -x "$BIN" ]; then
+        echo "FileLu configuration or rclone binary not found." >&2
+        exit 1
+      fi
+
+      REMOTE="$("$BIN" listremotes --config "$CONF" | head -n 1)"
+      if [ -z "$REMOTE" ]; then
+        echo "No remote found in $CONF" >&2
+        exit 1
+      fi
+
+      mkdir -p "$MNT"
+      exec "$BIN" mount "$REMOTE" "$MNT" \
+        --config "$CONF" \
+        --vfs-cache-mode=full \
+        --vfs-cache-max-size=10G \
+        --vfs-cache-max-age=24h \
+        --umask=077 \
+        --dir-cache-time=1m
+    '';
+  };
+
+  systemd.user.services.filelu-mount = {
+    Unit = {
+      Description = "FileLu Cloud FUSE mount for Nemo and file access";
+      Wants = [ "network-online.target" ];
+      After = [ "graphical-session.target" "network-online.target" ];
+      ConditionPathExists = "${config.home.homeDirectory}/.FileLuSync/rcfslu.conf";
+    };
+    Service = {
+      Type = "notify";
+      ExecStart = "${config.home.homeDirectory}/.local/bin/filelu-mount";
+      ExecStop = "/run/wrappers/bin/fusermount3 -u '${config.home.homeDirectory}/FileLu'";
+      Restart = "on-failure";
+      RestartSec = 10;
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
+
   # MEGAcmd runner: extracted from deb and run natively with FUSE support via nix-ld
   home.file.".local/bin/mega-runner" = {
     executable = true;
