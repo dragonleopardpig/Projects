@@ -31,6 +31,7 @@ let
         pkgs.libayatana-appindicator
       ])}''${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
       export GDK_PIXBUF_MODULE_FILE=${pkgs.librsvg}/${pkgs.gdk-pixbuf.binaryDir}/loaders.cache
+      export GDRIVE_ICONS_DIR="${../assets/gdrive-icons}"
       exec python3 ${../scripts/gdrive-sync.py} "$@"
     '';
   };
@@ -44,6 +45,24 @@ in
   home.file.".local/bin/gdrive-tray" = {
     source = "${gdriveControl}/bin/gdrive-control";
     executable = true;
+    force = true;
+  };
+
+  # Custom scalable icons for Google Drive tray and settings
+  home.file.".local/share/icons/hicolor/scalable/apps/gdrive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/hicolor/scalable/apps/gdrive-syncing.svg" = {
+    source = ../assets/gdrive-icons/gdrive-syncing.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/hicolor/scalable/apps/gdrive-paused.svg" = {
+    source = ../assets/gdrive-icons/gdrive-paused.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/hicolor/scalable/apps/gdrive-error.svg" = {
+    source = ../assets/gdrive-icons/gdrive-error.svg;
     force = true;
   };
 

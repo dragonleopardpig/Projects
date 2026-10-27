@@ -29,14 +29,18 @@ USER_ICONS = Path.home() / ".local/share/icons/hicolor/scalable/apps"
 
 
 def get_icon_path(name: str) -> str:
-    candidates = [
-        ASSET_ICONS / f"{name}.svg",
+    candidates = []
+    if "GDRIVE_ICONS_DIR" in os.environ:
+        candidates.append(Path(os.environ["GDRIVE_ICONS_DIR"]) / f"{name}.svg")
+    candidates.extend([
         USER_ICONS / f"{name}.svg",
+        Path.home() / "Projects/NixOS/assets/gdrive-icons" / f"{name}.svg",
+        ASSET_ICONS / f"{name}.svg",
         ASSET_ICONS / f"{name}.png",
-    ]
+    ])
     for c in candidates:
         if c.exists():
-            return str(c)
+            return str(c.resolve())
     # Fallback system icon names
     fallbacks = {
         "gdrive": "folder-google-drive",
@@ -632,11 +636,21 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
 
     class TrayApp:
         def __init__(self):
-            self.indicator = AyatanaAppIndicator3.Indicator.new(
-                "google-drive-sync",
-                get_icon_path("gdrive"),
-                AyatanaAppIndicator3.IndicatorCategory.APPLICATION_STATUS,
-            )
+            icon_path = get_icon_path("gdrive")
+            icon_dir = os.path.dirname(icon_path) if os.path.isabs(icon_path) else ""
+            if icon_dir:
+                self.indicator = AyatanaAppIndicator3.Indicator.new_with_path(
+                    "google-drive-sync",
+                    icon_path,
+                    AyatanaAppIndicator3.IndicatorCategory.APPLICATION_STATUS,
+                    icon_dir,
+                )
+            else:
+                self.indicator = AyatanaAppIndicator3.Indicator.new(
+                    "google-drive-sync",
+                    icon_path,
+                    AyatanaAppIndicator3.IndicatorCategory.APPLICATION_STATUS,
+                )
             self.indicator.set_status(AyatanaAppIndicator3.IndicatorStatus.ACTIVE)
             self.indicator.set_title("Google Drive")
 
@@ -654,7 +668,11 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             self.setup_timer()
 
         def set_tray_icon(self, state: str):
-            self.indicator.set_icon_full(get_icon_path(state), f"Google Drive - {state}")
+            icon_path = get_icon_path(state)
+            icon_dir = os.path.dirname(icon_path) if os.path.isabs(icon_path) else ""
+            if icon_dir:
+                self.indicator.set_icon_theme_path(icon_dir)
+            self.indicator.set_icon_full(icon_path, f"Google Drive - {state}")
 
         def setup_timer(self):
             if self.timer_source:
