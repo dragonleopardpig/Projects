@@ -302,6 +302,9 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
     gi.require_version("Gtk", "3.0")
     from gi.repository import Gtk, Gdk, GLib
 
+    GLib.set_prgname("gdrive-settings")
+    GLib.set_application_name("Google Drive Sync")
+
     config_mgr = ConfigManager()
     mount_point = config_mgr.data.get("mount_point", str(DEFAULT_MOUNT_POINT))
     remote = config_mgr.data.get("remote", "gdrive")
@@ -500,6 +503,12 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
 
             self.refresh_mount_status()
             self.refresh_folder_list()
+            self.set_role("gdrive-settings")
+            icon_file = get_icon_path("gdrive")
+            if os.path.exists(icon_file):
+                self.set_icon_from_file(icon_file)
+            self.show_all()
+
             if self.standalone:
                 self.connect("destroy", Gtk.main_quit)
             else:
@@ -732,6 +741,7 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
                 self.settings_window = SettingsWindow(tray_ref=self)
             self.settings_window.refresh_mount_status()
             self.settings_window.refresh_folder_list()
+            self.settings_window.show_all()
             self.settings_window.present()
 
         def sync_folder_thread(self, folder: dict, resync: bool = False):

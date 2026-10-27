@@ -2629,6 +2629,22 @@ in
     }
 
     windowrule {
+      name = gdrive-settings-float
+      match:class = ^(gdrive-settings)$
+      float = yes
+      center = yes
+      size = 820 540
+    }
+
+    windowrule {
+      name = gdrive-settings-title-float
+      match:title = ^Google Drive Sync Settings$
+      float = yes
+      center = yes
+      size = 820 540
+    }
+
+    windowrule {
       name = megasync-add-dialogs-float
       match:class = ^MEGAsync$
       match:title = ^(Add sync|Add backup)$
