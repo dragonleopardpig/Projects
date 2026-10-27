@@ -886,6 +886,19 @@ in
         chmod +x "$APP_DIR/FileLuSync.bin"
       fi
 
+      # If window is already open and mapped in Hyprland, focus it
+      if hyprctl clients 2>/dev/null | grep -q "class: FileLuSync"; then
+        hyprctl dispatch focuswindow "class:FileLuSync"
+        exit 0
+      fi
+
+      # If running in background without a visible window (e.g. after Win+K close to tray),
+      # terminate the hidden instance so a new one starts with the UI restored cleanly
+      if pgrep -f "FileLuSync.bin" >/dev/null 2>&1; then
+        pkill -f "FileLuSync.bin" 2>/dev/null || true
+        sleep 0.4
+      fi
+
       exec fhs -c 'export LD_LIBRARY_PATH="${pkgs.zstd.out}/lib:''${LD_LIBRARY_PATH:-}"; exec "$@"' _ "$APP_DIR/FileLuSync.bin" "$@"
     '';
   };
