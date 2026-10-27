@@ -213,13 +213,16 @@ Manage…**, the **WinApps** app in AGS/Walker, or
 The same dialog has **Fullscreen Windows desktop** and **Open Windows**. Opening
 reuses and focuses an existing full-desktop viewer, or starts Windows if needed;
 it does not create a second viewer when one is already open. The fullscreen
-checkbox is remembered, including for launches through the separate Windows
-shortcut. **Open Windows** saves all form settings before launching; **Save
-settings** saves them without opening Windows. If Windows is already running,
+checkbox and the other inputs are read directly when **Open Windows** is clicked;
+no save step is required. These launch-time choices do not overwrite defaults.
+**Set as default** remembers the current values for future control windows and
+launches through the separate Windows shortcut, without opening Windows.
+If Windows is already running,
 opening or reconnecting its viewer does not change its CPU/RAM allocation.
-The manager shows the running allocation separately from saved settings and
-flags pending CPU/RAM changes: save your work, use **Shut down all WinApps**,
-then **Open Windows** to apply them. Windows' Restart does not apply them.
+The manager shows the running allocation separately from defaults and flags
+launch-time CPU/RAM requests that cannot be applied to a running VM: save your
+work, use **Shut down all WinApps**, then **Open Windows** with the desired inputs
+still selected. Windows' Restart does not apply them.
 Fullscreen covers AGS
 only on Windows' workspace; other workspaces keep their normal bar. The bar
 stays on the top layer rather than the overlay layer, and host workspace
@@ -234,11 +237,11 @@ stored at `~/.local/state/winapps/windows-launch.log` and
 For headless GUI checks, use an explicitly unused high-numbered Xvfb display,
 not automatic display selection, which can disturb Xwayland's display socket.
 Use `winapps-settings set --cpus 6` to change only CPU allocation.
-`winapps-settings status` shows the running and next-start allocations. The
-settings are stored in `~/.config/winapps/memory.env` and survive NixOS rebuilds.
+`winapps-settings status` shows the running allocation and saved defaults. The
+defaults are stored in `~/.config/winapps/memory.env` and survive NixOS rebuilds.
 Existing RAM-only settings are preserved, with CPU allocation defaulting to four;
 `winapps-memory` remains a compatible command alias. All Office
-apps share this one VM allocation. Saving never stops Windows: save your Windows
+apps share this one VM allocation. Setting defaults never stops Windows: save your Windows
 work, choose **Start → Power → Shut down**, and launch Windows again to apply it.
 Closing the viewer, pausing the VM, or using Windows' Restart does not apply it.
 The same dialog also sets **Windows desktop scale (%)**. Windows' own Display

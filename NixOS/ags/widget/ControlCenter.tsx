@@ -179,11 +179,11 @@ function WindowsResourcesCard() {
     const refresh = () => execAsync([command, "status"])
         .then(output => {
             const details = JSON.parse(output)
-            const saved = `${details.configured_cpus} vCPUs · ${details.configured_gib} GiB`
+            const defaults = `${details.configured_cpus} vCPUs · ${details.configured_gib} GiB`
             summary.set(details.running_gib === null || details.running_cpus === null
-                ? `Next start: ${saved} (${details.state})`
+                ? `Defaults: ${defaults} (${details.state})`
                 : `${details.state}: ${details.running_cpus} vCPUs · ${details.running_gib} GiB` +
-                    (details.pending ? `\nNext start: ${saved}` : ""))
+                    (details.pending ? `\nDefaults: ${defaults}` : ""))
         })
         .catch(() => summary.set("VM status unavailable"))
 

@@ -116,7 +116,7 @@ def status():
     return details
 
 
-def save_settings(amount, processors, desktop_scale=None, fullscreen=None):
+def validate_settings(amount, processors, desktop_scale=None, fullscreen=None):
     minimum, maximum = limits()
     if not minimum <= amount <= maximum:
         raise ValueError(f"Choose {minimum}–{maximum} GiB; leave at least 4 GiB for NixOS.")
@@ -130,6 +130,13 @@ def save_settings(amount, processors, desktop_scale=None, fullscreen=None):
         fullscreen = configured_settings()["fullscreen"]
     if not isinstance(fullscreen, bool):
         raise ValueError("Fullscreen must be on or off.")
+    return amount, processors, desktop_scale, fullscreen
+
+
+def save_settings(amount, processors, desktop_scale=None, fullscreen=None):
+    amount, processors, desktop_scale, fullscreen = validate_settings(
+        amount, processors, desktop_scale, fullscreen,
+    )
     CONFIG_DIRECTORY.mkdir(mode=0o700, parents=True, exist_ok=True)
     descriptor, temporary_path = tempfile.mkstemp(prefix=".memory-", dir=CONFIG_DIRECTORY)
     try:
@@ -188,14 +195,17 @@ def focus_windows(viewer, fullscreen):
         raise ValueError("Could not apply fullscreen to the Windows viewer.")
 
 
-def open_windows(fullscreen=None, report=None):
+def open_windows(fullscreen=None, report=None, selection=None):
     if report is None:
         report = lambda message: None
-    configured = configured_settings()
-    if fullscreen is None:
-        fullscreen = configured["fullscreen"]
-    else:
-        save_settings(configured["ram_gib"], configured["cpus"], configured["desktop_scale"], fullscreen)
+    if selection is None:
+        configured = configured_settings()
+        selection = (
+            configured["ram_gib"], configured["cpus"], configured["desktop_scale"], configured["fullscreen"],
+        )
+    if fullscreen is not None:
+        selection = (*selection[:3], fullscreen)
+    amount, processors, desktop_scale, fullscreen = validate_settings(*selection)
     hyprland = shutil.which("hyprctl") is not None
     if hyprland:
         viewers = windows_viewers()
@@ -213,9 +223,14 @@ def open_windows(fullscreen=None, report=None):
     LAUNCH_LOG.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     descriptor = os.open(LAUNCH_LOG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     os.chmod(LAUNCH_LOG, 0o600)
+    environment = os.environ.copy()
+    environment.update(
+        WINAPPS_RAM_SIZE=f"{amount}G", WINAPPS_CPU_CORES=str(processors),
+        WINAPPS_DESKTOP_SCALE=str(desktop_scale), WINAPPS_FULLSCREEN=str(int(fullscreen)),
+    )
     with os.fdopen(descriptor, "w") as output:
         process = subprocess.Popen(
-            ["winapps", "windows"], stdout=output, stderr=output, start_new_session=True,
+            ["winapps", "windows"], stdout=output, stderr=output, start_new_session=True, env=environment,
         )
     if not hyprland:
         return "Windows viewer launch requested."
@@ -334,7 +349,8 @@ def gui():
         grid.attach(fullscreen, 0, 3, 2, 1)
         hint = Gtk.Label(
             label="Fullscreen hides the bar only on Windows' workspace.\n"
-            "Open Windows saves all settings before opening the viewer.\n"
+            "Open Windows uses these inputs without changing defaults.\n"
+            "Set as default remembers these values for future launches.\n"
             "CPU/RAM: Shut down all WinApps, then Open Windows.\n"
             "Scale: reconnect the viewer. Fullscreen applies immediately.\n"
             "Shutdown closes ALL Windows apps. Save Windows/Office work first.",
@@ -346,7 +362,7 @@ def gui():
         progress = Gtk.ProgressBar(show_text=True, text="Ready")
         progress.set_name("progress")
         layout.pack_start(progress, False, False, 0)
-        message = Gtk.Label(label="Choose an action. No settings are changed until you save or open Windows.",
+        message = Gtk.Label(label="Choose values and open Windows. Set as default is optional.",
                             xalign=0, wrap=True, max_width_chars=75, selectable=True)
         message.set_name("status")
         layout.pack_start(message, False, False, 0)
@@ -359,11 +375,9 @@ def gui():
                 f"Allocated: {details['running_gib']} GiB, {details['running_cpus']} vCPUs.\n"
                 if details["running_gib"] is not None else ""
             )
-            pending = "CPU/RAM changes need a full shutdown/start.\n" if details["pending"] else ""
             header.set_text(
                 f"Windows: {details['state']}.\n{allocated}"
-                f"Saved for next start: {details['configured_gib']} GiB, {details['configured_cpus']} vCPUs.\n"
-                f"{pending}"
+                f"Defaults: {details['configured_gib']} GiB, {details['configured_cpus']} vCPUs.\n"
                 f"Host: {details['host_cpus']} logical CPUs; {details['host_available_gib']} GiB RAM available."
             )
             return False
@@ -377,17 +391,22 @@ def gui():
             progress.pulse()
             return True
 
-        def finish(text, success, updated):
+        def finish(text, success, updated, selection):
             activity["busy"] = False
             for control in controls:
                 control.set_sensitive(True)
             progress.set_fraction(1 if success else 0)
-            pending = success and updated and updated["pending"]
+            pending = success and updated and selection is not None and any(
+                updated[running] is not None and updated[running] != selected
+                for running, selected in (
+                    ("running_gib", selection[0]), ("running_cpus", selection[1]),
+                )
+            )
             if pending:
                 text += (
                     f"\nWindows is still allocated {updated['running_gib']} GiB, {updated['running_cpus']} vCPUs. "
-                    f"Saved for next full start: {updated['configured_gib']} GiB, {updated['configured_cpus']} vCPUs.\n"
-                    "Save your Windows work, click Shut down all WinApps, then Open Windows. "
+                    f"Requested for this launch: {selection[0]} GiB, {selection[1]} vCPUs.\n"
+                    "Save your Windows work, click Shut down all WinApps, then Open Windows with these input values. "
                     "Reopening the viewer alone does not change CPU/RAM."
                 )
             progress.set_text("Shutdown/start needed" if pending else "Complete" if success else "Action needed")
@@ -396,7 +415,7 @@ def gui():
                 update_header(updated)
             return False
 
-        def run_action(text, operation):
+        def run_action(text, operation, selection=None):
             if activity["busy"]:
                 return
             activity["busy"] = True
@@ -412,9 +431,9 @@ def gui():
                     result = operation()
                     updated = status()
                 except (OSError, ValueError, subprocess.SubprocessError) as error:
-                    GLib.idle_add(finish, str(error), False, None)
+                    GLib.idle_add(finish, str(error), False, None, selection)
                 else:
-                    GLib.idle_add(finish, result, True, updated)
+                    GLib.idle_add(finish, result, True, updated, selection)
 
             threading.Thread(target=worker, daemon=True).start()
 
@@ -446,13 +465,12 @@ def gui():
                 return
 
             def operation():
-                save_settings(*selected)
-                return open_windows(report=report)
+                return open_windows(report=report, selection=selected)
 
-            run_action("Saving settings and opening Windows…", operation)
+            run_action("Opening Windows with the current input values…", operation, selected)
 
-        def save(_button):
-            selected = selected_settings("Save settings")
+        def set_defaults(_button):
+            selected = selected_settings("Set as default")
             if selected is None:
                 return
             amount, processors, desktop_scale, selected_fullscreen = selected
@@ -460,13 +478,13 @@ def gui():
             def operation():
                 save_settings(amount, processors, desktop_scale, selected_fullscreen)
                 return (
-                    f"Saved: {amount} GiB, {processors} vCPUs, scale {desktop_scale}%, "
+                    f"Defaults set: {amount} GiB, {processors} vCPUs, scale {desktop_scale}%, "
                     f"fullscreen {'on' if selected_fullscreen else 'off'}.\n"
-                    "CPU/RAM apply after full shutdown/start; scale after reconnecting. "
-                    "Use Open Windows to apply fullscreen now."
+                    "Future launches use these defaults unless you change the inputs. "
+                    "Windows and its running apps were not changed."
                 )
 
-            run_action("Saving settings…", operation)
+            run_action("Setting default values…", operation)
 
         def choose_apps(_button):
             def operation():
@@ -478,7 +496,7 @@ def gui():
         for column, row, label, callback in (
             (0, 0, "Open Windows", open_desktop),
             (1, 0, "Choose Windows apps…", choose_apps),
-            (0, 1, "Save settings", save),
+            (0, 1, "Set as default", set_defaults),
             (1, 1, "Shut down all WinApps", lambda _button: run_action(
                 "Requesting a normal Windows shutdown…", lambda: shutdown_windows(report))),
         ):

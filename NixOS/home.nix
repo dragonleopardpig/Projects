@@ -865,6 +865,40 @@ in
     terminal = false;
   };
 
+  # FileLuSync runner: unpacked in ~/.local/opt/filelusync, executed in FHS with zstd
+  home.file.".local/bin/filelusync" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      APP_DIR="$HOME/.local/opt/filelusync"
+      ZIP_PATH="$HOME/Downloads/filelusync_5.0.0.zip"
+      EXTRACTED_DIR="$HOME/Downloads/filelusync_5.0.0"
+
+      if [ ! -f "$APP_DIR/FileLuSync.bin" ]; then
+        mkdir -p "$APP_DIR"
+        if [ -d "$EXTRACTED_DIR" ]; then
+          cp "$EXTRACTED_DIR/FileLuSync.bin" "$EXTRACTED_DIR/app.png" "$APP_DIR/"
+        elif [ -f "$ZIP_PATH" ]; then
+          ${pkgs.unzip}/bin/unzip -q -o "$ZIP_PATH" -d "$APP_DIR"
+        fi
+        chmod +x "$APP_DIR/FileLuSync.bin"
+      fi
+
+      exec fhs -c 'export LD_LIBRARY_PATH="${pkgs.zstd}/lib:''${LD_LIBRARY_PATH:-}"; exec "$@"' _ "$APP_DIR/FileLuSync.bin" "$@"
+    '';
+  };
+
+  xdg.desktopEntries.filelusync = {
+    name = "FileLuSync";
+    exec = "/home/thinky/.local/bin/filelusync";
+    icon = "/home/thinky/.local/opt/filelusync/app.png";
+    comment = "FileLu Cloud Storage & Sync Client";
+    categories = [ "Utility" "Network" ];
+    terminal = false;
+  };
+
   # MEGAcmd runner: extracted from deb and run natively with FUSE support via nix-ld
   home.file.".local/bin/mega-runner" = {
     executable = true;
