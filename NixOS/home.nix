@@ -865,6 +865,54 @@ in
     terminal = false;
   };
 
+  # FileLuSync runner: unpacked in ~/.local/opt/filelusync, executed in FHS with zstd
+  home.file.".local/bin/filelusync" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -eu
+
+      APP_DIR="$HOME/.local/opt/filelusync"
+      ZIP_PATH="$HOME/Downloads/filelusync_5.0.0.zip"
+
+      if [ ! -f "$APP_DIR/FileLuSync.bin" ]; then
+        mkdir -p "$APP_DIR"
+        if [ -f "$ZIP_PATH" ]; then
+          ${pkgs.unzip}/bin/unzip -q -o "$ZIP_PATH" -d "$APP_DIR"
+          if [ -d "$APP_DIR/filelusync_5.0.0" ]; then
+            mv "$APP_DIR"/filelusync_5.0.0/* "$APP_DIR"/
+            rmdir "$APP_DIR/filelusync_5.0.0" 2>/dev/null || true
+          fi
+        fi
+        chmod +x "$APP_DIR/FileLuSync.bin" 2>/dev/null || true
+      fi
+
+      # If window is already open and mapped in Hyprland, focus it
+      if hyprctl clients 2>/dev/null | grep -q "class: FileLuSync"; then
+        hyprctl dispatch focuswindow "class:FileLuSync"
+        exit 0
+      fi
+
+      # If running in background without a visible window (e.g. after close to tray),
+      # restart cleanly so the UI appears
+      if pgrep -f "FileLuSync.bin" >/dev/null 2>&1; then
+        pkill -f "FileLuSync.bin" 2>/dev/null || true
+        sleep 0.4
+      fi
+
+      exec fhs -c 'export LD_LIBRARY_PATH="${pkgs.zstd.out}/lib:''${LD_LIBRARY_PATH:-}"; exec "$@"' _ "$APP_DIR/FileLuSync.bin" "$@"
+    '';
+  };
+
+  xdg.desktopEntries.filelusync = {
+    name = "FileLuSync";
+    exec = "/home/thinky/.local/bin/filelusync";
+    icon = "/home/thinky/.local/opt/filelusync/app.png";
+    comment = "FileLu Cloud Storage & Sync Client";
+    categories = [ "Utility" "Network" ];
+    terminal = false;
+  };
+
   # MEGAcmd runner: extracted from deb and run natively with FUSE support via nix-ld
   home.file.".local/bin/mega-runner" = {
     executable = true;
@@ -2626,6 +2674,14 @@ in
       float = yes
       center = yes
       size = 1440 900
+    }
+
+    windowrule {
+      name = filelusync-float
+      match:class = ^FileLuSync$
+      float = yes
+      center = yes
+      size = 900 650
     }
 
     windowrule {
