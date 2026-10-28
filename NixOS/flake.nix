@@ -113,6 +113,7 @@
             ./patches/sioyek-annotation-opacity.patch
             ./patches/sioyek-fuzzy-file-matching.patch
             ./patches/sioyek-lettered-section-references.patch
+            ./patches/sioyek-reference-generalization.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           # final, not prev: the jkqtplotter below is patched in this same
