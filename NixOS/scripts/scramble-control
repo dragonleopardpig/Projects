@@ -30,6 +30,7 @@ case "${1:-}" in
         ;;
     start-sync)
         lock_session
+        systemctl --user start scramble-health.service
         rm -f "$stopped"
         if [[ $backend == scramble-webdav.service && ! -f "$HOME/.config/scramble-webdav.env" ]]; then
             kitty --title 'Scramble folder sync setup' bash -c "
@@ -65,6 +66,8 @@ case "${1:-}" in
         ;;
     stop-sync)
         lock_session
+        printf '%s\n' "$$" > "$state_folder/stopping"
+        trap 'rm -f "$state_folder/stopping"' EXIT
         systemctl --user stop scramble-private-sync.timer scramble-consolidate.service
         while [[ $(systemctl --user show --value -p ActiveState scramble-private-sync.service) =~ ^(active|activating|deactivating)$ ]]; do
             sleep 1

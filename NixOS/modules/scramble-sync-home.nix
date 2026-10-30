@@ -13,6 +13,16 @@ let
     unset LD_LIBRARY_PATH LD_PRELOAD
     exec ${pkgs.python3}/bin/python3 ${../scripts/scramble-consolidate.py} "$@"
   '';
+  healthScript = pkgs.writeShellScript "scramble-health" ''
+    export PATH="${lib.makeBinPath [ pkgs.systemd pkgs.rclone pkgs.libnotify ]}:$PATH"
+    unset LD_LIBRARY_PATH LD_PRELOAD
+    exec ${pkgs.python3}/bin/python3 ${../scripts/scramble-health.py} monitor
+  '';
+  statusScript = pkgs.writeShellScript "scramble-sync-status" (
+    builtins.replaceStrings [ "@PYTHON@" "@HEALTH@" ]
+      [ "${pkgs.python3}/bin/python3" "${../scripts/scramble-health.py}" ]
+      (builtins.readFile ../scripts/scramble-sync-status)
+  );
   hostName = if osConfig != null then osConfig.networking.hostName else scrambleHostName;
   cliHost = hostName != "M90aPro";
   backend = if cliHost then "scramble-webdav.service" else "scramble-desktop.service";
@@ -103,7 +113,7 @@ in
     executable = true;
   };
   home.file.".local/bin/scramble-sync-status" = {
-    source = ../scripts/scramble-sync-status;
+    source = statusScript;
     executable = true;
     force = true;
   };
@@ -149,6 +159,24 @@ in
       ExecStart = "${syncScript}";
       TimeoutStartSec = "infinity";
     };
+  };
+
+  systemd.user.services.scramble-health = {
+    Unit = {
+      Description = "Live Scramble transfer and connection monitor";
+      After = [ "graphical-session.target" ];
+      PartOf = [ "graphical-session.target" ];
+      StartLimitIntervalSec = 0;
+    };
+    Service = {
+      Type = "simple";
+      ExecStart = "${healthScript}";
+      Environment = [ "SCRAMBLE_BACKEND=${backend}" ];
+      Restart = "always";
+      RestartSec = 5;
+      TimeoutStopSec = 15;
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   systemd.user.services.scramble-cloud-mount = {
@@ -229,7 +257,7 @@ in
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";
     };
     Service = {
-      Type = "oneshot";
+      Type = "exec";
       ExecStart = "${consolidateScript}";
       TimeoutStartSec = "infinity";
       TimeoutStopSec = "90s";

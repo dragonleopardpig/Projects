@@ -119,10 +119,32 @@ entries to preserve offline reading and annotations.
 
 Right-click the tray icon for **Open Scramble Desktop**, **Open Scramble Private
 Folder**, **Browse Scramble Cloud**, **Sync Now**, **Sync Status**, and **Quit**.
-Status opens a notification, not a terminal. The badge is green while syncing,
-yellow during setup, red on
-failure, and hidden when idle and healthy. Its tooltip refreshes every five
-seconds. Quitting safely pauses a migration, waits for an ordinary active sync,
+Status opens a notification, not a terminal. The tray always shows a health
+badge without a text label: **blue** for active work, **green** for healthy
+scheduled idle, **yellow** for setup or a paused migration, **red** for a failure
+or lost connection, and **gray** after an intentional Quit. Hover to see the
+status and initial upload counter. A stopped transfer between scheduled jobs
+is normal.
+
+`scramble-health.service` checks actual transfer PIDs and service states every
+five seconds, independently of Scramble Desktop and the bar. It also reads a
+small encrypted cloud access marker about every 20 seconds to check the
+connection and key. The tooltip and Sync Status popup show the live transfer
+PID, live transfer speed, recent rclone transfer statistics, and the last
+successful sync. Rclone reports transfer statistics every five seconds; they
+describe the current transfer, not the entire migration. A recent completed
+transfer's speed is labeled as recent when the next job has not reported yet.
+Samples older than 15 seconds are hidden, and scheduled idle shows 0 B/s.
+
+Desktop notifications announce monitoring startup, persistent failures, and
+recovery. A ten-second delay prevents brief service transitions from producing
+false failure alerts. Intentional Quit is reported as stopped. If the Desktop
+tray item disappears, the bar retains a status icon; left-click relaunches
+Scramble and right-click opens the status notification. A stale monitor cache
+is shown as an error instead of appearing healthy. Inspect the monitor with
+`journalctl --user -u scramble-health.service`.
+
+Quitting safely pauses a migration, waits for an ordinary active sync,
 unmounts the cloud view, stops the timer/backend, and removes the icon.
 Relaunching reconnects and resumes the same setup automatically. The next
 graphical login starts it again.

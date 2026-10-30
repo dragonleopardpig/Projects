@@ -53,12 +53,14 @@ window.Bar {
     .Temperature    { color: #ff4500; }
     .SystemdFailed  { color: #ff4500; font-weight: bold; }
     .ScrambleStatus .scramble-icon { font-size: 22px; }
-    .ScrambleStatus.busy .health { background-color: #00ca4e; }
+    .ScrambleStatus.ok .health { background-color: #00ca4e; }
+    .ScrambleStatus.busy .health { background-color: #48b5ff; }
     .ScrambleStatus.pending .health { background-color: #ffbd44; }
     .ScrambleStatus.error .health { background-color: #ff605c; }
+    .ScrambleStatus.stopped .health { background-color: #8b8b9a; }
     .ScrambleStatus .health {
-        min-width: 8px;
-        min-height: 8px;
+        min-width: 9px;
+        min-height: 9px;
         border: 1px solid #14141e;
         border-radius: 999px;
     }

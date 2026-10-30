@@ -51,7 +51,7 @@ class Consolidation:
             "--transfers", "1", "--checkers", "2", "--tpslimit", "2",
             "--contimeout", "10s", "--timeout", "30m", "--retries", "3",
             "--low-level-retries", "3", "--retries-sleep", "30s",
-            "--stats", "30s", "--stats-one-line", "--stats-log-level", "NOTICE",
+            "--stats", "5s", "--stats-one-line", "--stats-log-level", "NOTICE",
         ], capture=capture)
 
     def checkpoint(self, name, operation):

@@ -175,6 +175,9 @@ sudo nixos-rebuild switch --flake .#M90aPro
   matching history entries. The project attachment symlink is migrated too.
 - Check progress with `scramble-sync-status` or
   `journalctl --user -u scramble-consolidate.service -f`.
+- The tray keeps a visible health badge; hover for live speed and status. An independent
+  monitor checks transfer processes every five seconds and notifies you about
+  failures and recovery; green **Ready** means the next sync is scheduled.
 - See [Scramble setup and migration](docs/scramble-sync.md) for recovery backups
   and key-backup requirements.
 

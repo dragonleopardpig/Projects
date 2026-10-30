@@ -1,12 +1,19 @@
-import { bind } from "astal"
+import { bind, execAsync } from "astal"
 import AstalTray from "gi://AstalTray"
+import GLib from "gi://GLib"
 import ScrambleStatus from "./ScrambleStatus"
+
+function runHelper(name: string, ...args: string[]) {
+    void execAsync([`${GLib.get_home_dir()}/.local/bin/${name}`, ...args])
+        .catch(error => console.error(`Scramble tray action failed: ${error}`))
+}
 
 export default function SysTray() {
     const tray = AstalTray.get_default()
 
     return <box className="SysTray">
-        {bind(tray, "items").as(items => items.map(item => (
+        {bind(tray, "items").as(items => {
+            const widgets = items.map(item => (
             <menubutton
                 tooltipMarkup={bind(item, "tooltipMarkup")}
                 usePopover={false}
@@ -24,6 +31,19 @@ export default function SysTray() {
                     ? <ScrambleStatus />
                     : <icon gicon={bind(item, "gicon")} pixelSize={18} />)}
             </menubutton>
-        )))}
+            ))
+            if (!items.some(item => item.tooltipMarkup?.includes("Scramble Desktop"))) {
+                widgets.push(<button
+                    onClicked={() => runHelper("scramble-launch")}
+                    onButtonPressEvent={(_self, event) => {
+                        if (event.get_button()[1] !== 3) return false
+                        runHelper("scramble-control", "status")
+                        return true
+                    }}>
+                    <ScrambleStatus />
+                </button>)
+            }
+            return widgets
+        })}
     </box>
 }
