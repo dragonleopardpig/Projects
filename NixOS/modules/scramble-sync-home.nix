@@ -2,6 +2,7 @@
 let
   home = config.home.homeDirectory;
   ready = "${home}/.config/rclone/scramble-private-v2-ready";
+  cloudMounted = "${home}/Scramble Cloud";
   rclone = "${pkgs.rclone}/bin/rclone";
   syncScript = pkgs.writeShellScript "scramble-private-sync" (
     builtins.replaceStrings [ "@RCLONE@" ] [ rclone ]
@@ -148,6 +149,27 @@ in
       ExecStart = "${syncScript}";
       TimeoutStartSec = "infinity";
     };
+  };
+
+  systemd.user.services.scramble-cloud-mount = {
+    Unit = {
+      Description = "Read-only view of the Scramble cloud account";
+      Wants = [ "network-online.target" backend ];
+      After = [ "graphical-session.target" "network-online.target" backend ];
+      PartOf = [ "graphical-session.target" ];
+      ConditionPathExists = "${home}/.config/rclone/rclone.conf";
+    };
+    Service = {
+      Type = "notify";
+      Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
+      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p -m 700 '${cloudMounted}'";
+      ExecStart = "${rclone} mount scramble_drive: '${cloudMounted}' --devname='Scramble Cloud' --webdav-encoding=Colon --read-only --vfs-cache-mode=off --umask=077 --poll-interval=0 --dir-cache-time=15s --contimeout=10s --timeout=1m";
+      ExecStop = "/run/wrappers/bin/fusermount3 -u '${cloudMounted}'";
+      TimeoutStopSec = "30s";
+      Restart = "on-failure";
+      RestartSec = 10;
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   systemd.user.services.scramble-desktop = {

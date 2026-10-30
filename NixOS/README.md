@@ -165,6 +165,8 @@ sudo nixos-rebuild switch --flake .#M90aPro
 - `~/Scramble Private` is the only Scramble working folder and Nemo bookmark.
   It is a writable offline directory, not a cloud mount. References, attachments,
   and existing private files synchronize through the original rclone-crypt key.
+- `~/Scramble Cloud` is a separate read-only mount under Nemo's Devices for
+  browsing the cloud account directly, including the retained public originals.
 - The first launch after upgrading backs up and consolidates the old folders,
   verifies encrypted cloud copies, and then enables one private sync timer.
   Old public cloud originals remain available for rollback until all hosts are updated.

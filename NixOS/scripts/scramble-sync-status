@@ -48,6 +48,10 @@ elif systemctl --user is-failed --quiet scramble-session.service; then
 elif ! systemctl --user is-active --quiet "$backend"; then
     state=error
     summary="$backend_name is stopped"
+elif ! systemctl --user is-active --quiet scramble-cloud-mount.service ||
+     ! mountpoint --quiet "$HOME/Scramble Cloud"; then
+    state=error
+    summary='The Scramble Cloud view is unmounted; use Sync Now to reconnect'
 elif [[ ! -d $folder || -L $folder ]] || mountpoint --quiet "$folder"; then
     state=error
     summary='Scramble Private must be the real writable offline folder, not a cloud mount'
@@ -90,6 +94,7 @@ else
     printf 'Private sync timer: %s\n' "$(systemctl --user is-active scramble-private-sync.timer 2>/dev/null || true)"
     if [[ -n $last ]]; then printf '%s\n' "$last"; fi
     printf 'Offline folder: %s\n' "$folder"
+    printf 'Cloud view: %s (%s)\n' "$HOME/Scramble Cloud" "$(systemctl --user is-active scramble-cloud-mount.service 2>/dev/null || true)"
     printf 'Cloud storage: rclone-crypt encrypted private storage\n'
     printf 'Libraries: References and Misc copy new files without overwriting existing ones\n'
 fi

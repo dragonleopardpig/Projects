@@ -11,6 +11,13 @@ without a network connection or a running Scramble app. `References`,
 `trident-optics-attachment`, `Misc`, and the existing private files live inside
 this folder. Nemo has one **Scramble Private** bookmark.
 
+For a direct cloud view, `~/Scramble Cloud` is a separate **read-only mount**
+shown under Nemo's Devices. It displays the account root, including the retained
+`References`, `Misc`, and `PublicSync` originals. `EncryptedSync` displays the
+rclone-crypt ciphertext as stored in the cloud. Use the private offline folder
+for readable working files. The cloud view requires a connection and refreshes
+directory listings after a short cache period (15 seconds).
+
 All cloud uploads use the original `scramble_private` rclone-crypt configuration,
 whose underlying destination remains `scramble_drive:EncryptedSync`. Filenames
 and contents are encrypted in addition to Scramble's account encryption. Local
@@ -104,17 +111,20 @@ Sioyek also redirects old document paths and updates matching saved history
 entries to preserve offline reading and annotations.
 
 Right-click the tray icon for **Open Scramble Desktop**, **Open Scramble Private
-Folder**, **Sync Now**, **Sync Status**, and **Quit**. Status opens a notification,
-not a terminal. The badge is green while syncing, yellow during setup, red on
+Folder**, **Browse Scramble Cloud**, **Sync Now**, **Sync Status**, and **Quit**.
+Status opens a notification, not a terminal. The badge is green while syncing,
+yellow during setup, red on
 failure, and hidden when idle and healthy. Its tooltip refreshes every five
 seconds. Quitting safely pauses a migration, waits for an ordinary active sync,
-stops the timer/backend, and removes the icon. Relaunching reconnects and resumes
-the same setup automatically. The next graphical login starts it again.
+unmounts the cloud view, stops the timer/backend, and removes the icon.
+Relaunching reconnects and resumes the same setup automatically. The next
+graphical login starts it again.
 
 Normal local history is under `~/.local/state/scramble/history`; migration
 backups and old local histories are under
 `~/.local/state/scramble/consolidation`. These hidden recovery directories are
-not additional working folders or cloud mounts.
+not additional working folders or cloud mounts. The cloud mount does not create
+another sync job or a second offline working copy.
 
 ## Back up the key
 

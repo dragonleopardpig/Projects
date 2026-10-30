@@ -59,7 +59,7 @@
  		width: 550,
  		height: 800,
  		frame: false,
-@@ -63,6 +95,19 @@
+@@ -63,6 +95,20 @@
  		}
  	});
  
@@ -68,6 +68,7 @@
 +	tray.setContextMenu(Menu.buildFromTemplate([
 +		{ label: 'Open Scramble Desktop', click: showMainWindow },
 +		{ label: 'Open Scramble Private Folder', click: () => controlAction('open-private') },
++		{ label: 'Browse Scramble Cloud', click: () => controlAction('open-cloud') },
 +		{ type: 'separator' },
 +		{ label: 'Sync Now', click: () => controlAction('sync-now') },
 +		{ label: 'Sync Status', click: () => controlAction('status') },
@@ -79,7 +80,7 @@
  	registerMountMainIpc();
  
  	if (serve) {
-@@ -109,7 +154,10 @@
+@@ -109,7 +155,10 @@
  	
  }
  
@@ -91,7 +92,7 @@
  
  app.on('render-process-gone', (_event, webContents, details) => {
    log.error('Renderer process gone', {
-@@ -123,15 +171,16 @@
+@@ -123,15 +172,16 @@
    if (shutdownStarted) return;
    event.preventDefault();
    shutdownStarted = true;
@@ -112,7 +113,7 @@
          detail: `${error instanceof Error ? error.message : String(error)}\n\nClose files that are using the drive, unmount it, and quit again.`,
          buttons: ['Keep Scramble open'],
          defaultId: 0,
-@@ -156,7 +205,7 @@
+@@ -156,7 +206,7 @@
  			'[Desktop Entry]',
  			'Type=Application',
  			'Name=' + appName,
@@ -121,7 +122,7 @@
  			'X-GNOME-Autostart-enabled=true',
  			'',
  		].join('\n');
-@@ -238,4 +287,4 @@
+@@ -238,4 +288,4 @@
  		log.info('Update downloaded:', info);
  		autoUpdater.quitAndInstall();
  	});

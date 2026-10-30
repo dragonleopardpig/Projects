@@ -54,6 +54,7 @@ case "${1:-}" in
             notify-send 'Scramble connection is not ready' 'Check your login and local WebDAV settings. Use the tray menu to view sync status.'
             exit 1
         fi
+        systemctl --user start scramble-cloud-mount.service
         if [[ ! -f "$private_ready" ]]; then
             "$HOME/.local/bin/scramble-sync-init" private
             exit 0
@@ -67,7 +68,7 @@ case "${1:-}" in
         while [[ $(systemctl --user show --value -p ActiveState scramble-private-sync.service) =~ ^(active|activating|deactivating)$ ]]; do
             sleep 1
         done
-        systemctl --user stop scramble-private-sync.timer
+        systemctl --user stop scramble-private-sync.timer scramble-cloud-mount.service
         if [[ $backend == scramble-webdav.service ]]; then
             systemctl --user stop "$backend"
         fi
@@ -82,8 +83,12 @@ case "${1:-}" in
         fi
         "$HOME/.local/bin/scramble-control" stop-sync
         ;;
-    open-private|open-public|open-cloud)
+    open-private|open-public)
         open_folder "$HOME/Scramble Private"
+        ;;
+    open-cloud)
+        systemctl --user start scramble-cloud-mount.service
+        open_folder "$HOME/Scramble Cloud"
         ;;
     status)
         status_message="$("$HOME/.local/bin/scramble-sync-status")"
