@@ -12,11 +12,18 @@ without a network connection or a running Scramble app. `References`,
 this folder. Nemo has one **Scramble Private** bookmark.
 
 For a direct cloud view, `~/Scramble Cloud` is a separate **read-only mount**
-shown under Nemo's Devices. It displays the account root, including the retained
-`References`, `Misc`, and `PublicSync` originals. `EncryptedSync` displays the
-rclone-crypt ciphertext as stored in the cloud. Use the private offline folder
-for readable working files. The cloud view requires a connection and refreshes
-directory listings after a short cache period (15 seconds).
+shown under Nemo's Devices. It decrypts `scramble_private:Current` using the
+original crypt key, so it has the same readable folder layout as
+`~/Scramble Private`: `References`, `Misc`, `trident-optics-attachment`, and
+the other private folders are at the same relative paths. The cloud view
+requires a connection and refreshes directory listings after a short cache
+period (15 seconds). Files still awaiting their initial upload appear locally
+first; the mount shows only what has reached the cloud.
+
+The Scramble website shows the account's underlying layout, including
+`EncryptedSync` and the retained public originals. Those names differ because
+the private cloud contents are encrypted. The old `References`, `Misc`, and
+`PublicSync` originals remain available there for rollback.
 
 All cloud uploads use the original `scramble_private` rclone-crypt configuration,
 whose underlying destination remains `scramble_drive:EncryptedSync`. Filenames

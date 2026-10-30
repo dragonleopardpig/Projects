@@ -94,7 +94,7 @@ else
     printf 'Private sync timer: %s\n' "$(systemctl --user is-active scramble-private-sync.timer 2>/dev/null || true)"
     if [[ -n $last ]]; then printf '%s\n' "$last"; fi
     printf 'Offline folder: %s\n' "$folder"
-    printf 'Cloud view: %s (%s)\n' "$HOME/Scramble Cloud" "$(systemctl --user is-active scramble-cloud-mount.service 2>/dev/null || true)"
+    printf 'Cloud view: %s (decrypted private folder, read-only; %s)\n' "$HOME/Scramble Cloud" "$(systemctl --user is-active scramble-cloud-mount.service 2>/dev/null || true)"
     printf 'Cloud storage: rclone-crypt encrypted private storage\n'
     printf 'Libraries: References and Misc copy new files without overwriting existing ones\n'
 fi

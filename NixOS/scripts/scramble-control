@@ -54,11 +54,12 @@ case "${1:-}" in
             notify-send 'Scramble connection is not ready' 'Check your login and local WebDAV settings. Use the tray menu to view sync status.'
             exit 1
         fi
-        systemctl --user start scramble-cloud-mount.service
         if [[ ! -f "$private_ready" ]]; then
             "$HOME/.local/bin/scramble-sync-init" private
+            systemctl --user start scramble-cloud-mount.service
             exit 0
         fi
+        systemctl --user start scramble-cloud-mount.service
         systemctl --user start scramble-private-sync.timer
         systemctl --user start --no-block scramble-private-sync.service
         ;;
@@ -87,7 +88,12 @@ case "${1:-}" in
         open_folder "$HOME/Scramble Private"
         ;;
     open-cloud)
-        systemctl --user start scramble-cloud-mount.service
+        if ! systemctl --user start scramble-cloud-mount.service ||
+           ! mountpoint --quiet "$HOME/Scramble Cloud"; then
+            notify-send --app-name=Scramble --icon=scramble-desktop \
+                'Scramble Cloud is not ready' 'Import the original private crypt key and check the Scramble connection.'
+            exit 1
+        fi
         open_folder "$HOME/Scramble Cloud"
         ;;
     status)
