@@ -3,14 +3,14 @@ set -euo pipefail
 umask 077
 
 if [[ $# -gt 1 ]]; then
-    echo 'Usage: scramble-sync-init [public|private|all]' >&2
+    echo 'Usage: scramble-sync-init [private|all]' >&2
     exit 2
 fi
-scope=${1:-all}
+scope=${1:-private}
 case "$scope" in
-    public|private|all) ;;
+    private|all) ;;
     *)
-        echo 'Usage: scramble-sync-init [public|private|all]' >&2
+        echo 'Public sync has been retired. Use scramble-sync-init for the single encrypted private folder.' >&2
         exit 2
         ;;
 esac
@@ -18,21 +18,11 @@ esac
 config="$HOME/.config/rclone/rclone.conf"
 export RCLONE_CONFIG="$config"
 import="$HOME/.config/rclone/scramble-private-import.conf"
-ready="$HOME/.config/rclone/scramble-ready"
-public_ready="$HOME/.config/rclone/scramble-public-ready"
-local_folder="$HOME/Documents/Scramble Sync"
-public_folder="$HOME/Documents/Scramble Public"
-units=(scramble-public-mount.service)
-if [[ $scope != private ]]; then
-    units+=(scramble-public-sync.timer)
-fi
-if [[ $scope != public ]]; then
-    units+=(scramble-private-sync.timer scramble-private-mount.service)
-fi
+ready="$HOME/.config/rclone/scramble-private-v2-ready"
 
-if [[ ( $scope == public || -e "$ready" ) && ( $scope == private || -e "$public_ready" ) ]]; then
-    systemctl --user enable --now "${units[@]}"
-    echo "The requested $scope sync is already initialized."
+if [[ -e "$ready" ]]; then
+    systemctl --user start scramble-private-sync.timer
+    echo 'The single offline Scramble Private folder is already initialized.'
     exit 0
 fi
 
@@ -45,7 +35,7 @@ if ! rclone listremotes | grep -qx 'scramble_drive:'; then
     exit 1
 fi
 
-if [[ $scope != public && -e "$import" ]]; then
+if [[ -e "$import" ]]; then
     python3 - "$config" "$import" <<'PY'
 from configparser import RawConfigParser
 from pathlib import Path
@@ -82,69 +72,9 @@ import_path.unlink()
 PY
 fi
 
-rclone lsf scramble_drive: --max-depth 1 >/dev/null
-systemctl --user enable --now scramble-public-mount.service
-
-if [[ $scope != public && ! -e "$ready" ]]; then
-    if ! rclone listremotes | grep -qx 'scramble_private:'; then
-        echo 'The existing private crypt key is missing. Transfer it from an initialized host; do not generate a replacement.' >&2
-        echo 'Public cloud browsing does not need this key. Run scramble-sync-init public to initialize only the public local folder.' >&2
-        exit 1
-    fi
-    rclone cat scramble_private:Current/RCLONE_TEST >/dev/null
-    if [[ -L "$local_folder" ]]; then
-        echo 'The private sync folder is a symlink; refusing to initialize.' >&2
-        exit 1
-    fi
-    mkdir -p "$local_folder"
-    chmod 700 "$local_folder"
-    if [[ -n $(find "$local_folder" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
-        echo 'The private sync folder contains files; move them aside before the first sync.' >&2
-        exit 1
-    fi
-
-    rclone copyto scramble_private:Current/RCLONE_TEST "$local_folder/RCLONE_TEST"
-    rclone bisync "$local_folder" scramble_private:Current \
-        --resync --check-access --max-delete 50 \
-        --resilient --recover --max-lock 10m \
-        --header-upload 'Content-Type: application/octet-stream' \
-        --webdav-encoding Colon \
-        --transfers 1 --checkers 2 --tpslimit 2 --retries-sleep 30s \
-        --compare size,checksum --download-hash --color NEVER
-
-    touch "$ready"
-    chmod 600 "$ready"
+if ! rclone listremotes | grep -qx 'scramble_private:'; then
+    echo 'The existing private crypt key is missing. Transfer it from an initialized host; do not generate a replacement.' >&2
+    exit 1
 fi
-
-if [[ $scope != private && ! -e "$public_ready" ]]; then
-    if [[ -L "$public_folder" ]]; then
-        echo 'The public sync folder is a symlink; refusing to initialize.' >&2
-        exit 1
-    fi
-    mkdir -p "$public_folder"
-    chmod 700 "$public_folder"
-    if [[ -n $(find "$public_folder" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
-        echo 'The public sync folder contains files; move them aside before the first sync.' >&2
-        exit 1
-    fi
-
-    rclone mkdir scramble_drive:PublicSync/Current
-    public_markers=$(rclone lsf scramble_drive:PublicSync/Current --files-only --include RCLONE_TEST --max-depth 1)
-    if ! grep -qx RCLONE_TEST <<<"$public_markers"; then
-        printf '%s\n' 'Scramble public sync access check' | rclone rcat scramble_drive:PublicSync/Current/RCLONE_TEST
-    fi
-    rclone copyto scramble_drive:PublicSync/Current/RCLONE_TEST "$public_folder/RCLONE_TEST"
-    rclone bisync "$public_folder" scramble_drive:PublicSync/Current \
-        --resync --check-access --max-delete 50 \
-        --resilient --recover --max-lock 10m \
-        --header-upload 'Content-Type: application/octet-stream' \
-        --webdav-encoding Colon \
-        --transfers 1 --checkers 2 --tpslimit 2 --retries-sleep 30s \
-        --compare size,checksum --download-hash --color NEVER
-
-    touch "$public_ready"
-    chmod 600 "$public_ready"
-fi
-
-systemctl --user enable --now "${units[@]}"
-echo "The requested $scope sync is ready. Run scramble-sync-status to check both folders."
+systemctl --user start --no-block scramble-consolidate.service
+echo 'Consolidation into ~/Scramble Private is running in the background. Check scramble-sync-status.'

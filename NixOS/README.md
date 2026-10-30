@@ -162,20 +162,18 @@ sudo nixos-rebuild switch --flake .#M90aPro
 
 ## Scramble Offline Reading
 
-- Scramble Desktop and cloud mounts start after the graphical session is ready,
-  so display initialization and cloud connection delays do not hold up the desktop.
-- `~/Scramble Public` and `~/Scramble Private` are live cloud mounts. Reading an
-  uncached file through these paths needs a working Scramble connection.
-- `~/Documents/Scramble Public` is the local two-way sync of
-  `PublicSync/Current`; `~/Documents/Scramble Sync` is the local private sync.
-- `~/Documents/Scramble References` holds offline copies of the cloud
-  `References` folder. Missing books download after login and every 30 minutes.
-  Existing local files are preserved; the downloader does not upload or delete.
-- The `sioyek` and `sioyek-xcb` launchers redirect cloud document paths to downloaded local
-  copies and updates saved session paths and matching history entries. A missing
-  offline copy produces a notification instead of opening the cloud mount.
-- Check downloads with `systemctl --user status scramble-references-download`
-  or `journalctl --user -u scramble-references-download -f`.
+- `~/Scramble Private` is the only Scramble working folder and Nemo bookmark.
+  It is a writable offline directory, not a cloud mount. References, attachments,
+  and existing private files synchronize through the original rclone-crypt key.
+- The first launch after upgrading backs up and consolidates the old folders,
+  verifies encrypted cloud copies, and then enables one private sync timer.
+  Old public cloud originals remain available for rollback until all hosts are updated.
+- Sioyek redirects old document paths to the consolidated local files and updates
+  matching history entries. The project attachment symlink is migrated too.
+- Check progress with `scramble-sync-status` or
+  `journalctl --user -u scramble-consolidate.service -f`.
+- See [Scramble setup and migration](docs/scramble-sync.md) for recovery backups
+  and key-backup requirements.
 
 ## Sioyek File Picker
 

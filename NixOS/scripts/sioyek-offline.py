@@ -10,10 +10,14 @@ import tempfile
 
 def offline_path(argument, home):
     path = Path(os.path.abspath(os.path.expanduser(argument)))
+    private = home / "Scramble Private"
     mappings = (
-        (home / "Scramble Public/References", home / "Documents/Scramble References"),
-        (home / "Scramble Public/PublicSync/Current", home / "Documents/Scramble Public"),
-        (home / "Scramble Private", home / "Documents/Scramble Sync"),
+        (home / "Scramble Public/References", private / "References"),
+        (home / "Scramble Public/PublicSync/Current", private),
+        (home / "Documents/Scramble References", private / "References"),
+        (home / "Documents/Scramble Public", private),
+        (home / "Documents/Scramble Sync", private),
+        (home / "Scramble Public/Misc", private / "Misc"),
     )
     for remote_root, local_root in mappings:
         if path.is_relative_to(remote_root):
@@ -23,7 +27,7 @@ def offline_path(argument, home):
         return None
     recovery_root = home / ".cache/sioyek-recovery"
     if path.is_relative_to(recovery_root):
-        local_path = home / "Documents/Scramble References" / path.relative_to(recovery_root)
+        local_path = private / "References" / path.relative_to(recovery_root)
         if local_path.is_file():
             return str(local_path)
     return argument
@@ -111,7 +115,7 @@ def main(arguments):
         if local_path is None:
             message = (
                 f"No offline copy of {Path(argument).name}. "
-                "Let Scramble finish downloading, then reopen it from Documents."
+                "Let Scramble finish downloading, then reopen it from Scramble Private."
             )
             print(message, file=sys.stderr)
             if shutil.which("notify-send"):

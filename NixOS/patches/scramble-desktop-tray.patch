@@ -1,17 +1,33 @@
 --- a/electron/main.js
 +++ b/electron/main.js
-@@ -1,1 +1,1 @@
+@@ -1,4 +1,4 @@
 -const {app, BrowserWindow, nativeImage, dialog, ipcMain} = require('electron');
 +const {app, BrowserWindow, nativeImage, dialog, ipcMain, Menu, Tray} = require('electron');
-@@ -8,0 +9,1 @@
+ const is = require("electron-is");
+ const url = require('url');
+ const path = require('path');
+@@ -6,10 +6,16 @@
+ const fs = require('fs');
+ const { getIconPath } = require('./icon');
+ const log = require('electron-log');
 +const { execFile } = require('child_process');
-@@ -12,0 +14,5 @@
+ const { WebdavSupervisor } = require('./webdav/supervisor');
+ let autoUpdaterReference;
+ let webdavSupervisor;
+ let shutdownStarted = false;
 +let tray;
 +
 +if (!app.requestSingleInstanceLock() || process.argv.includes('--scramble-quit')) {
 +  app.exit(0);
 +}
-@@ -44,0 +51,25 @@
+ 
+ // Init electron-store
+ const ElectronStore = require('electron-store');
+@@ -43,9 +49,35 @@
+ app.dock?.setIcon(getIconPath());
+ 
+ ipcMain.handle('app-version-get', () => app.getVersion());
++
 +function showMainWindow() {
 +  if (!global.win || global.win.isDestroyed()) return;
 +  if (global.win.isMinimized()) global.win.restore();
@@ -36,17 +52,22 @@
 +  else if (!shutdownStarted && !commandLine.includes('--start-in-tray')) showMainWindow();
 +});
 +app.on('activate', showMainWindow);
-+
-@@ -46,0 +78,1 @@
+ 	
+ function onReady () {
+ 	win = new BrowserWindow({
 +		show: !process.argv.includes('--start-in-tray'),
-@@ -63,0 +96,15 @@
+ 		width: 550,
+ 		height: 800,
+ 		frame: false,
+@@ -63,6 +95,19 @@
+ 		}
+ 	});
+ 
 +	tray = new Tray(getIconPath());
 +	tray.setToolTip(appName);
 +	tray.setContextMenu(Menu.buildFromTemplate([
 +		{ label: 'Open Scramble Desktop', click: showMainWindow },
-+		{ label: 'Open Public Sync Folder', click: () => controlAction('open-public') },
-+		{ label: 'Open Private Sync Folder', click: () => controlAction('open-private') },
-+		{ label: 'Browse Cloud Files', click: () => controlAction('open-cloud') },
++		{ label: 'Open Scramble Private Folder', click: () => controlAction('open-private') },
 +		{ type: 'separator' },
 +		{ label: 'Sync Now', click: () => controlAction('sync-now') },
 +		{ label: 'Sync Status', click: () => controlAction('status') },
@@ -55,27 +76,73 @@
 +	]));
 +	tray.on('click', showMainWindow);
 +
-@@ -107,0 +155,3 @@
-+	if (process.env.NOTIFY_SOCKET) {
-+		controlAction('ready');
-+	}
-@@ -124,1 +174,2 @@
+ 	registerMountMainIpc();
+ 
+ 	if (serve) {
+@@ -109,7 +154,10 @@
+ 	
+ }
+ 
+-app.on('ready', onReady);
++app.on('ready', () => {
++  onReady();
++  if (process.env.NOTIFY_SOCKET) controlAction('ready');
++});
+ 
+ app.on('render-process-gone', (_event, webContents, details) => {
+   log.error('Renderer process gone', {
+@@ -123,15 +171,16 @@
+   if (shutdownStarted) return;
+   event.preventDefault();
+   shutdownStarted = true;
 -  void webdavSupervisor.shutdown()
 +  void runControl('stop-sync')
 +    .then(() => webdavSupervisor.shutdown())
-@@ -128,1 +179,1 @@
+     .then(() => app.quit())
+     .catch((error) => {
+       shutdownStarted = false;
 -      log.error('Failed to stop WebDAV during app shutdown:', error);
 +      log.error('Failed to stop Scramble during app shutdown:', error);
-@@ -131,2 +182,2 @@
+       return dialog.showMessageBox({
+         type: 'error',
 -        title: 'WebDAV drive is still mounted',
 -        message: 'Scramble could not safely unmount the WebDAV drive.',
 +        title: 'Scramble is still running',
 +        message: 'Scramble could not safely stop sync or unmount its drives.',
-@@ -157,1 +208,1 @@
+         detail: `${error instanceof Error ? error.message : String(error)}\n\nClose files that are using the drive, unmount it, and quit again.`,
+         buttons: ['Keep Scramble open'],
+         defaultId: 0,
+@@ -156,7 +205,7 @@
+ 			'[Desktop Entry]',
+ 			'Type=Application',
+ 			'Name=' + appName,
 -			'Exec=' + process.execPath,
 +			'Exec=' + (process.env.SCRAMBLE_LAUNCHER || process.execPath) + ' --start-in-tray',
+ 			'X-GNOME-Autostart-enabled=true',
+ 			'',
+ 		].join('\n');
+@@ -238,4 +287,4 @@
+ 		log.info('Update downloaded:', info);
+ 		autoUpdater.quitAndInstall();
+ 	});
+-}
+\ No newline at end of file
++}
 --- a/electron/window.js
 +++ b/electron/window.js
-@@ -9,1 +9,1 @@
+@@ -6,7 +6,7 @@
+ 
+ ipcMain.on('minimize-window', () => {
+     console.log("Minimize window", win);
 -    if (win) win.minimize();
 +    if (win) win.hide();
+ });
+ 
+ ipcMain.on('maximize-window', () => {
+@@ -23,4 +23,4 @@
+     requestAppQuit(app);
+ });
+ 
+-ipcMain.handle('is-dev', () => is.dev());
+\ No newline at end of file
++ipcMain.handle('is-dev', () => is.dev());

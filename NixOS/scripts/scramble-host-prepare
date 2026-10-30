@@ -62,9 +62,8 @@ PY
 systemctl --user enable --now scramble-webdav.service
 for attempt in {1..30}; do
     if rclone lsf scramble_drive: --max-depth 1 >/dev/null 2>&1; then
-        systemctl --user enable --now scramble-public-mount.service
-        echo 'Existing cloud files are now available in Nemo: Scramble Public Cloud (read-only).'
-        echo 'Run scramble-sync-init public for local public sync. Transfer the existing crypt key, then run scramble-sync-init private for private sync.'
+        echo 'Scramble WebDAV is ready. Import the existing crypt key, then run scramble-sync-init.'
+        echo 'All files use the single offline folder: ~/Scramble Private.'
         exit 0
     fi
     sleep 1

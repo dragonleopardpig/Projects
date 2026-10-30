@@ -1,142 +1,127 @@
-# Scramble public and private folders on all NixOS hosts
+# One encrypted Scramble Private folder
 
-The shared `home.nix` installs Scramble Desktop, its app launcher entry, rclone,
-and the same user services on X299, X299-SSD, M90aPro, and PortableSSD. Open
-**Scramble Desktop** from the app launcher and sign in to browse your cloud files.
-The desktop app is installed by the rebuild; no manual download is needed.
-Launching it reconnects the local WebDAV backend, restores the cloud views,
-initializes empty local sync folders when their credentials are available, and
-starts their timers and an immediate sync. Launching it again restores the
-same window rather than creating a duplicate.
-At graphical login, Scramble Desktop starts in the background with its tray
-icon. Its window stays hidden until opened from the launcher or tray menu.
-Quitting keeps it stopped for the current session; the next login starts it again.
+All four hosts use one real, writable offline folder:
 
-Nemo has bookmarks for two editable local folders and their read-only cloud
-views:
+| Local folder | Cloud destination |
+| --- | --- |
+| `~/Scramble Private` | `scramble_private:Current` |
 
-| Folder | Purpose | Cloud destination |
-| --- | --- | --- |
-| `~/Documents/Scramble Public` | Editable public sync folder | `scramble_drive:PublicSync/Current` |
-| `~/Documents/Scramble Sync` | Editable private sync folder | `scramble_private:Current` |
-| `~/Scramble Public` | Read-only view of all existing cloud files | `scramble_drive:` |
-| `~/Scramble Private` | Read-only decrypted private cloud view | `scramble_private:Current` |
+This is a normal local directory, **not a FUSE mount**. Files remain available
+without a network connection or a running Scramble app. `References`,
+`trident-optics-attachment`, `Misc`, and the existing private files live inside
+this folder. Nemo has one **Scramble Private** bookmark.
 
-The public folder uses Scramble's normal account encryption. It is not an
-anonymous public share. The private folder adds rclone crypt encryption:
-the raw `EncryptedSync` folder in Scramble contains encrypted names and files.
+All cloud uploads use the original `scramble_private` rclone-crypt configuration,
+whose underlying destination remains `scramble_drive:EncryptedSync`. Filenames
+and contents are encrypted in addition to Scramble's account encryption. Local
+offline copies are ordinary readable files; rclone crypt does not encrypt the
+local filesystem.
 
-M90aPro already has a signed-in Scramble Desktop and an initialized sync.
-Its WebDAV service stays on `127.0.0.1:1900`. The other hosts use the
-official Scramble CLI to serve WebDAV on their own loopback address. Each
-host must log in to the same Scramble account locally.
+## Upgrade existing hosts
+
+Pull and rebuild the shared NixOS configuration, then launch **Scramble Desktop**.
+The same configuration applies to X299, X299-SSD, M90aPro, and PortableSSD.
+Scramble starts in the tray at graphical login without opening its window.
+
+The first launch starts `scramble-consolidate.service` in the background. It:
+
+1. Validates the existing crypt key by decrypting the private access marker.
+   It never generates or replaces a crypt key.
+2. Gracefully pauses the old public/private syncs and reference-book timer,
+   unmounts both old cloud views, and saves local files and the rclone
+   configuration under `~/.local/state/scramble/consolidation`.
+3. Moves the old local private, public, and reference folders into
+   `~/Scramble Private`, preserving different versions as conflict files rather
+   than overwriting them. The old project attachment link is updated too.
+4. Imports cloud-only files, including `Misc` and reference books, and copies
+   the old public cloud history into `scramble_private:History/LegacyPublic`.
+5. Uploads everything into encrypted private storage, checks the decrypted
+   cloud contents against every local file, and establishes the new sync
+   baseline. Only then is normal two-way sync enabled.
+
+The old public cloud folders are **retained for rollback until every host has
+been upgraded**. They are no longer synchronized by an upgraded host. Do not
+delete these originals while older hosts can still write to them. The migration
+does not delete or purge cloud originals.
+
+Migration checkpoints survive interruptions. A failed transfer retries without
+repeating completed local moves. The tray status popup shows the current phase.
+The initial encrypted upload can take a long time for a multi-gigabyte library.
+Inspect it with:
+
+```sh
+scramble-sync-status
+journalctl --user -u scramble-consolidate.service -f
+```
+
+The migration is complete when
+`~/.config/rclone/scramble-private-v2-ready` exists. Different local and cloud
+versions are retained with `.from-local-HOST-HASH` or `.from-cloud-HOST-HASH`
+in their names. Review these before deleting recovery backups.
 
 ## Set up another host
 
-1. Boot that host, update its `~/Projects` checkout with `git pull --ff-only`,
-   then run `sudo nixos-rebuild switch --flake ~/Projects/NixOS#HOST`, replacing
-   `HOST` with `X299`, `X299-SSD`, or `PortableSSD`. This installs Scramble
-   Desktop as well as the shared rclone units and helper commands. If you only
-   want the desktop app, open it from the app launcher and sign in; the remaining
-   steps set up the public and private folder sync.
-2. Run `scramble-host-prepare` in a terminal on that host. It installs the
-   pinned Scramble CLI, prompts for your Scramble login locally, generates
-   separate local WebDAV credentials, and starts the loopback WebDAV service.
-   This login is separate from Desktop login. The helper also mounts your
-   existing cloud files at Nemo's **Scramble Public Cloud (read-only)** bookmark;
-   no private crypt key or local sync initialization is required for that view.
-   Run `scramble-sync-init public` to initialize public local sync independently.
-   The launcher opens this setup terminal automatically if local WebDAV
-   credentials are missing. This is a one-time login on each host, not something
-   to repeat after quitting and reopening Scramble.
-3. From M90aPro, run `scramble-transfer-crypt SSH_HOST`, replacing `SSH_HOST`
-   with a working SSH name or address for the destination. SSH host-key
-   verification must already work. This transfers **only** the rclone crypt
-   settings. It does not copy the M90aPro WebDAV password or Scramble login.
-4. On the destination host, run `scramble-sync-init`. It checks both rclone
-   remotes, initializes both local folders, performs their first two-way sync,
-   and starts both timers and cloud mounts. Each local folder must be empty
-   before its first initialization.
-   Alternatively, launch Scramble Desktop again: it imports the transferred
-   key and initializes the empty private folder automatically. It never
-   generates a new crypt key to replace a missing one or overwrites a nonempty
-   local folder during initialization.
+Scramble Desktop and its launcher are installed by the rebuild; no manual
+download is needed. Each host signs into the same account locally.
 
-Repeat steps 1–4 for each additional host. The hosts do not need to be
-online at the same time to exchange files through Scramble Cloud.
+- On X299, X299-SSD, and PortableSSD, run `scramble-host-prepare` to install the
+  pinned CLI, sign in, and configure the loopback WebDAV connection.
+- M90aPro uses the signed-in Desktop app as its WebDAV backend.
+- Transfer the existing private key from an initialized host with
+  `scramble-transfer-crypt SSH_HOST`, or securely place the private-only import
+  at `~/.config/rclone/scramble-private-import.conf`. The initializer refuses to
+  overwrite a different key and removes a successfully consumed import.
+- Run `scramble-sync-init`, or relaunch Scramble Desktop. An existing host is
+  consolidated safely; a new host downloads the encrypted private contents.
 
-On an already initialized host such as M90aPro, run `scramble-sync-init` once
-after rebuilding to add the public folder. It leaves the existing private sync
-baseline and crypt keys in place.
+Never copy another host's WebDAV password over your own local connection
+configuration. Never create a replacement crypt key for existing cloud data.
 
-## Use and verify
+## Daily use
 
-Edit files in Nemo's **Scramble Public Sync** and **Scramble Private Sync**
-bookmarks. Both folders work offline. Their five-minute timers carry edits and
-deletions in both directions. The **Cloud (read-only)** bookmarks show their
-cloud copies, with the private copy decrypted by rclone crypt. These bookmarks
-appear after rebuilding; the cloud views become mounts after setup completes.
-The public cloud bookmark shows the entire existing account, not just the
-dedicated `PublicSync/Current` local-sync folder. Existing files outside that
-folder are browsable but are not automatically downloaded into public local
-sync. Desktop login alone does not start the CLI, create rclone configuration,
-or initialize either local sync.
+Edit working files in `~/Scramble Private`. The single private sync timer runs
+every five minutes. Working files use normal two-way sync: edits and deletions
+propagate, with replaced/deleted versions backed up locally and in encrypted
+cloud history.
 
-In the Scramble browser, public local files appear under **PublicSync → Current**,
-not at the account root. For example, a local `trident-optics-attachment` folder
-appears at `PublicSync/Current/trident-optics-attachment`. Keep its real files
-inside the local sync folder and link the project path to that folder, not the
-other way around: rclone does not follow symlinks inside the sync folder.
+The large `References` and `Misc` libraries use non-destructive add-only copying
+in both directions, preserving the existing reference-book policy. New files
+are copied, but an existing file is not overwritten or deleted. To publish a
+revised library document, give it a new filename. Remove unwanted copies from
+both sides, or an add-only copy will restore them.
 
-Uploads use binary request bodies so Scramble's JSON middleware does not consume
-JSON files before the WebDAV upload handler reads them. Transfers run one at a
-time with limited request rates to reduce cloud rate-limit errors.
-Colons in filenames, including Windows `:Zone.Identifier` metadata files, are
-encoded as full-width colons in the cloud and decoded by the sync and mounts.
+Working-file sync uses downloaded hashes because the WebDAV backend does not
+reliably expose modification times or hashes. Library folders are excluded
+from that expensive scan, so multi-gigabyte libraries are not downloaded every
+five minutes. The migration verifies the entire encrypted folder once before
+switching over. Concurrent working-file changes on multiple hosts can still
+produce conflict copies; avoid editing the same file on two offline hosts.
 
-Check the timers with `systemctl --user list-timers 'scramble-*-sync.timer'`,
-or run both syncs immediately with
-`systemctl --user start scramble-public-sync.service scramble-private-sync.service`.
-The AGS bar shows Scramble in the system tray alongside ProtonVPN, Remmina,
-and Filen. Like Filen, a small bottom-right green dot means syncing is active;
-the badge disappears when idle and healthy. Minimize hides the desktop window
-to this tray icon. Choose **Open Scramble Desktop** in its tray menu or
-launch the app again to restore the existing window. The tray's **Quit**
-action stops the timers, waits for any active sync to finish, unmounts the
-read-only views, stops the CLI backend when used, and shuts down the app.
-Right-click the Scramble tray icon for
-**Open Scramble Desktop**, **Open Public Sync Folder**, **Open Private Sync
-Folder**, **Browse Cloud Files**, **Sync Now**, **Sync Status**, and **Quit**.
-**Sync Status** shows a desktop notification instead of opening a terminal.
-For a terminal report, run `scramble-sync-status` directly.
-The launcher brings the stopped services back automatically after quitting;
-stored logins and crypt keys are retained. The icon disappears when Scramble
-quits and returns when the app is launched again.
-Yellow means setup is
-pending; red means a service stopped, the last sync failed,
-or no sync succeeded in 15 minutes. Hover over it for details, or run
-`scramble-sync-status` in a terminal.
-The dot refreshes every five seconds. It stays yellow until both public and
-private sync are initialized; a missing private crypt key does not mean the
-public sync is broken. Failures in an initialized sync still show red, even
-while the other folder's setup is pending.
-The indicator checks local service state; a new network failure appears after
-the next sync attempt.
+Keep the real attachment folder inside `~/Scramble Private` and link the project
+path to it. Rclone does not follow symlinks inside the sync folder. Existing
+links into the old Scramble folders are redirected during consolidation.
+Sioyek also redirects old document paths and updates matching saved history
+entries to preserve offline reading and annotations.
 
-These are user services. They start automatically when you log in; M90aPro's
-Scramble Desktop and the cloud mounts need a graphical session. They do not
-sync before login. There is no separate crypt daemon: rclone encrypts uploads
-and decrypts downloads as each sync or mount request runs.
+Right-click the tray icon for **Open Scramble Desktop**, **Open Scramble Private
+Folder**, **Sync Now**, **Sync Status**, and **Quit**. Status opens a notification,
+not a terminal. The badge is green while syncing, yellow during setup, red on
+failure, and hidden when idle and healthy. Its tooltip refreshes every five
+seconds. Quitting safely pauses a migration, waits for an ordinary active sync,
+stops the timer/backend, and removes the icon. Relaunching reconnects and resumes
+the same setup automatically. The next graphical login starts it again.
 
-If two hosts edit the same file before syncing, rclone may preserve both as
-conflict copies. The timer uses downloaded hashes because this WebDAV
-backend does not provide usable hashes, so a large folder can incur
-substantial traffic. Earlier versions removed during a sync are kept in
-`~/Documents/.Scramble Sync History` or the encrypted cloud `History` folder.
-Public versions are kept in `~/Documents/.Scramble Public History` and
-`scramble_drive:PublicSync/History`.
+Normal local history is under `~/.local/state/scramble/history`; migration
+backups and old local histories are under
+`~/.local/state/scramble/consolidation`. These hidden recovery directories are
+not additional working folders or cloud mounts.
 
-Keep `~/.config/rclone/rclone.conf` private and back it up securely: its
-lightly obscured crypt keys are needed to decrypt this folder. No keys are
-stored in the flake or Nix store. The local working folder is plaintext
-while the host is unlocked.
+## Back up the key
+
+Keep `~/.config/rclone/rclone.conf` private (mode `600`) and back it up to an
+encrypted external backup or password vault. Its `[scramble_private]` section
+contains the original crypt password and salt needed to recover the cloud
+data. Losing them makes the encrypted files unrecoverable. The migration's
+configuration backup is local recovery protection, not a substitute for an
+independent secure backup. Do not commit credentials or keys to Git, or place
+them in a normal cloud sync folder.

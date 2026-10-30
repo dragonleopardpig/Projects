@@ -6,8 +6,9 @@ if [[ $# -gt 1 || ( $# -eq 1 && $1 != --brief ) ]]; then
     exit 2
 fi
 
-ready="$HOME/.config/rclone/scramble-ready"
-public_ready="$HOME/.config/rclone/scramble-public-ready"
+ready="$HOME/.config/rclone/scramble-private-v2-ready"
+folder="$HOME/Scramble Private"
+phase_file="$HOME/.local/state/scramble/consolidation/phase"
 if [[ $(hostname) == M90aPro ]]; then
     backend=scramble-desktop.service
     backend_name='Scramble Desktop'
@@ -17,10 +18,9 @@ else
 fi
 
 state=ok
-summary='Public and private sync are healthy'
+summary='Scramble Private is healthy'
 last=''
-oldest_age=0
-setup_summary=''
+migration_state=$(systemctl --user show --value -p ActiveState scramble-consolidate.service)
 
 if [[ -f $HOME/.local/state/scramble/stopped ]] &&
    ! systemctl --user is-active --quiet scramble-desktop.service &&
@@ -29,105 +29,67 @@ if [[ -f $HOME/.local/state/scramble/stopped ]] &&
     summary='Scramble is stopped; launch Scramble Desktop to reconnect'
 elif [[ ! -f $HOME/.config/rclone/rclone.conf ]]; then
     state=pending
-    if [[ $backend == scramble-webdav.service ]]; then
-        summary='Complete the folder-sync login terminal (Desktop login is separate)'
-    else
-        summary='Configure the local WebDAV rclone remote before initializing folder sync'
+    summary='Complete the Scramble folder-sync login and import the existing private crypt key'
+elif [[ $migration_state =~ ^(active|activating|deactivating)$ ]]; then
+    state=busy
+    summary='Consolidating all files into the encrypted Scramble Private folder'
+    if [[ -s $phase_file ]]; then summary=$(cat "$phase_file"); fi
+elif [[ ! -f $ready ]]; then
+    state=pending
+    summary='Launch Scramble Desktop to consolidate the existing folders using the original crypt key'
+    if systemctl --user is-failed --quiet scramble-consolidate.service; then
+        state=error
+        summary='Consolidation is paused safely; use Sync Now to retry'
+        if [[ -s $phase_file ]]; then summary=$(cat "$phase_file"); fi
     fi
 elif systemctl --user is-failed --quiet scramble-session.service; then
     state=error
     summary='Automatic startup failed; check journalctl --user -u scramble-session.service'
-elif [[ $(systemctl --user show --value -p ActiveState scramble-session.service) =~ ^(active|activating)$ ]]; then
-    state=busy
-    summary='Connecting cloud views and initializing available sync folders'
 elif ! systemctl --user is-active --quiet "$backend"; then
     state=error
     summary="$backend_name is stopped"
+elif [[ ! -d $folder || -L $folder ]] || mountpoint --quiet "$folder"; then
+    state=error
+    summary='Scramble Private must be the real writable offline folder, not a cloud mount'
+elif ! systemctl --user is-active --quiet scramble-private-sync.timer; then
+    state=error
+    summary='The private sync timer is stopped'
 else
-    if [[ ! -f $ready || ! -f $public_ready ]]; then
+    unit=scramble-private-sync.service
+    sync_state=$(systemctl --user show --value -p ActiveState "$unit")
+    result=$(systemctl --user show --value -p Result "$unit")
+    exit_status=$(systemctl --user show --value -p ExecMainStatus "$unit")
+    last_us=$(systemctl --user show --value -p ExecMainExitTimestampMonotonic "$unit")
+    if [[ $sync_state == active || $sync_state == activating ]]; then
+        state=busy
+        summary='Private sync is running now'
+    elif [[ $result != success || $exit_status != 0 ]]; then
+        state=error
+        summary='The last private sync failed'
+    elif [[ ! $last_us =~ ^[0-9]+$ || $last_us -eq 0 ]]; then
         state=pending
-        if [[ -f $public_ready ]]; then
-            setup_summary='Private sync is not configured; import its existing crypt key and relaunch Scramble'
-        elif [[ -f $ready ]]; then
-            setup_summary='Public sync is not initialized; launch Scramble Desktop to initialize it'
-        else
-            setup_summary='Launch Scramble Desktop to initialize public sync; private sync needs its existing crypt key'
+        summary='Waiting for the first private sync'
+    else
+        read -r uptime _ < /proc/uptime
+        age=$(( ${uptime%%.*} - last_us / 1000000 ))
+        if (( age < 0 )); then age=0; fi
+        last="Last completed sync $((age / 60)) minute(s) ago"
+        if (( age > 900 )); then
+            state=error
+            summary='Private sync is overdue by more than 15 minutes'
         fi
-        summary=$setup_summary
     fi
-    for scope in public private; do
-        if [[ $scope == public && ! -f $public_ready ]] || [[ $scope == private && ! -f $ready ]]; then
-            continue
-        fi
-        mounted="$HOME/Scramble ${scope^}"
-        if ! systemctl --user is-active --quiet "scramble-$scope-sync.timer"; then
-            state=error
-            summary="The $scope sync timer is stopped"
-            break
-        fi
-        if ! systemctl --user is-active --quiet "scramble-$scope-mount.service" || \
-           [[ $(findmnt -n -T "$mounted" -o TARGET 2>/dev/null || true) != "$mounted" ]]; then
-            state=error
-            summary="The $scope cloud view is not mounted"
-            break
-        fi
-
-        unit="scramble-$scope-sync.service"
-        sync_state=$(systemctl --user show --value -p ActiveState "$unit")
-        result=$(systemctl --user show --value -p Result "$unit")
-        exit_status=$(systemctl --user show --value -p ExecMainStatus "$unit")
-        last_us=$(systemctl --user show --value -p ExecMainExitTimestampMonotonic "$unit")
-
-        if [[ $sync_state == active || $sync_state == activating ]]; then
-            state=busy
-            summary="The $scope sync is running now"
-        elif [[ $result != success || $exit_status != 0 ]]; then
-            state=error
-            summary="The last $scope sync failed"
-            break
-        elif [[ ! $last_us =~ ^[0-9]+$ || $last_us -eq 0 ]]; then
-            if [[ $state != busy ]]; then
-                state=pending
-                summary="Waiting for the first $scope sync"
-            fi
-        else
-            read -r uptime _ < /proc/uptime
-            age=$(( ${uptime%%.*} - last_us / 1000000 ))
-            if (( age < 0 )); then age=0; fi
-            if (( age > oldest_age )); then oldest_age=$age; fi
-            last="Oldest completed sync $((oldest_age / 60)) minute(s) ago"
-            if (( age > 900 )); then
-                state=error
-                summary="The $scope sync is overdue by more than 15 minutes"
-                break
-            fi
-        fi
-    done
-fi
-
-if [[ -n $setup_summary && $summary != "$setup_summary" ]]; then
-    summary="$summary; $setup_summary"
-fi
-if [[ -n $setup_summary && $state != error ]]; then
-    state=pending
 fi
 
 if [[ ${1:-} == --brief ]]; then
-    if [[ -n $last ]]; then
-        printf '%s|%s. %s.\n' "$state" "$summary" "$last"
-    else
-        printf '%s|%s.\n' "$state" "$summary"
-    fi
+    printf '%s|%s.%s\n' "$state" "$summary" "${last:+ $last.}"
 else
     printf 'Scramble: %s\n' "$summary"
     printf 'Connection: %s (%s)\n' "$backend_name" "$(systemctl --user is-active "$backend" 2>/dev/null || true)"
     printf 'Desktop: %s\n' "$(systemctl --user is-active scramble-desktop.service 2>/dev/null || true)"
-    printf 'Automatic startup: %s\n' "$(systemctl --user is-active scramble-session.service 2>/dev/null || true)"
-    for scope in public private; do
-        printf '%s sync timer: %s\n' "${scope^}" "$(systemctl --user is-active "scramble-$scope-sync.timer" 2>/dev/null || true)"
-        printf '%s cloud view: %s\n' "${scope^}" "$(systemctl --user is-active "scramble-$scope-mount.service" 2>/dev/null || true)"
-    done
+    printf 'Private sync timer: %s\n' "$(systemctl --user is-active scramble-private-sync.timer 2>/dev/null || true)"
     if [[ -n $last ]]; then printf '%s\n' "$last"; fi
-    printf 'Public local folder: %s\n' "$HOME/Documents/Scramble Public"
-    printf 'Private local folder: %s\n' "$HOME/Documents/Scramble Sync"
+    printf 'Offline folder: %s\n' "$folder"
+    printf 'Cloud storage: rclone-crypt encrypted private storage\n'
+    printf 'Libraries: References and Misc copy new files without overwriting existing ones\n'
 fi

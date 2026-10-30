@@ -9,8 +9,7 @@ backend=@BACKEND@
 rclone=@RCLONE@
 state_folder="$HOME/.local/state/scramble"
 stopped="$state_folder/stopped"
-public_ready="$HOME/.config/rclone/scramble-public-ready"
-private_ready="$HOME/.config/rclone/scramble-ready"
+private_ready="$HOME/.config/rclone/scramble-private-v2-ready"
 
 lock_session() {
     mkdir -p "$state_folder"
@@ -55,34 +54,20 @@ case "${1:-}" in
             notify-send 'Scramble connection is not ready' 'Check your login and local WebDAV settings. Use the tray menu to view sync status.'
             exit 1
         fi
-        systemctl --user start scramble-public-mount.service
-        if [[ ! -f "$public_ready" ]]; then
-            "$HOME/.local/bin/scramble-sync-init" public
-        fi
-        if [[ ! -f "$private_ready" ]] && {
-            [[ -f "$HOME/.config/rclone/scramble-private-import.conf" ]] ||
-            "$rclone" listremotes | grep -qx 'scramble_private:';
-        }; then
+        if [[ ! -f "$private_ready" ]]; then
             "$HOME/.local/bin/scramble-sync-init" private
+            exit 0
         fi
-        units=(scramble-public-sync.timer scramble-public-mount.service)
-        sync_units=(scramble-public-sync.service)
-        if [[ -f "$private_ready" ]]; then
-            units+=(scramble-private-sync.timer scramble-private-mount.service)
-            sync_units+=(scramble-private-sync.service)
-        fi
-        systemctl --user start "${units[@]}"
-        systemctl --user start --no-block "${sync_units[@]}"
+        systemctl --user start scramble-private-sync.timer
+        systemctl --user start --no-block scramble-private-sync.service
         ;;
     stop-sync)
         lock_session
-        systemctl --user stop scramble-public-sync.timer scramble-private-sync.timer
-        for scope in public private; do
-            while [[ $(systemctl --user show --value -p ActiveState "scramble-$scope-sync.service") =~ ^(active|activating|deactivating)$ ]]; do
-                sleep 1
-            done
+        systemctl --user stop scramble-private-sync.timer scramble-consolidate.service
+        while [[ $(systemctl --user show --value -p ActiveState scramble-private-sync.service) =~ ^(active|activating|deactivating)$ ]]; do
+            sleep 1
         done
-        systemctl --user stop scramble-public-mount.service scramble-private-mount.service
+        systemctl --user stop scramble-private-sync.timer
         if [[ $backend == scramble-webdav.service ]]; then
             systemctl --user stop "$backend"
         fi
@@ -97,14 +82,8 @@ case "${1:-}" in
         fi
         "$HOME/.local/bin/scramble-control" stop-sync
         ;;
-    open-public)
-        open_folder "$HOME/Documents/Scramble Public"
-        ;;
-    open-private)
-        open_folder "$HOME/Documents/Scramble Sync"
-        ;;
-    open-cloud)
-        open_folder "$HOME/Scramble Public"
+    open-private|open-public|open-cloud)
+        open_folder "$HOME/Scramble Private"
         ;;
     status)
         status_message="$("$HOME/.local/bin/scramble-sync-status")"

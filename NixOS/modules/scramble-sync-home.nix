@@ -1,26 +1,31 @@
 { config, lib, osConfig ? null, pkgs, scrambleHostName ? null, ... }:
 let
   home = config.home.homeDirectory;
-  ready = "${home}/.config/rclone/scramble-ready";
-  publicReady = "${home}/.config/rclone/scramble-public-ready";
-  mounted = "${home}/Scramble Private";
-  publicMounted = "${home}/Scramble Public";
+  ready = "${home}/.config/rclone/scramble-private-v2-ready";
   rclone = "${pkgs.rclone}/bin/rclone";
   syncScript = pkgs.writeShellScript "scramble-private-sync" (
     builtins.replaceStrings [ "@RCLONE@" ] [ rclone ]
       (builtins.readFile ../scripts/scramble-private-sync)
   );
+  consolidateScript = pkgs.writeShellScript "scramble-consolidate" ''
+    export PATH="${lib.makeBinPath [ pkgs.coreutils pkgs.systemd pkgs.rclone ]}:$PATH"
+    unset LD_LIBRARY_PATH LD_PRELOAD
+    exec ${pkgs.python3}/bin/python3 ${../scripts/scramble-consolidate.py} "$@"
+  '';
   hostName = if osConfig != null then osConfig.networking.hostName else scrambleHostName;
   cliHost = hostName != "M90aPro";
   backend = if cliHost then "scramble-webdav.service" else "scramble-desktop.service";
   scrambleDesktop =
     let
       pname = "scramble-desktop";
-      version = "1.0.40";
+      version = "1.0.42";
       src = pkgs.fetchurl {
-        url = "https://electron-auto-update.s3.de.io.cloud.ovh.net/Scramble_linux_x86_64.AppImage?versionId=1791756323.915028";
+        urls = [
+          "https://electron-auto-update.s3.de.io.cloud.ovh.net/Scramble_linux_x86_64.AppImage?versionId=1793133317.866797"
+          "https://electron-auto-update.s3.de.io.cloud.ovh.net/Scramble_linux_x86_64.AppImage"
+        ];
         name = "Scramble-${version}-x86_64.AppImage";
-        hash = "sha256-Rl3WZoIbRsjFO98EciZoBLM8r2dTR7MI/6Yx1f1N9Bo=";
+        hash = "sha512-aQuicNwWWaXCxA8aHMqp7o3Z/x7FD+lZ7RGVG37h69ZMhyu6YpAMCGSKhOe31VszOhL+Sf6TfybVcAWamJDNyw==";
       };
       appimageContents = pkgs.appimageTools.extractType2 {
         inherit pname version src;
@@ -31,6 +36,8 @@ let
             cd "$TMPDIR/scramble-app"
             ${pkgs.patch}/bin/patch -p1 --fuzz=0 < ${../patches/scramble-desktop-tray.patch}
           )
+          ${pkgs.nodejs}/bin/node --check "$TMPDIR/scramble-app/electron/main.js"
+          ${pkgs.nodejs}/bin/node --check "$TMPDIR/scramble-app/electron/window.js"
           ${pkgs.asar}/bin/asar pack "$TMPDIR/scramble-app" "$out/resources/app.asar"
         '';
       };
@@ -47,6 +54,8 @@ let
         install -Dm444 ${appimageContents}/scramble-desktop.desktop \
           $out/share/applications/scramble-desktop.desktop
         cp -r ${appimageContents}/usr/share/icons $out/share/
+        mkdir -p $out/nix-support
+        ln -s ${src} $out/nix-support/upstream-installer.AppImage
         substituteInPlace $out/share/applications/scramble-desktop.desktop \
           --replace-fail 'Exec=AppRun --no-sandbox' "Exec=${home}/.local/bin/scramble-launch"
       '';
@@ -62,7 +71,7 @@ let
     builtins.replaceStrings
       [ "@BACKEND@" "@RCLONE@" "@DESKTOP@" "@PATH@" ]
       [ backend rclone "${scrambleDesktop}/bin/scramble-desktop"
-        (lib.makeBinPath [ pkgs.coreutils pkgs.gnugrep pkgs.systemd pkgs.util-linux pkgs.libnotify pkgs.xdg-utils pkgs.kitty ]) ]
+        (lib.makeBinPath [ pkgs.coreutils pkgs.gnugrep pkgs.systemd pkgs.util-linux pkgs.libnotify pkgs.xdg-utils pkgs.kitty pkgs.python3 pkgs.rclone ]) ]
       (builtins.readFile ../scripts/scramble-control)
   );
   launchScript = pkgs.writeShellScript "scramble-launch" (
@@ -82,6 +91,10 @@ in
   };
   home.file.".local/bin/scramble-sync-init" = {
     source = ../scripts/scramble-sync-init;
+    executable = true;
+  };
+  home.file.".local/bin/scramble-consolidate" = {
+    source = consolidateScript;
     executable = true;
   };
   home.file.".local/bin/scramble-transfer-crypt" = {
@@ -108,25 +121,17 @@ in
 
     home = Path.home()
     bookmarks = home / '.config/gtk-3.0/bookmarks'
-    entries = [
-        (home / 'Documents/Scramble Public', 'Scramble Public Sync'),
-        (home / 'Documents/Scramble Sync', 'Scramble Private Sync'),
-        (home / 'Scramble Public', 'Scramble Public Cloud (read-only)'),
-        (home / 'Scramble Private', 'Scramble Private Cloud (read-only)'),
-    ]
+    retired = {
+        (home / path).as_uri() for path in [
+            'Documents/Scramble Public', 'Documents/Scramble Sync',
+            'Documents/Scramble References', 'Scramble Public', 'Scramble Private',
+        ]
+    }
     content = bookmarks.read_text() if bookmarks.exists() else ""
-    existing = {line.split()[0] for line in content.splitlines() if line.strip()}
-    additions = []
-    for directory, label in entries:
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if directory.as_uri() not in existing:
-            additions.append(directory.as_uri() + ' ' + label)
-    if additions:
-        bookmarks.parent.mkdir(parents=True, exist_ok=True)
-        with bookmarks.open('a') as file:
-            if content and not content.endswith('\n'):
-                file.write('\n')
-            file.write('\n'.join(additions) + '\n')
+    lines = [line for line in content.splitlines() if not line.split() or line.split()[0] not in retired]
+    lines.append((home / 'Scramble Private').as_uri() + ' Scramble Private')
+    bookmarks.parent.mkdir(parents=True, exist_ok=True)
+    bookmarks.write_text('\n'.join(lines) + '\n')
     PY
   '';
 
@@ -141,6 +146,7 @@ in
       Type = "oneshot";
       Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
       ExecStart = "${syncScript}";
+      TimeoutStartSec = "infinity";
     };
   };
 
@@ -176,7 +182,10 @@ in
   };
 
   systemd.user.timers.scramble-private-sync = {
-    Unit.Description = "Check the encrypted Scramble folder every five minutes";
+    Unit = {
+      Description = "Check the single encrypted Scramble folder every five minutes";
+      ConditionPathExists = ready;
+    };
     Timer = {
       OnActiveSec = "1min";
       OnUnitInactiveSec = "5min";
@@ -186,104 +195,23 @@ in
     Install.WantedBy = [ "timers.target" ];
   };
 
-  systemd.user.services.scramble-private-mount = {
+  systemd.user.services.scramble-consolidate = {
     Unit = {
-      Description = "Decrypted read-only view of the encrypted Scramble folder";
-      Wants = [ "network-online.target" backend ];
-      After = [ "graphical-session.target" "network-online.target" backend ];
-      ConditionPathExists = ready;
-    };
-    Service = {
-      Type = "notify";
-      Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
-      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${mounted}'";
-      ExecStart = "${rclone} mount scramble_private:Current '${mounted}' --webdav-encoding=Colon --read-only --vfs-cache-mode=off --umask=077 --poll-interval=0 --dir-cache-time=30s";
-      ExecStop = "/run/wrappers/bin/fusermount3 -u '${mounted}'";
-      Restart = "on-failure";
-      RestartSec = 10;
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
-  };
-
-  systemd.user.services.scramble-public-sync = {
-    Unit = {
-      Description = "Two-way sync of the public Scramble folder";
+      Description = "Safely consolidate all Scramble files into the encrypted private folder";
       Wants = [ "network-online.target" backend ];
       After = [ "network-online.target" backend ];
-      ConditionPathExists = publicReady;
-    };
-    Service = {
-      Type = "oneshot";
-      Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
-      ExecStart = "${syncScript} public";
-    };
-  };
-
-  systemd.user.timers.scramble-public-sync = {
-    Unit.Description = "Check the public Scramble folder every five minutes";
-    Timer = {
-      OnActiveSec = "1min";
-      OnUnitInactiveSec = "5min";
-      AccuracySec = "30s";
-      Unit = "scramble-public-sync.service";
-    };
-    Install.WantedBy = [ "timers.target" ];
-  };
-
-  systemd.user.services.scramble-public-mount = {
-    Unit = {
-      Description = "Read-only view of the existing Scramble cloud files";
-      Wants = [ "network-online.target" backend ];
-      After = [ "graphical-session.target" "network-online.target" backend ];
-      ConditionPathExists = "${home}/.config/rclone/rclone.conf";
-    };
-    Service = {
-      Type = "notify";
-      Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
-      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${publicMounted}'";
-      ExecStart = "${rclone} mount scramble_drive: '${publicMounted}' --webdav-encoding=Colon --read-only --vfs-cache-mode=full --vfs-cache-max-size=1G --vfs-cache-max-age=24h --umask=077 --poll-interval=0 --dir-cache-time=30s";
-      ExecStop = "/run/wrappers/bin/fusermount3 -u '${publicMounted}'";
-      Restart = "on-failure";
-      RestartSec = 10;
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
-  };
-
-  xdg.configFile."systemd/user/scramble-references-download.service".force = true;
-  xdg.configFile."systemd/user/scramble-references-download.timer".force = true;
-
-  # THE REFERENCE LIBRARY, both ways but ADD-ONLY: books new in the cloud come down, books new
-  # here go up (2026-10-21: seven added locally had never reached the cloud). Not a bisync like
-  # Scramble Public's -- that one hashes every file each run, downloading what the WebDAV side
-  # cannot hash, which for a multi-gigabyte library is the whole library every half hour; and
-  # it carries deletions. Here nothing is ever deleted or overwritten on either side: to drop
-  # or rename a book, do it in the cloud too, or the next run brings the old one back.
-  systemd.user.services.scramble-references-download = {
-    Unit = {
-      Description = "Keep the Scramble reference books in step both ways (add-only)";
-      Wants = [ "network-online.target" backend ];
-      After = [ "network-online.target" backend ];
+      PartOf = [ "graphical-session.target" ];
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";
     };
     Service = {
       Type = "oneshot";
-      Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
-      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${home}/Documents/Scramble References'";
-      ExecStart = [
-        "${rclone} copy scramble_drive:References '${home}/Documents/Scramble References' --webdav-encoding=Colon --ignore-existing --transfers=1 --checkers=2 --tpslimit=2 --contimeout=10s --timeout=1m --retries=3 --low-level-retries=3"
-        "${rclone} copy '${home}/Documents/Scramble References' scramble_drive:References --webdav-encoding=Colon --ignore-existing --transfers=1 --checkers=2 --tpslimit=2 --contimeout=10s --timeout=1m --retries=3 --low-level-retries=3"
-      ];
+      ExecStart = "${consolidateScript}";
+      TimeoutStartSec = "infinity";
+      TimeoutStopSec = "90s";
+      KillSignal = "SIGINT";
+      Restart = "on-failure";
+      RestartSec = "60s";
     };
-  };
-
-  systemd.user.timers.scramble-references-download = {
-    Unit.Description = "Keep Scramble reference books available offline";
-    Timer = {
-      OnActiveSec = "1min";
-      OnUnitInactiveSec = "30min";
-      Unit = "scramble-references-download.service";
-    };
-    Install.WantedBy = [ "timers.target" ];
   };
 
   systemd.user.services.scramble-webdav = lib.mkIf cliHost {
