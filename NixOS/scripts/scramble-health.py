@@ -151,37 +151,6 @@ def derive(units, backend, configured, ready, stopped, stopping, folder_ok,
     return result
 
 
-class Notifications:
-    def __init__(self):
-        self.error_since = None
-        self.announced_error = False
-        self.announced_start = False
-
-    def update(self, report, now):
-        state = report["state"]
-        if state == "error":
-            if self.error_since is None:
-                self.error_since = now
-            if not self.announced_error and now - self.error_since >= 10:
-                self.announced_error = True
-                return "Scramble needs attention", report["summary"], "critical"
-            return None
-        self.error_since = None
-        if state in {"pending", "stopped"} or report["label"] == "Stopping":
-            self.announced_error = False
-            if state == "stopped":
-                self.announced_start = False
-            return None
-        if self.announced_error:
-            self.announced_error = False
-            self.announced_start = True
-            return "Scramble is responding again", report["summary"], "normal"
-        if not self.announced_start and report.get("connection") is True:
-            self.announced_start = True
-            return "Scramble monitor is active", report["summary"], "normal"
-        return None
-
-
 class Monitor:
     def __init__(self, home):
         self.home = Path(home)
@@ -192,7 +161,6 @@ class Monitor:
         self.probe = {}
         self.future = None
         self.next_probe = 0
-        self.notifications = Notifications()
 
     def configured(self):
         config = RawConfigParser()
@@ -284,17 +252,10 @@ class Monitor:
         return {}
 
     def publish(self, report):
+        # The tray badge and hover details report changes without interrupting work.
         temporary = self.file.with_suffix(".tmp")
         temporary.write_text(json.dumps(report) + "\n")
         temporary.replace(self.file)
-        notice = self.notifications.update(report, time.monotonic())
-        if notice:
-            title, message, urgency = notice
-            try:
-                subprocess.run(["notify-send", "--app-name=Scramble", "--icon=scramble-desktop",
-                                "--urgency=" + urgency, "--expire-time=15000", title, message], timeout=3, check=False)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
 
     def run(self):
         self.state.mkdir(parents=True, exist_ok=True, mode=0o700)

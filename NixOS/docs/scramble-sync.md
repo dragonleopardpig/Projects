@@ -136,9 +136,9 @@ describe the current transfer, not the entire migration. A recent completed
 transfer's speed is labeled as recent when the next job has not reported yet.
 Samples older than 15 seconds are hidden, and scheduled idle shows 0 B/s.
 
-Desktop notifications announce monitoring startup, persistent failures, and
-recovery. A ten-second delay prevents brief service transitions from producing
-false failure alerts. Intentional Quit is reported as stopped. If the Desktop
+Automatic desktop notifications are disabled. Failures turn the tray indicator
+red; hover for live status and transfer speed, or select Sync Status when you
+want a detailed popup. Intentional Quit is reported as stopped. If the Desktop
 tray item disappears, the bar retains a status icon; left-click relaunches
 Scramble and right-click opens the status notification. A stale monitor cache
 is shown as an error instead of appearing healthy. Inspect the monitor with

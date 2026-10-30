@@ -14,7 +14,7 @@ let
     exec ${pkgs.python3}/bin/python3 ${../scripts/scramble-consolidate.py} "$@"
   '';
   healthScript = pkgs.writeShellScript "scramble-health" ''
-    export PATH="${lib.makeBinPath [ pkgs.systemd pkgs.rclone pkgs.libnotify ]}:$PATH"
+    export PATH="${lib.makeBinPath [ pkgs.systemd pkgs.rclone ]}:$PATH"
     unset LD_LIBRARY_PATH LD_PRELOAD
     exec ${pkgs.python3}/bin/python3 ${../scripts/scramble-health.py} monitor
   '';
