@@ -55,6 +55,10 @@ export default function ScrambleStatus() {
     return <box
         className={status().as(currentStatus => `ScrambleStatus ${currentStatus.state}`)}
         tooltipText={status().as(tooltip)}
+        setup={self => {
+            const unsubscribe = status.subscribe(() => self.trigger_tooltip_query())
+            self.connect("destroy", unsubscribe)
+        }}
         onDestroy={() => status.drop()}>
         <overlay halign={Gtk.Align.CENTER} valign={Gtk.Align.CENTER}>
             <icon className="scramble-icon" gicon={scrambleIcon} />
