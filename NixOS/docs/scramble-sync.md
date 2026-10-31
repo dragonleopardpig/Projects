@@ -144,6 +144,13 @@ Scramble and right-click opens the status notification. A stale monitor cache
 is shown as an error instead of appearing healthy. Inspect the monitor with
 `journalctl --user -u scramble-health.service`.
 
+Persistent `90-quiet-monitor.conf` and `90-quiet-startup.conf` user-service
+drop-ins select the quiet helpers. They also protect a targeted live update
+when rebooting into an older NixOS generation: its Home Manager activation can
+restore the old base unit files. Replacing the base unit symlinks alone does
+not survive that activation. Inspect the effective commands and drop-ins with
+`systemctl --user show scramble-health.service scramble-session.service -p ExecStart -p DropInPaths`.
+
 Quitting safely pauses a migration, waits for an ordinary active sync,
 unmounts the cloud view, stops the timer/backend, and removes the icon.
 Relaunching reconnects and resumes the same setup automatically. The next

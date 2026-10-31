@@ -179,6 +179,20 @@ in
     Install.WantedBy = [ "graphical-session.target" ];
   };
 
+  # Keep the quiet helpers selected even when boot-time activation restores
+  # base service files from an older generation. A live unit-symlink change
+  # alone is overwritten by that activation; these drop-ins survive it.
+  xdg.configFile."systemd/user/scramble-health.service.d/90-quiet-monitor.conf".text = ''
+    [Service]
+    ExecStart=
+    ExecStart=${healthScript}
+  '';
+  xdg.configFile."systemd/user/scramble-session.service.d/90-quiet-startup.conf".text = ''
+    [Service]
+    ExecStart=
+    ExecStart=${controlScript} start-sync
+  '';
+
   systemd.user.services.scramble-cloud-mount = {
     Unit = {
       Description = "Decrypted read-only cloud view matching Scramble Private";
