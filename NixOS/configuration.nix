@@ -310,7 +310,7 @@ let
   };
 in
 {
-  imports = [];
+  imports = [ ./modules/always-on.nix ];
 
   boot = {
     kernelPackages = pkgs.linuxPackages_latest;
