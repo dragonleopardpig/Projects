@@ -75,6 +75,8 @@ window.Bar {
     .IdleInhibitor           { color: #888; padding: 0 6px; }
     .IdleInhibitor:hover     { color: #ffd700; }
     .IdleInhibitor.Inhibited { color: #ffd700; text-shadow: 0 0 4px #ffd700; }
+    .IdleInhibitor .AlwaysOnBadge { color: #50fa7b; font-size: 13px; margin-left: 2px;
+                                    text-shadow: 0 0 4px #50fa7b; }
 
     .Privacy { padding: 0 4px; }
     .Privacy .MicActive {
