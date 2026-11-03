@@ -2570,6 +2570,19 @@ in
         exit 0
       fi
 
+      # Not while a screen is dark or the session is locked.  A transition
+      # there waits for frames a sleeping screen never asks for: on an
+      # always-on night (2026-11-02) awww-daemon spun a core for 16 hours,
+      # one stuck transition a minute.  A failing hyprctl (the compositor
+      # starting or gone) skips too; the next minute tries again.
+      monitors="$(hyprctl monitors -j 2>/dev/null)" || exit 0
+      printf '%s' "$monitors" \
+        | jq -e 'length > 0 and all(.[]; .dpmsStatus == true)' >/dev/null 2>&1 \
+        || exit 0
+      if pgrep -f '[s]waylock' >/dev/null 2>&1; then
+        exit 0
+      fi
+
       wallpaper="$(
         find "$WALLPAPER_DIR" -maxdepth 1 -type f \
           \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
