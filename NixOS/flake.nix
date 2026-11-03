@@ -10,7 +10,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     winapps = {
-      url = "path:/home/thinky/Projects/winapps";
+      # git+file at a branch, not path: -- a path: input hashes the whole folder,
+      # .git included, so any git command in winapps (even `git status`
+      # refreshing its index) broke flake.lock's hash (2026-11-03).  This reads
+      # the COMMITTED tree of main only: commit winapps changes, then
+      # `nix flake update winapps`.
+      url = "git+file:///home/thinky/Projects/winapps?ref=main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     disko = {

@@ -357,14 +357,18 @@
         ]
       },
       "locked": {
-        "lastModified": 1792727505,
-        "narHash": "sha256-l1HH7QI1VxRvLPiMISMmCvJyu0lCRu6maR16X7fl2pg=",
-        "path": "/home/thinky/Projects/winapps",
-        "type": "path"
+        "lastModified": 1793671551,
+        "narHash": "sha256-PxVQCuQTHYoIWxMlFtFSqlgflER9FcEF9sCjs7W7pWc=",
+        "ref": "main",
+        "rev": "d4339187505908812640bbc1633411548bd44722",
+        "revCount": 936,
+        "type": "git",
+        "url": "file:///home/thinky/Projects/winapps"
       },
       "original": {
-        "path": "/home/thinky/Projects/winapps",
-        "type": "path"
+        "ref": "main",
+        "type": "git",
+        "url": "file:///home/thinky/Projects/winapps"
       }
     }
   },
