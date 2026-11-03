@@ -432,7 +432,7 @@ in
     export const DISPLAY_SCALE_CMD = "${config.home.homeDirectory}/.local/bin/display-scale";
     export const MOUSE_SPEED_CMD = "${config.home.homeDirectory}/.local/bin/mouse-speed";
     export const WEATHER_CMD =
-        "${pkgs.curl}/bin/curl -sf 'https://wttr.in/Singapore?format=%c+%t'";
+        "${pkgs.python3}/bin/python3 ${./assets/weather-fetch.py} --bar Singapore";
     // Detailed forecast fetcher for the Weather popup; emits slim JSON.
     export const WEATHER_FETCH_BIN = "${pkgs.python3}/bin/python3";
     export const WEATHER_FETCH_SCRIPT = "${./assets/weather-fetch.py}";
