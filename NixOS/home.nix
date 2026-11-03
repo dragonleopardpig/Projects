@@ -1446,7 +1446,10 @@ in
       saved="$state/saved"
       mkdir -p "$state"
       exec 9>"$state/lock"
-      flock 9
+      # (waited for 15 s at most, then given up: a call that queued behind a
+      # stuck one ran hours later -- an `on` from the evening re-locked the
+      # screen black the moment it was unlocked in the morning, 2026-11-04)
+      flock -w 15 9 || exit 0
 
       locked() { pgrep -f '[s]waylock' >/dev/null 2>&1; }
 
@@ -1480,7 +1483,9 @@ in
           --text-color cdd6f4 --line-color 00000000 \
           --inside-ver-color 000000 --ring-ver-color 89b4fa \
           --inside-wrong-color f38ba8 --ring-wrong-color f38ba8 \
-          >/dev/null 2>&1 || true
+          >/dev/null 2>&1 9>&- || true
+        # (9>&-: the lock stays here -- swaylock, daemonized, kept it all night
+        # and every `off` waited behind it, the monitor left dimmed to 0)
         for _ in $(seq 1 40); do locked && return 0; sleep 0.1; done
         return 1
       }
