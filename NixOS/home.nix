@@ -1401,6 +1401,13 @@ in
         exit 0
       fi
 
+      # ALWAYS-ON MODE keeps the signal: a monitor switched off overnight drops
+      # its HDMI link, and Hyprland, XWayland and every window go round with it
+      # (2026-11-03).  It is made to LOOK off instead -- night-look.
+      if [ -e /run/systemd/logind.conf.d/50-always-on.conf ]; then
+        exec ~/.local/bin/night-look on
+      fi
+
       # Already dark -- F1 twice, or the idle blank after a lock.
       if dark all; then exit 0; fi
 
@@ -1411,6 +1418,121 @@ in
         --who=blank-screen \
         --why="Screens blanked; the external monitor is still in use" \
         "$0" --hold
+    '';
+  };
+
+  # NIGHT LOOK, for always-on mode (modules/always-on.nix): the monitor made to
+  # LOOK switched off while it keeps its signal.  Switched off for real it drops
+  # its HDMI link after a while, and on 2026-11-02/03 Hyprland fell back to a
+  # fake output nine times overnight -- every window moved each time, XWayland
+  # stopped mapping windows by morning.  The user: "make sure the monitor looks
+  # like power off".  So: locked on PURE BLACK, no ring until a key is pressed,
+  # and the monitor's brightness and contrast taken to 0 over DDC/CI (ddcutil);
+  # put back as it was on any input, and at every login in case a reboot came
+  # between.  A session that is not locked is never dimmed (an open door that
+  # looks shut); a monitor with no DDC/CI is left black but lit.
+  #   night-look on     lock black (if not locked), then dim
+  #   night-look leave  `on`, in always-on mode only (idle, past any inhibitor)
+  #   night-look idle   dim again if locked, in always-on mode only
+  #   night-look dim    dim only;  night-look off   put back
+  home.file.".local/bin/night-look" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -u
+
+      dropin=/run/systemd/logind.conf.d/50-always-on.conf
+      state="$HOME/.local/state/night-look"
+      saved="$state/saved"
+      mkdir -p "$state"
+      exec 9>"$state/lock"
+      flock 9
+
+      locked() { pgrep -f '[s]waylock' >/dev/null 2>&1; }
+
+      dim() {
+        [ -e "$saved" ] && return 0
+        now=$(ddcutil --terse getvcp 10 12 2>/dev/null | awk '$1 == "VCP" { printf "%s ", $4 }')
+        set -- $now
+        [ "$#" -eq 2 ] || return 0            # (no DDC/CI: black, but lit)
+        echo "$1 $2" > "$saved"
+        ddcutil --noverify setvcp 10 0 >/dev/null 2>&1 || true
+        ddcutil --noverify setvcp 12 0 >/dev/null 2>&1 || true
+      }
+
+      restore() {
+        [ -e "$saved" ] || return 0
+        read -r brightness contrast < "$saved" || true
+        ddcutil --noverify setvcp 10 "$brightness" >/dev/null 2>&1 || true
+        ddcutil --noverify setvcp 12 "$contrast" >/dev/null 2>&1 || true
+        rm -f "$saved"
+      }
+
+      lock_black() {
+        locked && return 0
+        # --daemonize: back once the lock is really up.  No idle ring: the
+        # screen is black until a key is pressed, and then the ring shows.
+        swaylock --daemonize --color 000000 \
+          --indicator-radius 120 --indicator-thickness 12 \
+          --indicator-caps-lock --show-failed-attempts --font-size 24 \
+          --inside-color 000000 --ring-color 585b70 \
+          --key-hl-color a6e3a1 --bs-hl-color f38ba8 \
+          --text-color cdd6f4 --line-color 00000000 \
+          --inside-ver-color 000000 --ring-ver-color 89b4fa \
+          --inside-wrong-color f38ba8 --ring-wrong-color f38ba8 \
+          >/dev/null 2>&1 || true
+        for _ in $(seq 1 40); do locked && return 0; sleep 0.1; done
+        return 1
+      }
+
+      case "''${1:-}" in
+        on)
+          if lock_black; then
+            dim
+          else
+            notify-send -a Display -i dialog-warning -t 6000 "Lock failed" \
+              "swaylock did not start; the screen was left as it was." >/dev/null 2>&1 || true
+          fi
+          ;;
+        leave) [ -e "$dropin" ] && { flock -u 9; exec "$0" on; } ;;
+        idle)  [ -e "$dropin" ] && locked && dim ;;
+        dim)   dim ;;
+        off)   restore ;;
+        *)     echo "usage: night-look on|leave|idle|dim|off" >&2; exit 2 ;;
+      esac
+      exit 0
+    '';
+  };
+
+  # HYPRIDLE FOLLOWS ALWAYS-ON: the night look hangs on hypridle's idle
+  # timers, and the tea cup's usual daytime state is hypridle STOPPED.  When
+  # always-on comes on hypridle is started (if it was stopped); when it goes
+  # off, hypridle is stopped again -- only if this started it.  Polled, as the
+  # bar polls the same drop-in, so `always-on on` typed in a terminal counts.
+  home.file.".local/bin/always-on-idle" = {
+    executable = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -u
+      dropin=/run/systemd/logind.conf.d/50-always-on.conf
+      mark="''${XDG_RUNTIME_DIR:-/tmp}/hypridle-started-by-always-on"
+      was=""
+      while true; do
+        now=off
+        [ -e "$dropin" ] && now=on
+        if [ "$now" != "$was" ]; then
+          if [ "$now" = on ]; then
+            if ! systemctl --user is-active -q hypridle.service; then
+              systemctl --user start hypridle.service && touch "$mark"
+            fi
+          elif [ -e "$mark" ]; then
+            rm -f "$mark"
+            systemctl --user stop hypridle.service || true
+          fi
+          was=$now
+        fi
+        sleep 10
+      done
     '';
   };
 
@@ -1427,6 +1549,11 @@ in
     text = ''
       #!/usr/bin/env bash
       set -eu
+
+      # Always-on mode: locked black and dimmed, the signal kept (night-look).
+      if [ -e /run/systemd/logind.conf.d/50-always-on.conf ]; then
+        exec ~/.local/bin/night-look on
+      fi
 
       # pgrep -f, not -x: swaylock on NixOS is a C wrapper that execs
       # .swaylock-wrapped, so the process name is never "swaylock" and -x
@@ -3031,6 +3158,9 @@ in
       ];
 
       exec-once = [ "~/.local/bin/display-rescue"
+                    # (a night look a reboot interrupted: the monitor's brightness back)
+                    "~/.local/bin/night-look off"
+                    "~/.local/bin/always-on-idle"
                     "uwsm app -- pypr"
                     # AGS v2 (Astal) is now the only bar (waybar retired).
                     "uwsm app -- ags run"
@@ -3489,7 +3619,22 @@ in
       {
         timeout = 1200;
         on-timeout = "~/.local/bin/blank-screen";
-        on-resume = "hyprctl dispatch dpms on";
+        on-resume = "hyprctl dispatch dpms on; ~/.local/bin/night-look off";
+      }
+      # ALWAYS-ON NIGHTS (night-look; nothing in the day): locked black and
+      # dimmed after 20 min even past an inhibitor -- an RDP window holds idle
+      # off -- and dimmed again a minute after any bump while locked.
+      {
+        timeout = 1200;
+        ignore_inhibit = true;
+        on-timeout = "~/.local/bin/night-look leave";
+        on-resume = "~/.local/bin/night-look off";
+      }
+      {
+        timeout = 60;
+        ignore_inhibit = true;
+        on-timeout = "~/.local/bin/night-look idle";
+        on-resume = "~/.local/bin/night-look off";
       }
     ];
   };
