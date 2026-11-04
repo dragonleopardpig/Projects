@@ -1451,7 +1451,7 @@ in
       # screen black the moment it was unlocked in the morning, 2026-11-04)
       flock -w 15 9 || exit 0
 
-      locked() { pgrep -f '[s]waylock' >/dev/null 2>&1; }
+      locked() { pgrep swaylock >/dev/null 2>&1; }
 
       dim() {
         [ -e "$saved" ] && return 0
@@ -1560,12 +1560,13 @@ in
         exec ~/.local/bin/night-look on
       fi
 
-      # pgrep -f, not -x: swaylock on NixOS is a C wrapper that execs
-      # .swaylock-wrapped, so the process name is never "swaylock" and -x
-      # silently never matched -- which made the guard below decide the lock
-      # had failed and skip the blanking entirely.  The bracket class keeps the
-      # pattern from matching this command's own line.
-      if ! pgrep -f '[s]waylock' >/dev/null 2>&1; then
+      # By its process NAME, not -f: swaylock on NixOS is a C wrapper that
+      # execs .swaylock-wrapped, so its name is ".swaylock-wrapp" (cut to 15)
+      # and -x "swaylock" never matched -- but -f searched every command line,
+      # and any process whose words held "swaylock" (2026-11-04: a watcher of
+      # one, in a terminal) passed for a lock, so F1 locked nothing.  The name
+      # holds "swaylock" whichever way it is started.
+      if ! pgrep swaylock >/dev/null 2>&1; then
         # --daemonize so this returns once the lock surface is really up, and
         # a dark screen rather than swaylock's default white flash.
         # --indicator-idle-visible matters: without it swaylock draws nothing
@@ -1585,14 +1586,14 @@ in
       fi
 
       for _ in $(seq 1 40); do
-        if pgrep -f '[s]waylock' >/dev/null 2>&1; then break; fi
+        if pgrep swaylock >/dev/null 2>&1; then break; fi
         sleep 0.1
       done
       sleep 1
 
       # Blank only a session that really is locked: a screen that goes dark
       # over an unlocked desktop is an open door that looks shut.
-      if ! pgrep -f '[s]waylock' >/dev/null 2>&1; then
+      if ! pgrep swaylock >/dev/null 2>&1; then
         notify-send -a Display -i dialog-warning -t 6000 \
           "Lock failed" "swaylock did not start; the screen was left on rather than blanked." \
           >/dev/null 2>&1 || true
@@ -2711,7 +2712,7 @@ in
       printf '%s' "$monitors" \
         | jq -e 'length > 0 and all(.[]; .dpmsStatus == true)' >/dev/null 2>&1 \
         || exit 0
-      if pgrep -f '[s]waylock' >/dev/null 2>&1; then
+      if pgrep swaylock >/dev/null 2>&1; then
         exit 0
       fi
 
