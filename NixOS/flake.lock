@@ -349,11 +349,11 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1793806636,
-        "narHash": "sha256-It4uSjd+SmfNt2IxE9FXiSqfZTa6bIsa0at+t7RiKYM=",
+        "lastModified": 1793895584,
+        "narHash": "sha256-vblurzK51lLSHi2HoJHrWbyXQ1y9INNnF8Cj2aiY5HE=",
         "ref": "main",
-        "rev": "ad6d14fe532db7b49b966fd120ac899f8b6b4214",
-        "revCount": 1194,
+        "rev": "d2c28cef8e8ad1e019ae98919e6f87a222a2b37a",
+        "revCount": 1208,
         "type": "git",
         "url": "file:///home/thinky/Projects/strata"
       },
