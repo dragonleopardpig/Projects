@@ -53,6 +53,7 @@ OPTIONS:
 HOST:
     X299        Build for X299 desktop
     X299-SSD    Build for X299 external SSD clone
+    CRUCIAL-SSD Build for Crucial 1TB External SSD (Crucial-SSD also accepted)
     M90aPro     Build for M90aPro laptop
     PortableSSD Build for the portable boot-anywhere SSD
     auto        Auto-detect based on hostname (default)
@@ -113,7 +114,7 @@ build_portablessd_mounted() {
 
     print_info "Building PortableSSD system closure on $CURRENT_HOST (native x86_64)..."
     local SYS
-    SYS=$(nix build "$SCRIPT_DIR#nixosConfigurations.PortableSSD.config.system.build.toplevel" \
+    SYS=$(nix build "path:$SCRIPT_DIR#nixosConfigurations.PortableSSD.config.system.build.toplevel" \
             --no-link --print-out-paths)
     print_success "Built: $SYS"
 
@@ -142,22 +143,35 @@ HOST=${2:-auto}
 # Auto-detect host if needed
 if [ "$HOST" = "auto" ]; then
     case "$CURRENT_HOST" in
-        X299|X299-SSD|M90aPro|PortableSSD)
+        X299|X299-SSD|Crucial-SSD|CRUCIAL-SSD|M90aPro|PortableSSD)
             HOST=$CURRENT_HOST
+            if [ "$HOST" = "X299-SSD" ]; then
+                BOOT_UUID=$(findmnt -n -o UUID /boot 2>/dev/null || true)
+                if [ "$BOOT_UUID" = "42F5-D6BF" ]; then
+                    HOST="CRUCIAL-SSD"
+                    print_info "Detected Crucial 1TB SSD via boot UUID ($BOOT_UUID)"
+                elif [ "$BOOT_UUID" = "0C04-2087" ]; then
+                    HOST="X299-SSD"
+                    print_info "Detected X299-SSD clone via boot UUID ($BOOT_UUID)"
+                fi
+            fi
             print_info "Auto-detected host: $HOST"
             ;;
         *)
             print_error "Unknown hostname: $CURRENT_HOST"
-            print_error "Please specify 'X299', 'X299-SSD', 'M90aPro', or 'PortableSSD'"
+            print_error "Please specify 'X299', 'X299-SSD', 'CRUCIAL-SSD', 'M90aPro', or 'PortableSSD'"
             exit 1
             ;;
     esac
 fi
 
 # Validate host
-if [ "$HOST" != "X299" ] && [ "$HOST" != "X299-SSD" ] && [ "$HOST" != "M90aPro" ] && [ "$HOST" != "PortableSSD" ]; then
+if [ "$HOST" = "Crucial-SSD" ]; then
+    HOST="CRUCIAL-SSD"
+fi
+if [ "$HOST" != "X299" ] && [ "$HOST" != "X299-SSD" ] && [ "$HOST" != "CRUCIAL-SSD" ] && [ "$HOST" != "M90aPro" ] && [ "$HOST" != "PortableSSD" ]; then
     print_error "Invalid host: $HOST"
-    print_error "Must be 'X299', 'X299-SSD', 'M90aPro', or 'PortableSSD'"
+    print_error "Must be 'X299', 'X299-SSD', 'CRUCIAL-SSD', 'M90aPro', or 'PortableSSD'"
     exit 1
 fi
 
@@ -166,7 +180,7 @@ cd "$SCRIPT_DIR"
 print_info "Working directory: $SCRIPT_DIR"
 
 IMPURE_FLAG=""
-if [ "$HOST" = "X299" ] || [ "$HOST" = "X299-SSD" ]; then
+if [ "$HOST" = "X299" ] || [ "$HOST" = "X299-SSD" ] || [ "$HOST" = "CRUCIAL-SSD" ]; then
     IMPURE_FLAG="--impure"
     print_info "Using --impure for $HOST so local Euresys driver sources can be imported"
 fi
@@ -187,7 +201,7 @@ if [ "$HOST" = "PortableSSD" ]; then
                     COMMAND="boot"
                 fi
                 print_info "Running: sudo nixos-rebuild $COMMAND --flake .#PortableSSD"
-                sudo nixos-rebuild "$COMMAND" --flake ".#PortableSSD"
+                sudo nixos-rebuild "$COMMAND" --flake "path:$SCRIPT_DIR#PortableSSD"
                 print_success "NixOS '$COMMAND' completed for PortableSSD (no activation, no logout)."
                 if [ "$COMMAND" = "boot" ]; then
                     read -p "Reboot now to use the new generation? (y/N) " -n 1 -r; echo
@@ -203,7 +217,7 @@ fi
 case "$COMMAND" in
     switch|test|boot|build)
         print_info "Running: sudo nixos-rebuild $COMMAND $IMPURE_FLAG --flake .#$HOST"
-        sudo nixos-rebuild "$COMMAND" $IMPURE_FLAG --flake ".#$HOST"
+        sudo nixos-rebuild "$COMMAND" $IMPURE_FLAG --flake "path:$SCRIPT_DIR#$HOST"
         print_success "NixOS rebuild $COMMAND completed for $HOST"
         ;;
 
@@ -213,7 +227,7 @@ case "$COMMAND" in
         print_success "Flake inputs updated"
 
         print_info "Rebuilding with updated inputs..."
-        sudo nixos-rebuild switch $IMPURE_FLAG --flake ".#$HOST"
+        sudo nixos-rebuild switch $IMPURE_FLAG --flake "path:$SCRIPT_DIR#$HOST"
         print_success "NixOS rebuild completed with updated inputs for $HOST"
         ;;
 

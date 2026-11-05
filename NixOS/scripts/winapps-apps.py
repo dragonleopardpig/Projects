@@ -46,7 +46,7 @@ def load_catalog():
 
 
 def desktop_context():
-    if not shutil.which("hyprctl"):
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") or not shutil.which("hyprctl"):
         return None, "WinApps"
     result = subprocess.run(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=5)
     if result.returncode != 0:

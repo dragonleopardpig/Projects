@@ -1,0 +1,20 @@
+diff --git a/src/compositors/umbriel/umbriel_runtime.cpp b/src/compositors/umbriel/umbriel_runtime.cpp
+--- a/src/compositors/umbriel/umbriel_runtime.cpp
++++ b/src/compositors/umbriel/umbriel_runtime.cpp
+@@ -105,4 +105,13 @@
+   bool UmbrielRuntime::requestAction(std::string_view action, nlohmann::json fields) const {
+-    fields["cmd"] = "action";
+-    fields["action"] = action;
+-    return send(fields).has_value();
++    // The pinned Umbriel snapshot exposes actions through cmd=msg/arg, the
++    // same interface used by its CLI. cmd=action is not supported there.
++    std::string argument(action);
++    if (!fields.empty()) {
++      const auto window = fields.find("window");
++      if (fields.size() != 1 || window == fields.end() || !window->is_string()) {
++        return false;
++      }
++      argument += ':';
++      argument += window->get_ref<const std::string&>();
++    }
++    return send({{"cmd", "msg"}, {"arg", argument}}).has_value();

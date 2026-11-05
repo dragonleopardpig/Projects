@@ -1,4 +1,4 @@
-{ inputs, pkgs, ... }:
+{ config, inputs, lib, pkgs, ... }:
 let
   configDirectory = "/home/thinky/.config/winapps";
   rdpClient = pkgs.freerdp.overrideAttrs (previous: {
@@ -8,9 +8,11 @@ let
   passwordCommand = pkgs.writeShellScript "winapps-askpass" ''
     exec ${pkgs.gnused}/bin/sed -n s/^PASSWORD=//p ${configDirectory}/credentials.env
   '';
+  targetUuid = lib.removePrefix "/dev/disk/by-uuid/" (config.fileSystems."/mnt/winapps".device or "326619bb-8b95-4d83-825b-b21a6762f518");
   storageCheck = pkgs.writeShellScript "winapps-storage-check" ''
     set -eu
-    if [ "$(${pkgs.util-linux}/bin/findmnt -n -o UUID --mountpoint /mnt/winapps || true)" != fe0516c1-a263-495f-b22d-ef205ead9203 ]; then
+    mounted_uuid="$(${pkgs.util-linux}/bin/findmnt -n -o UUID --mountpoint /mnt/winapps || true)"
+    if [ "$mounted_uuid" != "${targetUuid}" ] && [ "$mounted_uuid" != "fe0516c1-a263-495f-b22d-ef205ead9203" ] && [ "$mounted_uuid" != "326619bb-8b95-4d83-825b-b21a6762f518" ]; then
       printf 'The Windows VM partition is not mounted at /mnt/winapps.\n' >&2
       exit 1
     fi
@@ -119,17 +121,20 @@ in
   users.users.thinky.extraGroups = [ "kvm" ];
 
   home-manager.users.thinky = { config, lib, ... }: {
+    home.file.".local/bin/winapps-settings".source = "${resourceControl}/bin/winapps-settings";
     xdg.configFile."winapps/.env".source = config.lib.file.mkOutOfStoreSymlink "${configDirectory}/memory.env";
 
-    xdg.desktopEntries.winapps-settings = {
-      name = "WinApps";
-      comment = "Open Windows and manage apps, CPU/RAM, fullscreen, scaling, and shutdown";
-      exec = "${resourceControl}/bin/winapps-settings";
-      icon = "preferences-system";
-      terminal = false;
-      categories = [ "Settings" "System" ];
-      settings.Keywords = "WinApps;Windows;RAM;Memory;CPU;Cores;Office;Teams;Apps;Fullscreen;Shutdown;";
-    };
+    home.file.".local/share/applications/winapps-settings.desktop".text = ''
+      [Desktop Entry]
+      Type=Application
+      Name=WinApps
+      Comment=Open Windows and manage apps, CPU/RAM, fullscreen, scaling, and shutdown
+      Exec=${resourceControl}/bin/winapps-settings
+      Icon=preferences-system
+      Terminal=false
+      Categories=Settings;System;
+      Keywords=WinApps;Windows;RAM;Memory;CPU;Cores;Office;Teams;Apps;Fullscreen;Shutdown;
+    '';
 
     wayland.windowManager.hyprland.extraConfig = ''
       windowrule {

@@ -231,6 +231,35 @@
     },
     "nixpkgs_4": {
       "locked": {
+        "lastModified": 1793341285,
+        "narHash": "sha256-LOv16TsMYV2/8BUYnhSxHkOASe7es2ORbqMeLlZJ8Hc=",
+        "rev": "1c89083e451e891152365b799595cf7790a43325",
+        "type": "tarball",
+        "url": "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1105037.1c89083e451e/nixexprs.tar.zst"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst"
+      }
+    },
+    "nixpkgs_5": {
+      "locked": {
+        "lastModified": 1791956154,
+        "narHash": "sha256-jBYGPi4udQ9uo4KQp9m2J0546nJVQitG15gvZSaVVAs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "55bfb4d7437bd4e09ab7cba58a43bd68eb310044",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_6": {
+      "locked": {
         "lastModified": 1775710090,
         "narHash": "sha256-ar3rofg+awPB8QXDaFJhJ2jJhu+KqN/PRCXeyuXR76E=",
         "owner": "NixOS",
@@ -244,6 +273,39 @@
         "repo": "nixpkgs",
         "type": "github"
       }
+    },
+    "noctalia": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_4"
+      },
+      "locked": {
+        "lastModified": 1793794316,
+        "narHash": "sha256-qWC3aDzPQKG9HUJvHDhKKi+2vpkl8ZG++0aL+Be7t0I=",
+        "owner": "noctalia-dev",
+        "repo": "noctalia",
+        "rev": "9b9ca20746eb6488fb38ad6597b84057bf976706",
+        "type": "github"
+      },
+      "original": {
+        "owner": "noctalia-dev",
+        "ref": "cachix",
+        "repo": "noctalia",
+        "type": "github"
+      }
+    },
+    "noctalia-suite": {
+      "inputs": {
+        "noctalia": "noctalia"
+      },
+      "locked": {
+        "path": "./noctalia",
+        "type": "path"
+      },
+      "original": {
+        "path": "./noctalia",
+        "type": "path"
+      },
+      "parent": []
     },
     "pdf-prep": {
       "inputs": {
@@ -275,9 +337,30 @@
         "home-manager": "home-manager",
         "minder-src": "minder-src",
         "nixpkgs": "nixpkgs_3",
+        "noctalia-suite": "noctalia-suite",
         "pdf-prep": "pdf-prep",
+        "strata": "strata",
         "walker": "walker",
         "winapps": "winapps"
+      }
+    },
+    "strata": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_5"
+      },
+      "locked": {
+        "lastModified": 1793806636,
+        "narHash": "sha256-It4uSjd+SmfNt2IxE9FXiSqfZTa6bIsa0at+t7RiKYM=",
+        "ref": "main",
+        "rev": "ad6d14fe532db7b49b966fd120ac899f8b6b4214",
+        "revCount": 1194,
+        "type": "git",
+        "url": "file:///home/thinky/Projects/strata"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "file:///home/thinky/Projects/strata"
       }
     },
     "systems": {
@@ -330,7 +413,7 @@
         "elephant": [
           "elephant"
         ],
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_6",
         "systems": "systems_2"
       },
       "locked": {

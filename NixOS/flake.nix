@@ -45,6 +45,9 @@
       url = "github:abenz1267/walker";
       inputs.elephant.follows = "elephant";
     };
+    noctalia-suite.url = "path:./noctalia";
+    # Build the committed local checkout; keep its toolkit/Rust nixpkgs pin.
+    strata.url = "git+file:///home/thinky/Projects/strata?ref=main";
   };
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
@@ -576,6 +579,11 @@
 
       # X299 Desktop (external SSD clone)
       nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
+
+      # Crucial 1TB External SSD (identical to X299-SSD)
+      nixosConfigurations.CRUCIAL-SSD = mkSystem ./hosts/Crucial-SSD;
+      # Compatibility with existing commands using the original flake name.
+      nixosConfigurations.Crucial-SSD = mkSystem ./hosts/Crucial-SSD;
 
       # M90aPro Laptop Configuration
       nixosConfigurations.M90aPro = mkSystem ./hosts/M90aPro;

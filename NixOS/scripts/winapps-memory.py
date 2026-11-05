@@ -172,7 +172,27 @@ def container_state():
     raise ValueError("Could not check the Windows container. No forced shutdown was performed.")
 
 
+def desktop_backend():
+    # Both compositors can be installed. Only the active session's IPC socket
+    # identifies which one can inspect and focus the Windows viewer.
+    desktops = os.environ.get("XDG_CURRENT_DESKTOP", "").lower().split(":")
+    if os.environ.get("UMBRIEL_SOCKET") and shutil.which("umbriel") and (
+        "umbriel" in desktops or desktops == [""]
+    ):
+        return "umbriel"
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl") and (
+        "hyprland" in desktops or desktops == [""]
+    ):
+        return "hyprland"
+    return None
+
+
 def windows_viewers():
+    if desktop_backend() == "umbriel":
+        result = subprocess.run(["umbriel", "windows", "--json"], capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            raise ValueError("Could not check the existing Windows viewer. No additional viewer was opened.")
+        return [client for client in json.loads(result.stdout) if client.get("app_id") == "Microsoft Windows"]
     result = subprocess.run(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=5)
     if result.returncode != 0:
         raise ValueError("Could not check the existing Windows viewer. No additional viewer was opened.")
@@ -180,6 +200,48 @@ def windows_viewers():
 
 
 def focus_windows(viewer, fullscreen):
+    if desktop_backend() == "umbriel":
+        identifier = viewer["id"]
+        if not re.fullmatch(r"[0-9a-fA-F]+", identifier):
+            raise ValueError("The existing Windows viewer has an invalid window identifier.")
+        inventory = subprocess.run(
+            ["umbriel", "workspaces", "--json"], capture_output=True, text=True, timeout=5,
+        )
+        if inventory.returncode != 0:
+            raise ValueError("Could not locate the Windows viewer's workspace.")
+        workspace = next((item for item in json.loads(inventory.stdout)
+                          if item["id"] == viewer.get("workspace")), None)
+        if workspace is None:
+            raise ValueError("The Windows viewer's workspace no longer exists. Try opening it again.")
+        # Umbriel's window-focus selects a window within its own workspace;
+        # that workspace may still be hidden. Reveal it on its output first.
+        switched = subprocess.run(
+            ["umbriel", "msg", f"workspace-switch:{workspace['index']}/{workspace['output']}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if switched.returncode != 0:
+            raise ValueError("Could not show the Windows viewer's workspace.")
+        focused = subprocess.run(
+            ["umbriel", "msg", f"window-focus:{identifier}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if focused.returncode != 0:
+            raise ValueError("Could not focus the Windows viewer.")
+        # Query the state after focusing: another window's fullscreen state
+        # may have changed when this viewer became visible.
+        current = next((client for client in windows_viewers() if client["id"] == identifier), None)
+        if current is None:
+            raise ValueError("The Windows viewer closed before fullscreen could be applied.")
+        if not current.get("visible"):
+            raise ValueError("Windows is connected, but its workspace is not visible on an enabled display.")
+        if bool(current.get("fullscreen")) != fullscreen:
+            changed = subprocess.run(
+                ["umbriel", "msg", "window-toggle-fullscreen"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if changed.returncode != 0:
+                raise ValueError("Could not apply fullscreen to the Windows viewer.")
+        return
     address = viewer["address"]
     if not re.fullmatch(r"0x[0-9a-fA-F]+", address):
         raise ValueError("The existing Windows viewer has an invalid window address.")
@@ -206,8 +268,8 @@ def open_windows(fullscreen=None, report=None, selection=None):
     if fullscreen is not None:
         selection = (*selection[:3], fullscreen)
     amount, processors, desktop_scale, fullscreen = validate_settings(*selection)
-    hyprland = shutil.which("hyprctl") is not None
-    if hyprland:
+    managed_desktop = desktop_backend() is not None
+    if managed_desktop:
         viewers = windows_viewers()
         if viewers:
             state = container_state()
@@ -232,7 +294,7 @@ def open_windows(fullscreen=None, report=None, selection=None):
         process = subprocess.Popen(
             ["winapps", "windows"], stdout=output, stderr=output, start_new_session=True, env=environment,
         )
-    if not hyprland:
+    if not managed_desktop:
         return "Windows viewer launch requested."
     started = time.monotonic()
     while True:

@@ -1,16 +1,5 @@
 { lib, config, osConfig, inputs, pkgs, ... }:
 let
-  # On X299 / X299-SSD the monitor uses DDC/CI. ddcci_backlight does bind
-  # (see boot.extraModprobeConfig), but every i2c transaction to the
-  # monitor's MCU is ~75 ms — too slow for waybar's draggable slider,
-  # which fires many value-changed events per drag and queues writes
-  # faster than they drain. So those hosts use a custom indicator
-  # + scroll/click instead of `backlight/slider`. Everything else
-  # (M90aPro's intel_backlight, PortableSSD's whatever it boots on)
-  # keeps the real slider.
-  useScrollIndicator =
-    osConfig.networking.hostName == "X299"
-    || osConfig.networking.hostName == "X299-SSD";
   nemoMegaLibraryPath = lib.makeLibraryPath [
     pkgs.nemo
     pkgs.glib
@@ -1236,7 +1225,7 @@ in
     text = ''
       #!/bin/sh
       # Backlight backend selection (preferred order):
-      #   1. a native sysfs panel, by name: intel_backlight (M90aPro),
+      #   1. a native sysfs panel, by driver name: intel_backlight,
       #      amdgpu_bl*, nvidia_0 (what the NVIDIA driver exposes once the
       #      panel is routed to the dGPU by the BIOS MUX), then
       #      nvidia_wmi_ec_backlight (Predator Helios Neo 16 in hybrid mode --
@@ -1244,7 +1233,7 @@ in
       #      is no intel_backlight at all), acpi_video0; then any other
       #      non-ddcci entry, so an unknown laptop still lands on its panel
       #      instead of falling through to DDC.
-      #   2. ddcci* (X299 hosts via ddcci_backlight, ~75 ms per write)
+      #   2. ddcci* via ddcci_backlight (~75 ms per write)
       #   3. ddcutil setvcp 10 (last-ditch; only if no sysfs entry exists)
       pick_dev() {
         for d in intel_backlight amdgpu_bl0 amdgpu_bl1 nvidia_0 nvidia_wmi_ec_backlight acpi_video0; do
@@ -1287,22 +1276,40 @@ in
         printf '%s\n' "$b" | tee "$cache"
       }
 
+      select_target() {
+        MON=$(focused_mon)
+        BUS=""
+        DEV=""
+        case "$MON" in
+          "") DEV=$(pick_dev) ;;
+          eDP-*|LVDS-*|DSI-*)
+            DEV=$(pick_dev)
+            case "$DEV" in ddcci*) DEV="" ;; esac
+            ;;
+          *)
+            BUS=$(ddc_bus "$MON" || true)
+            [ -n "$BUS" ] || return 0
+            # Only use a DDC backlight belonging to this connector's bus.
+            # An unrelated ddcci device must not capture another monitor's keys.
+            for d in /sys/class/backlight/ddcci*; do
+              [ -d "$d" ] || continue
+              device_path=$(readlink -f "$d/device")
+              case "$device_path" in
+                */i2c-"$BUS"/*) DEV=''${d##*/}; break ;;
+              esac
+            done
+            ;;
+        esac
+      }
+
       case "''${1:-}" in
         up|down)
-          MON=$(focused_mon)
-          case "$MON" in
-            ""|eDP-*) DEV=$(pick_dev) ;;
-            # External screen: ddcci_backlight is a fast sysfs path where it
-            # managed to bind (the X299 desktop).  It does not bind here --
-            # ddcci-setup runs long before the NVIDIA i2c bus exists -- so the
-            # laptop falls through to speaking DDC/CI directly.
-            *)        DEV=$(ls /sys/class/backlight/ 2>/dev/null | grep -m1 ddcci || true) ;;
-          esac
+          select_target
           if [ -n "$DEV" ]; then
             [ "$1" = up ] && brightnessctl -d "$DEV" set +10% \
                           || brightnessctl -d "$DEV" set 10%-
           else
-            BUS=$(ddc_bus "$MON" || true)
+            if [ -z "$BUS" ]; then BUS=$(ddc_bus "$MON" || true); fi
             if [ -z "$BUS" ]; then
               notify-send -a Brightness -i display-brightness -t 2000 \
                 "No brightness control" "$MON exposes neither a backlight nor DDC/CI." \
@@ -1326,12 +1333,15 @@ in
           pkill -RTMIN+8 waybar 2>/dev/null || true
           ;;
         status)
-          DEV=$(pick_dev)
+          select_target
           if [ -n "$DEV" ]; then
             cur=$(cat "/sys/class/backlight/$DEV/actual_brightness")
             max=$(cat "/sys/class/backlight/$DEV/max_brightness")
           else
-            line=$(ddcutil --terse getvcp 10 2>/dev/null || true)
+            line=""
+            if [ -n "$BUS" ]; then
+              line=$(ddcutil --bus "$BUS" --terse getvcp 10 2>/dev/null || true)
+            fi
             if [ -z "$line" ]; then
               printf '{"text":"󰃟 ?","tooltip":"no backlight","class":"err"}\n'
               exit 0
@@ -3253,7 +3263,7 @@ in
         "custom/launcher" "hyprland/workspaces"
         "cpu" "memory" "disk" "temperature" "systemd-failed-units"
         "mpris"
-        (if useScrollIndicator then "custom/brightness" else "backlight/slider")
+        "custom/brightness"
       ];
       modules-center = [ "hyprland/window" ];
       modules-right = [
@@ -3332,19 +3342,8 @@ in
         tooltip-format = "Left: toggle sensors  ·  Right: toggle btop";
       };
 
-      "backlight/slider" = {
-        min = 0;
-        max = 100;
-        orientation = "horizontal";
-        # Used on M90aPro (intel_backlight, microsecond writes). X299 hosts
-        # use the custom indicator below instead — DDC/CI's ~75 ms per
-        # transaction makes drag-to-set queue faster than it drains.
-      };
-
-      # X299-host fallback: indicator (10-cell unicode bar) + scroll/click.
-      # exec reads /sys/class/backlight/ddcci5/actual_brightness, so refresh
-      # is fast even with kernel module delay back at 0. Each scroll/click
-      # invokes brightness-ctl, which writes sysfs → one i2c transaction.
+      # Runtime detection in brightness-ctl works on native backlights and
+      # external DDC/CI monitors without tying this portable drive to a host.
       # Keyboard control is via F5/F6 (Hyprland binds, independent of focus).
       "custom/brightness" = {
         exec = "~/.local/bin/brightness-ctl status";

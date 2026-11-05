@@ -1,0 +1,36 @@
+diff --git a/src/server/server_events.cpp b/src/server/server_events.cpp
+--- a/src/server/server_events.cpp
++++ b/src/server/server_events.cpp
+@@ -1596,6 +1596,7 @@
+   void Server::notifyIdleActivity() { wlr_idle_notifier_v1_notify_activity(m_idleNotifier, m_seat->wlr()); }
+ 
+   void Server::notifyInputActivity() {
+-    wakeDpmsOutputs();
++    // Pointer motion, buttons and gestures reset idle without waking monitors.
++    // Keyboard::handleKey owns waking outputs on a new key press.
+     notifyIdleActivity();
+   }
+diff --git a/src/input/keyboard.cpp b/src/input/keyboard.cpp
+--- a/src/input/keyboard.cpp
++++ b/src/input/keyboard.cpp
+@@ -250,6 +250,7 @@
+     auto* event = static_cast<wlr_keyboard_key_event*>(data);
+     m_server->rememberKeyboardInputSource(*this);
+     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
++      m_server->wakeDpmsOutputs();
+       m_server->notifyInputActivity();
+     } else {
+       m_server->notifyIdleActivity();
+diff --git a/src/server/server.h b/src/server/server.h
+--- a/src/server/server.h
++++ b/src/server/server.h
+@@ -434,7 +434,7 @@
+     void raiseLockTree();
+     void updateLockBlank();
+     void updateBackdrop();
+-    // Continuations such as releases and repeats still reset the idle timer, but only a new press or motion may wake
+-    // outputs that were powered off through a DPMS action.
++    // Input resets the idle timer. Only a keyboard press wakes DPMS-off outputs;
++    // mouse motion, buttons, scrolling, touch and gestures leave them powered off.
+     void notifyIdleActivity();
+     void notifyInputActivity();
