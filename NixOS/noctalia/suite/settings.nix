@@ -57,7 +57,7 @@
     reserve_space = true;
     start = [ "launcher" "workspaces" "taskbar" ];
     center = [ "active_window" ];
-    end = [ "media" "weather" "clock" "privacy" "caffeine" "volume" "network" "bluetooth" "battery" "notifications" "tray" "control-center" "session" ];
+    end = [ "media" "weather" "clock" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "control-center" "session" ];
   };
   widget = {
     workspaces = { labels_only_when_occupied = true; hide_when_empty = true; };
@@ -71,5 +71,13 @@
     network.show_label = false;
     tray.drawer = true;
     control-center.glyph = "adjustments";
+    # ALWAYS-ON MODE (modules/always-on-umbriel.nix): either click switches it; the glyph a cup
+    # when off, an infinity when on (the watcher sets it).
+    always-on = {
+      type = "custom_button";
+      glyph = "coffee";
+      actions = { left = "exec /run/current-system/sw/bin/always-on-toggle";
+                  right = "exec /run/current-system/sw/bin/always-on-toggle"; };
+    };
   };
 }

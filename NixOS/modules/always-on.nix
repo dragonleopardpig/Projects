@@ -99,6 +99,9 @@ let
   '';
 in
 {
+  # Under umbriel (the Noctalia session): the night look on idle, the bar's cup, F1.
+  imports = [ ./always-on-umbriel.nix ];
+
   environment.systemPackages = [ always-on ];
 
   # Put the last choice back at boot, before logind reads its configuration.

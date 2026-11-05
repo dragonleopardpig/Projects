@@ -10,6 +10,11 @@ let
     name = "noctalia-lock-and-blank";
     runtimeInputs = [ shell umbriel pkgs.systemd pkgs.jq pkgs.coreutils ];
     text = ''
+      # ALWAYS-ON MODE keeps the monitor's signal (modules/always-on-umbriel.nix): locked black
+      # and dimmed -- the night look -- never powered off.
+      if [ -e /run/systemd/logind.conf.d/50-always-on.conf ]; then
+        exec "$HOME/.local/bin/night-look" on
+      fi
       if [ "''${1:-}" != --inhibited ]; then
         # A closed lid must not turn monitor power-off into machine suspend.
         exec systemd-inhibit --what=handle-lid-switch --mode=block \
