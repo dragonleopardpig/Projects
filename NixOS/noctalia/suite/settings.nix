@@ -1,4 +1,4 @@
-{ themeName, wallpaper }:
+{ themeName, wallpaper, barAccents, launcherIcon }:
 {
   storage.key_source = "secret-service";
   shell = {
@@ -8,6 +8,17 @@
     # Applications inherit the active session's display.
     launch_apps_as_systemd_services = false;
     polkit_agent = true;
+    # Familiar AGS app-drawer browsing, using the native shell launcher.
+    launcher = {
+      layout = "full";
+      width = 1100;
+      search_position = "top";
+      default_view = "all";
+      app_grid = true;
+      show_icons = true;
+      colorize_icons = false;
+      sort_by_usage = false;
+    };
     panel.open_near_click_control_center = true;
     screenshot = {
       pipe_to_command = true;
@@ -68,25 +79,40 @@
     end = [ "media" "weather" "clock" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "umbriel-displays" "control-center" "session" ];
   };
   widget = {
+    launcher = {
+      custom_image = launcherIcon;
+      custom_image_colorize = true;
+      color = barAccents.desktop;
+      scale = 1.25;
+    };
     workspaces = { labels_only_when_occupied = true; hide_when_empty = true; };
     taskbar = { only_active_workspace = true; taskbar_max_width = 280; };
     active_window = { display = "text_only"; max_length = 800; title_scroll = "none"; show_empty_label = false; };
-    media = { hide_when_no_media = true; hide_artist = true; max_length = 100; };
-    clock = { format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
-    weather = { show_condition = false; actions.left = "panel-toggle control-center weather"; };
-    privacy.hide_inactive = true;
-    volume.show_label = false;
-    network.show_label = false;
-    tray.drawer = true;
-    control-center.glyph = "adjustments";
+    # Right-side controls use the Fastfetch hues plus a neon-purple accent.
+    # Native warning/mute/attention colors still communicate exceptional states.
+    media = { color = barAccents.audio; hide_when_no_media = true; hide_artist = true; max_length = 100; };
+    clock = { color = barAccents.distro; format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
+    weather = { color = barAccents.distro; show_condition = false; actions.left = "panel-toggle control-center weather"; };
+    privacy = { color = barAccents.system; hide_inactive = true; };
+    caffeine.color = barAccents.neonPurple;
+    volume = { color = barAccents.audio; show_label = false; };
+    network = { color = barAccents.desktop; show_label = false; };
+    bluetooth.color = barAccents.desktop;
+    battery.color = barAccents.system;
+    notifications.color = barAccents.distro;
+    tray = { color = barAccents.desktop; drawer = true; };
+    control-center = { color = barAccents.neonPurple; glyph = "adjustments"; };
+    session.color = "#FFFFFF";
     # Plugin bar widgets (see plugins.enabled above).
     umbriel-companion.type = "noctalia/umbriel-companion:bar";
     umbriel-displays.type = "prponkshe/umbriel-displays:bar";
+    umbriel-displays.color = barAccents.desktop;
     xwayland.type = "tordex/xwayland:bar";
     # ALWAYS-ON MODE (modules/always-on-umbriel.nix): either click switches it; the glyph a cup
     # when off, an infinity when on (the watcher sets it).
     always-on = {
       type = "custom_button";
+      color = barAccents.neonPurple;
       glyph = "coffee";
       actions = { left = "exec /run/current-system/sw/bin/always-on-toggle";
                   right = "exec /run/current-system/sw/bin/always-on-toggle"; };

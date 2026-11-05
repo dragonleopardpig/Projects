@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -78,6 +79,22 @@ class DesktopTests(unittest.TestCase):
             self.assertIn("Reused", message)
             focus.assert_called_once_with(viewer, False)
             launch.assert_not_called()
+
+    def test_umbriel_enters_fullscreen_after_mapping_instead_of_using_freerdp_f(self):
+        viewer = {"id": "abcd", "fullscreen": False}
+        for backend, client_fullscreen in (("umbriel", "0"), ("hyprland", "1")):
+            with self.subTest(backend=backend), tempfile.TemporaryDirectory() as directory, patch.object(
+                winapps, "LAUNCH_LOG", Path(directory) / "launch.log"
+            ), patch.object(winapps, "desktop_backend", return_value=backend), patch.object(
+                winapps, "validate_settings", return_value=(4, 4, 125, True)
+            ), patch.object(winapps, "windows_viewers", side_effect=[[], [viewer]]), patch.object(
+                winapps, "focus_windows"
+            ) as focus, patch.object(winapps.subprocess, "Popen") as launch:
+                self.assertIn("ready", winapps.open_windows(selection=(4, 4, 125, True)))
+                environment = launch.call_args.kwargs["env"]
+                self.assertEqual(environment["WINAPPS_FULLSCREEN"], client_fullscreen)
+                self.assertEqual(environment["WINAPPS_DESKTOP_SCALE"], "125")
+                focus.assert_called_once_with(viewer, True)
 
     def test_hyprland_focus_behavior_is_preserved(self):
         winapps.os.environ["XDG_CURRENT_DESKTOP"] = "Hyprland"

@@ -28,6 +28,16 @@ colors and the dedicated Foot profile use the declared OLO-Neon defaults.
 | Raised surface | `#121C2E` |
 | Primary text | `#E9FFF8` |
 
+The right-side bar controls borrow Fastfetch's current Kitty ANSI key colors:
+gold DISTRO (`#FFD166`) for weather, clock and notifications; sky-blue DE/WM
+(`#6BC5FF`) for network, Bluetooth, tray glyphs and displays; mint-green SYSTEM
+(`#4EF2C2`) for privacy and battery; lavender AUDIO (`#C27DFF`) for media and
+volume. Caffeine, always-on and settings use neon purple (`#BF40FF`); the power
+button is white (`#FFFFFF`).
+These are foreground colors on the midnight bar; OLO control fills and magenta
+window outlines remain as above. Warning and attention states keep their
+native colors, and tray applications retain their own artwork.
+
 Olo is the inspiration: this palette uses displayable saturated teal rather
 than claiming to reproduce the experimental color described by
 [UC Berkeley](https://news.berkeley.edu/2025/04/22/scientists-trick-the-eye-into-seeing-new-color-olo/).

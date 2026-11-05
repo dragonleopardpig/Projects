@@ -11,17 +11,23 @@ validation and the isolated lock/power regression remain development tools.
 
 ## Current deployment
 
-Generation **40** is installed for the next boot, with the retired launchers
+Generation **45** is installed for the next boot, with the retired launchers
 absent from its system packages:
 
 ```
-/nix/store/rihal4vdnprs80xdjfsh9wibccan2lsy-nixos-system-CRUCIAL-SSD-26.05.20260427.1c3fe55
+/nix/store/jaicicaznwn6h5di0lxzr7jagigjs1mk-nixos-system-CRUCIAL-SSD-26.05.20260427.1c3fe55
 ```
 
 The current source uses OLO-inspired teal control fills with dark text.
 Magenta is reserved for window outlines, glow and wallpaper curves. Both
 palette variants pass text-contrast checks; the dark primary pair is 11.6:1.
 The palette and wallpaper are applied live.
+
+Right-side bar controls use Fastfetch's Kitty colors (gold, sky blue, mint and
+lavender), plus neon purple; the power button is white. The blue NixOS
+snowflake and Super+Space open a wide native app grid with search, categories
+and optional pins, replacing the AGS app-drawer workflow. These preferences
+are applied live and saved for future logins.
 
 The desktop's saved scale is 125%. Native-resolution Xwayland and XSETTINGS
 are configured for sharp X11 rendering. An isolated 4K/125% session verified
@@ -32,7 +38,11 @@ desktop scale is 125% for its next connection.
 WinApps identifies the running compositor, switches to its viewer's workspace
 and output, focuses it, and verifies visibility. Existing connections are
 reused. The updated GUI's Open Windows button was verified with the viewer
-visible and focused. Seven launcher regression checks pass.
+visible and focused. Umbriel launches map the viewer normally before applying
+compositor fullscreen: mapping FreeRDP with `/f` could leave only wallpaper on
+screen despite the viewer being reported as visible. The corrected GUI was
+verified with both a fresh connection and reuse from another workspace, with
+Windows visibly rendered fullscreen. Eight launcher regression checks pass.
 
 F1 locks before turning monitors off, with keyboard-only wake. The full
 headless Shell/lock-helper/compositor test passed. A separate physical HDMI

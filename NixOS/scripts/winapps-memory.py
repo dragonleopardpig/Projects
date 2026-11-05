@@ -268,7 +268,8 @@ def open_windows(fullscreen=None, report=None, selection=None):
     if fullscreen is not None:
         selection = (*selection[:3], fullscreen)
     amount, processors, desktop_scale, fullscreen = validate_settings(*selection)
-    managed_desktop = desktop_backend() is not None
+    backend = desktop_backend()
+    managed_desktop = backend is not None
     if managed_desktop:
         viewers = windows_viewers()
         if viewers:
@@ -286,9 +287,13 @@ def open_windows(fullscreen=None, report=None, selection=None):
     descriptor = os.open(LAUNCH_LOG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     os.chmod(LAUNCH_LOG, 0o600)
     environment = os.environ.copy()
+    # In the pinned Umbriel, an X11 viewer mapped with FreeRDP's /f can be
+    # marked fullscreen/visible while only the wallpaper is rendered. Map it
+    # normally first; focus_windows applies compositor fullscreen afterward.
+    client_fullscreen = fullscreen and backend != "umbriel"
     environment.update(
         WINAPPS_RAM_SIZE=f"{amount}G", WINAPPS_CPU_CORES=str(processors),
-        WINAPPS_DESKTOP_SCALE=str(desktop_scale), WINAPPS_FULLSCREEN=str(int(fullscreen)),
+        WINAPPS_DESKTOP_SCALE=str(desktop_scale), WINAPPS_FULLSCREEN=str(int(client_fullscreen)),
     )
     with os.fdopen(descriptor, "w") as output:
         process = subprocess.Popen(

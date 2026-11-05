@@ -71,7 +71,8 @@ let
   };
   shellConfig = toml.generate "noctalia-suite.toml" (import ./settings.nix {
     themeName = theme.name;
-    inherit (theme) wallpaper;
+    inherit (theme) wallpaper barAccents;
+    launcherIcon = "${pkgs.nixos-icons}/share/icons/hicolor/scalable/apps/nix-snowflake-white.svg";
   });
   configHome = pkgs.runCommand "noctalia-suite-config" { } ''
     mkdir -p $out/noctalia/palettes

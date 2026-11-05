@@ -53,6 +53,15 @@ let
 in {
   name = "OLO-Neon";
   inherit dark light neon;
+  # Fastfetch's named ANSI key colors, as displayed by the current Kitty palette.
+  # Keep these foreground accents separate from the OLO control-fill palette.
+  barAccents = {
+    distro = "#FFD166";
+    desktop = "#6BC5FF";
+    system = "#4EF2C2";
+    audio = "#C27DFF";
+    neonPurple = "#BF40FF";
+  };
   fontConfig = pkgs.writeText "olo-neon-fonts.conf" ''
     <?xml version="1.0"?>
     <!DOCTYPE fontconfig SYSTEM "fonts.dtd">

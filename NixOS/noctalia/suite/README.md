@@ -44,11 +44,21 @@ secondary colors, and magenta window outlines and orbital wallpaper curves.
 Inter is the UI font; Foot uses JetBrains Mono. The active task title occupies
 the bar's center, with date and time on the right.
 
+The sky-blue NixOS snowflake opens the native launcher, also bound to
+**Super+Space**. Its wide icon grid starts with all applications alphabetically,
+with search above the grid, categories, recent apps and optional pins. Click
+an app or search and press Enter; Escape or clicking outside closes it. This
+preserves the AGS app-drawer workflow within Noctalia's own themed panel.
+
 Native-resolution Xwayland and XSETTINGS keep X11 applications sharp at
 fractional display scales. At 4K/125%, X11 sees 3840x2160 with 120-DPI fonts,
 rather than an enlarged 3072x1728 framebuffer. This matches the previous
 Hyprland force-zero-scaling behavior. Changing this option requires a new login.
 WinApps' Windows desktop scale is 125% for its next viewer connection.
+Under Umbriel, WinApps maps its viewer normally and then applies compositor
+fullscreen. This avoids the pinned compositor's initial X11 fullscreen path,
+which can report a visible viewer while rendering only wallpaper. Opening
+Windows again switches to and focuses the existing connection.
 
 ## Hardware and locking
 
