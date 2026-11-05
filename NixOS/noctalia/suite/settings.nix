@@ -42,8 +42,16 @@
     # The existing desktop has hardware-specific DPMS workarounds. Keep blanking opt-in.
     screen-off = { enabled = false; timeout = 1200; action = "screen_off"; };
   };
-  # The official and community catalogs remain available in Settings → Plugins.
-  plugins = { enabled = [ ]; auto_update = "none"; };
+  # Fetched from the default official/community sources on first start (no background updates);
+  # the rest of both catalogs stays available in Settings → Plugins.
+  plugins = {
+    enabled = [
+      "noctalia/umbriel-companion"      # official: layout/submap in the bar, layout + window panel
+      "prponkshe/umbriel-displays"      # community: resolution/scale/arrangement -> umbriel/outputs.toml
+      "tordex/xwayland"                 # community: is the focused window XWayland?
+    ];
+    auto_update = "none";
+  };
   bar.main = {
     position = "top";
     thickness = 42;
@@ -55,9 +63,9 @@
     background_opacity = 0.94;
     compositor_blur = true;
     reserve_space = true;
-    start = [ "launcher" "workspaces" "taskbar" ];
-    center = [ "active_window" ];
-    end = [ "media" "weather" "clock" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "control-center" "session" ];
+    start = [ "launcher" "workspaces" "umbriel-companion" "taskbar" ];
+    center = [ "active_window" "xwayland" ];
+    end = [ "media" "weather" "clock" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "umbriel-displays" "control-center" "session" ];
   };
   widget = {
     workspaces = { labels_only_when_occupied = true; hide_when_empty = true; };
@@ -71,6 +79,10 @@
     network.show_label = false;
     tray.drawer = true;
     control-center.glyph = "adjustments";
+    # Plugin bar widgets (see plugins.enabled above).
+    umbriel-companion.type = "noctalia/umbriel-companion:bar";
+    umbriel-displays.type = "prponkshe/umbriel-displays:bar";
+    xwayland.type = "tordex/xwayland:bar";
     # ALWAYS-ON MODE (modules/always-on-umbriel.nix): either click switches it; the glyph a cup
     # when off, an infinity when on (the watcher sets it).
     always-on = {

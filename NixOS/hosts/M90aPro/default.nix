@@ -1,10 +1,19 @@
 # M90aPro Laptop - Host-specific configuration
-{ lib, ... }:
+{ inputs, lib, ... }:
 {
   imports = [
     ./hardware-configuration.nix
     ./nvidia-prime.nix
+    ../../modules/strata.nix
+    inputs.noctalia-suite.nixosModules.suite
   ];
+
+  # Noctalia Suite desktop (Shell, Umbriel, Greeter + Strata), as on CRUCIAL-SSD.
+  desktop.noctaliaSuite = {
+    enable = true;
+    greeter.enable = true;
+  };
+  home-manager.users.thinky.imports = [ inputs.noctalia-suite.homeManagerModules.suite ];
 
   networking.hostName = "M90aPro";
 
