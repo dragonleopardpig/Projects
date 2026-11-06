@@ -14,7 +14,10 @@
       pkgs = noctalia.inputs.nixpkgs.legacyPackages.${system};
       lib = pkgs.lib;
       shell = noctalia.packages.${system}.default.overrideAttrs (previous: {
-        patches = (previous.patches or [ ]) ++ [ ./suite/noctalia-umbriel-ipc.patch ];
+        patches = (previous.patches or [ ]) ++ [
+          ./suite/noctalia-umbriel-ipc.patch
+          ./suite/fullscreen-launcher.patch
+        ];
       });
       suite = import ./suite { inherit pkgs shell; };
     in {

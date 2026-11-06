@@ -1,0 +1,81 @@
+diff --git a/src/config/config_types.h b/src/config/config_types.h
+--- a/src/config/config_types.h
++++ b/src/config/config_types.h
+@@ -1198,6 +1198,7 @@
+     static constexpr std::int32_t kDefaultWidth = 760;
+ 
+     LauncherLayout layout = LauncherLayout::Full;
++    bool fullscreen = false; // Fill the output work area for the app drawer.
+     std::int32_t width = kDefaultWidth;
+     LauncherSearchPosition searchPosition = LauncherSearchPosition::Bottom;
+     LauncherDefaultView defaultView = LauncherDefaultView::Recent;
+diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
+--- a/src/config/schema/config_schema.cpp
++++ b/src/config/schema/config_schema.cpp
+@@ -1561,6 +1561,7 @@
+     const Schema<ShellConfig::LauncherConfig>& shellLauncherSchema() {
+       static const Schema<ShellConfig::LauncherConfig> s = {
+           enumField(&ShellConfig::LauncherConfig::layout, "layout", ShellConfig::kLauncherLayouts),
++          field(&ShellConfig::LauncherConfig::fullscreen, "fullscreen"),
+           field(&ShellConfig::LauncherConfig::width, "width", noctalia::config::schema::kLauncherWidthRange),
+           enumField(
+               &ShellConfig::LauncherConfig::searchPosition, "search_position", ShellConfig::kLauncherSearchPositions
+diff --git a/src/shell/launcher/launcher_panel.h b/src/shell/launcher/launcher_panel.h
+--- a/src/shell/launcher/launcher_panel.h
++++ b/src/shell/launcher/launcher_panel.h
+@@ -64,6 +64,8 @@
+ 
+   float preferredWidth() const override;
+   float preferredHeight() const override;
++  bool fillsWidth() const noexcept override;
++  bool fillsHeight() const noexcept override { return fillsWidth(); }
+   LayerShellKeyboard keyboardMode() const override { return LayerShellKeyboard::Exclusive; }
+   InputArea* initialFocusArea() const override;
+   bool handleGlobalKey(std::uint32_t sym, std::uint32_t modifiers, bool pressed, bool preedit) override;
+diff --git a/src/shell/launcher/launcher_panel.cpp b/src/shell/launcher/launcher_panel.cpp
+--- a/src/shell/launcher/launcher_panel.cpp
++++ b/src/shell/launcher/launcher_panel.cpp
+@@ -48,7 +48,7 @@
+   constexpr std::size_t kGlobalOptInMinChars = 2;
+   constexpr float kIconSizeDefault = 40.0F;
+   constexpr float kIconSizeCompact = 28.0F;
+-  constexpr std::size_t kAppGridColumns = 5;
++  constexpr std::size_t kAppGridColumns = 8;
+   constexpr float kLauncherHeight = 620.0F;
+   constexpr std::int32_t kCompactNavigationWidth = 680;
+   constexpr float kLauncherAvatarSize = 44.0F;
+@@ -131,12 +131,14 @@
+     bool showIcons = true;
+     bool showAppOriginIndicator = true;
+     bool compact = false;
++    bool fullscreenGrid = false;
+     std::optional<ColorSpec> appIconColorizeTint;
+     std::optional<ColorSpec> listItemBackground;
+   };
+ 
+   float launcherIconSize(const LauncherListStyle& style) {
+-    return (style.compact ? kIconSizeCompact : kIconSizeDefault) * style.scale;
++    const float normalSize = style.fullscreenGrid ? 72.0F : kIconSizeDefault;
++    return (style.compact ? kIconSizeCompact : normalSize) * style.scale;
+   }
+ 
+   float stableLabelHeight(const TextMetrics& metrics) { return std::round(metrics.bottom - metrics.top); }
+@@ -204,6 +206,7 @@
+       style.showIcons = launcher.showIcons;
+       style.showAppOriginIndicator = launcher.showAppOriginIndicator;
+       style.compact = launcher.compact;
++      style.fullscreenGrid = launcher.fullscreen && launcher.appGrid;
+       style.appIconColorizeTint = effectiveShellAppIconColorizationTint(config->config().shell, launcher.colorizeIcons);
+       if (config->config().shell.panel.listItemBackground) {
+         style.listItemBackground = colorSpecFromRole(ColorRole::SurfaceContainer, cardOpacity);
+@@ -1472,6 +1475,10 @@
+ bool LauncherPanel::usesBrowserLayout() const {
+   return m_scopedProviderId.empty()
+       && (m_config == nullptr || m_config->config().shell.launcher.layout == ShellConfig::LauncherLayout::Full);
++}
++
++bool LauncherPanel::fillsWidth() const noexcept {
++  return usesBrowserLayout() && m_config != nullptr && m_config->config().shell.launcher.fullscreen;
+ }
+ 
+ float LauncherPanel::preferredWidth() const {

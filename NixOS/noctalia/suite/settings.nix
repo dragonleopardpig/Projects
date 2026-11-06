@@ -11,6 +11,7 @@
     # Familiar AGS app-drawer browsing, using the native shell launcher.
     launcher = {
       layout = "full";
+      fullscreen = true;
       width = 1100;
       search_position = "top";
       default_view = "all";
@@ -20,6 +21,7 @@
       sort_by_usage = false;
     };
     panel.open_near_click_control_center = true;
+    panel.launcher_placement = "floating";
     screenshot = {
       pipe_to_command = true;
       pipe_command = "swappy -f -";
@@ -76,7 +78,7 @@
     reserve_space = true;
     start = [ "launcher" "workspaces" "umbriel-companion" "taskbar" ];
     center = [ "active_window" "xwayland" ];
-    end = [ "media" "weather" "clock" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "umbriel-displays" "control-center" "session" ];
+    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "umbriel-displays" "session" ];
   };
   widget = {
     launcher = {
@@ -101,7 +103,7 @@
     battery.color = barAccents.system;
     notifications.color = barAccents.distro;
     tray = { color = barAccents.desktop; drawer = true; };
-    control-center = { color = barAccents.neonPurple; glyph = "adjustments"; };
+    control-center = { color = "#FF7E70"; glyph = "adjustments"; };
     session.color = "#FFFFFF";
     # Plugin bar widgets (see plugins.enabled above).
     umbriel-companion.type = "noctalia/umbriel-companion:bar";

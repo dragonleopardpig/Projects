@@ -45,10 +45,14 @@ Inter is the UI font; Foot uses JetBrains Mono. The active task title occupies
 the bar's center, with date and time on the right.
 
 The sky-blue NixOS snowflake opens the native launcher, also bound to
-**Super+Space**. Its wide icon grid starts with all applications alphabetically,
-with search above the grid, categories, recent apps and optional pins. Click
+**Super+Space**. Its full-screen, eight-column icon grid starts with all
+applications alphabetically, with search above the grid, categories, recent
+apps and optional pins. Click
 an app or search and press Enter; Escape or clicking outside closes it. This
 preserves the AGS app-drawer workflow within Noctalia's own themed panel.
+The local launcher patch exposes `shell.launcher.fullscreen`, using the native
+panel fill sizing on both axes. It respects the output's reserved bar space,
+uses larger icons, and keeps search, category browsing and keyboard navigation.
 
 Native-resolution Xwayland and XSETTINGS keep X11 applications sharp at
 fractional display scales. At 4K/125%, X11 sees 3840x2160 with 120-DPI fonts,

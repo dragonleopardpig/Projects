@@ -72,7 +72,7 @@ runtime and leaves laptop inputs alone.
 | --- | --- |
 | Super+Return | OLO-Neon Foot terminal |
 | Super+Shift+N | Strata file browser |
-| Super+Space | App grid and search (also the bar's NixOS snowflake) |
+| Super+Space | Full-screen app grid and search (also the bar's NixOS snowflake) |
 | Super+Shift+V | Clipboard history |
 | Super+Comma | Settings and theme selection |
 | Super+Shift+W | Wallpaper picker |

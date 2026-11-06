@@ -11,11 +11,11 @@ validation and the isolated lock/power regression remain development tools.
 
 ## Current deployment
 
-Generation **45** is installed for the next boot, with the retired launchers
+Generation **46** is installed for the next boot, with the retired launchers
 absent from its system packages:
 
 ```
-/nix/store/jaicicaznwn6h5di0lxzr7jagigjs1mk-nixos-system-CRUCIAL-SSD-26.05.20260427.1c3fe55
+/nix/store/l71483pq9pbdvibjja0hzq7nmav2a255-nixos-system-CRUCIAL-SSD-26.05.20260427.1c3fe55
 ```
 
 The current source uses OLO-inspired teal control fills with dark text.
@@ -24,10 +24,14 @@ palette variants pass text-contrast checks; the dark primary pair is 11.6:1.
 The palette and wallpaper are applied live.
 
 Right-side bar controls use Fastfetch's Kitty colors (gold, sky blue, mint and
-lavender), plus neon purple; the power button is white. The blue NixOS
-snowflake and Super+Space open a wide native app grid with search, categories
-and optional pins, replacing the AGS app-drawer workflow. These preferences
-are applied live and saved for future logins.
+lavender), plus neon purple; the power button is white. The salmon Control
+Panel button (`#FF7E70`) follows the date/time button. The blue NixOS snowflake
+and Super+Space open a full-screen, eight-column native app grid with larger
+icons, search, categories and optional pins. The local Shell patch exposes
+`shell.launcher.fullscreen` and uses the compositor's available output extent,
+preserving the bar. A 4K/125% isolated check verified full-display sizing,
+Escape dismissal, and search/Enter activation of a desktop entry. These
+preferences are applied live and saved for future logins.
 
 The desktop's saved scale is 125%. Native-resolution Xwayland and XSETTINGS
 are configured for sharp X11 rendering. An isolated 4K/125% session verified
