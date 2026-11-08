@@ -18,3 +18,49 @@ diff --git a/src/compositors/umbriel/umbriel_runtime.cpp b/src/compositors/umbri
 +      argument += window->get_ref<const std::string&>();
 +    }
 +    return send({{"cmd", "msg"}, {"arg", argument}}).has_value();
+diff --git a/src/scripting/luau_host.cpp b/src/scripting/luau_host.cpp
+--- a/src/scripting/luau_host.cpp
++++ b/src/scripting/luau_host.cpp
+@@ -1855,7 +1855,32 @@ namespace {
+     if (request.contains("cmd")) {
+       luaL_argerror(L, 1, "`cmd` is set by the host");
+     }
+-    request["cmd"] = "action";
++    std::string argument = action->get_ref<const std::string&>();
++    if (const auto layout = request.find("layout"); layout != request.end() && layout->is_string()) {
++      argument += ':';
++      argument += layout->get_ref<const std::string&>();
++    } else if (const auto fraction = request.find("fraction"); fraction != request.end() && fraction->is_number()) {
++      argument += ':';
++      argument += std::to_string(fraction->get<double>());
++    } else if (const auto workspace = request.find("workspace"); workspace != request.end()) {
++      argument += ':';
++      if (workspace->is_string()) {
++        argument += workspace->get_ref<const std::string&>();
++      } else if (workspace->is_number_integer()) {
++        argument += std::to_string(workspace->get<long long>());
++      }
++      if (const auto output = request.find("output"); output != request.end() && output->is_string()) {
++        argument += '/';
++        argument += output->get_ref<const std::string&>();
++      }
++    } else if (const auto window = request.find("window"); window != request.end() && window->is_string()) {
++      argument += ':';
++      argument += window->get_ref<const std::string&>();
++    } else if (const auto arg = request.find("arg"); arg != request.end() && arg->is_string()) {
++      argument += ':';
++      argument += arg->get_ref<const std::string&>();
++    }
++    nlohmann::json message = {{"cmd", "msg"}, {"arg", argument}};
+ 
+     auto* host = hostForState(L);
+     std::string socketPath = compositors::umbriel::findSocketPath();
+@@ -1864,7 +1889,7 @@ namespace {
+       return 1;
+     }
+ 
+-    std::string payload = request.dump();
++    std::string payload = message.dump();
+     payload.push_back('\n');
+     const int callbackRef = lua_isfunction(L, 2) ? lua_ref(L, 2) : LUA_NOREF;
+     const bool ok = host->startUmbrielAction(std::move(socketPath), std::move(payload), callbackRef);
