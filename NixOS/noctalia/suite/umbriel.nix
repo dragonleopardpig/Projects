@@ -7,6 +7,10 @@ let
     repeat = !builtins.elem cmd [ "volume-mute" "mic-mute" "media toggle" ];
   };
 in {
+  include.files = [
+    "${./effects/random-window}/effect.toml"
+    "${./effects/random-workspace}/effect.toml"
+  ];
   general = {
     mod_key = "Super";
     autostart = [ shellCommand ];
@@ -38,9 +42,14 @@ in {
     focus.follows_mouse = true;
   };
   layout = {
-    mode = "scrolling";
+    mode = "dwindle";
     extent_presets = [ 0.333 0.5 0.667 ];
     scrolling.default_extent_fraction = 0.5;
+  };
+  animation = {
+    windows_in = { effect = "random_window"; duration_ms = 320; curve = "easeout"; };
+    windows_out = { effect = "random_window"; duration_ms = 240; curve = "easeinoutcubic"; };
+    workspaces = { style = "reveal"; effect = "random_workspace"; duration_ms = 320; curve = "easeout"; };
   };
   keybinds = {
     # Keep daily Hyprland app chords; give Suite additions separate bindings.
@@ -75,10 +84,11 @@ in {
     "Mod+Right" = "window-focus-or-output-right";
     "Mod+Up" = "window-focus-or-output-up";
     "Mod+Down" = "window-focus-or-output-down";
-    "Mod+Shift+Left" = "column-move-left";
-    "Mod+Shift+Right" = "column-move-right";
+    "Mod+Shift+Left" = "window-move-left";
+    "Mod+Shift+Right" = "window-move-right";
     "Mod+Shift+Up" = "window-move-up";
     "Mod+Shift+Down" = "window-move-down";
+    "Mod+Alt+T" = "layout-toggle-split";
     "Ctrl+Alt+Left" = "workspace-previous";
     "Ctrl+Alt+Right" = "workspace-next";
     "Alt+Tab" = spawn "noctalia msg window-switcher";

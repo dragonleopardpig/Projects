@@ -36,7 +36,19 @@
       { action = "shutdown"; countdown_seconds = 5; }
     ];
   };
-  wallpaper = { enabled = true; default.path = toString wallpaper; };
+  wallpaper = {
+    enabled = true;
+    default.path = toString wallpaper;
+    directory = "/home/thinky/Pictures/Wallpapers";
+    transition = [ "fade" "wipe" "disc" "stripes" "zoom" "honeycomb" "vortex" "pixel" "diamond" "golden" "melt" ];
+    transition_duration = 1500;
+    automation = {
+      enabled = true;
+      interval_seconds = 60;
+      order = "random";
+      recursive = false;
+    };
+  };
   theme = {
     mode = "dark";
     source = "custom";
@@ -69,7 +81,7 @@
     position = "top";
     thickness = 42;
     margin_ends = 16;
-    margin_edge = 10;
+    margin_edge = 0;
     padding = 12;
     widget_spacing = 8;
     radius = 16;

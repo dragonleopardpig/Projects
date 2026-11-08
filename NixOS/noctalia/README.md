@@ -1,8 +1,8 @@
 # Noctalia Suite
 
-The CRUCIAL-SSD host uses **Noctalia Shell, Umbriel, and Noctalia Greeter** as
-its Wayland desktop. Hyprland remains available at login. Strata is installed
-by the host's separate NixOS module.
+All hosts offer **Noctalia Shell with Umbriel** and the previous **Hyprland +
+AGS** desktop at login. M90aPro and CRUCIAL-SSD use Noctalia Greeter; other
+hosts retain SDDM. Strata remains a separate host package where enabled.
 
 The former AGS bridge bar trial and nested desktop/greeter previews have been
 removed. This flake contains the desktop session and its validation tools.

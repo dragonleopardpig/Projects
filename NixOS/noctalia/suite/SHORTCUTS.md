@@ -26,9 +26,13 @@ is not needed in this session.
 
 ## Windows, workspaces, shell
 
+Umbriel uses the dwindle layout by default.
+
 | Shortcut | Action |
 | --- | --- |
 | Super+arrows | Focus in that direction, crossing outputs at an edge |
+| Super+Shift+arrows | Move the focused tile in that direction |
+| Super+Alt+T | Toggle the focused tile's split direction |
 | Super+K | Close focused window |
 | Super+Shift+F | Maximize the column/window |
 | Super+1…9 | Select that workspace on the current output |

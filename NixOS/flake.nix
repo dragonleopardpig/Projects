@@ -46,8 +46,8 @@
       inputs.elephant.follows = "elephant";
     };
     noctalia-suite.url = "path:./noctalia";
-    # Build the committed local checkout; keep its toolkit/Rust nixpkgs pin.
-    strata.url = "git+file:///home/thinky/Projects/strata?ref=main";
+    # Build the committed feature branch, including pane controls and terminals.
+    strata.url = "git+file:///home/thinky/Projects/strata?ref=feat/1-pane-controls-compact-search";
   };
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
@@ -555,6 +555,7 @@
             ];
           }
           ./configuration.nix
+          inputs.noctalia-suite.nixosModules.suite
           hostModule
           disko.nixosModules.disko
           grub2-themes.nixosModules.default
@@ -567,9 +568,11 @@
             home-manager.users.thinky = {
               imports = [
                 ./home.nix
+                inputs.noctalia-suite.homeManagerModules.suite
               ];
             };
             home-manager.extraSpecialArgs = { inherit inputs; };
+            desktop.noctaliaSuite.enable = true;
           }
         ];
       };

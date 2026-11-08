@@ -3,6 +3,19 @@ let desktopPkgs = pkgs;
 in { config, lib, pkgs, ... }:
 let
   cfg = config.desktop.noctaliaSuite;
+  hyprlandAgsSession = pkgs.runCommand "hyprland-ags-session" {
+    passthru.providedSessions = [ "hyprland-ags" ];
+  } ''
+    mkdir -p $out/share/wayland-sessions
+    cat > $out/share/wayland-sessions/hyprland-ags.desktop <<EOF
+    [Desktop Entry]
+    Name=Hyprland + AGS
+    Comment=Previous Hyprland desktop with the AGS bar
+    Exec=${lib.getExe pkgs.uwsm} start -F -- /run/current-system/sw/bin/start-hyprland
+    Type=Application
+    DesktopNames=Hyprland
+    EOF
+  '';
 in {
   options.desktop.noctaliaSuite = {
     enable = lib.mkEnableOption "the Noctalia Suite desktop session";
@@ -14,7 +27,7 @@ in {
     environment.etc = {
       "noctalia-suite/session-enabled".text = "Noctalia Suite login integration enabled\n";
     };
-    services.displayManager.sessionPackages = [ suite.sessionEntry ];
+    services.displayManager.sessionPackages = [ suite.sessionEntry hyprlandAgsSession ];
     systemd.packages = [ suite.umbriel ];
     systemd.user.services.umbriel = {
       restartIfChanged = false;

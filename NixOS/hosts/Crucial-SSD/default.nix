@@ -1,6 +1,6 @@
 # Crucial 1TB External SSD - identical to X299-SSD
 # Uses hardware-neutral universal boot, NVIDIA support, and WinApps.
-{ inputs, pkgs, ... }:
+{ pkgs, ... }:
 {
   imports = [
     ./hardware-configuration.nix
@@ -8,14 +8,9 @@
     ../X299-SSD/nvidia.nix
     ../../modules/winapps.nix
     ../../modules/strata.nix
-    inputs.noctalia-suite.nixosModules.suite
   ];
 
-  desktop.noctaliaSuite = {
-    enable = true;
-    greeter.enable = true;
-  };
-  home-manager.users.thinky.imports = [ inputs.noctalia-suite.homeManagerModules.suite ];
+  desktop.noctaliaSuite.greeter.enable = true;
 
   networking.hostName = "CRUCIAL-SSD";
   # Keep local references to the clone's former name resolving after renaming.

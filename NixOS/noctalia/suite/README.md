@@ -2,8 +2,9 @@
 
 This module integrates Noctalia Shell 5.4.1, Umbriel's pinned 2026-10-16
 snapshot, and Noctalia Greeter 1.7.0. The flake locks their packages separately
-from the host's nixpkgs. The CRUCIAL-SSD configuration enables the suite and
-greeter; Hyprland remains available as a login session.
+from the host's nixpkgs. Every host offers Noctalia Suite and the previous
+Hyprland + AGS desktop at login. M90aPro and CRUCIAL-SSD use Noctalia Greeter;
+the other hosts retain SDDM.
 
 The desktop provides the launcher, taskbar, centered active-window title,
 right-side clock, clipboard history, notifications, tray, screenshots, media,
@@ -13,19 +14,17 @@ Noctalia session. There are no installed trial or preview launchers.
 
 ## Integration
 
-Add `inputs.noctalia-suite.nixosModules.suite` to a host and enable:
+The shared `mkSystem` configuration imports the NixOS and Home Manager modules
+and enables the suite for every host. Hosts that use Noctalia Greeter set:
 
 ```nix
-desktop.noctaliaSuite = {
-  enable = true;
-  greeter.enable = true;
-};
-home-manager.users.thinky.imports = [ inputs.noctalia-suite.homeManagerModules.suite ];
+desktop.noctaliaSuite.greeter.enable = true;
 ```
 
 The greeter option replaces SDDM with greetd. The module registers the Umbriel
-session/portal units and keeps AGS, swaync, hypridle, and hyprpolkitagent out of
-its graphical session. The session wrapper stops already-running conflicting
+session/portal units and a **Hyprland + AGS** login entry. AGS, swaync,
+hypridle, and hyprpolkitagent stay out of the Umbriel session. The previous
+Hyprland configuration starts AGS as before. The session wrapper stops conflicting
 services, and restores their previous active state when the session ends.
 Upstream `start-umbriel` manages the session targets and environment cleanup.
 
@@ -42,7 +41,14 @@ and data profiles. The Secret Service provides the storage key.
 [OLO-Neon](theme/README.md) uses teal control fills with dark text, mint/cyan
 secondary colors, and magenta window outlines and orbital wallpaper curves.
 Inter is the UI font; Foot uses JetBrains Mono. The active task title occupies
-the bar's center, with date and time on the right.
+the bar's center, with date and time on the right. The bar meets the top edge.
+
+Umbriel uses dwindle by default. Window opening, closing, and workspace changes
+pick a shader transition using a stable random value for each transition.
+Noctalia chooses a random image from `~/Pictures/Wallpapers` every minute and
+randomizes its wallpaper transition. The existing Home Manager daily timer
+downloads Bing's image and NASA APOD into that folder. The OLO wallpaper remains
+the fallback when the folder is empty.
 
 The sky-blue NixOS snowflake opens the native launcher, also bound to
 **Super+Space**. Its full-screen, eight-column icon grid starts with all

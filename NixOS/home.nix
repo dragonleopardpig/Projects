@@ -2787,8 +2787,14 @@ in
       echo "Fetching NASA APOD..."
       # Use DEMO_KEY by default; set NASA_API_KEY env var for your own key
       NASA_KEY="''${NASA_API_KEY:-DEMO_KEY}"
-      if ! NASA_JSON=$(curl -sf "https://api.nasa.gov/planetary/apod?api_key=$NASA_KEY&thumbs=true"); then
-        echo "Warning: Failed to fetch NASA APOD metadata (network/DNS or API limit?)"
+      NASA_JSON=$(curl -sf --max-time 20 "https://api.nasa.gov/planetary/apod?api_key=$NASA_KEY&thumbs=true") || NASA_JSON=""
+      if [ -z "$NASA_JSON" ]; then
+        echo "NASA APOD API unavailable; trying NASA's APOD feed"
+        NASA_JSON=$(curl -fsSL --max-time 20 "https://science.nasa.gov/feed/apod-basic/" \
+          | ${pkgs.python3}/bin/python3 ${./noctalia/suite/apod-feed.py}) || NASA_JSON=""
+      fi
+      if [ -z "$NASA_JSON" ]; then
+        echo "Warning: Failed to fetch NASA APOD metadata"
       else
         NASA_DATE=$(echo "$NASA_JSON" | jq -r '.date')
         MEDIA_TYPE=$(echo "$NASA_JSON" | jq -r '.media_type')
@@ -3820,7 +3826,7 @@ in
       enable_audio_bell = false;
       mouse_hide_wait = "-1.0";
       window_padding_width = 16;
-      background_opacity = "0.72";
+      background_opacity = "0.94";
       background_blur = 10;
       foreground = "#d9f6ff";
       background = "#07111b";

@@ -1,0 +1,3 @@
+[effects.preset.random_window]
+kind = "animation"
+shader = "shader.glsl"
