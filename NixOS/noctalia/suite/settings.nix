@@ -77,6 +77,13 @@
     ];
     auto_update = "none";
   };
+  plugin_settings = {
+    "noctalia/umbriel-companion" = {
+      panel_placement = "attached";
+      panel_position = "top_left";
+      panel_open_near_click = true;
+    };
+  };
   bar.main = {
     position = "top";
     thickness = 42;
