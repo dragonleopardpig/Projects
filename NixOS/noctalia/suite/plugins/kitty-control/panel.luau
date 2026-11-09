@@ -387,6 +387,7 @@ local function applyConfig()
     else
       state.status = "Saved (no running kitty)"
     end
+    render()
   end)
 end
 
@@ -396,8 +397,11 @@ local function card(title, iconName, children)
     ui.glyph({ name = iconName or "adjustments", size = 16, color = "primary" }),
     ui.label({ text = title, fontSize = 13, fontWeight = "bold", color = "primary", flexGrow = 1 })
   })
-  table.insert(children, 1, header)
-  return ui.column({ gap = 10, padding = 12, radius = 12, fill = "surface_container" }, children)
+  local rows = { header }
+  for _, c in ipairs(children) do
+    table.insert(rows, c)
+  end
+  return ui.column({ gap = 10, padding = 12, radius = 12, fill = "surface_container" }, rows)
 end
 
 -- UI helper: Label + Value header row
