@@ -50,6 +50,10 @@ in {
     windows_in = { effect = "random_window"; duration_ms = 320; curve = "easeout"; };
     windows_out = { effect = "random_window"; duration_ms = 240; curve = "easeinoutcubic"; };
     workspaces = { style = "reveal"; effect = "random_workspace"; duration_ms = 320; curve = "easeout"; };
+    scratchpad = {
+      dim = 0.0;
+      blur = false;
+    };
   };
   keybinds = {
     # Keep daily Hyprland app chords; give Suite additions separate bindings.
@@ -95,6 +99,7 @@ in {
     "Mod+Tab" = "window-focus-previous";
     "Mod+T" = "scratchpad-toggle:terminal";
     "Mod+C" = "scratchpad-toggle:agent";
+    "Mod+Shift+C" = "window-toggle-scratchpad:agent";
     "Mod+V" = "scratchpad-toggle:volume";
     "Mod+X" = "scratchpad-toggle:notepad";
     "Mod+A" = spawn "noctalia msg config-reload";
@@ -130,7 +135,7 @@ in {
   ]) (lib.range 1 9));
   scratchpad = [
     { name = "terminal"; spawn_when_empty = "kitty --class kitty-dropterm"; }
-    { name = "agent"; spawn_when_empty = "kitty --class kitty-agent -d /home/thinky/Projects -e /home/thinky/.local/bin/agy"; }
+    { name = "agent"; spawn_when_empty = "kitty --class kitty-agent -d /home/thinky/Projects -e /home/thinky/.local/bin/agy --dangerously-skip-permissions"; }
     { name = "volume"; spawn_when_empty = "pavucontrol"; }
     { name = "notepad"; spawn_when_empty = "xed --name notepad --standalone"; }
   ];
