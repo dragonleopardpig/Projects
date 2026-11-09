@@ -349,18 +349,18 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1793935417,
-        "narHash": "sha256-3pArOKC8DVzB4hjZoxNZpIoI5tf6pmywCR2kWR8QWoU=",
-        "ref": "feat/1-pane-controls-compact-search",
-        "rev": "8f810006aacfd9250d367960bcec244c9557198f",
-        "revCount": 1212,
-        "type": "git",
-        "url": "file:///home/thinky/Projects/strata"
+        "lastModified": 1794183411,
+        "narHash": "sha256-Smj6QnVuC4J17lk6SDtDroUMGTo65bJfjvzrfOiz0Cg=",
+        "owner": "dragonleopardpig",
+        "repo": "strata",
+        "rev": "840cb1b3e7fe9d1913c325e25744da9dbd8604b3",
+        "type": "github"
       },
       "original": {
+        "owner": "dragonleopardpig",
         "ref": "feat/1-pane-controls-compact-search",
-        "type": "git",
-        "url": "file:///home/thinky/Projects/strata"
+        "repo": "strata",
+        "type": "github"
       }
     },
     "systems": {

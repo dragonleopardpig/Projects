@@ -46,8 +46,8 @@
       inputs.elephant.follows = "elephant";
     };
     noctalia-suite.url = "path:./noctalia";
-    # Build the committed feature branch, including pane controls and terminals.
-    strata.url = "git+file:///home/thinky/Projects/strata?ref=feat/1-pane-controls-compact-search";
+    # Share the reviewed feature branch across hosts through the fork.
+    strata.url = "github:dragonleopardpig/strata/feat/1-pane-controls-compact-search";
   };
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
