@@ -3,15 +3,15 @@ let desktopPkgs = pkgs;
 in { config, lib, pkgs, ... }:
 let
   cfg = config.desktop.noctaliaSuite;
-  hyprlandAgsSession = pkgs.runCommand "hyprland-ags-session" {
-    passthru.providedSessions = [ "hyprland-ags" ];
+  hyprlandLoginSession = pkgs.runCommand "hyprland-login-session" {
+    passthru.providedSessions = [ "hyprland-uwsm" ];
   } ''
     mkdir -p $out/share/wayland-sessions
-    cat > $out/share/wayland-sessions/hyprland-ags.desktop <<EOF
+    cat > $out/share/wayland-sessions/hyprland-uwsm.desktop <<EOF
     [Desktop Entry]
-    Name=Hyprland + AGS
-    Comment=Previous Hyprland desktop with the AGS bar
-    Exec=${lib.getExe pkgs.uwsm} start -F -- /run/current-system/sw/bin/start-hyprland
+    Name=Hyprland
+    Comment=Hyprland desktop managed by UWSM
+    Exec=${lib.getExe config.programs.uwsm.package} start -F -- /run/current-system/sw/bin/start-hyprland
     Type=Application
     DesktopNames=Hyprland
     EOF
@@ -27,7 +27,7 @@ in {
     environment.etc = {
       "noctalia-suite/session-enabled".text = "Noctalia Suite login integration enabled\n";
     };
-    services.displayManager.sessionPackages = [ suite.sessionEntry hyprlandAgsSession ];
+    services.displayManager.sessionPackages = [ suite.sessionEntry ];
     systemd.packages = [ suite.umbriel ];
     systemd.user.services.umbriel = {
       restartIfChanged = false;
@@ -69,6 +69,8 @@ in {
     });
   } (lib.mkIf cfg.greeter.enable {
     services.displayManager.sddm.enable = lib.mkForce false;
+    # Show one Hyprland choice even though Hyprland and UWSM each install one.
+    services.displayManager.sessionPackages = lib.mkForce [ suite.sessionEntry hyprlandLoginSession ];
     systemd.services.sddm-random-theme.enable = false;
     services.accounts-daemon.enable = true;
     services.greetd = {
