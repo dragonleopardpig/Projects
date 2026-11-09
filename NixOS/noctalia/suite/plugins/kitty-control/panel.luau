@@ -1,12 +1,13 @@
 --!nonstrict
 -- Kitty Terminal Control Panel
--- Full appearance, transparency, typography, cursor, and theme manager.
+-- Full appearance, transparency, typography, cursor, themes, and shell features (Fastfetch, ble.sh).
 
 local M = {}
 
 local OVERRIDES_PATH = "~/.config/kitty/overrides.conf"
+local SHELL_ENV_PATH = "~/.config/kitty/shell-env.sh"
 
--- Theme definitions
+-- Color theme definitions
 local THEMES = {
   ["olo-neon"] = {
     name = "OLO-Neon",
@@ -58,27 +59,27 @@ active_border_color #ff149e
 inactive_border_color #213846
 active_tab_background #ff149e
 active_tab_foreground #ffffff
-inactive_tab_background #090e1a
-inactive_tab_foreground #a6bdc9
+inactive_tab_background #121c2e
+inactive_tab_foreground #77f9e0
 color0 #080d19
 color1 #ff149e
 color2 #00f5c8
-color3 #ffd166
-color4 #6bc5ff
-color5 #c27dff
+color3 #ffd700
+color4 #61e8ff
+color5 #ff7e70
 color6 #77f9e0
 color7 #e9fff8
 color8 #213846
-color9 #ff4db3
-color10 #77f9e0
-color11 #ffe08a
-color12 #8ed3ff
-color13 #d0a6ff
-color14 #a3f3ff
+color9 #ff54b8
+color10 #5cffdc
+color11 #ffe347
+color12 #8aefff
+color13 #ffa298
+color14 #a6fbe9
 color15 #ffffff
 ]]
   },
-  ["tokyo-night"] = {
+  ["tokyonight"] = {
     name = "Tokyo Night",
     accent = "#7aa2f7",
     bg = "#1a1b26",
@@ -86,11 +87,15 @@ color15 #ffffff
 foreground #c0caf5
 background #1a1b26
 selection_foreground #c0caf5
-selection_background #283457
+selection_background #33467c
 cursor #c0caf5
 cursor_text_color #1a1b26
 active_border_color #7aa2f7
 inactive_border_color #292e42
+active_tab_background #7aa2f7
+active_tab_foreground #16161e
+inactive_tab_background #1f2335
+inactive_tab_foreground #545c7e
 color0 #15161e
 color1 #f7768e
 color2 #9ece6a
@@ -122,6 +127,10 @@ cursor #f5e0dc
 cursor_text_color #1e1e2e
 active_border_color #b4befe
 inactive_border_color #313244
+active_tab_background #b4befe
+active_tab_foreground #1e1e2e
+inactive_tab_background #181825
+inactive_tab_foreground #a6adc8
 color0 #45475a
 color1 #f38ba8
 color2 #a6e3a1
@@ -153,6 +162,10 @@ cursor #ebdbb2
 cursor_text_color #282828
 active_border_color #fabd2f
 inactive_border_color #3c3836
+active_tab_background #fabd2f
+active_tab_foreground #282828
+inactive_tab_background #1d2021
+inactive_tab_foreground #a89984
 color0 #282828
 color1 #cc241d
 color2 #98971a
@@ -184,6 +197,10 @@ cursor #d8dee9
 cursor_text_color #2e3440
 active_border_color #88c0d0
 inactive_border_color #3b4252
+active_tab_background #88c0d0
+active_tab_foreground #2e3440
+inactive_tab_background #2e3440
+inactive_tab_foreground #d8dee9
 color0 #3b4252
 color1 #bf616a
 color2 #a3be8c
@@ -204,21 +221,37 @@ color15 #eceff4
   }
 }
 
--- Current state with defaults matching existing setup
+-- Current state with defaults
 local state = {
+  -- Appearance & Window
   opacity = 0.94,
   blur = 10,
   dynamic_opacity = true,
+  padding = 16,
+  -- Typography
   font_size = 9.5,
   font_family = "CaskaydiaCove Nerd Font Mono",
-  padding = 16,
+  -- Cursor & Motion
   cursor_shape = "block",
   cursor_trail = 2,
+  -- Shell features (Fastfetch & ble.sh)
+  fastfetch_enabled = true,
+  fastfetch_logo = "nixos", -- "nixos", "small", "none"
+  ble_enabled = true,
+  ble_autosuggest = true,
+  ble_syntax_highlight = true,
+  -- Terminal Behavior
+  copy_on_select = true,
+  enable_audio_bell = false,
+  detect_urls = true,
+  tab_bar_style = "powerline", -- "powerline", "slanted", "fade", "hidden"
+  scrollback_lines = 10000,
+  -- Theme & Status
   theme = "olo-neon",
   status = "Ready"
 }
 
--- Load configuration from ~/.config/kitty/overrides.conf if it exists
+-- Load configuration from ~/.config/kitty/overrides.conf
 local function loadConfig()
   local path = noctalia.expandPath(OVERRIDES_PATH)
   if not noctalia.fileExists(path) then
@@ -232,25 +265,53 @@ local function loadConfig()
   for line in string.gmatch(content .. "\n", "(.-)\n") do
     local trimmed = noctalia.string.trim(line)
     if trimmed ~= "" and string.sub(trimmed, 1, 1) ~= "#" then
-      local k, v = string.match(trimmed, "^([%w_]+)%s+(.+)$")
-      if k and v then
-        v = noctalia.string.trim(v)
-        if k == "background_opacity" then
-          state.opacity = tonumber(v) or state.opacity
-        elseif k == "background_blur" then
-          state.blur = tonumber(v) or state.blur
-        elseif k == "dynamic_background_opacity" then
-          state.dynamic_opacity = (v == "yes" or v == "true")
-        elseif k == "font_size" then
-          state.font_size = tonumber(v) or state.font_size
-        elseif k == "font_family" then
-          state.font_family = v
-        elseif k == "window_padding_width" then
-          state.padding = tonumber(v) or state.padding
-        elseif k == "cursor_shape" then
-          state.cursor_shape = v
-        elseif k == "cursor_trail" then
-          state.cursor_trail = tonumber(v) or state.cursor_trail
+      if string.find(trimmed, "^env%s+") then
+        local k, v = string.match(trimmed, "^env%s+([%w_]+)=(.*)$")
+        if k and v then
+          v = noctalia.string.trim(v)
+          if k == "FASTFETCH_ENABLED" then
+            state.fastfetch_enabled = (v == "1" or v == "true")
+          elseif k == "FASTFETCH_LOGO" then
+            state.fastfetch_logo = v
+          elseif k == "BLE_ENABLED" then
+            state.ble_enabled = (v == "1" or v == "true")
+          elseif k == "BLE_AUTOSUGGEST" then
+            state.ble_autosuggest = (v == "1" or v == "true")
+          elseif k == "BLE_SYNTAX_HIGHLIGHT" then
+            state.ble_syntax_highlight = (v == "1" or v == "true")
+          end
+        end
+      else
+        local k, v = string.match(trimmed, "^([%w_]+)%s+(.+)$")
+        if k and v then
+          v = noctalia.string.trim(v)
+          if k == "background_opacity" then
+            state.opacity = tonumber(v) or state.opacity
+          elseif k == "background_blur" then
+            state.blur = tonumber(v) or state.blur
+          elseif k == "dynamic_background_opacity" then
+            state.dynamic_opacity = (v == "yes" or v == "true")
+          elseif k == "font_size" then
+            state.font_size = tonumber(v) or state.font_size
+          elseif k == "font_family" then
+            state.font_family = v
+          elseif k == "window_padding_width" then
+            state.padding = tonumber(v) or state.padding
+          elseif k == "cursor_shape" then
+            state.cursor_shape = v
+          elseif k == "cursor_trail" then
+            state.cursor_trail = tonumber(v) or state.cursor_trail
+          elseif k == "copy_on_select" then
+            state.copy_on_select = (v == "yes" or v == "true")
+          elseif k == "enable_audio_bell" then
+            state.enable_audio_bell = (v == "yes" or v == "true")
+          elseif k == "detect_urls" then
+            state.detect_urls = (v == "yes" or v == "true")
+          elseif k == "tab_bar_style" then
+            state.tab_bar_style = v
+          elseif k == "scrollback_lines" then
+            state.scrollback_lines = tonumber(v) or state.scrollback_lines
+          end
         end
       end
     elseif string.find(trimmed, "^# Theme:%s*") then
@@ -262,23 +323,43 @@ local function loadConfig()
   end
 end
 
--- Write configuration to ~/.config/kitty/overrides.conf and trigger live reload
+-- Write configuration to overrides.conf and shell-env.sh, then trigger live reload
 local function applyConfig()
   local path = noctalia.expandPath(OVERRIDES_PATH)
+  local shellEnvPath = noctalia.expandPath(SHELL_ENV_PATH)
   local themeDef = THEMES[state.theme] or THEMES["olo-neon"]
 
   local lines = {
     "# Auto-generated by Noctalia Kitty Control Panel",
     string.format("# Theme: %s", state.theme),
     "",
+    "# Appearance & Window",
     string.format("background_opacity %.2f", state.opacity),
     string.format("background_blur %d", math.floor(state.blur + 0.5)),
     string.format("dynamic_background_opacity %s", state.dynamic_opacity and "yes" or "no"),
+    string.format("window_padding_width %d", math.floor(state.padding + 0.5)),
+    "",
+    "# Typography",
     string.format("font_size %.1f", state.font_size),
     string.format("font_family %s", state.font_family),
-    string.format("window_padding_width %d", math.floor(state.padding + 0.5)),
+    "",
+    "# Cursor & Motion",
     string.format("cursor_shape %s", state.cursor_shape),
     string.format("cursor_trail %d", math.floor(state.cursor_trail + 0.5)),
+    "",
+    "# Terminal Behavior",
+    string.format("copy_on_select %s", state.copy_on_select and "yes" or "no"),
+    string.format("enable_audio_bell %s", state.enable_audio_bell and "yes" or "no"),
+    string.format("detect_urls %s", state.detect_urls and "yes" or "no"),
+    string.format("tab_bar_style %s", state.tab_bar_style),
+    string.format("scrollback_lines %d", math.floor(state.scrollback_lines + 0.5)),
+    "",
+    "# Shell Environment & Features (Fastfetch, ble.sh)",
+    string.format("env FASTFETCH_ENABLED=%s", state.fastfetch_enabled and "1" or "0"),
+    string.format("env FASTFETCH_LOGO=%s", state.fastfetch_logo),
+    string.format("env BLE_ENABLED=%s", state.ble_enabled and "1" or "0"),
+    string.format("env BLE_AUTOSUGGEST=%s", state.ble_autosuggest and "1" or "0"),
+    string.format("env BLE_SYNTAX_HIGHLIGHT=%s", state.ble_syntax_highlight and "1" or "0"),
     "",
     "# Color Scheme",
     themeDef.config
@@ -286,6 +367,20 @@ local function applyConfig()
 
   local content = table.concat(lines, "\n")
   noctalia.writeFile(path, content)
+
+  -- Write shell-env.sh for bash subshells and .bashrc integration
+  local shellLines = {
+    "# Auto-generated by Noctalia Kitty Control Panel",
+    string.format("export FASTFETCH_ENABLED=%s", state.fastfetch_enabled and "1" or "0"),
+    string.format("export FASTFETCH_LOGO=%q", state.fastfetch_logo),
+    string.format("export BLE_ENABLED=%s", state.ble_enabled and "1" or "0"),
+    string.format("export BLE_AUTOSUGGEST=%s", state.ble_autosuggest and "1" or "0"),
+    string.format("export BLE_SYNTAX_HIGHLIGHT=%s", state.ble_syntax_highlight and "1" or "0"),
+    ""
+  }
+  noctalia.writeFile(shellEnvPath, table.concat(shellLines, "\n"))
+
+  -- Signal Kitty windows to reload instantly
   noctalia.runAsync("pkill -SIGUSR1 -x .kitty-wrapped || true", function(res)
     if res and res.exitCode == 0 then
       state.status = "Applied & Reloaded"
@@ -318,35 +413,155 @@ local render
 render = function()
   local items = {}
 
-  -- Top Header
-  table.insert(items, ui.row({ align = "center", gap = 10, padding = 4 }, {
-    ui.glyph({ name = "terminal-2", size = 22, color = "primary" }),
-    ui.column({ gap = 2, flexGrow = 1 }, {
-      ui.label({ text = "Kitty Control Panel", fontSize = 16, fontWeight = "bold" }),
-      ui.label({ text = state.status, fontSize = 11, color = "on_surface_variant" })
+  -- 1. Header Bar
+  local headerRow = ui.row({ align = "center", justify = "space_between" }, {
+    ui.row({ align = "center", gap = 8 }, {
+      ui.glyph({ name = "terminal-2", size = 22, color = "primary" }),
+      ui.label({ text = "Kitty Control", fontSize = 16, fontWeight = "bold" })
     }),
-    ui.button({
-      text = "Close",
-      onClick = function() panel.close() end
-    })
-  }))
+    ui.label({ text = state.status, fontSize = 11, color = "on_surface_variant" })
+  })
+  table.insert(items, headerRow)
 
-  -- 1. Appearance & Transparency Card
-  local appearanceRows = {
-    -- Background Opacity Slider
+  -- 2. Fastfetch System Info Card
+  local fastfetchRows = {
+    -- Fastfetch on Startup toggle
+    ui.row({ align = "center", justify = "space_between" }, {
+      ui.column({ gap = 2 }, {
+        ui.label({ text = "Fastfetch on Shell Launch", fontSize = 12, fontWeight = "medium" }),
+        ui.label({ text = "Print system specs banner on terminal open", fontSize = 10, color = "on_surface_variant" })
+      }),
+      ui.toggle({
+        value = state.fastfetch_enabled,
+        onToggle = function(v)
+          state.fastfetch_enabled = (v == true or v == "true")
+          applyConfig()
+          render()
+        end
+      })
+    }),
+    -- Fastfetch Logo Mode
+    ui.column({ gap = 6 }, {
+      fieldHeader("Banner Logo Style", ""),
+      ui.row({ gap = 8 }, {
+        ui.button({
+          text = "󰣇 Cyberpunk",
+          variant = (state.fastfetch_logo == "nixos") and "primary" or "tonal",
+          selected = (state.fastfetch_logo == "nixos"),
+          enabled = state.fastfetch_enabled,
+          flexGrow = 1,
+          onClick = function()
+            state.fastfetch_logo = "nixos"
+            applyConfig()
+            render()
+          end
+        }),
+        ui.button({
+          text = "󰣇 Compact",
+          variant = (state.fastfetch_logo == "small") and "primary" or "tonal",
+          selected = (state.fastfetch_logo == "small"),
+          enabled = state.fastfetch_enabled,
+          flexGrow = 1,
+          onClick = function()
+            state.fastfetch_logo = "small"
+            applyConfig()
+            render()
+          end
+        }),
+        ui.button({
+          text = "󰅂 Text Only",
+          variant = (state.fastfetch_logo == "none") and "primary" or "tonal",
+          selected = (state.fastfetch_logo == "none"),
+          enabled = state.fastfetch_enabled,
+          flexGrow = 1,
+          onClick = function()
+            state.fastfetch_logo = "none"
+            applyConfig()
+            render()
+          end
+        })
+      })
+    }),
+    -- Run Fastfetch Test Button
+    ui.button({
+      text = "  Run Fastfetch in Terminal",
+      glyph = "player-play",
+      variant = "tonal",
+      onClick = function()
+        noctalia.runAsync("kitty --hold fastfetch &")
+      end
+    })
+  }
+  table.insert(items, card("Fastfetch System Info", "device-desktop", fastfetchRows))
+
+  -- 3. ble.sh (Bash Line Editor) Card
+  local bleRows = {
+    -- ble.sh Master Toggle
+    ui.row({ align = "center", justify = "space_between" }, {
+      ui.column({ gap = 2 }, {
+        ui.label({ text = "ble.sh Enhanced Shell", fontSize = 12, fontWeight = "medium" }),
+        ui.label({ text = "Fish-style autosuggestions & syntax highlighting in bash", fontSize = 10, color = "on_surface_variant" })
+      }),
+      ui.toggle({
+        value = state.ble_enabled,
+        onToggle = function(v)
+          state.ble_enabled = (v == true or v == "true")
+          applyConfig()
+          render()
+        end
+      })
+    }),
+    -- Ghost Autosuggestions Toggle
+    ui.row({ align = "center", justify = "space_between" }, {
+      ui.column({ gap = 2 }, {
+        ui.label({ text = "Autosuggestions (Ghost Text)", fontSize = 12, fontWeight = "medium" }),
+        ui.label({ text = "History-based suggestions as you type (Tab to accept)", fontSize = 10, color = "on_surface_variant" })
+      }),
+      ui.toggle({
+        value = state.ble_autosuggest,
+        enabled = state.ble_enabled,
+        onToggle = function(v)
+          state.ble_autosuggest = (v == true or v == "true")
+          applyConfig()
+          render()
+        end
+      })
+    }),
+    -- Syntax Highlighting Toggle
+    ui.row({ align = "center", justify = "space_between" }, {
+      ui.column({ gap = 2 }, {
+        ui.label({ text = "Real-time Syntax Highlighting", fontSize = 12, fontWeight = "medium" }),
+        ui.label({ text = "Colorize commands, arguments, strings, and errors live", fontSize = 10, color = "on_surface_variant" })
+      }),
+      ui.toggle({
+        value = state.ble_syntax_highlight,
+        enabled = state.ble_enabled,
+        onToggle = function(v)
+          state.ble_syntax_highlight = (v == true or v == "true")
+          applyConfig()
+          render()
+        end
+      })
+    })
+  }
+  table.insert(items, card("ble.sh Line Editor", "sparkles", bleRows))
+
+  -- 4. Appearance & Window Card
+  local appRows = {
+    -- Opacity Slider
     ui.column({ gap = 4 }, {
       fieldHeader("Background Opacity", string.format("%d%%", math.floor(state.opacity * 100 + 0.5))),
       ui.slider({
-        min = 0.20,
-        max = 1.00,
-        step = 0.01,
-        value = state.opacity,
+        min = 20,
+        max = 100,
+        step = 2,
+        value = math.floor(state.opacity * 100 + 0.5),
         onChange = function(v)
-          state.opacity = tonumber(v) or state.opacity
+          state.opacity = (tonumber(v) or 94) / 100.0
           render()
         end,
         onDragEnd = function(v)
-          state.opacity = tonumber(v) or state.opacity
+          state.opacity = (tonumber(v) or 94) / 100.0
           applyConfig()
           render()
         end
@@ -354,7 +569,7 @@ render = function()
     }),
     -- Background Blur Slider
     ui.column({ gap = 4 }, {
-      fieldHeader("Background Blur", state.blur > 0 and string.format("%d px", math.floor(state.blur + 0.5)) or "Off"),
+      fieldHeader("Background Blur", string.format("%d px", math.floor(state.blur + 0.5))),
       ui.slider({
         min = 0,
         max = 30,
@@ -372,36 +587,58 @@ render = function()
       })
     }),
     -- Dynamic Opacity Toggle
-    ui.row({ align = "center", gap = 8 }, {
-      ui.label({ text = "Dynamic Opacity (focus-dim)", fontSize = 12, flexGrow = 1 }),
+    ui.row({ align = "center", justify = "space_between" }, {
+      ui.column({ gap = 2 }, {
+        ui.label({ text = "Dynamic Opacity", fontSize = 12, fontWeight = "medium" }),
+        ui.label({ text = "Allow apps/scripts to modulate background transparency", fontSize = 10, color = "on_surface_variant" })
+      }),
       ui.toggle({
-        checked = state.dynamic_opacity,
-        onToggle = function(checked)
-          state.dynamic_opacity = checked
+        value = state.dynamic_opacity,
+        onToggle = function(v)
+          state.dynamic_opacity = (v == true or v == "true")
+          applyConfig()
+          render()
+        end
+      })
+    }),
+    -- Window Padding Slider
+    ui.column({ gap = 4 }, {
+      fieldHeader("Window Padding", string.format("%d px", math.floor(state.padding + 0.5))),
+      ui.slider({
+        min = 0,
+        max = 40,
+        step = 2,
+        value = state.padding,
+        onChange = function(v)
+          state.padding = tonumber(v) or state.padding
+          render()
+        end,
+        onDragEnd = function(v)
+          state.padding = tonumber(v) or state.padding
           applyConfig()
           render()
         end
       })
     })
   }
-  table.insert(items, card("Appearance & Transparency", "blur", appearanceRows))
+  table.insert(items, card("Appearance & Transparency", "palette", appRows))
 
-  -- 2. Typography & Layout Card
+  -- 5. Typography & Font Card
   local typoRows = {
     -- Font Size Slider
     ui.column({ gap = 4 }, {
       fieldHeader("Font Size", string.format("%.1f pt", state.font_size)),
       ui.slider({
-        min = 7.0,
-        max = 22.0,
-        step = 0.5,
-        value = state.font_size,
+        min = 70,
+        max = 220,
+        step = 5,
+        value = math.floor(state.font_size * 10 + 0.5),
         onChange = function(v)
-          state.font_size = tonumber(v) or state.font_size
+          state.font_size = (tonumber(v) or 95) / 10.0
           render()
         end,
         onDragEnd = function(v)
-          state.font_size = tonumber(v) or state.font_size
+          state.font_size = (tonumber(v) or 95) / 10.0
           applyConfig()
           render()
         end
@@ -434,30 +671,11 @@ render = function()
           end
         })
       })
-    end)(),
-    -- Window Padding
-    ui.column({ gap = 4 }, {
-      fieldHeader("Window Padding", string.format("%d px", math.floor(state.padding + 0.5))),
-      ui.slider({
-        min = 0,
-        max = 40,
-        step = 2,
-        value = state.padding,
-        onChange = function(v)
-          state.padding = tonumber(v) or state.padding
-          render()
-        end,
-        onDragEnd = function(v)
-          state.padding = tonumber(v) or state.padding
-          applyConfig()
-          render()
-        end
-      })
-    })
+    end)()
   }
-  table.insert(items, card("Typography & Layout", "typography", typoRows))
+  table.insert(items, card("Typography & Font", "typography", typoRows))
 
-  -- 3. Cursor & Motion Card
+  -- 6. Cursor & Motion Card
   local cursorRows = {
     -- Cursor Shape Buttons
     ui.column({ gap = 6 }, {
@@ -498,7 +716,7 @@ render = function()
         })
       })
     }),
-    -- Cursor Trail Slider
+    -- Cursor Trail Decay Slider
     ui.column({ gap = 4 }, {
       fieldHeader("Cursor Trail Decay", state.cursor_trail > 0 and string.format("%d", math.floor(state.cursor_trail + 0.5)) or "Off"),
       ui.slider({
@@ -518,58 +736,217 @@ render = function()
       })
     })
   }
-  table.insert(items, card("Cursor & Trail", "cursor-text", cursorRows))
+  table.insert(items, card("Cursor & Motion", "pointer", cursorRows))
 
-  -- 4. Color Themes Card
-  local themeButtons = {}
-  for themeId, t in pairs(THEMES) do
-    local isSelected = (state.theme == themeId)
-    table.insert(themeButtons, ui.button({
-      text = isSelected and ("✓ " .. t.name) or t.name,
-      variant = isSelected and "primary" or "secondary",
-      onClick = function()
-        state.theme = themeId
-        applyConfig()
-        render()
-      end
-    }))
-  end
-  local themeRows = {
-    ui.label({ text = "Select terminal palette preset:", fontSize = 11, color = "on_surface_variant" }),
-    ui.row({ gap = 6, wrap = true }, themeButtons)
-  }
-  table.insert(items, card("Color Palettes", "palette", themeRows))
-
-  -- 5. Footer Actions Card
-  local actionRows = {
-    ui.row({ gap = 8 }, {
-      ui.button({
-        text = "Reload Kitty",
-        variant = "primary",
-        flexGrow = 1,
-        onClick = function()
-          applyConfig()
-          render()
-        end
+  -- 7. Terminal Behavior Card
+  local behaviorRows = {
+    -- Copy on Select
+    ui.row({ align = "center", justify = "space_between" }, {
+      ui.column({ gap = 2 }, {
+        ui.label({ text = "Copy on Select", fontSize = 12, fontWeight = "medium" }),
+        ui.label({ text = "Automatically copy highlighted text to system clipboard", fontSize = 10, color = "on_surface_variant" })
       }),
-      ui.button({
-        text = "Reset Defaults",
-        variant = "secondary",
-        flexGrow = 1,
-        onClick = function()
-          state.opacity = 0.94
-          state.blur = 10
-          state.dynamic_opacity = true
-          state.font_size = 9.5
-          state.font_family = "CaskaydiaCove Nerd Font Mono"
-          state.padding = 16
-          state.cursor_shape = "block"
-          state.cursor_trail = 2
-          state.theme = "olo-neon"
+      ui.toggle({
+        value = state.copy_on_select,
+        onToggle = function(v)
+          state.copy_on_select = (v == true or v == "true")
           applyConfig()
           render()
         end
       })
+    }),
+    -- Audio Bell
+    ui.row({ align = "center", justify = "space_between" }, {
+      ui.column({ gap = 2 }, {
+        ui.label({ text = "Audio Bell", fontSize = 12, fontWeight = "medium" }),
+        ui.label({ text = "Play alert chime on terminal BEL character", fontSize = 10, color = "on_surface_variant" })
+      }),
+      ui.toggle({
+        value = state.enable_audio_bell,
+        onToggle = function(v)
+          state.enable_audio_bell = (v == true or v == "true")
+          applyConfig()
+          render()
+        end
+      })
+    }),
+    -- Detect URLs
+    ui.row({ align = "center", justify = "space_between" }, {
+      ui.column({ gap = 2 }, {
+        ui.label({ text = "Clickable URLs", fontSize = 12, fontWeight = "medium" }),
+        ui.label({ text = "Underline web links on hover and open in browser", fontSize = 10, color = "on_surface_variant" })
+      }),
+      ui.toggle({
+        value = state.detect_urls,
+        onToggle = function(v)
+          state.detect_urls = (v == true or v == "true")
+          applyConfig()
+          render()
+        end
+      })
+    }),
+    -- Tab Bar Style
+    ui.column({ gap = 6 }, {
+      fieldHeader("Tab Bar Style", state.tab_bar_style),
+      ui.row({ gap = 6 }, {
+        ui.button({
+          text = "Powerline",
+          variant = (state.tab_bar_style == "powerline") and "primary" or "tonal",
+          selected = (state.tab_bar_style == "powerline"),
+          flexGrow = 1,
+          onClick = function()
+            state.tab_bar_style = "powerline"
+            applyConfig()
+            render()
+          end
+        }),
+        ui.button({
+          text = "Slanted",
+          variant = (state.tab_bar_style == "slanted") and "primary" or "tonal",
+          selected = (state.tab_bar_style == "slanted"),
+          flexGrow = 1,
+          onClick = function()
+            state.tab_bar_style = "slanted"
+            applyConfig()
+            render()
+          end
+        }),
+        ui.button({
+          text = "Fade",
+          variant = (state.tab_bar_style == "fade") and "primary" or "tonal",
+          selected = (state.tab_bar_style == "fade"),
+          flexGrow = 1,
+          onClick = function()
+            state.tab_bar_style = "fade"
+            applyConfig()
+            render()
+          end
+        }),
+        ui.button({
+          text = "Hidden",
+          variant = (state.tab_bar_style == "hidden") and "primary" or "tonal",
+          selected = (state.tab_bar_style == "hidden"),
+          flexGrow = 1,
+          onClick = function()
+            state.tab_bar_style = "hidden"
+            applyConfig()
+            render()
+          end
+        })
+      })
+    }),
+    -- Scrollback Lines
+    ui.column({ gap = 4 }, {
+      fieldHeader("Scrollback Buffer", string.format("%s lines", tostring(math.floor(state.scrollback_lines + 0.5)))),
+      ui.slider({
+        min = 2,
+        max = 50,
+        step = 2,
+        value = math.floor(state.scrollback_lines / 1000 + 0.5),
+        onChange = function(v)
+          state.scrollback_lines = (tonumber(v) or 10) * 1000
+          render()
+        end,
+        onDragEnd = function(v)
+          state.scrollback_lines = (tonumber(v) or 10) * 1000
+          applyConfig()
+          render()
+        end
+      })
+    })
+  }
+  table.insert(items, card("Terminal Behavior", "settings", behaviorRows))
+
+  -- 8. Color Themes Card
+  local themeGrid = {}
+  local themeKeys = { "olo-neon", "cyberpunk", "tokyonight", "catppuccin", "gruvbox", "nord" }
+
+  for i = 1, #themeKeys, 2 do
+    local k1 = themeKeys[i]
+    local k2 = themeKeys[i + 1]
+    local t1 = THEMES[k1]
+    local t2 = THEMES[k2]
+
+    local rowChildren = {}
+    if t1 then
+      table.insert(rowChildren, ui.button({
+        text = t1.name,
+        variant = (state.theme == k1) and "primary" or "tonal",
+        selected = (state.theme == k1),
+        flexGrow = 1,
+        onClick = function()
+          state.theme = k1
+          applyConfig()
+          render()
+        end
+      }))
+    end
+    if t2 then
+      table.insert(rowChildren, ui.button({
+        text = t2.name,
+        variant = (state.theme == k2) and "primary" or "tonal",
+        selected = (state.theme == k2),
+        flexGrow = 1,
+        onClick = function()
+          state.theme = k2
+          applyConfig()
+          render()
+        end
+      }))
+    end
+    table.insert(themeGrid, ui.row({ gap = 8 }, rowChildren))
+  end
+  table.insert(items, card("Color Themes", "color-swatch", themeGrid))
+
+  -- 9. Footer Actions
+  local actionRows = {
+    ui.row({ gap = 8 }, {
+      ui.button({
+        text = "New Terminal",
+        glyph = "terminal-2",
+        variant = "primary",
+        flexGrow = 1,
+        onClick = function()
+          noctalia.runAsync("kitty &")
+        end
+      }),
+      ui.button({
+        text = "Reload Windows",
+        glyph = "refresh",
+        variant = "tonal",
+        flexGrow = 1,
+        onClick = function()
+          applyConfig()
+        end
+      })
+    }),
+    ui.button({
+      text = "Reset to Defaults",
+      glyph = "rotate-ccw",
+      variant = "tonal",
+      onClick = function()
+        state.opacity = 0.94
+        state.blur = 10
+        state.dynamic_opacity = true
+        state.padding = 16
+        state.font_size = 9.5
+        state.font_family = "CaskaydiaCove Nerd Font Mono"
+        state.cursor_shape = "block"
+        state.cursor_trail = 2
+        state.fastfetch_enabled = true
+        state.fastfetch_logo = "nixos"
+        state.ble_enabled = true
+        state.ble_autosuggest = true
+        state.ble_syntax_highlight = true
+        state.copy_on_select = true
+        state.enable_audio_bell = false
+        state.detect_urls = true
+        state.tab_bar_style = "powerline"
+        state.scrollback_lines = 10000
+        state.theme = "olo-neon"
+        applyConfig()
+        render()
+      end
     })
   }
   table.insert(items, ui.column({ gap = 6 }, actionRows))
@@ -584,5 +961,5 @@ function onOpen(_context)
   render()
 end
 
-loadConfig()
-render()
+M.onOpen = onOpen
+return M

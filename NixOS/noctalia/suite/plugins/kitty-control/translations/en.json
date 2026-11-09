@@ -2,9 +2,12 @@
   "title": "Kitty Terminal",
   "tooltip": "Kitty Control Panel",
   "section": {
-    "appearance": "Appearance & Transparency",
-    "typography": "Typography & Layout",
-    "cursor": "Cursor & Feel",
+    "appearance": "Appearance & Window",
+    "typography": "Typography & Font",
+    "cursor": "Cursor & Motion",
+    "fastfetch": "Fastfetch System Info",
+    "blesh": "ble.sh Line Editor",
+    "behavior": "Terminal Behavior",
     "themes": "Color Themes",
     "actions": "Actions"
   },
@@ -17,9 +20,21 @@
     "padding": "Window Padding",
     "cursor_shape": "Cursor Shape",
     "cursor_trail": "Cursor Trail",
-    "theme": "Active Theme"
+    "theme": "Active Theme",
+    "fastfetch_enabled": "Fastfetch on Launch",
+    "fastfetch_logo": "Logo Style",
+    "ble_enabled": "ble.sh Integration",
+    "ble_autosuggest": "Autosuggestions",
+    "ble_syntax_highlight": "Syntax Highlighting",
+    "copy_on_select": "Copy on Select",
+    "enable_audio_bell": "Audio Bell",
+    "detect_urls": "Detect URLs",
+    "tab_bar_style": "Tab Bar Style",
+    "scrollback_lines": "Scrollback Buffer"
   },
   "action": {
+    "run_fastfetch": "Run Fastfetch Now",
+    "new_terminal": "New Terminal Window",
     "reload": "Reload Windows",
     "reset": "Reset to Defaults"
   }

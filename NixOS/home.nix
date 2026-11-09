@@ -3886,11 +3886,23 @@ in
     bashrcExtra = ''
       export PATH="$HOME/.local/bin:$HOME/bin:$HOME/go/bin:$PATH"
 
+      # Load Kitty Control runtime shell overrides if present
+      if [ -f "$HOME/.config/kitty/shell-env.sh" ]; then
+        source "$HOME/.config/kitty/shell-env.sh"
+      fi
+
       # ble.sh: fish-like autosuggestions, syntax highlighting, menu completion.
       # Source --noattach early; attach on first prompt so starship / direnv /
       # kitty integration (all appended later in bashrc) finish setup first.
-      if [[ $- == *i* ]]; then
+      if [[ $- == *i* && "''${BLE_ENABLED:-1}" == "1" ]]; then
         source ${pkgs.blesh}/share/blesh/ble.sh --noattach
+
+        if [[ "''${BLE_AUTOSUGGEST:-1}" != "1" ]]; then
+          bleopt complete_auto_complete=0
+        fi
+        if [[ "''${BLE_SYNTAX_HIGHLIGHT:-1}" != "1" ]]; then
+          bleopt highlight_syntax=0
+        fi
 
         # Autosuggestion keys (only fire while a ghost suggestion is shown):
         #   Tab   -> accept one word of the suggestion (up to next "/")
@@ -3932,7 +3944,15 @@ in
       direnv-fix = "rm -f .devenv/nix-eval-cache.db && direnv reload";
     };
     initExtra = ''
-      fastfetch
+      if [[ "''${FASTFETCH_ENABLED:-1}" == "1" ]]; then
+        if [[ "''${FASTFETCH_LOGO:-nixos}" == "none" ]]; then
+          fastfetch --logo none
+        elif [[ "''${FASTFETCH_LOGO:-nixos}" == "small" ]]; then
+          fastfetch --logo nixos_small
+        else
+          fastfetch
+        fi
+      fi
     '';
   };
 
