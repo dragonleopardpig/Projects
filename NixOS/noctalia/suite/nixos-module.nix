@@ -27,7 +27,8 @@ in {
     environment.etc = {
       "noctalia-suite/session-enabled".text = "Noctalia Suite login integration enabled\n";
     };
-    services.displayManager.sessionPackages = [ suite.sessionEntry ];
+    # Use one UWSM-managed Hyprland entry in every display manager.
+    services.displayManager.sessionPackages = lib.mkForce [ suite.sessionEntry hyprlandLoginSession ];
     systemd.packages = [ suite.umbriel ];
     systemd.user.services.umbriel = {
       restartIfChanged = false;
@@ -69,8 +70,6 @@ in {
     });
   } (lib.mkIf cfg.greeter.enable {
     services.displayManager.sddm.enable = lib.mkForce false;
-    # Show one Hyprland choice even though Hyprland and UWSM each install one.
-    services.displayManager.sessionPackages = lib.mkForce [ suite.sessionEntry hyprlandLoginSession ];
     systemd.services.sddm-random-theme.enable = false;
     services.accounts-daemon.enable = true;
     services.greetd = {
