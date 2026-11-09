@@ -681,6 +681,26 @@ in
     zen_mode = False
   '';
 
+  # Fcitx5 classic UI theme matching the dark desktop palette
+  xdg.configFile."fcitx5/conf/classicui.conf".text = ''
+    # Vertical Candidate List
+    Vertical Candidate List=False
+    # Use Per Screen DPI
+    PerScreenDPI=True
+    # Font
+    Font="Inter 11"
+    # Menu Font
+    MenuFont="Inter 10"
+    # Tray Font
+    TrayFont="Inter 10"
+    # Theme
+    Theme=Nord-Dark
+    # Dark Theme
+    DarkTheme=Nord-Dark
+    # Use Dark Theme
+    UseDarkTheme=True
+  '';
+
   # nwg-drawer (fullscreen Unity/GNOME-Activities-style app grid) — cyberpunk
   # palette matching waybar. Auto-loaded from $XDG_CONFIG_HOME/nwg-drawer/.
   xdg.configFile."nwg-drawer/drawer.css".text = ''

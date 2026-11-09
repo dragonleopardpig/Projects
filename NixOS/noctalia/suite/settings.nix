@@ -8,6 +8,14 @@
     # Applications inherit the active session's display.
     launch_apps_as_systemd_services = false;
     polkit_agent = true;
+    keyboard_layout = {
+      custom_labels = {
+        "Keyboard - English (US)" = "US";
+        "English (US)" = "US";
+        "Pinyin" = "拼";
+        "pinyin" = "拼";
+      };
+    };
     # Familiar AGS app-drawer browsing, using the native shell launcher.
     launcher = {
       layout = "full";
@@ -103,7 +111,7 @@
     reserve_space = true;
     start = [ "launcher" "workspaces" "umbriel-companion" "taskbar" ];
     center = [ "active_window" "xwayland" ];
-    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "umbriel-displays" "kitty-control" "session" ];
+    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "umbriel-displays" "kitty-control" "session" ];
   };
   widget = {
     launcher = {
@@ -127,6 +135,14 @@
     bluetooth.color = barAccents.desktop;
     battery.color = barAccents.system;
     notifications.color = barAccents.distro;
+    keyboard_layout = {
+      color = barAccents.desktop;
+      display = "short";
+      show_glyph = true;
+      show_label = true;
+      hide_when_single_layout = false;
+      actions.left = "exec fcitx5-remote -t";
+    };
     tray = { color = barAccents.desktop; drawer = true; };
     control-center = { color = "#FF7E70"; glyph = "adjustments"; };
     session.color = "#FFFFFF";
