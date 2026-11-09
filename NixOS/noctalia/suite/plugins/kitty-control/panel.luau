@@ -323,6 +323,9 @@ local function loadConfig()
   end
 end
 
+-- Forward declaration
+local render
+
 -- Write configuration to overrides.conf and shell-env.sh, then trigger live reload
 local function applyConfig()
   local path = noctalia.expandPath(OVERRIDES_PATH)
@@ -392,7 +395,7 @@ local function applyConfig()
 end
 
 -- UI helper: Group card
-local function card(title, iconName, children)
+local function card(title, iconName, children, cardKey)
   local header = ui.row({ align = "center", gap = 8 }, {
     ui.glyph({ name = iconName or "adjustments", size = 16, color = "primary" }),
     ui.label({ text = title, fontSize = 13, fontWeight = "bold", color = "primary", flexGrow = 1 })
@@ -401,7 +404,7 @@ local function card(title, iconName, children)
   for _, c in ipairs(children) do
     table.insert(rows, c)
   end
-  return ui.column({ gap = 10, padding = 12, radius = 12, fill = "surface_container" }, rows)
+  return ui.column({ key = cardKey, gap = 10, padding = 12, radius = 12, fill = "surface_container" }, rows)
 end
 
 -- UI helper: Label + Value header row
@@ -412,13 +415,11 @@ local function fieldHeader(label, valueStr)
   })
 end
 
-local render
-
 render = function()
   local items = {}
 
   -- 1. Header Bar
-  local headerRow = ui.row({ align = "center", justify = "space_between" }, {
+  local headerRow = ui.row({ key = "header_bar", align = "center", justify = "space_between" }, {
     ui.row({ align = "center", gap = 8 }, {
       ui.glyph({ name = "terminal-2", size = 22, color = "primary" }),
       ui.label({ text = "Kitty Control", fontSize = 16, fontWeight = "bold" })
@@ -436,9 +437,10 @@ render = function()
         ui.label({ text = "Print system specs banner on terminal open", fontSize = 10, color = "on_surface_variant" })
       }),
       ui.toggle({
-        value = state.fastfetch_enabled,
-        onToggle = function(v)
-          state.fastfetch_enabled = (v == true or v == "true")
+        key = "toggle_fastfetch",
+        checked = state.fastfetch_enabled,
+        onChange = function(v)
+          state.fastfetch_enabled = (v == true or v == "true" or v == 1 or v == "1")
           applyConfig()
           render()
         end
@@ -449,8 +451,9 @@ render = function()
       fieldHeader("Banner Logo Style", ""),
       ui.row({ gap = 8 }, {
         ui.button({
+          key = "btn_logo_nixos",
           text = "󰣇 Cyberpunk",
-          variant = (state.fastfetch_logo == "nixos") and "primary" or "tonal",
+          variant = (state.fastfetch_logo == "nixos") and "primary" or "secondary",
           selected = (state.fastfetch_logo == "nixos"),
           enabled = state.fastfetch_enabled,
           flexGrow = 1,
@@ -461,8 +464,9 @@ render = function()
           end
         }),
         ui.button({
+          key = "btn_logo_small",
           text = "󰣇 Compact",
-          variant = (state.fastfetch_logo == "small") and "primary" or "tonal",
+          variant = (state.fastfetch_logo == "small") and "primary" or "secondary",
           selected = (state.fastfetch_logo == "small"),
           enabled = state.fastfetch_enabled,
           flexGrow = 1,
@@ -473,8 +477,9 @@ render = function()
           end
         }),
         ui.button({
+          key = "btn_logo_none",
           text = "󰅂 Text Only",
-          variant = (state.fastfetch_logo == "none") and "primary" or "tonal",
+          variant = (state.fastfetch_logo == "none") and "primary" or "secondary",
           selected = (state.fastfetch_logo == "none"),
           enabled = state.fastfetch_enabled,
           flexGrow = 1,
@@ -488,15 +493,16 @@ render = function()
     }),
     -- Run Fastfetch Test Button
     ui.button({
+      key = "btn_run_fastfetch",
       text = "  Run Fastfetch in Terminal",
       glyph = "player-play",
-      variant = "tonal",
+      variant = "secondary",
       onClick = function()
         noctalia.runAsync("kitty --hold fastfetch &")
       end
     })
   }
-  table.insert(items, card("Fastfetch System Info", "device-desktop", fastfetchRows))
+  table.insert(items, card("Fastfetch System Info", "device-desktop", fastfetchRows, "card_fastfetch"))
 
   -- 3. ble.sh (Bash Line Editor) Card
   local bleRows = {
@@ -507,9 +513,10 @@ render = function()
         ui.label({ text = "Fish-style autosuggestions & syntax highlighting in bash", fontSize = 10, color = "on_surface_variant" })
       }),
       ui.toggle({
-        value = state.ble_enabled,
-        onToggle = function(v)
-          state.ble_enabled = (v == true or v == "true")
+        key = "toggle_ble",
+        checked = state.ble_enabled,
+        onChange = function(v)
+          state.ble_enabled = (v == true or v == "true" or v == 1 or v == "1")
           applyConfig()
           render()
         end
@@ -522,10 +529,11 @@ render = function()
         ui.label({ text = "History-based suggestions as you type (Tab to accept)", fontSize = 10, color = "on_surface_variant" })
       }),
       ui.toggle({
-        value = state.ble_autosuggest,
+        key = "toggle_ble_autosuggest",
+        checked = state.ble_autosuggest,
         enabled = state.ble_enabled,
-        onToggle = function(v)
-          state.ble_autosuggest = (v == true or v == "true")
+        onChange = function(v)
+          state.ble_autosuggest = (v == true or v == "true" or v == 1 or v == "1")
           applyConfig()
           render()
         end
@@ -538,17 +546,18 @@ render = function()
         ui.label({ text = "Colorize commands, arguments, strings, and errors live", fontSize = 10, color = "on_surface_variant" })
       }),
       ui.toggle({
-        value = state.ble_syntax_highlight,
+        key = "toggle_ble_syntax_highlight",
+        checked = state.ble_syntax_highlight,
         enabled = state.ble_enabled,
-        onToggle = function(v)
-          state.ble_syntax_highlight = (v == true or v == "true")
+        onChange = function(v)
+          state.ble_syntax_highlight = (v == true or v == "true" or v == 1 or v == "1")
           applyConfig()
           render()
         end
       })
     })
   }
-  table.insert(items, card("ble.sh Line Editor", "sparkles", bleRows))
+  table.insert(items, card("ble.sh Line Editor", "sparkles", bleRows, "card_ble"))
 
   -- 4. Appearance & Window Card
   local appRows = {
@@ -603,9 +612,10 @@ render = function()
         ui.label({ text = "Allow apps/scripts to modulate background transparency", fontSize = 10, color = "on_surface_variant" })
       }),
       ui.toggle({
-        value = state.dynamic_opacity,
-        onToggle = function(v)
-          state.dynamic_opacity = (v == true or v == "true")
+        key = "toggle_dynamic_opacity",
+        checked = state.dynamic_opacity,
+        onChange = function(v)
+          state.dynamic_opacity = (v == true or v == "true" or v == 1 or v == "1")
           applyConfig()
           render()
         end
@@ -634,7 +644,7 @@ render = function()
       })
     })
   }
-  table.insert(items, card("Appearance & Transparency", "palette", appRows))
+  table.insert(items, card("Appearance & Transparency", "palette", appRows, "card_appearance"))
 
   -- 5. Typography & Font Card
   local typoRows = {
@@ -673,6 +683,7 @@ render = function()
       return ui.column({ gap = 4 }, {
         fieldHeader("Font Family", ""),
         ui.select({
+          key = "select_font_family",
           options = fontOptions,
           selectedIndex = fontIdx,
           onChange = function(idxStr, text)
@@ -689,7 +700,7 @@ render = function()
       })
     end)()
   }
-  table.insert(items, card("Typography & Font", "typography", typoRows))
+  table.insert(items, card("Typography & Font", "typography", typoRows, "card_typography"))
 
   -- 6. Cursor & Motion Card
   local cursorRows = {
@@ -698,8 +709,9 @@ render = function()
       fieldHeader("Cursor Shape", ""),
       ui.row({ gap = 8 }, {
         ui.button({
+          key = "btn_cursor_block",
           text = "█ Block",
-          variant = (state.cursor_shape == "block") and "primary" or "tonal",
+          variant = (state.cursor_shape == "block") and "primary" or "secondary",
           selected = (state.cursor_shape == "block"),
           flexGrow = 1,
           onClick = function()
@@ -709,8 +721,9 @@ render = function()
           end
         }),
         ui.button({
+          key = "btn_cursor_beam",
           text = "❘ Beam",
-          variant = (state.cursor_shape == "beam") and "primary" or "tonal",
+          variant = (state.cursor_shape == "beam") and "primary" or "secondary",
           selected = (state.cursor_shape == "beam"),
           flexGrow = 1,
           onClick = function()
@@ -720,8 +733,9 @@ render = function()
           end
         }),
         ui.button({
+          key = "btn_cursor_underline",
           text = "  Underline",
-          variant = (state.cursor_shape == "underline") and "primary" or "tonal",
+          variant = (state.cursor_shape == "underline") and "primary" or "secondary",
           selected = (state.cursor_shape == "underline"),
           flexGrow = 1,
           onClick = function()
@@ -755,7 +769,7 @@ render = function()
       })
     })
   }
-  table.insert(items, card("Cursor & Motion", "pointer", cursorRows))
+  table.insert(items, card("Cursor & Motion", "pointer", cursorRows, "card_cursor"))
 
   -- 7. Terminal Behavior Card
   local behaviorRows = {
@@ -766,9 +780,10 @@ render = function()
         ui.label({ text = "Automatically copy highlighted text to system clipboard", fontSize = 10, color = "on_surface_variant" })
       }),
       ui.toggle({
-        value = state.copy_on_select,
-        onToggle = function(v)
-          state.copy_on_select = (v == true or v == "true")
+        key = "toggle_copy_on_select",
+        checked = state.copy_on_select,
+        onChange = function(v)
+          state.copy_on_select = (v == true or v == "true" or v == 1 or v == "1")
           applyConfig()
           render()
         end
@@ -781,9 +796,10 @@ render = function()
         ui.label({ text = "Play alert chime on terminal BEL character", fontSize = 10, color = "on_surface_variant" })
       }),
       ui.toggle({
-        value = state.enable_audio_bell,
-        onToggle = function(v)
-          state.enable_audio_bell = (v == true or v == "true")
+        key = "toggle_audio_bell",
+        checked = state.enable_audio_bell,
+        onChange = function(v)
+          state.enable_audio_bell = (v == true or v == "true" or v == 1 or v == "1")
           applyConfig()
           render()
         end
@@ -796,9 +812,10 @@ render = function()
         ui.label({ text = "Underline web links on hover and open in browser", fontSize = 10, color = "on_surface_variant" })
       }),
       ui.toggle({
-        value = state.detect_urls,
-        onToggle = function(v)
-          state.detect_urls = (v == true or v == "true")
+        key = "toggle_detect_urls",
+        checked = state.detect_urls,
+        onChange = function(v)
+          state.detect_urls = (v == true or v == "true" or v == 1 or v == "1")
           applyConfig()
           render()
         end
@@ -809,8 +826,9 @@ render = function()
       fieldHeader("Tab Bar Style", state.tab_bar_style),
       ui.row({ gap = 6 }, {
         ui.button({
+          key = "btn_tab_powerline",
           text = "Powerline",
-          variant = (state.tab_bar_style == "powerline") and "primary" or "tonal",
+          variant = (state.tab_bar_style == "powerline") and "primary" or "secondary",
           selected = (state.tab_bar_style == "powerline"),
           flexGrow = 1,
           onClick = function()
@@ -820,8 +838,9 @@ render = function()
           end
         }),
         ui.button({
+          key = "btn_tab_slanted",
           text = "Slanted",
-          variant = (state.tab_bar_style == "slanted") and "primary" or "tonal",
+          variant = (state.tab_bar_style == "slanted") and "primary" or "secondary",
           selected = (state.tab_bar_style == "slanted"),
           flexGrow = 1,
           onClick = function()
@@ -831,8 +850,9 @@ render = function()
           end
         }),
         ui.button({
+          key = "btn_tab_fade",
           text = "Fade",
-          variant = (state.tab_bar_style == "fade") and "primary" or "tonal",
+          variant = (state.tab_bar_style == "fade") and "primary" or "secondary",
           selected = (state.tab_bar_style == "fade"),
           flexGrow = 1,
           onClick = function()
@@ -842,8 +862,9 @@ render = function()
           end
         }),
         ui.button({
+          key = "btn_tab_hidden",
           text = "Hidden",
-          variant = (state.tab_bar_style == "hidden") and "primary" or "tonal",
+          variant = (state.tab_bar_style == "hidden") and "primary" or "secondary",
           selected = (state.tab_bar_style == "hidden"),
           flexGrow = 1,
           onClick = function()
@@ -877,7 +898,7 @@ render = function()
       })
     })
   }
-  table.insert(items, card("Terminal Behavior", "settings", behaviorRows))
+  table.insert(items, card("Terminal Behavior", "settings", behaviorRows, "card_behavior"))
 
   -- 8. Color Themes Card
   local themeGrid = {}
@@ -892,8 +913,9 @@ render = function()
     local rowChildren = {}
     if t1 then
       table.insert(rowChildren, ui.button({
+        key = "btn_theme_" .. k1,
         text = t1.name,
-        variant = (state.theme == k1) and "primary" or "tonal",
+        variant = (state.theme == k1) and "primary" or "secondary",
         selected = (state.theme == k1),
         flexGrow = 1,
         onClick = function()
@@ -905,8 +927,9 @@ render = function()
     end
     if t2 then
       table.insert(rowChildren, ui.button({
+        key = "btn_theme_" .. k2,
         text = t2.name,
-        variant = (state.theme == k2) and "primary" or "tonal",
+        variant = (state.theme == k2) and "primary" or "secondary",
         selected = (state.theme == k2),
         flexGrow = 1,
         onClick = function()
@@ -916,14 +939,15 @@ render = function()
         end
       }))
     end
-    table.insert(themeGrid, ui.row({ gap = 8 }, rowChildren))
+    table.insert(themeGrid, ui.row({ key = "theme_row_" .. i, gap = 8 }, rowChildren))
   end
-  table.insert(items, card("Color Themes", "color-swatch", themeGrid))
+  table.insert(items, card("Color Themes", "color-swatch", themeGrid, "card_themes"))
 
   -- 9. Footer Actions
   local actionRows = {
-    ui.row({ gap = 8 }, {
+    ui.row({ key = "actions_row_primary", gap = 8 }, {
       ui.button({
+        key = "btn_new_terminal",
         text = "New Terminal",
         glyph = "terminal-2",
         variant = "primary",
@@ -933,9 +957,10 @@ render = function()
         end
       }),
       ui.button({
+        key = "btn_reload_windows",
         text = "Reload Windows",
         glyph = "refresh",
-        variant = "tonal",
+        variant = "secondary",
         flexGrow = 1,
         onClick = function()
           applyConfig()
@@ -943,9 +968,10 @@ render = function()
       })
     }),
     ui.button({
+      key = "btn_reset_defaults",
       text = "Reset to Defaults",
       glyph = "rotate-ccw",
-      variant = "tonal",
+      variant = "secondary",
       onClick = function()
         state.opacity = 0.94
         state.blur = 10
@@ -971,10 +997,10 @@ render = function()
       end
     })
   }
-  table.insert(items, ui.column({ gap = 6 }, actionRows))
+  table.insert(items, ui.column({ key = "footer_actions", gap = 6 }, actionRows))
 
   -- Render the full scrollable view
-  panel.render(ui.scroll({ flexGrow = 1, gap = 12, padding = 12 }, items))
+  panel.render(ui.scroll({ key = "kitty_control_scroll", flexGrow = 1, gap = 12, padding = 12 }, items))
 end
 
 function onOpen(_context)
