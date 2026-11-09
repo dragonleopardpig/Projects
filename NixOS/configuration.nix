@@ -582,6 +582,11 @@ in
     };
   };
 
+  # Fast session shutdown: prevent misbehaving user processes from stalling logout
+  systemd.user.extraConfig = ''
+    DefaultTimeoutStopSec=4s
+  '';
+
   programs.dconf.enable = true;
 
   # Enable CUPS to print documents.

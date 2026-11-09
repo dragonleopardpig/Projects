@@ -1,4 +1,4 @@
-# Unified flake.nix for X299 and M90aPro
+# Unified flake.nix for M90aPro, X299-SSD, Crucial-SSD, and PortableSSD
 {
   description = "NixOS configuration";
 
@@ -577,9 +577,6 @@
         ];
       };
     in {
-      # X299 Desktop Configuration
-      nixosConfigurations.X299 = mkSystem ./hosts/X299;
-
       # X299 Desktop (external SSD clone)
       nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
 
@@ -595,16 +592,8 @@
       nixosConfigurations.PortableSSD = mkSystem ./hosts/PortableSSD;
 
       # Standalone home-manager configurations (optional)
-      homeConfigurations."thinky@X299" = home-manager.lib.homeManagerConfiguration {
-        # you need this line
-        extraSpecialArgs = { inherit inputs; scrambleHostName = "X299"; };
-        modules = [
-          ./home.nix
-        ];
-      };
-
       homeConfigurations."thinky@M90aPro" = home-manager.lib.homeManagerConfiguration {
-        # you need this line
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
         extraSpecialArgs = { inherit inputs; scrambleHostName = "M90aPro"; };
         modules = [
           ./home.nix

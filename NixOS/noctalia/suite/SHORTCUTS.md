@@ -18,10 +18,11 @@ The existing Hyprland bindings in `home.nix` are the source for these bindings.
 | Super+Y | Yazi in Kitty |
 | Super+M | Minder |
 | Super+T | Toggle terminal scratchpad |
+| Super+C | Toggle Antigravity AI agent scratchpad |
 | Super+V | Toggle Pavucontrol scratchpad |
 | Super+X | Toggle Xed scratchpad |
 
-The three scratchpads use Umbriel's native launch/show/hide behavior. Pyprland
+The four scratchpads use Umbriel's native launch/show/hide behavior. Pyprland
 is not needed in this session.
 
 ## Windows, workspaces, shell

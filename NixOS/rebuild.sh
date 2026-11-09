@@ -51,7 +51,6 @@ OPTIONS:
     clean     Clean old generations and collect garbage
 
 HOST:
-    X299        Build for X299 desktop
     X299-SSD    Build for X299 external SSD clone
     CRUCIAL-SSD Build for Crucial 1TB External SSD (Crucial-SSD also accepted)
     M90aPro     Build for M90aPro laptop
@@ -66,7 +65,7 @@ display-manager and logs you out mid-rebuild):
 
 EXAMPLES:
     $0                          # Auto-detect host and switch
-    $0 switch X299              # Switch X299 to new configuration
+    $0 switch M90aPro           # Switch M90aPro to new configuration
     $0 test M90aPro             # Test M90aPro configuration
     $0 boot PortableSSD         # From any host: update the mounted PortableSSD
     $0 update                   # Update flake and rebuild
@@ -143,7 +142,7 @@ HOST=${2:-auto}
 # Auto-detect host if needed
 if [ "$HOST" = "auto" ]; then
     case "$CURRENT_HOST" in
-        X299|X299-SSD|Crucial-SSD|CRUCIAL-SSD|M90aPro|PortableSSD)
+        X299-SSD|Crucial-SSD|CRUCIAL-SSD|M90aPro|PortableSSD)
             HOST=$CURRENT_HOST
             if [ "$HOST" = "X299-SSD" ]; then
                 BOOT_UUID=$(findmnt -n -o UUID /boot 2>/dev/null || true)
@@ -159,7 +158,7 @@ if [ "$HOST" = "auto" ]; then
             ;;
         *)
             print_error "Unknown hostname: $CURRENT_HOST"
-            print_error "Please specify 'X299', 'X299-SSD', 'CRUCIAL-SSD', 'M90aPro', or 'PortableSSD'"
+            print_error "Please specify 'X299-SSD', 'CRUCIAL-SSD', 'M90aPro', or 'PortableSSD'"
             exit 1
             ;;
     esac
@@ -169,9 +168,9 @@ fi
 if [ "$HOST" = "Crucial-SSD" ]; then
     HOST="CRUCIAL-SSD"
 fi
-if [ "$HOST" != "X299" ] && [ "$HOST" != "X299-SSD" ] && [ "$HOST" != "CRUCIAL-SSD" ] && [ "$HOST" != "M90aPro" ] && [ "$HOST" != "PortableSSD" ]; then
+if [ "$HOST" != "X299-SSD" ] && [ "$HOST" != "CRUCIAL-SSD" ] && [ "$HOST" != "M90aPro" ] && [ "$HOST" != "PortableSSD" ]; then
     print_error "Invalid host: $HOST"
-    print_error "Must be 'X299', 'X299-SSD', 'CRUCIAL-SSD', 'M90aPro', or 'PortableSSD'"
+    print_error "Must be 'X299-SSD', 'CRUCIAL-SSD', 'M90aPro', or 'PortableSSD'"
     exit 1
 fi
 
@@ -180,7 +179,7 @@ cd "$SCRIPT_DIR"
 print_info "Working directory: $SCRIPT_DIR"
 
 IMPURE_FLAG=""
-if [ "$HOST" = "X299" ] || [ "$HOST" = "X299-SSD" ] || [ "$HOST" = "CRUCIAL-SSD" ]; then
+if [ "$HOST" = "X299-SSD" ] || [ "$HOST" = "CRUCIAL-SSD" ]; then
     IMPURE_FLAG="--impure"
     print_info "Using --impure for $HOST so local Euresys driver sources can be imported"
 fi

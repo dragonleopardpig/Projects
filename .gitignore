@@ -5,6 +5,7 @@
 !/NixOS/
 !/emacs/
 !/org/
+!/.agents/
 
 # Within org/, ignore generated assets / large data dumps.
 /org/data/

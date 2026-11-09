@@ -1,17 +1,13 @@
 # NixOS Configuration
 
-Flake-based NixOS configuration managing two machines from a single codebase. Both hosts share identical `configuration.nix` and `home.nix` files, with only hardware-specific differences isolated per host.
+Flake-based NixOS configuration managing active machines from a single codebase (`M90aPro`, `X299-SSD`, `Crucial-SSD`, and `PortableSSD`). All hosts share identical `configuration.nix` and `home.nix` files, with hardware-specific differences isolated per host. (Note: The former X299 desktop was retired).
 
-## Hosts
+## Active Hosts
 
-| | X299 (Desktop) | M90aPro (Laptop) |
-|---|---|---|
-| GPU | NVIDIA RTX 4070 (single GPU) | Intel iGPU + NVIDIA (Prime Sync) |
-| GPU config | `hosts/X299/nvidia.nix` | `hosts/M90aPro/nvidia-prime.nix` |
-| CUDA | Enabled with IDE symlink | Not configured |
-| Extra hardware | Euresys CoaxLink frame grabber | - |
-
-See also: [Euresys eGrabber on NixOS setup guide](modules/egrabber/EGRABBER-NIXOS-GUIDE.md) for the X299 frame grabber configuration.
+| | M90aPro (Laptop) | X299-SSD / Crucial-SSD | PortableSSD |
+|---|---|---|---|
+| GPU | Intel iGPU + NVIDIA (Prime Sync) | NVIDIA | Hardware-neutral boot |
+| GPU config | `hosts/M90aPro/nvidia-prime.nix` | `hosts/X299-SSD/nvidia.nix` | `universal-boot.nix` |
 
 ## Structure
 
@@ -124,9 +120,9 @@ NixOS/
 ./rebuild.sh
 
 # Explicit host and operation
-./rebuild.sh switch X299
+./rebuild.sh switch M90aPro
 ./rebuild.sh test M90aPro
-./rebuild.sh boot X299
+./rebuild.sh boot PortableSSD
 
 # Update flake inputs then rebuild
 ./rebuild.sh update
@@ -138,15 +134,14 @@ NixOS/
 Or manually:
 
 ```bash
-sudo nixos-rebuild switch --flake .#X299
 sudo nixos-rebuild switch --flake .#M90aPro
 ```
 
 ### Making Changes
 
-**Both hosts** (most common): Edit `configuration.nix` (system) or `home.nix` (user).
+**All hosts** (most common): Edit `configuration.nix` (system) or `home.nix` (user).
 
-**One host only**: Edit files in `hosts/X299/` or `hosts/M90aPro/`.
+**One host only**: Edit files in `hosts/M90aPro/`, `hosts/X299-SSD/`, etc.
 
 ### Initial Setup on a New Machine
 

@@ -94,6 +94,7 @@ in {
     "Alt+Tab" = spawn "noctalia msg window-switcher";
     "Mod+Tab" = "window-focus-previous";
     "Mod+T" = "scratchpad-toggle:terminal";
+    "Mod+C" = "scratchpad-toggle:agent";
     "Mod+V" = "scratchpad-toggle:volume";
     "Mod+X" = "scratchpad-toggle:notepad";
     "Mod+A" = spawn "noctalia msg config-reload";
@@ -129,12 +130,14 @@ in {
   ]) (lib.range 1 9));
   scratchpad = [
     { name = "terminal"; spawn_when_empty = "kitty --class kitty-dropterm"; }
+    { name = "agent"; spawn_when_empty = "kitty --class kitty-agent -d /home/thinky/Projects -e /home/thinky/.local/bin/agy"; }
     { name = "volume"; spawn_when_empty = "pavucontrol"; }
     { name = "notepad"; spawn_when_empty = "xed --name notepad --standalone"; }
   ];
   window_rule = [
     { match.app_id = "^dev.noctalia.Noctalia$"; default_floating = true; default_floating_size_px = { width = 1020; height = 900; }; }
     { match.app_id = "^kitty-dropterm$"; default_scratchpad = "terminal"; default_floating_size_px = { width = 1400; height = 800; }; }
+    { match.app_id = "^kitty-agent$"; default_scratchpad = "agent"; default_floating_size_px = { width = 1200; height = 850; }; }
     { match.app_id = "^(org.pulseaudio.pavucontrol|pavucontrol)$"; default_scratchpad = "volume"; default_floating_size_px = { width = 650; height = 850; }; }
     { match.app_id = "^notepad$"; default_scratchpad = "notepad"; default_floating_size_px = { width = 960; height = 950; }; }
   ];

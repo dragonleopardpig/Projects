@@ -69,6 +69,9 @@ in
   # Prompt for newer devenv CLI releases on direct terminal invocations.
   home.file.".local/bin/devenv".source = ./scripts/devenv-update/launch;
 
+  # Desktop Control skill for Antigravity AI agent (available across all hosts)
+  home.file.".gemini/config/skills/desktop-control/SKILL.md".source = ./skills/desktop-control/SKILL.md;
+
   home.file.".local/share/icons/hicolor/256x256/apps/euresys-studio.png" = {
     source = ./assets/euresys-studio.png;
   };
@@ -3960,11 +3963,51 @@ in
     shellAliases = {
       ls = "eza --icons=always --group-directories-first --sort=extension";
       gc = "git commit -m";
-      rebuild = "~/Projects/NixOS/rebuild.sh";
+      rebuild-raw = "~/Projects/NixOS/rebuild.sh";
       btop = "btop";
       direnv-fix = "rm -f .devenv/nix-eval-cache.db && direnv reload";
+      a = "agy";
+      ask = "agy";
     };
     initExtra = ''
+      # Smart rebuild: automatically offers to hand errors over to Antigravity
+      rebuild() {
+        local logfile
+        logfile=$(mktemp /tmp/nixos-rebuild-error.XXXXXX)
+        if ~/Projects/NixOS/rebuild.sh "$@" 2>&1 | tee "$logfile"; then
+          rm -f "$logfile"
+        else
+          echo -e "\n\033[1;33m[!] Rebuild failed.\033[0m Hand over to Antigravity to diagnose and fix? [Y/n] "
+          read -r answer
+          if [[ -z "$answer" || "$answer" =~ ^[Yy]$ ]]; then
+            agy -i "NixOS rebuild failed with the following error output:
+
+$(cat "$logfile")
+
+Please diagnose the issue in /home/thinky/Projects/NixOS, explain what went wrong, and propose a fix."
+          fi
+          rm -f "$logfile"
+        fi
+      }
+
+      # Quick command to diagnose whichever command failed last
+      fix() {
+        local last_cmd
+        last_cmd=$(fc -ln -1 | sed 's/^[[:space:]]*//')
+        agy -i "I just ran '$last_cmd' and encountered an error. Please inspect the current workspace and help diagnose and fix it."
+      }
+
+      # System journal doctor
+      sys-doctor() {
+        local errors
+        errors=$(journalctl -p 3 -xb -n 40 --no-pager)
+        agy -i "Here are the latest systemd journal errors:
+
+$errors
+
+Please diagnose what caused them and explain how to resolve them."
+      }
+
       if [[ "''${FASTFETCH_ENABLED:-1}" == "1" ]]; then
         if [[ "''${FASTFETCH_LOGO:-nixos}" == "none" ]]; then
           fastfetch --logo none
