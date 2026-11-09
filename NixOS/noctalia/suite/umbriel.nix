@@ -59,12 +59,12 @@ in {
     "Mod+P" = spawn "protonvpn-app";
     "Mod+W" = spawn "walker";
     "Mod+B" = spawn "kitty -e btop";
-    "Mod+N" = spawn "$HOME/.local/bin/nemo-x11";
+    "Mod+N" = spawn "strata";
     "Mod+S" = spawn "$HOME/.local/bin/sioyek --new-window";
     "Mod+Y" = spawn "kitty -e yazi";
     "Mod+M" = spawn "minder";
     "Mod+Return" = spawn terminalCommand;
-    "Mod+Shift+N" = spawn "strata";
+    "Mod+Shift+N" = spawn "$HOME/.local/bin/nemo-x11";
     "Mod+Space" = spawn "noctalia msg panel-toggle launcher";
     "Mod+Shift+V" = spawn "noctalia msg panel-toggle clipboard";
     "Mod+Comma" = spawn "noctalia msg settings-open";
@@ -130,13 +130,13 @@ in {
   scratchpad = [
     { name = "terminal"; spawn_when_empty = "kitty --class kitty-dropterm"; }
     { name = "volume"; spawn_when_empty = "pavucontrol"; }
-    { name = "notepad"; spawn_when_empty = "xed --standalone"; }
+    { name = "notepad"; spawn_when_empty = "xed --name notepad --standalone"; }
   ];
   window_rule = [
     { match.app_id = "^dev.noctalia.Noctalia$"; default_floating = true; default_floating_size_px = { width = 1020; height = 900; }; }
     { match.app_id = "^kitty-dropterm$"; default_scratchpad = "terminal"; default_floating_size_px = { width = 1400; height = 800; }; }
     { match.app_id = "^(org.pulseaudio.pavucontrol|pavucontrol)$"; default_scratchpad = "volume"; default_floating_size_px = { width = 650; height = 850; }; }
-    { match.app_id = "^(xed|org.x.editor)$"; default_scratchpad = "notepad"; default_floating_size_px = { width = 960; height = 950; }; }
+    { match.app_id = "^notepad$"; default_scratchpad = "notepad"; default_floating_size_px = { width = 960; height = 950; }; }
   ];
   layer_rule = [ { match.namespace = "^noctalia-.*$"; blur = true; blur_ignore_alpha = 0.5; } ];
 }

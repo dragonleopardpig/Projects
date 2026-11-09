@@ -13,7 +13,7 @@ The existing Hyprland bindings in `home.nix` are the source for these bindings.
 | Super+P | Proton VPN |
 | Super+W | Walker |
 | Super+B | btop in Kitty |
-| Super+N | Existing Nemo wrapper |
+| Super+N | Strata file browser |
 | Super+S | Sioyek, new window |
 | Super+Y | Yazi in Kitty |
 | Super+M | Minder |
@@ -75,7 +75,7 @@ runtime and leaves laptop inputs alone.
 | Shortcut | Action |
 | --- | --- |
 | Super+Return | OLO-Neon Foot terminal |
-| Super+Shift+N | Strata file browser |
+| Super+Shift+N | Nemo file manager |
 | Super+Space | Full-screen app grid and search (also the bar's NixOS snowflake) |
 | Super+Shift+V | Clipboard history |
 | Super+Comma | Settings and theme selection |

@@ -107,7 +107,7 @@ let
   # Includes are merged before this small entrypoint, in the order shown.
   userCompositorConfig = toml.generate "umbriel-user.toml" {
     include.files = [ compositorConfig ];
-    include.optional.files = [ "~/.config/umbriel/outputs.toml" ];
+    include.optional.files = [ "~/.config/umbriel/outputs.toml" "~/.config/umbriel/overrides.toml" ];
   };
   userCompositorService = pkgs.writeText "umbriel-user-config.conf" ''
     [Service]

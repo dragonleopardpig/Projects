@@ -385,8 +385,9 @@ in
       "x-scheme-handler/https" = [ "firefox.desktop" ];
       "x-scheme-handler/about" = [ "firefox.desktop" ];
       "x-scheme-handler/unknown" = [ "firefox.desktop" ];
-      "text/plain" = [ "xed.desktop" ];
-      "text/markdown" = [ "xed.desktop" ];
+      "text/plain" = [ "org.x.editor.desktop" ];
+      "text/markdown" = [ "org.x.editor.desktop" ];
+      "text/x-log" = [ "org.x.editor.desktop" ];
     };
   };
   
