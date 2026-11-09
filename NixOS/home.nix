@@ -76,11 +76,31 @@ in
     source = ./assets/euresys-studio.png;
   };
 
+  home.file.".local/share/icons/hicolor/256x256/apps/filelusync.png" = {
+    source = ./assets/filelu.png;
+  };
+
+  home.file.".local/share/icons/hicolor/256x256/apps/filelu.png" = {
+    source = ./assets/filelu.png;
+  };
+
+  home.file.".local/share/icons/hicolor/256x256/apps/lark.png" = {
+    source = ./assets/lark.png;
+  };
+
+  home.file.".local/share/icons/hicolor/scalable/apps/sioyek.png" = {
+    source = "${pkgs.sioyek}/share/pixmaps/sioyek-icon-linux.png";
+  };
+
+  home.file.".local/share/icons/hicolor/index.theme" = {
+    source = "${pkgs.hicolor-icon-theme}/share/icons/hicolor/index.theme";
+  };
+
   xdg.desktopEntries.sioyek-xcb = {
-    name = "Sioyek";
+    name = "Sioyek (X11)";
     exec = "/home/thinky/.local/bin/sioyek --new-window %f";
-    icon = "sioyek";
-    comment = "Sioyek document viewer in a separate window";
+    icon = "sioyek-icon-linux";
+    comment = "Sioyek document viewer in a separate window (forced X11)";
     # Sioyek renders through MuPDF, so EPUB is native -- no conversion involved.
     # It has to be declared here or Sioyek never appears as a choice for one.
     mimeType = [
@@ -983,10 +1003,14 @@ in
   xdg.desktopEntries.filelusync = {
     name = "FileLuSync";
     exec = "/home/thinky/.local/bin/filelusync";
-    icon = "/home/thinky/.local/opt/filelusync/app.png";
+    icon = "filelusync";
     comment = "FileLu Cloud Storage & Sync Client";
     categories = [ "Utility" "Network" ];
     terminal = false;
+  };
+
+  home.file.".local/opt/filelusync/app.png" = {
+    source = ./assets/filelu.png;
   };
 
   # MEGAcmd runner: extracted from deb and run natively with FUSE support via nix-ld

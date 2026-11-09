@@ -53,6 +53,18 @@ in
     source = ../assets/gdrive-icons/gdrive.svg;
     force = true;
   };
+  home.file.".local/share/icons/hicolor/scalable/apps/google-drive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/hicolor/scalable/apps/folder-google-drive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/hicolor/scalable/places/folder-google-drive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
   home.file.".local/share/icons/hicolor/scalable/apps/gdrive-syncing.svg" = {
     source = ../assets/gdrive-icons/gdrive-syncing.svg;
     force = true;
@@ -73,7 +85,7 @@ in
     Name=Sync with Google Drive
     Comment=Add this folder to Google Drive sync list
     Exec=${gdriveControl}/bin/gdrive-control add "%F"
-    Icon-Name=folder-google-drive
+    Icon-Name=gdrive
     Selection=s
     Extensions=dir;
     Quote=double
@@ -84,7 +96,7 @@ in
     name = "Google Drive Settings";
     comment = "Configure Google Drive sync folders and cloud mount";
     exec = "${gdriveControl}/bin/gdrive-control settings";
-    icon = "folder-google-drive";
+    icon = "gdrive";
     terminal = false;
     categories = [ "Utility" "Settings" "FileTools" ];
   };
