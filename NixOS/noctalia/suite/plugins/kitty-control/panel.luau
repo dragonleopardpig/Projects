@@ -552,16 +552,19 @@ render = function()
     ui.column({ gap = 4 }, {
       fieldHeader("Background Opacity", string.format("%d%%", math.floor(state.opacity * 100 + 0.5))),
       ui.slider({
-        min = 20,
-        max = 100,
-        step = 2,
-        value = math.floor(state.opacity * 100 + 0.5),
+        key = "slider_opacity",
+        min = 0.20,
+        max = 1.00,
+        step = 0.02,
+        value = state.opacity,
         onChange = function(v)
-          state.opacity = (tonumber(v) or 94) / 100.0
-          render()
+          local num = tonumber(v)
+          if num then
+            state.opacity = num
+            render()
+          end
         end,
-        onDragEnd = function(v)
-          state.opacity = (tonumber(v) or 94) / 100.0
+        onDragEnd = function()
           applyConfig()
           render()
         end
@@ -571,16 +574,19 @@ render = function()
     ui.column({ gap = 4 }, {
       fieldHeader("Background Blur", string.format("%d px", math.floor(state.blur + 0.5))),
       ui.slider({
+        key = "slider_blur",
         min = 0,
         max = 30,
         step = 1,
         value = state.blur,
         onChange = function(v)
-          state.blur = tonumber(v) or state.blur
-          render()
+          local num = tonumber(v)
+          if num then
+            state.blur = num
+            render()
+          end
         end,
-        onDragEnd = function(v)
-          state.blur = tonumber(v) or state.blur
+        onDragEnd = function()
           applyConfig()
           render()
         end
@@ -605,16 +611,19 @@ render = function()
     ui.column({ gap = 4 }, {
       fieldHeader("Window Padding", string.format("%d px", math.floor(state.padding + 0.5))),
       ui.slider({
+        key = "slider_padding",
         min = 0,
         max = 40,
         step = 2,
         value = state.padding,
         onChange = function(v)
-          state.padding = tonumber(v) or state.padding
-          render()
+          local num = tonumber(v)
+          if num then
+            state.padding = num
+            render()
+          end
         end,
-        onDragEnd = function(v)
-          state.padding = tonumber(v) or state.padding
+        onDragEnd = function()
           applyConfig()
           render()
         end
@@ -629,16 +638,19 @@ render = function()
     ui.column({ gap = 4 }, {
       fieldHeader("Font Size", string.format("%.1f pt", state.font_size)),
       ui.slider({
-        min = 70,
-        max = 220,
-        step = 5,
-        value = math.floor(state.font_size * 10 + 0.5),
+        key = "slider_font_size",
+        min = 7.0,
+        max = 24.0,
+        step = 0.5,
+        value = state.font_size,
         onChange = function(v)
-          state.font_size = (tonumber(v) or 95) / 10.0
-          render()
+          local num = tonumber(v)
+          if num then
+            state.font_size = num
+            render()
+          end
         end,
-        onDragEnd = function(v)
-          state.font_size = (tonumber(v) or 95) / 10.0
+        onDragEnd = function()
           applyConfig()
           render()
         end
@@ -720,16 +732,19 @@ render = function()
     ui.column({ gap = 4 }, {
       fieldHeader("Cursor Trail Decay", state.cursor_trail > 0 and string.format("%d", math.floor(state.cursor_trail + 0.5)) or "Off"),
       ui.slider({
+        key = "slider_cursor_trail",
         min = 0,
         max = 10,
         step = 1,
         value = state.cursor_trail,
         onChange = function(v)
-          state.cursor_trail = tonumber(v) or state.cursor_trail
-          render()
+          local num = tonumber(v)
+          if num then
+            state.cursor_trail = num
+            render()
+          end
         end,
-        onDragEnd = function(v)
-          state.cursor_trail = tonumber(v) or state.cursor_trail
+        onDragEnd = function()
           applyConfig()
           render()
         end
@@ -839,16 +854,19 @@ render = function()
     ui.column({ gap = 4 }, {
       fieldHeader("Scrollback Buffer", string.format("%s lines", tostring(math.floor(state.scrollback_lines + 0.5)))),
       ui.slider({
-        min = 2,
-        max = 50,
-        step = 2,
-        value = math.floor(state.scrollback_lines / 1000 + 0.5),
+        key = "slider_scrollback",
+        min = 2000,
+        max = 50000,
+        step = 1000,
+        value = state.scrollback_lines,
         onChange = function(v)
-          state.scrollback_lines = (tonumber(v) or 10) * 1000
-          render()
+          local num = tonumber(v)
+          if num then
+            state.scrollback_lines = num
+            render()
+          end
         end,
-        onDragEnd = function(v)
-          state.scrollback_lines = (tonumber(v) or 10) * 1000
+        onDragEnd = function()
           applyConfig()
           render()
         end
