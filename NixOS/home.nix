@@ -3873,6 +3873,9 @@ in
 
     # Optional: Copy on select
     copy_on_select yes
+
+    # Runtime overrides from Noctalia Kitty Control panel
+    globinclude overrides.conf
   '';
   };
 

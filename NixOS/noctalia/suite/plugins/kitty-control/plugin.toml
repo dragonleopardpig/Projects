@@ -1,0 +1,23 @@
+id = "community/kitty-control"
+name = "Kitty Control"
+version = "1.0.0"
+plugin_api = 45
+author = "community"
+license = "MIT"
+dependencies = ["kitty"]
+tags = ["terminal", "bar", "panel", "utility"]
+icon = "terminal-2"
+description = "Control panel for Kitty terminal appearance, transparency, typography, and themes."
+
+[[widget]]
+id = "bar"
+entry = "bar.luau"
+
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 440
+height = 720
+placement = "attached"
+position = "top_right"
+open_near_click = true

@@ -1,0 +1,26 @@
+{
+  "title": "Kitty Terminal",
+  "tooltip": "Kitty Control Panel",
+  "section": {
+    "appearance": "Appearance & Transparency",
+    "typography": "Typography & Layout",
+    "cursor": "Cursor & Feel",
+    "themes": "Color Themes",
+    "actions": "Actions"
+  },
+  "field": {
+    "opacity": "Background Opacity",
+    "blur": "Background Blur",
+    "dynamic_opacity": "Dynamic Opacity",
+    "font_size": "Font Size",
+    "font_family": "Font Family",
+    "padding": "Window Padding",
+    "cursor_shape": "Cursor Shape",
+    "cursor_trail": "Cursor Trail",
+    "theme": "Active Theme"
+  },
+  "action": {
+    "reload": "Reload Windows",
+    "reset": "Reset to Defaults"
+  }
+}

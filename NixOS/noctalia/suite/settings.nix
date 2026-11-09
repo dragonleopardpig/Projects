@@ -74,6 +74,7 @@
       "noctalia/umbriel-companion"      # official: layout/submap in the bar, layout + window panel
       "prponkshe/umbriel-displays"      # community: resolution/scale/arrangement -> umbriel/outputs.toml
       "tordex/xwayland"                 # community: is the focused window XWayland?
+      "community/kitty-control"         # local/community: kitty terminal control panel
     ];
     auto_update = "none";
   };
@@ -81,6 +82,11 @@
     "noctalia/umbriel-companion" = {
       panel_placement = "attached";
       panel_position = "top_left";
+      panel_open_near_click = true;
+    };
+    "community/kitty-control" = {
+      panel_placement = "attached";
+      panel_position = "top_right";
       panel_open_near_click = true;
     };
   };
@@ -97,7 +103,7 @@
     reserve_space = true;
     start = [ "launcher" "workspaces" "umbriel-companion" "taskbar" ];
     center = [ "active_window" "xwayland" ];
-    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "umbriel-displays" "session" ];
+    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "tray" "umbriel-displays" "kitty-control" "session" ];
   };
   widget = {
     launcher = {
@@ -128,6 +134,8 @@
     umbriel-companion.type = "noctalia/umbriel-companion:bar";
     umbriel-displays.type = "prponkshe/umbriel-displays:bar";
     umbriel-displays.color = barAccents.desktop;
+    kitty-control.type = "community/kitty-control:bar";
+    kitty-control.color = barAccents.neonPurple;
     xwayland.type = "tordex/xwayland:bar";
     # ALWAYS-ON MODE (modules/always-on-umbriel.nix): either click switches it; the glyph a cup
     # when off, an infinity when on (the watcher sets it).
