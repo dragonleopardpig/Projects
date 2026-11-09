@@ -43,7 +43,10 @@
         xdg.configFile."systemd/user/umbriel.service.d/zz-noctalia-user-config.conf".source = suite.userCompositorService;
         xdg.configFile."noctalia-suite/noctalia/config.toml".source = suite.userShellConfig;
         xdg.configFile."noctalia-suite/noctalia/palettes/OLO-Neon.json".source = suite.theme.palette;
-        xdg.dataFile."noctalia-suite/noctalia/plugins/kitty-control".source = ./suite/plugins/kitty-control;
+        xdg.dataFile."noctalia-suite/noctalia/plugins/kitty-control" = {
+          source = ./suite/plugins/kitty-control;
+          force = true;
+        };
       };
     };
 }
