@@ -349,11 +349,11 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1794183411,
-        "narHash": "sha256-Smj6QnVuC4J17lk6SDtDroUMGTo65bJfjvzrfOiz0Cg=",
+        "lastModified": 1794188851,
+        "narHash": "sha256-MoQF41UU+5a4vGsubaFshZmfCXehf6AsnlM/ak6lb7A=",
         "owner": "dragonleopardpig",
         "repo": "strata",
-        "rev": "840cb1b3e7fe9d1913c325e25744da9dbd8604b3",
+        "rev": "4bfd0cb486dedcc8f33a4c85d449153670b8b763",
         "type": "github"
       },
       "original": {
