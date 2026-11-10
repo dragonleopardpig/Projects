@@ -2,7 +2,11 @@
 """
 Windows RDP / VM BMP-to-PNG Clipboard Bridge.
 Converts incoming Windows clipboard bitmaps (image/bmp) to standard Wayland
-image/png so GTK4 applications (like Pinta) and Linux browsers can paste them.
+image/png so GTK4 applications (like Pinta) and Linux desktop tools can paste them.
+
+Crucial detail: FreeRDP / Wayland pipes do not send EOF immediately.
+Instead of waiting for EOF, we read the exact BMP byte count encoded in the
+14-byte BMP header (offset [2:6], little-endian uint32).
 """
 
 import os
@@ -10,8 +14,34 @@ import subprocess
 import sys
 import tempfile
 
+def read_bmp_from_stream(stream):
+    try:
+        header = stream.read(14)
+        if len(header) < 14 or header[:2] != b"BM":
+            return None
+
+        file_size = int.from_bytes(header[2:6], "little")
+        # Sanity check: valid BMP between 54 bytes and 128 MB
+        if file_size < 54 or file_size > 128 * 1024 * 1024:
+            return None
+
+        remaining = file_size - 14
+        body = bytearray()
+        while len(body) < remaining:
+            chunk = stream.read(min(65536, remaining - len(body)))
+            if not chunk:
+                break
+            body.extend(chunk)
+
+        if len(body) != remaining:
+            return None
+
+        return header + bytes(body)
+    except Exception:
+        return None
+
 def main():
-    # 1. Check if image/png is already present on the clipboard.
+    # 1. Check if image/png is already present on the clipboard
     try:
         types_res = subprocess.run(["wl-paste", "--list-types"], capture_output=True, text=True, timeout=2)
         types = types_res.stdout.splitlines()
@@ -20,17 +50,12 @@ def main():
     except Exception:
         pass
 
-    # 2. Read full payload from stdin (passed by wl-paste -t image/bmp --watch)
-    try:
-        raw = sys.stdin.buffer.read()
-    except Exception:
+    # 2. Read exactly the BMP size from stdin (avoiding EOF hang)
+    raw = read_bmp_from_stream(sys.stdin.buffer)
+    if not raw:
         return
 
-    # A valid Windows BMP starts with 'BM' and has at least 54 bytes of header
-    if len(raw) < 54 or not raw.startswith(b"BM"):
-        return
-
-    # 3. Write raw BMP to temporary file
+    # 3. Convert BMP to PNG using ImageMagick
     bmp_path = None
     png_path = None
     try:
@@ -40,7 +65,6 @@ def main():
 
         png_path = bmp_path + ".png"
 
-        # 4. Convert BMP to PNG using ImageMagick
         res = subprocess.run(
             ["magick", bmp_path, png_path],
             stdout=subprocess.DEVNULL,
@@ -49,7 +73,7 @@ def main():
         )
 
         if res.returncode == 0 and os.path.isfile(png_path) and os.path.getsize(png_path) > 0:
-            # 5. Populate Wayland clipboard with the synthesized PNG
+            # 4. Populate Wayland clipboard with the synthesized PNG
             with open(png_path, "rb") as f_png:
                 subprocess.run(
                     ["wl-copy", "-t", "image/png"],
