@@ -1,52 +1,65 @@
 #!/usr/bin/env python3
 """
-Sync Noctalia Suite runtime state with declarative NixOS/Home Manager config.
-Prunes stale declarative sections (e.g. [bar.main]) from settings.toml so that
-declarative Nix configurations take precedence, while preserving genuine user
-runtime state (wallpaper rotation, lockscreen layout, etc.).
+Sync Nix-managed bar widget placement without discarding GUI preferences.
+Only start/center/end in bar.main belong to settings.nix; bar appearance,
+per-monitor overrides and other runtime state remain user-writable.
 """
 
 import os
-import re
+from collections.abc import MutableMapping
+from pathlib import Path
+import stat
 import subprocess
 import sys
+import tempfile
+
+import tomlkit
+from tomlkit.exceptions import ParseError
+
 
 def prune_declarative_overrides():
-    state_home = os.environ.get("NOCTALIA_STATE_HOME") or os.path.expanduser("~/.local/state/noctalia-suite")
-    settings_file = os.path.join(state_home, "noctalia", "settings.toml")
-    if not os.path.isfile(settings_file):
-        return
-
+    state_home = os.environ.get("NOCTALIA_STATE_HOME") or os.path.join(
+        os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"),
+        "noctalia-suite",
+    )
+    settings_file = Path(state_home, "noctalia", "settings.toml").resolve()
+    temporary_file = None
     try:
-        with open(settings_file, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-    except OSError:
-        return
+        if not settings_file.is_file():
+            return False
+        original = settings_file.read_text(encoding="utf-8")
+        document = tomlkit.parse(original)
+        bar = document.get("bar")
+        main = bar.get("main") if isinstance(bar, MutableMapping) else None
+        if not isinstance(main, MutableMapping):
+            return False
+        layout_keys = {"start", "center", "end"} & main.keys()
+        if not layout_keys:
+            return False
+        for key in layout_keys:
+            del main[key]
 
-    # Sections managed declaratively in settings.nix that must not be masked by GUI state
-    declarative_sections = {"bar.main"}
+        # Keep comments/formatting and replace atomically, so the shell's file
+        # watcher never reads a truncated settings file. Preserve its permissions.
+        mode = stat.S_IMODE(settings_file.stat().st_mode)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=settings_file.parent,
+            prefix=".settings-", delete=False,
+        ) as stream:
+            temporary_file = Path(stream.name)
+            os.fchmod(stream.fileno(), mode)
+            stream.write(tomlkit.dumps(document))
+        if settings_file.read_text(encoding="utf-8") != original:
+            raise RuntimeError("settings changed during sync; leaving the newer preferences intact")
+        temporary_file.replace(settings_file)
+        return True
+    except (OSError, ParseError, RuntimeError) as error:
+        print(f"[sync-settings] Warning: leaving {settings_file} unchanged: {error}", file=sys.stderr)
+        return False
+    finally:
+        if temporary_file is not None:
+            temporary_file.unlink(missing_ok=True)
 
-    out = []
-    skip = False
-    modified = False
-
-    for line in lines:
-        header_match = re.match(r"^\s*\[([a-zA-Z0-9_.\-\"\@]+)\]", line)
-        if header_match:
-            sec = header_match.group(1).strip("\"'")
-            skip = sec in declarative_sections or any(sec.startswith(f"{s}.") for s in declarative_sections)
-            if skip:
-                modified = True
-                continue
-        if not skip:
-            out.append(line)
-
-    if modified:
-        try:
-            with open(settings_file, "w", encoding="utf-8") as f:
-                f.writelines(out)
-        except OSError as e:
-            print(f"[sync-settings] Warning: could not write {settings_file}: {e}", file=sys.stderr)
 
 def reload_desktop():
     uid = os.getuid()

@@ -36,6 +36,11 @@ Noctalia's palette/config files live under `~/.config/noctalia-suite/noctalia`;
 its GUI overrides and encrypted data use the separate `noctalia-suite` state
 and data profiles. The Secret Service provides the storage key.
 
+On activation, the settings sync removes only saved `bar.main.start`, `center`
+and `end` overrides so the Nix-defined widget order takes effect. GUI appearance
+choices, including bar opacity, and per-monitor settings persist across rebuilds.
+The sync runs after Home Manager links the new configuration.
+
 ## Appearance and scaling
 
 [OLO-Neon](theme/README.md) uses teal control fills with dark text, mint/cyan
@@ -104,7 +109,8 @@ nix flake check path:. --accept-flake-config
 nix run path:.#check-lock --accept-flake-config
 ```
 
-The build checks Noctalia/Umbriel/Foot configs and GPU-selection fixtures. The
+The build checks Noctalia/Umbriel/Foot configs, GPU-selection fixtures and
+preservation of GUI preferences during settings sync. The
 lock/power check runs the real Shell, compositor and F1 helper on a headless
 display, with private session/system buses and temporary state. It verifies
 locking, power-off, mouse inactivity and keyboard wake while leaving the host

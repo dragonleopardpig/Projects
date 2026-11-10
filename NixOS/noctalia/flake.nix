@@ -24,7 +24,7 @@
       packages.${system} = {
         default = suite.suiteSession;
         noctalia = shell;
-        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest;
+        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings;
         umbriel = suite.umbriel;
         greeter = suite.greeter;
       };
@@ -36,6 +36,7 @@
       checks.${system} = {
         suite = suite.validatedSuite;
         gpuSelection = suite.gpuSelectionCheck;
+        syncSettings = suite.syncSettingsCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
       homeManagerModules.suite = { lib, ... }: {
@@ -59,7 +60,7 @@
           source = ./suite/plugins/kitty-control;
           force = true;
         };
-        home.activation.syncNoctaliaSuite = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        home.activation.syncNoctaliaSuite = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
           ${lib.getExe suite.syncSettings} || true
         '';
       };

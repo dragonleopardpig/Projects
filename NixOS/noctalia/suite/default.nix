@@ -65,13 +65,20 @@ let
     runtimeInputs = [ pkgs.procps pkgs.coreutils pkgs.libnotify ];
     text = builtins.readFile ./stop-recording.sh;
   };
+  syncPython = pkgs.python3.withPackages (ps: [ ps.tomlkit ]);
   syncSettings = pkgs.writeShellApplication {
     name = "noctalia-sync-settings";
-    runtimeInputs = [ suiteTools pkgs.python3 ];
+    runtimeInputs = [ suiteTools syncPython ];
     text = ''
       exec python3 ${./sync-settings.py} "$@"
     '';
   };
+  syncSettingsCheck = pkgs.runCommand "noctalia-sync-settings-checked" {
+    nativeBuildInputs = [ syncPython ];
+  } ''
+    python3 ${./test-sync-settings.py} ${./sync-settings.py}
+    touch $out
+  '';
   suiteTools = pkgs.symlinkJoin {
     name = "noctalia-suite-tools";
     paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify ];
@@ -188,7 +195,7 @@ let
     EOF
   '';
 in {
-  inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings;
+  inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;
