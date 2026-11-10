@@ -652,10 +652,8 @@ in
     Service = {
       ExecStart = "${pkgs.writeShellScript "clipboard-bmp-to-png" ''
         exec ${pkgs.wl-clipboard}/bin/wl-paste -t image/bmp --watch ${pkgs.writeShellScript "bmp-to-png-handler" ''
-          types="$(${pkgs.wl-clipboard}/bin/wl-paste --list-types 2>/dev/null || true)"
-          if ! echo "$types" | ${pkgs.gnugrep}/bin/grep -q "image/png"; then
-            ${pkgs.imagemagick}/bin/magick - png:- | ${pkgs.wl-clipboard}/bin/wl-copy -t image/png
-          fi
+          export PATH="${pkgs.wl-clipboard}/bin:${pkgs.imagemagick}/bin:${pkgs.python3}/bin:$PATH"
+          exec ${pkgs.python3}/bin/python3 ${./scripts/bmp-to-png-clipboard.py}
         ''}
       ''}";
       Restart = "always";
