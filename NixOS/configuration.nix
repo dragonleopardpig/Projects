@@ -1142,7 +1142,6 @@ in
     ++ (lib.optionals (pkgs ? paraview) [ pkgs.paraview ]);
 
   services.blueman.enable = true;
-  systemd.user.services.blueman-applet.serviceConfig.ExecStart = lib.mkForce [ "" "${pkgs.blueman}/bin/blueman-applet" ];
   hardware.bluetooth = {
     enable = true;
     powerOnBoot = true;

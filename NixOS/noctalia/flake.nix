@@ -39,10 +39,22 @@
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
       homeManagerModules.suite = { ... }: {
-        xdg.configFile."umbriel/config.toml".source = suite.userCompositorConfig;
-        xdg.configFile."systemd/user/umbriel.service.d/zz-noctalia-user-config.conf".source = suite.userCompositorService;
-        xdg.configFile."noctalia-suite/noctalia/config.toml".source = suite.userShellConfig;
-        xdg.configFile."noctalia-suite/noctalia/palettes/OLO-Neon.json".source = suite.theme.palette;
+        xdg.configFile."umbriel/config.toml" = {
+          source = suite.userCompositorConfig;
+          force = true;
+        };
+        xdg.configFile."systemd/user/umbriel.service.d/zz-noctalia-user-config.conf" = {
+          source = suite.userCompositorService;
+          force = true;
+        };
+        xdg.configFile."noctalia-suite/noctalia/config.toml" = {
+          source = suite.userShellConfig;
+          force = true;
+        };
+        xdg.configFile."noctalia-suite/noctalia/palettes/OLO-Neon.json" = {
+          source = suite.theme.palette;
+          force = true;
+        };
         xdg.dataFile."noctalia-suite/noctalia/plugins/kitty-control" = {
           source = ./suite/plugins/kitty-control;
           force = true;
