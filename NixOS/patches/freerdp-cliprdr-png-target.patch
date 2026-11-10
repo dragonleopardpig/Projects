@@ -1,0 +1,104 @@
+--- a/client/X11/xf_cliprdr.c
++++ b/client/X11/xf_cliprdr.c
+@@ -105,6 +105,9 @@
+ 	size_t numTargets;
+ 	Atom targets[20];
+ 
++	size_t numOwnerTargets;
++	Atom ownerTargets[64];
++
+ 	UINT32 requestedFormatId;
+ 
+ 	wHashTable* cachedData;
+@@ -371,6 +374,33 @@
+ 
+ 	const BOOL formatIsHtml = formatId == ClipboardGetFormatId(clipboard->system, type_HtmlFormat);
+ 	const BOOL fetchImage = clipboard->isImageContent && formatIsHtml;
++
++	if (clipboard->numOwnerTargets > 0)
++	{
++		for (size_t index = 0; index < clipboard->numClientFormats; index++)
++		{
++			const xfCliprdrFormat* format = &(clipboard->clientFormats[index]);
++
++			if (fetchImage && format->isImage)
++			{
++				for (size_t t = 0; t < clipboard->numOwnerTargets; t++)
++				{
++					if (clipboard->ownerTargets[t] == format->atom)
++						return format;
++				}
++			}
++
++			if (format->formatToRequest == formatId)
++			{
++				for (size_t t = 0; t < clipboard->numOwnerTargets; t++)
++				{
++					if (clipboard->ownerTargets[t] == format->atom)
++						return format;
++				}
++			}
++		}
++	}
++
+ 	for (size_t index = 0; index < clipboard->numClientFormats; index++)
+ 	{
+ 		const xfCliprdrFormat* format = &(clipboard->clientFormats[index]);
+@@ -692,6 +722,7 @@
+ 	WINPR_ASSERT(xfc);
+ 
+ 	*numFormats = 0;
++	clipboard->numOwnerTargets = 0;
+ 	LogDynAndXGetWindowProperty(xfc->log, xfc->display, xfc->drawable, clipboard->property_atom, 0,
+ 	                            200, 0, XA_ATOM, &atom, &format_property, &proplength, &bytes_left,
+ 	                            &data);
+@@ -705,6 +736,13 @@
+ 			goto out;
+ 		}
+ 
++		const unsigned long maxTargets = ARRAYSIZE(clipboard->ownerTargets);
++		const unsigned long targetCount = (proplength < maxTargets) ? proplength : maxTargets;
++		for (unsigned long i = 0; i < targetCount; i++)
++		{
++			clipboard->ownerTargets[clipboard->numOwnerTargets++] = ((Atom*)data)[i];
++		}
++
+ 		if (!(formats = (CLIPRDR_FORMAT*)calloc(length, sizeof(CLIPRDR_FORMAT))))
+ 		{
+ 			WLog_ERR(TAG, "failed to allocate %lu CLIPRDR_FORMAT structs", length);
+@@ -1352,6 +1390,7 @@
+ 
+ 	cliprdr_file_context_clear(clipboard->file);
+ 
++	clipboard->numOwnerTargets = 0;
+ 	xf_cliprdr_stop_incr(clipboard);
+ 	ClipboardUnlock(clipboard->system);
+ }
+@@ -1752,6 +1791,7 @@
+ 				return;
+ 
+ 			clipboard->owner = None;
++			clipboard->numOwnerTargets = 0;
+ 			xf_cliprdr_check_owner(clipboard);
+ 		}
+ 
+--- a/winpr/libwinpr/clipboard/synthetic.c
++++ b/winpr/libwinpr/clipboard/synthetic.c
+@@ -561,14 +561,16 @@
+ 		dst = nullptr;
+ 		goto fail;
+ 	}
+-	*pSize = (UINT32)size;
+ 
+ fail:
+ 	winpr_image_free(image, TRUE);
+ 
+ 	if (dst)
++	{
+ 		memmove(dst, &dst[sizeof(WINPR_BITMAP_FILE_HEADER)],
+ 		        size - sizeof(WINPR_BITMAP_FILE_HEADER));
++		*pSize = (UINT32)(size - sizeof(WINPR_BITMAP_FILE_HEADER));
++	}
+ 	return dst;
+ }
+ #endif

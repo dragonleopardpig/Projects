@@ -24,6 +24,16 @@ existing quick-save while still allowing rename/relocate.
 Sourced from the `save-as` branch of the local fork
 (`git@github.com:dragonleopardpig/swappy.git`), commit `22e39a6`.
 
+### `freerdp-cliprdr-png-target.patch`
+
+Fixes two FreeRDP clipboard redirection bugs:
+1. Matches `format->atom` against the X11 clipboard owner's advertised `TARGETS`
+   so FreeRDP selects `image/png` instead of hardcoding `image/bmp` when Windows
+   requests `CF_DIB`.
+2. Updates `*pSize` to reflect the 14-byte `BITMAPFILEHEADER` stripping when
+   synthesizing `CF_DIB` from PNG/image formats in `winpr/libwinpr/clipboard/synthetic.c`,
+   eliminating the size mismatch corruption in Windows Paint.
+
 ### `nwg-drawer-click-outside-to-close.patch`
 
 Makes a plain left-click on the empty background of `nwg-drawer` dismiss the

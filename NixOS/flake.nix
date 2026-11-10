@@ -79,6 +79,19 @@
           ];
         });
 
+        # Enable PNG clipboard translation in FreeRDP WinPR so FreeRDP can translate
+        # between Linux image/png and Windows CF_DIB (bitmap) in both directions:
+        # pasting Linux screenshots into Windows (Paint, Office) and Windows images into Linux.
+        freerdp = prev.freerdp.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ./patches/freerdp-cliprdr-png-target.patch
+          ];
+          buildInputs = (old.buildInputs or [ ]) ++ [ prev.libpng ];
+          cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+            "-DWINPR_UTILS_IMAGE_PNG=ON"
+          ];
+        });
+
         # Add a native two-page (book spread) mode to Sioyek. Upstream already
         # has the layout + toggle_two_page_mode command but ships it unbound and
         # with no way to start in it; the patch binds Ctrl+d, adds a
