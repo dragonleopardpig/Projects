@@ -11,6 +11,9 @@ let
     runtimeInputs = [
       pythonEnv
       pkgs.gtk3
+      pkgs.gsettings-desktop-schemas
+      pkgs.adwaita-icon-theme
+      pkgs.hicolor-icon-theme
       pkgs.libayatana-appindicator
       pkgs.libnotify
       pkgs.librsvg
@@ -32,7 +35,17 @@ let
       ])}''${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
       export GDK_PIXBUF_MODULE_FILE=${pkgs.librsvg}/${pkgs.gdk-pixbuf.binaryDir}/loaders.cache
       export GDRIVE_ICONS_DIR="${../assets/gdrive-icons}"
-      exec python3 ${../scripts/gdrive-sync.py} "$@"
+      export XDG_DATA_DIRS="${pkgs.lib.concatStringsSep ":" [
+        "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}"
+        "${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}"
+        "${pkgs.adwaita-icon-theme}/share"
+        "${pkgs.hicolor-icon-theme}/share"
+      ]}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+      if [ -f "$HOME/Projects/NixOS/scripts/gdrive-sync.py" ]; then
+        exec python3 "$HOME/Projects/NixOS/scripts/gdrive-sync.py" "$@"
+      else
+        exec python3 ${../scripts/gdrive-sync.py} "$@"
+      fi
     '';
   };
 in
@@ -41,9 +54,22 @@ in
     gdriveControl
   ];
 
-  # Wrapper symlink for convenience
+  # Wrapper symlinks for convenience
+  home.file.".local/bin/gdrive-control" = {
+    source = "${gdriveControl}/bin/gdrive-control";
+    executable = true;
+    force = true;
+  };
+
   home.file.".local/bin/gdrive-tray" = {
     source = "${gdriveControl}/bin/gdrive-control";
+    executable = true;
+    force = true;
+  };
+
+  # Real-time status query tool for AGS bar and CLI
+  home.file.".local/bin/gdrive-sync-status" = {
+    source = ../scripts/gdrive-sync-status.py;
     executable = true;
     force = true;
   };
@@ -65,6 +91,34 @@ in
     source = ../assets/gdrive-icons/gdrive.svg;
     force = true;
   };
+  home.file.".local/share/icons/hicolor/scalable/places/folder-gdrive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/Tela-circle/scalable/apps/gdrive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/Tela-circle/scalable/apps/google-drive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/Tela-circle/scalable/places/folder-google-drive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/Tela-circle/scalable/places/folder-gdrive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/Tela-circle-dark/scalable/places/folder-gdrive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
+  home.file.".local/share/icons/Tela-circle-light/scalable/places/folder-gdrive.svg" = {
+    source = ../assets/gdrive-icons/gdrive.svg;
+    force = true;
+  };
   home.file.".local/share/icons/hicolor/scalable/apps/gdrive-syncing.svg" = {
     source = ../assets/gdrive-icons/gdrive-syncing.svg;
     force = true;
@@ -78,20 +132,43 @@ in
     force = true;
   };
 
-  # Nemo Context Menu Action
+  # Nemo Context Menu Actions
   xdg.dataFile."nemo/actions/sync_google_drive.nemo_action".text = ''
     [Nemo Action]
     Active=true
     Name=Sync with Google Drive
     Comment=Add this folder to Google Drive sync list
-    Exec=${gdriveControl}/bin/gdrive-control add "%F"
+    Exec=/home/thinky/.local/bin/gdrive-control add "%F"
     Icon-Name=gdrive
     Selection=s
     Extensions=dir;
+    Conditions=exec /home/thinky/.local/bin/gdrive-control not-synced %F;
     Quote=double
   '';
 
-  # Desktop Application Launcher
+  xdg.dataFile."nemo/actions/unsync_google_drive.nemo_action".text = ''
+    [Nemo Action]
+    Active=true
+    Name=Remove from Google Drive Sync
+    Comment=Remove this folder from Google Drive sync list
+    Exec=/home/thinky/.local/bin/gdrive-control remove "%F"
+    Icon-Name=edit-delete
+    Selection=s
+    Extensions=dir;
+    Conditions=exec /home/thinky/.local/bin/gdrive-control is-synced %F;
+    Quote=double
+  '';
+
+  # Desktop Application Launchers
+  xdg.desktopEntries.gdrive-tray = {
+    name = "Google Drive";
+    comment = "Start Google Drive sync and tray indicator";
+    exec = "${gdriveControl}/bin/gdrive-control tray";
+    icon = "gdrive";
+    terminal = false;
+    categories = [ "Utility" "Network" "FileTools" ];
+  };
+
   xdg.desktopEntries.gdrive-settings = {
     name = "Google Drive Settings";
     comment = "Configure Google Drive sync folders and cloud mount";
@@ -111,7 +188,7 @@ in
     bookmarks = home / '.config/gtk-3.0/bookmarks'
     
     entries = [
-        (home / 'Google Drive', 'Google Drive', 'folder-google-drive'),
+        (home / 'Google Drive', 'Google Drive', 'gdrive'),
         (home / 'MEGA', 'MEGA', 'megasync'),
         (home / 'Filen', 'Filen', 'filen-desktop'),
     ]
@@ -120,6 +197,9 @@ in
         d.mkdir(parents=True, exist_ok=True, mode=0o755)
         try:
             subprocess.run(["${pkgs.glib}/bin/gio", "set", str(d), "metadata::custom-icon-name", icon], check=False)
+            if icon == "gdrive":
+                icon_file = f"file://{home}/.local/share/icons/hicolor/scalable/apps/gdrive.svg"
+                subprocess.run(["${pkgs.glib}/bin/gio", "set", str(d), "metadata::custom-icon", icon_file], check=False)
         except Exception:
             pass
 
@@ -150,6 +230,8 @@ in
       Wants = [ "network-online.target" ];
       After = [ "graphical-session.target" "network-online.target" ];
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";
+      StartLimitIntervalSec = 300;
+      StartLimitBurst = 3;
     };
     Service = {
       Type = "notify";
@@ -158,7 +240,8 @@ in
       ExecStart = "${rclone} mount gdrive: '${mountPoint}' --vfs-cache-mode=full --vfs-cache-max-size=10G --vfs-cache-max-age=24h --umask=077 --dir-cache-time=1m";
       ExecStop = "/run/wrappers/bin/fusermount3 -u '${mountPoint}'";
       Restart = "on-failure";
-      RestartSec = 10;
+      RestartSec = 30;
+      RestartMaxDelaySec = 300;
     };
     Install.WantedBy = [ "graphical-session.target" ];
   };
@@ -170,6 +253,8 @@ in
       Wants = [ "network-online.target" ];
       After = [ "graphical-session.target" "network-online.target" ];
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";
+      StartLimitIntervalSec = 300;
+      StartLimitBurst = 3;
     };
     Service = {
       Type = "notify";
@@ -181,7 +266,8 @@ in
       ExecStart = "${rclone} mount mega: '${home}/MEGA' --vfs-cache-mode=full --vfs-cache-max-size=10G --vfs-cache-max-age=24h --umask=077 --dir-cache-time=1m";
       ExecStop = "/run/wrappers/bin/fusermount3 -u '${home}/MEGA'";
       Restart = "on-failure";
-      RestartSec = 10;
+      RestartSec = 30;
+      RestartMaxDelaySec = 300;
     };
     Install.WantedBy = [ "graphical-session.target" ];
   };

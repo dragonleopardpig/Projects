@@ -23,26 +23,59 @@ def notify(title: str, message: str, icon: str = "megasync", urgency: str = "nor
             pass
 
 
-def send_mega_command(op_code: str, target_path: str) -> bool:
+def focus_mega():
+    hyprctl = shutil.which("hyprctl")
+    if hyprctl:
+        try:
+            subprocess.run([hyprctl, "dispatch", "focuswindow", "class:^nz\\.co\\.mega\\."], capture_output=True, check=False)
+        except Exception:
+            pass
+
+
+def _connect_and_send(payload: bytes) -> bool:
     if not SOCKET_PATH.exists():
-        notify("MEGAsync", "MEGAsync does not appear to be running. Starting it now...", urgency="critical")
-        subprocess.Popen(["megasync"])
+        return False
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(3.0)
+        sock.connect(str(SOCKET_PATH))
+        sock.sendall(payload)
+        sock.recv(1024)
+        sock.close()
+        return True
+    except (ConnectionRefusedError, FileNotFoundError):
+        return False
+    except Exception as e:
+        notify("MEGAsync Error", f"Socket communication error: {e}", urgency="critical")
         return False
 
+
+def send_mega_command(op_code: str, target_path: str) -> bool:
     abs_path = str(Path(target_path).resolve())
     payload = f"{op_code}:{abs_path}\0".encode("utf-8")
 
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(5.0)
-        sock.connect(str(SOCKET_PATH))
-        sock.sendall(payload)
-        resp = sock.recv(1024)
-        sock.close()
+    if _connect_and_send(payload):
+        focus_mega()
         return True
+
+    # If socket connection failed or was refused, MEGAsync is not running
+    notify("MEGAsync", "MEGAsync is not running. Starting it now...", urgency="normal")
+    try:
+        subprocess.Popen(["megasync"])
     except Exception as e:
-        notify("MEGAsync Error", f"Failed to talk to MEGAsync socket: {e}", urgency="critical")
+        notify("MEGAsync Error", f"Failed to start MEGAsync: {e}", urgency="critical")
         return False
+
+    # Retry connecting for up to 6 seconds while MEGAsync initializes
+    import time
+    for _ in range(12):
+        time.sleep(0.5)
+        if _connect_and_send(payload):
+            focus_mega()
+            return True
+
+    notify("MEGAsync", "MEGAsync started. Please click Sync with MEGA again.", urgency="normal")
+    return False
 
 
 def main():

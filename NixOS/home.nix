@@ -440,6 +440,10 @@ in
     cat > $out/lib/paths.ts <<'TS'
     export const HOST = "${osConfig.networking.hostName}";
     export const SCRAMBLE_ICON = "${./ags/assets/scramble-desktop.png}";
+    export const GDRIVE_ICON = "${./assets/gdrive-icons/gdrive.svg}";
+    export const GDRIVE_ERROR_ICON = "${./assets/gdrive-icons/gdrive-error.svg}";
+    export const PROTONDRIVE_ICON = "${./assets/protondrive-icons/protondrive.svg}";
+    export const PROTONDRIVE_ERROR_ICON = "${./assets/protondrive-icons/protondrive-error.svg}";
     // Per-monitor display scaling (Windows-style). Absolute, so it does not
     // depend on the bar inheriting ~/.local/bin on PATH.
     export const DISPLAY_SCALE_CMD = "${config.home.homeDirectory}/.local/bin/display-scale";
@@ -898,6 +902,34 @@ in
     terminal = false;
   };
 
+  # FileLuSync auto-updater tool
+  home.file.".local/bin/filelu-update" = {
+    source = ./scripts/filelu-update.sh;
+    executable = true;
+    force = true;
+  };
+
+  # FileLuSync window toggle & focus helper
+  home.file.".local/bin/filelu-toggle" = {
+    source = ./scripts/filelu-toggle.sh;
+    executable = true;
+    force = true;
+  };
+
+  # FileLuSync menu action trigger helper
+  home.file.".local/bin/filelu-action" = {
+    source = ./scripts/filelu-action.py;
+    executable = true;
+    force = true;
+  };
+
+  # FileLuSync status & transfer information monitor
+  home.file.".local/bin/filelu-sync-status" = {
+    source = ./scripts/filelu-sync-status.py;
+    executable = true;
+    force = true;
+  };
+
   # FileLuSync runner: unpacked in ~/.local/opt/filelusync, executed in FHS with zstd
   home.file.".local/bin/filelusync" = {
     executable = true;
@@ -907,6 +939,11 @@ in
 
       APP_DIR="$HOME/.local/opt/filelusync"
       ZIP_PATH="$HOME/Downloads/filelusync_5.0.0.zip"
+
+      # If an uninstalled update zip exists in Downloads, or if FileLuSync is not installed, run updater first
+      if ls "$HOME/Downloads"/filelusync*.zip 2>/dev/null | grep -vq "\.installed$" || [ ! -f "$APP_DIR/FileLuSync.bin" ]; then
+        "$HOME/.local/bin/filelu-update" || true
+      fi
 
       if [ ! -f "$APP_DIR/FileLuSync.bin" ]; then
         mkdir -p "$APP_DIR"
@@ -920,17 +957,9 @@ in
         chmod +x "$APP_DIR/FileLuSync.bin" 2>/dev/null || true
       fi
 
-      # If window is already open and mapped in Hyprland, focus it
-      if hyprctl clients 2>/dev/null | grep -q "class: FileLuSync"; then
-        hyprctl dispatch focuswindow "class:FileLuSync"
-        exit 0
-      fi
-
-      # If running in background without a visible window (e.g. after close to tray),
-      # restart cleanly so the UI appears
-      if pgrep -f "FileLuSync.bin" >/dev/null 2>&1; then
-        pkill -f "FileLuSync.bin" 2>/dev/null || true
-        sleep 0.4
+      # If FileLuSync is already running, toggle/bring its window to current workspace
+      if pgrep -f "FileLuSync\.bin" >/dev/null 2>&1 || hyprctl clients 2>/dev/null | grep -q "class: FileLuSync"; then
+        exec "$HOME/.local/bin/filelu-toggle"
       fi
 
       BIN_TO_RUN="$APP_DIR/FileLuSync.bin"
@@ -977,8 +1006,38 @@ in
         --vfs-cache-max-size=10G \
         --vfs-cache-max-age=24h \
         --umask=077 \
-        --dir-cache-time=1m
+        --dir-cache-time=1m \
+        --disable=About \
+        --disable-http2 \
+        --contimeout=10s \
+        --timeout=30s \
+        --low-level-retries=2
     '';
+  };
+
+  systemd.user.paths.filelu-update = {
+    Unit = {
+      Description = "Watch ~/Downloads for FileLuSync updates";
+    };
+    Path = {
+      PathModified = "%h/Downloads/filelusync_amd.zip";
+      Unit = "filelu-update.service";
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
+
+  systemd.user.services.filelu-update = {
+    Unit = {
+      Description = "Automatically update FileLuSync when a new release is downloaded";
+      After = [ "network.target" ];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.writeShellScript "filelu-auto-update-trigger" ''
+        sleep 2
+        ${config.home.homeDirectory}/.local/bin/filelu-update
+      ''}";
+    };
   };
 
   systemd.user.services.filelu-mount = {
@@ -1000,6 +1059,15 @@ in
     Install.WantedBy = [ "graphical-session.target" ];
   };
 
+  xdg.desktopEntries.filelu-update = {
+    name = "Update FileLuSync";
+    exec = "/home/thinky/.local/bin/filelu-update --download";
+    icon = "filelusync";
+    comment = "Check and install latest FileLuSync update";
+    categories = [ "Utility" "Network" ];
+    terminal = false;
+  };
+
   xdg.desktopEntries.filelusync = {
     name = "FileLuSync";
     exec = "/home/thinky/.local/bin/filelusync";
@@ -1012,6 +1080,52 @@ in
   home.file.".local/opt/filelusync/app.png" = {
     source = ./assets/filelu.png;
   };
+
+  xdg.desktopEntries.antigravity = {
+    name = "Google Antigravity";
+    genericName = "AI Coding Agent";
+    comment = "Google Antigravity agentic coding assistant";
+    exec = "kitty --class antigravity -e agy --dangerously-skip-permissions";
+    icon = "antigravity";
+    categories = [ "Development" "Utility" ];
+    terminal = false;
+    settings = {
+      StartupWMClass = "antigravity";
+      Keywords = "ai;gemini;google;antigravity;agy;agent;coding;";
+    };
+  };
+
+  xdg.desktopEntries.claude-code = {
+    name = "Claude Code";
+    genericName = "AI Coding Assistant";
+    comment = "Anthropic's agentic coding tool that lives in your terminal";
+    exec = "kitty --class claude-code -e claude --dangerously-skip-permissions";
+    icon = "claude-code";
+    categories = [ "Development" "Utility" ];
+    terminal = false;
+    settings = {
+      StartupWMClass = "claude-code";
+      Keywords = "ai;claude;anthropic;agent;coding;";
+    };
+  };
+
+  xdg.desktopEntries.codex = {
+    name = "Codex";
+    genericName = "AI Coding Agent";
+    comment = "OpenAI Codex CLI coding agent";
+    exec = "kitty --class codex -e codex --dangerously-bypass-approvals-and-sandbox";
+    icon = "codex";
+    categories = [ "Development" "Utility" ];
+    terminal = false;
+    settings = {
+      StartupWMClass = "codex";
+      Keywords = "ai;codex;openai;chatgpt;agent;coding;";
+    };
+  };
+
+  home.file.".local/share/icons/hicolor/scalable/apps/antigravity.svg".source = ./assets/antigravity.svg;
+  home.file.".local/share/icons/hicolor/scalable/apps/claude-code.svg".source = ./assets/claude-code.svg;
+  home.file.".local/share/icons/hicolor/scalable/apps/codex.svg".source = ./assets/codex.svg;
 
   # MEGAcmd runner: extracted from deb and run natively with FUSE support via nix-ld
   home.file.".local/bin/mega-runner" = {
@@ -2884,6 +2998,26 @@ in
     '';
   };
 
+  systemd.user.services.ags = {
+    Unit = {
+      Description = "AGS desktop bar";
+      After = [ "graphical-session.target" ];
+      PartOf = [ "graphical-session.target" ];
+      StartLimitIntervalSec = 30;
+      StartLimitBurst = 5;
+    };
+    Service = {
+      Type = "exec";
+      ExecStart = "${config.home.profileDirectory}/bin/ags run";
+      Restart = "always";
+      RestartSec = 2;
+      TimeoutStopSec = 10;
+      StandardOutput = "journal";
+      StandardError = "journal";
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
+
   gtk = {
     enable = true;
     theme = { name = "Orchis-Dark"; package = pkgs.orchis-theme; };
@@ -2942,6 +3076,15 @@ in
     }
 
     windowrule {
+      name = rclone-browser-float
+      match:class = ^rclone-browser$
+      match:modal = false
+      float = yes
+      center = yes
+      size = 1200 800
+    }
+
+    windowrule {
       name = filen-desktop-float
       match:class = ^(filen-desktop|Filen Desktop)$
       float = yes
@@ -2963,6 +3106,22 @@ in
       float = yes
       center = yes
       size = 820 540
+    }
+
+    windowrule {
+      name = protondrive-settings-float
+      match:class = ^(protondrive-settings)$
+      float = yes
+      center = yes
+      size = 820 560
+    }
+
+    windowrule {
+      name = protondrive-settings-title-float
+      match:title = ^(Proton Drive Sync Settings|Sync Folder with Proton Drive)$
+      float = yes
+      center = yes
+      size = 820 560
     }
 
     windowrule {
@@ -3124,7 +3283,7 @@ in
           "$mod SHIFT, F, fullscreen, 1"
           "$mod, F7, exec, sh -c 'sioyek-keyboard-lights && notify-send -a Keyboard -i input-keyboard \"Sioyek keyboard palette restored\"'"
           "$mod SHIFT, A, exec, ags request togglebar"
-          "$mod, A, exec, sh -c 'ags quit 2>/dev/null; sleep 0.3; uwsm app -- ags run'"
+          "$mod, A, exec, systemctl --user restart ags.service"
           '', Print, exec, ~/.local/bin/screenshot''
           "SHIFT, Print, exec, ~/.local/bin/screenshot-full"
           "CTRL, Print, exec, ~/.local/bin/screenshot-monitor"
@@ -4234,6 +4393,7 @@ Please diagnose what caused them and explain how to resolve them."
     inputs.walker.homeManagerModules.default
     ./modules/scramble-sync-home.nix
     ./modules/gdrive-sync-home.nix
+    ./modules/protondrive-sync-home.nix
   ];
 
   programs.walker = {
@@ -4251,13 +4411,16 @@ Please diagnose what caused them and explain how to resolve them."
   '';
 
   home.activation.refreshWalkerIcons = lib.hm.dag.entryAfter [ "linkGeneration" "installPackages" ] ''
-    if [ -d "$HOME/.local/share/icons/hicolor" ]; then
-      ${pkgs.gtk3}/bin/gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" || true
-    fi
+    for theme in hicolor Tela-circle Tela-circle-dark Tela-circle-light; do
+      if [ -d "$HOME/.local/share/icons/$theme" ]; then
+        ${pkgs.gtk3}/bin/gtk-update-icon-cache -f -t "$HOME/.local/share/icons/$theme" || true
+      fi
+    done
     user_runtime_dir="/run/user/$(${pkgs.coreutils}/bin/id -u)"
     if [ -S "$user_runtime_dir/bus" ]; then
       XDG_RUNTIME_DIR="$user_runtime_dir" ${pkgs.systemd}/bin/systemctl --user try-restart elephant || true
       XDG_RUNTIME_DIR="$user_runtime_dir" ${pkgs.systemd}/bin/systemctl --user try-restart walker || true
+      XDG_RUNTIME_DIR="$user_runtime_dir" ${pkgs.systemd}/bin/systemctl --user try-restart ags || true
     fi
   '';
   # ── Nemo "Open Terminal Here" ──

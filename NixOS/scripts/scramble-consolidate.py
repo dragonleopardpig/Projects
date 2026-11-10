@@ -223,12 +223,18 @@ class Consolidation:
         def download():
             staging.mkdir(parents=True, exist_ok=True)
             exclusions = [] if name == "private" else ["--exclude", "/RCLONE_TEST"]
+            if destination.exists():
+                exclusions.extend(["--compare-dest", str(destination)])
             self.rclone("copy", remote, staging, *exclusions)
             if name == "private":
                 self.progress.setdefault("uploaded-hashes", {}).update(self.hash_manifest(staging))
                 self.save()
-        self.checkpoint("download-" + name, download)
-        self.checkpoint("merge-" + name, lambda: self.merge(staging, destination, prefer_source, "cloud"))
+        if name == "private":
+            download()
+            self.merge(staging, destination, prefer_source, "cloud")
+        else:
+            self.checkpoint("download-" + name, download)
+            self.checkpoint("merge-" + name, lambda: self.merge(staging, destination, prefer_source, "cloud"))
 
     def import_all_cloud(self):
         self.import_cloud("scramble_private:Current", "private", self.folder, prefer_source=True)
@@ -303,7 +309,7 @@ class Consolidation:
 
     def initialize_baseline(self):
         self.phase("Establishing the single private sync baseline")
-        self.rclone("bisync", self.folder, "scramble_private:Current", "--resync", "--resync-mode", "path2",
+        self.rclone("bisync", self.folder, "scramble_private:Current", "--resync", "--resync-mode", "path1",
                     "--compare", "size,checksum", "--download-hash", "--check-access", "--max-delete", "50",
                     "--exclude", "/References/**", "--exclude", "/Misc/**",
                     "--resilient", "--recover", "--max-lock", "10m",

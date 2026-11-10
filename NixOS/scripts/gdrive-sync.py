@@ -43,20 +43,21 @@ def get_icon_path(name: str) -> str:
             return str(c.resolve())
     # Fallback system icon names
     fallbacks = {
-        "gdrive": "folder-google-drive",
+        "gdrive": "gdrive",
         "gdrive-syncing": "emblem-synchronizing",
         "gdrive-paused": "media-playback-pause",
         "gdrive-error": "dialog-warning",
     }
-    return fallbacks.get(name, "folder")
+    return fallbacks.get(name, "gdrive")
 
 
-def send_notification(title: str, message: str, icon: str = "folder-google-drive", urgency: str = "normal"):
+def send_notification(title: str, message: str, icon: str = None, urgency: str = "normal"):
     notify_send = shutil.which("notify-send")
     if notify_send:
         try:
+            icon_arg = icon or get_icon_path("gdrive")
             subprocess.run(
-                [notify_send, "-a", "Google Drive", "-i", icon, "-u", urgency, title, message],
+                [notify_send, "-a", "Google Drive", "-i", icon_arg, "-u", urgency, title, message],
                 check=False,
             )
         except Exception:
@@ -65,14 +66,16 @@ def send_notification(title: str, message: str, icon: str = "folder-google-drive
 
 class ConfigManager:
     def __init__(self):
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        self.last_mtime = 0
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        self.data = self._load()
+        self._data = self._load()
 
     def _load(self) -> dict:
         if CONFIG_FILE.exists():
             try:
+                self.last_mtime = CONFIG_FILE.stat().st_mtime_ns
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     data.setdefault("remote", "gdrive")
@@ -83,29 +86,60 @@ class ConfigManager:
                     return data
             except Exception as e:
                 print(f"[gdrive-sync] Error reading {CONFIG_FILE}: {e}", file=sys.stderr)
+        self.last_mtime = 0
         return {
             "remote": "gdrive",
             "mount_point": str(DEFAULT_MOUNT_POINT),
             "auto_sync_interval_minutes": 10,
             "paused": False,
+            "notify_on_sync": False,
             "folders": [],
         }
+
+    def has_changed_on_disk(self) -> bool:
+        try:
+            if CONFIG_FILE.exists():
+                return CONFIG_FILE.stat().st_mtime_ns > self.last_mtime
+        except Exception:
+            pass
+        return False
+
+    def reload_if_needed(self):
+        with self.lock:
+            if self.has_changed_on_disk():
+                self._data = self._load()
+
+    @property
+    def data(self) -> dict:
+        self.reload_if_needed()
+        return self._data
+
+    @data.setter
+    def data(self, value: dict):
+        with self.lock:
+            self._data = value
 
     def save(self):
         with self.lock:
             temp_file = CONFIG_FILE.with_suffix(".tmp")
             with open(temp_file, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, indent=2, ensure_ascii=False)
+                json.dump(self._data, f, indent=2, ensure_ascii=False)
             temp_file.replace(CONFIG_FILE)
+            try:
+                self.last_mtime = CONFIG_FILE.stat().st_mtime_ns
+            except Exception:
+                pass
 
     def get_folders(self) -> list:
         with self.lock:
-            return list(self.data.get("folders", []))
+            self.reload_if_needed()
+            return list(self._data.get("folders", []))
 
     def add_folder(self, local_path: str, remote_path: str, mode: str = "bisync", enabled: bool = True) -> dict:
         local_path = str(Path(local_path).resolve())
         with self.lock:
-            for f in self.data["folders"]:
+            self.reload_if_needed()
+            for f in self._data["folders"]:
                 if f["local_path"] == local_path:
                     f["remote_path"] = remote_path
                     f["mode"] = mode
@@ -124,18 +158,20 @@ class ConfigManager:
                 "last_error": "",
                 "resync_needed": True,
             }
-            self.data["folders"].append(folder_entry)
+            self._data["folders"].append(folder_entry)
             self.save()
             return folder_entry
 
     def remove_folder(self, folder_id: str):
         with self.lock:
-            self.data["folders"] = [f for f in self.data["folders"] if f.get("id") != folder_id and f.get("local_path") != folder_id]
+            self.reload_if_needed()
+            self._data["folders"] = [f for f in self._data["folders"] if f.get("id") != folder_id and f.get("local_path") != folder_id]
             self.save()
 
     def update_folder_status(self, folder_id: str, status: str, last_sync: str = None, error: str = "", resync_needed: bool = None):
         with self.lock:
-            for f in self.data["folders"]:
+            self.reload_if_needed()
+            for f in self._data["folders"]:
                 if f.get("id") == folder_id or f.get("local_path") == folder_id:
                     f["status"] = status
                     if last_sync:
@@ -253,6 +289,16 @@ class RcloneOps:
         except Exception:
             pass
 
+    @staticmethod
+    def _is_pid_alive(pid: int) -> bool:
+        if pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
     @classmethod
     def sync_folder(cls, folder: dict) -> tuple[bool, str]:
         rclone = cls.rclone_bin()
@@ -264,9 +310,43 @@ class RcloneOps:
         if not Path(local_path).exists():
             return False, f"Local path '{local_path}' does not exist"
 
+        # Ensure local directory exists
+        try:
+            Path(local_path).mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+        # Check for active bisync locks for this local path
         if mode == "bisync":
-            cmd = [rclone, "bisync", local_path, remote_path, "--verbose"]
-            if resync:
+            cache_dir = Path.home() / ".cache/rclone/bisync"
+            if cache_dir.exists():
+                loc_pattern = local_path.replace("/", "_").strip("_")
+                for lck in cache_dir.glob("*.lck"):
+                    if loc_pattern in lck.name:
+                        try:
+                            lck_data = json.loads(lck.read_text(encoding="utf-8"))
+                            lck_pid = int(lck_data.get("PID", 0))
+                            if lck_pid > 0 and cls._is_pid_alive(lck_pid):
+                                return False, f"Sync already in progress (PID {lck_pid})"
+                            else:
+                                lck.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+
+        # Ensure remote directory exists before syncing
+        if ":" in remote_path:
+            try:
+                subprocess.run([rclone, "mkdir", remote_path], capture_output=True, text=True, timeout=60)
+            except Exception:
+                pass
+
+        # Bisync requires --resync on first run, or when explicitly requested
+        is_first_sync = folder.get("last_sync") in ("Never", None, "", "null")
+        needs_resync = resync or is_first_sync
+
+        if mode == "bisync":
+            cmd = [rclone, "bisync", local_path, remote_path, "--max-lock", "15m", "--verbose"]
+            if needs_resync:
                 cmd.append("--resync")
         elif mode == "sync_up":
             cmd = [rclone, "sync", local_path, remote_path, "--verbose"]
@@ -275,26 +355,352 @@ class RcloneOps:
         else:
             return False, f"Unknown sync mode: {mode}"
 
-        try:
-            log_line = f"[{datetime.datetime.now().isoformat()}] RUN: {' '.join(cmd)}\n"
+        def run_logged_cmd(command: list[str], timeout_s: int) -> tuple[int, str, str]:
+            LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            log_line = f"[{datetime.datetime.now().isoformat()}] RUN: {' '.join(command)}\n"
+            stdout_chunks: list[str] = []
+            stderr_chunks: list[str] = []
             with open(LOG_FILE, "a", encoding="utf-8") as log:
                 log.write(log_line)
+                log.flush()
 
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            proc = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
 
-            with open(LOG_FILE, "a", encoding="utf-8") as log:
-                log.write(f"EXIT: {res.returncode}\n{res.stdout}\n{res.stderr}\n")
+            def pump(stream, sink):
+                try:
+                    for line in iter(stream.readline, ""):
+                        sink.append(line)
+                        with open(LOG_FILE, "a", encoding="utf-8") as f:
+                            f.write(line)
+                            f.flush()
+                except Exception:
+                    pass
+                finally:
+                    stream.close()
 
-            if res.returncode == 0:
+            t_out = threading.Thread(target=pump, args=(proc.stdout, stdout_chunks), daemon=True)
+            t_err = threading.Thread(target=pump, args=(proc.stderr, stderr_chunks), daemon=True)
+            t_out.start()
+            t_err.start()
+
+            try:
+                ret = proc.wait(timeout=timeout_s)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                with open(LOG_FILE, "a", encoding="utf-8") as f:
+                    f.write(f"[{datetime.datetime.now().isoformat()}] KILLED: process timed out after {timeout_s}s\n")
+                    f.flush()
+                raise
+
+            t_out.join(timeout=3)
+            t_err.join(timeout=3)
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(f"EXIT: {ret}\n")
+                f.flush()
+
+            return ret, "".join(stdout_chunks), "".join(stderr_chunks)
+
+        timeout_s = 14400 if needs_resync else 3600
+        try:
+            retcode, stdout_str, stderr_str = run_logged_cmd(cmd, timeout_s)
+
+            if retcode == 0:
                 return True, "Sync completed successfully"
 
-            if "--resync" in res.stderr:
-                return False, "Bisync requires resync baseline (--resync)"
-            return False, res.stderr.strip().splitlines()[-1] if res.stderr else "Sync exited with error"
+            # Auto-retry with --resync if bisync was aborted and needs recovery
+            if mode == "bisync" and "--resync" not in cmd and "Must run --resync to recover" in stderr_str:
+                retry_cmd = cmd + ["--resync"]
+                retcode, stdout_str, stderr_str = run_logged_cmd(retry_cmd, 14400)
+                if retcode == 0:
+                    return True, "Sync completed successfully"
+
+            # Parse meaningful error message
+            error_lines = [
+                line.replace("ERROR :", "").strip()
+                for line in stderr_str.splitlines()
+                if "ERROR :" in line and "Must run --resync to recover" not in line and "Bisync aborted" not in line
+            ]
+            if error_lines:
+                err_msg = error_lines[-1]
+            elif stderr_str:
+                err_msg = stderr_str.strip().splitlines()[-1]
+            else:
+                err_msg = f"Sync failed with exit code {retcode}"
+
+            return False, err_msg
         except subprocess.TimeoutExpired:
             return False, "Sync timed out"
         except Exception as e:
             return False, str(e)
+
+
+
+# ----------------------------------------------------------------------
+# GOOGLE DRIVE ACCOUNT MANAGEMENT
+# ----------------------------------------------------------------------
+
+class AccountManager:
+    """Manages Google Drive account profile, storage quota, and auth flow."""
+
+    ACCOUNT_FILE = CONFIG_DIR / "account.json"
+    AVATAR_FILE = CONFIG_DIR / "avatar.jpg"
+    _mem_cache = None
+    _mem_cache_time = 0
+
+    @staticmethod
+    def human_readable_bytes(size: int) -> str:
+        if size <= 0:
+            return "0 B"
+        units = ["B", "KB", "MB", "GB", "TB", "PB"]
+        idx = 0
+        val = float(size)
+        while val >= 1024.0 and idx < len(units) - 1:
+            val /= 1024.0
+            idx += 1
+        return f"{val:.1f} {units[idx]}"
+
+    @classmethod
+    def get_account_info(cls, remote: str = "gdrive", force: bool = False, max_age_seconds: int = 300) -> dict:
+        now = time.time()
+        if not force and cls._mem_cache and (now - cls._mem_cache_time) < max_age_seconds:
+            return cls._mem_cache
+
+        # Check on-disk cache if not forced
+        if not force and cls.ACCOUNT_FILE.exists():
+            try:
+                cached = json.loads(cls.ACCOUNT_FILE.read_text(encoding="utf-8"))
+                age = now - cached.get("updated", 0)
+                if age < max_age_seconds:
+                    cls._mem_cache = cached
+                    cls._mem_cache_time = now
+                    return cached
+            except Exception:
+                pass
+
+        info = cls._fetch_account_info(remote)
+        if info.get("logged_in") or not cls.ACCOUNT_FILE.exists():
+            try:
+                CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                cls.ACCOUNT_FILE.write_text(json.dumps(info, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+        cls._mem_cache = info
+        cls._mem_cache_time = now
+        return info
+
+    @classmethod
+    def _fetch_account_info(cls, remote: str) -> dict:
+        import urllib.request
+        import urllib.error
+
+        default_result = {
+            "logged_in": False,
+            "name": "",
+            "email": "",
+            "photo_link": "",
+            "usage_bytes": 0,
+            "limit_bytes": 0,
+            "usage_str": "0 B",
+            "limit_str": "0 B",
+            "percent_str": "0%",
+            "percent_float": 0.0,
+            "updated": time.time(),
+            "error": None,
+        }
+
+        try:
+            rclone = shutil.which("rclone") or "rclone"
+            dump_res = subprocess.run([rclone, "config", "dump"], capture_output=True, text=True, timeout=5)
+            if dump_res.returncode != 0:
+                default_result["error"] = "rclone not available"
+                return default_result
+
+            all_conf = json.loads(dump_res.stdout or "{}")
+            remote_conf = all_conf.get(remote)
+            if not remote_conf:
+                default_result["error"] = f"Account '{remote}' not configured"
+                return default_result
+
+            token_str = remote_conf.get("token")
+            if not token_str:
+                default_result["error"] = "No authentication token found"
+                return default_result
+
+            token = json.loads(token_str)
+            access_token = token.get("access_token")
+
+            user_data = None
+            if access_token:
+                try:
+                    req = urllib.request.Request(
+                        "https://www.googleapis.com/drive/v3/about?fields=user,storageQuota",
+                        headers={"Authorization": f"Bearer {access_token}"}
+                    )
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        user_data = json.loads(resp.read().decode("utf-8"))
+                except urllib.error.HTTPError as e:
+                    # If rate limited (403), use on-disk cached data if available
+                    if e.code == 403 and cls.ACCOUNT_FILE.exists():
+                        try:
+                            cached = json.loads(cls.ACCOUNT_FILE.read_text(encoding="utf-8"))
+                            if cached.get("logged_in"):
+                                return cached
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+            # Token might be expired or invalid; trigger rclone about to refresh token
+            if not user_data:
+                try:
+                    subprocess.run([rclone, "about", f"{remote}:", "--json"], capture_output=True, timeout=25)
+                    dump_res = subprocess.run([rclone, "config", "dump"], capture_output=True, text=True, timeout=5)
+                    all_conf = json.loads(dump_res.stdout or "{}")
+                    remote_conf = all_conf.get(remote, {})
+                    token_str = remote_conf.get("token", "")
+                    if token_str:
+                        token = json.loads(token_str)
+                        access_token = token.get("access_token")
+                        if access_token:
+                            req = urllib.request.Request(
+                                "https://www.googleapis.com/drive/v3/about?fields=user,storageQuota",
+                                headers={"Authorization": f"Bearer {access_token}"}
+                            )
+                            with urllib.request.urlopen(req, timeout=5) as resp:
+                                user_data = json.loads(resp.read().decode("utf-8"))
+                except Exception as e:
+                    if cls.ACCOUNT_FILE.exists():
+                        try:
+                            return json.loads(cls.ACCOUNT_FILE.read_text(encoding="utf-8"))
+                        except Exception:
+                            pass
+                    default_result["error"] = str(e)
+                    return default_result
+
+            if not user_data or "user" not in user_data:
+                if cls.ACCOUNT_FILE.exists():
+                    try:
+                        return json.loads(cls.ACCOUNT_FILE.read_text(encoding="utf-8"))
+                    except Exception:
+                        pass
+                default_result["error"] = "Failed to retrieve user profile"
+                return default_result
+
+            user = user_data.get("user", {})
+            quota = user_data.get("storageQuota", {})
+            name = user.get("displayName", "")
+            email = user.get("emailAddress", "")
+            photo = user.get("photoLink", "")
+            usage = int(quota.get("usage", 0))
+            limit = int(quota.get("limit", 0))
+
+            pct = (usage / limit * 100) if limit > 0 else 0.0
+
+            result = {
+                "logged_in": True,
+                "name": name,
+                "email": email,
+                "photo_link": photo,
+                "usage_bytes": usage,
+                "limit_bytes": limit,
+                "usage_str": cls.human_readable_bytes(usage),
+                "limit_str": cls.human_readable_bytes(limit) if limit > 0 else "Unlimited",
+                "percent_str": f"{pct:.1f}%" if limit > 0 else "N/A",
+                "percent_float": min(1.0, max(0.0, usage / limit)) if limit > 0 else 0.0,
+                "updated": time.time(),
+                "error": None,
+            }
+
+            # Download avatar asynchronously
+            if photo:
+                try:
+                    def dl_avatar():
+                        try:
+                            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+                            urllib.request.urlretrieve(photo, str(cls.AVATAR_FILE))
+                        except Exception:
+                            pass
+                    threading.Thread(target=dl_avatar, daemon=True).start()
+                except Exception:
+                    pass
+
+            return result
+        except Exception as e:
+            if cls.ACCOUNT_FILE.exists():
+                try:
+                    return json.loads(cls.ACCOUNT_FILE.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            default_result["error"] = str(e)
+            return default_result
+
+    @classmethod
+    def connect_account(cls, remote: str = "gdrive"):
+        """Launches interactive terminal to authenticate with Google Drive."""
+        rclone = shutil.which("rclone") or "rclone"
+        terminal = shutil.which("kitty") or "xterm"
+
+        script = f"""
+echo '======================================================='
+echo '  Google Drive Account Authentication'
+echo '======================================================='
+echo 'Opening your default browser to sign in to Google...'
+echo ''
+if {rclone} listremotes | grep -qx '{remote}:'; then
+    {rclone} config reconnect '{remote}:'
+else
+    {rclone} config create '{remote}' drive scope=drive
+fi
+echo ''
+echo 'Authentication flow completed. You can close this window.'
+sleep 1
+"""
+        cmd = [terminal, "-T", "Google Drive Account Login", "--", "bash", "-c", script]
+        proc = subprocess.Popen(cmd)
+        return proc
+
+    @classmethod
+    def disconnect_account(cls, remote: str = "gdrive", mount_point: str = None) -> tuple[bool, str]:
+        """Unmounts and disconnects the Google Drive account."""
+        if mount_point:
+            RcloneOps.unmount_drive(mount_point)
+        rclone = shutil.which("rclone") or "rclone"
+        res = subprocess.run([rclone, "config", "disconnect", f"{remote}:"], capture_output=True, text=True)
+        cls._mem_cache = None
+        cls.clear_cache()
+        if res.returncode == 0:
+            return True, "Account disconnected successfully"
+        return False, res.stderr or "Failed to disconnect account"
+
+    @classmethod
+    def remove_account(cls, remote: str = "gdrive", mount_point: str = None) -> tuple[bool, str]:
+        """Unmounts and completely removes the Google Drive remote config."""
+        if mount_point:
+            RcloneOps.unmount_drive(mount_point)
+        rclone = shutil.which("rclone") or "rclone"
+        res = subprocess.run([rclone, "config", "delete", remote], capture_output=True, text=True)
+        cls._mem_cache = None
+        cls.clear_cache()
+        if res.returncode == 0:
+            return True, "Account removed successfully"
+        return False, res.stderr or "Failed to remove account"
+
+    @classmethod
+    def clear_cache(cls):
+        try:
+            if cls.ACCOUNT_FILE.exists():
+                cls.ACCOUNT_FILE.unlink()
+            if cls.AVATAR_FILE.exists():
+                cls.AVATAR_FILE.unlink()
+        except Exception:
+            pass
 
 
 # ----------------------------------------------------------------------
@@ -394,11 +800,14 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
                 def sync_worker():
                     ok, msg = RcloneOps.sync_folder(entry)
                     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    if ok:
+                    if "already in progress" in msg:
+                        config_mgr.update_folder_status(entry["id"], "syncing")
+                        send_notification("Google Drive Sync", f"Sync already running for {Path(local_path).name}")
+                    elif ok:
                         config_mgr.update_folder_status(entry["id"], "idle", last_sync=now_str, error="", resync_needed=False)
                         send_notification("Google Drive Sync", f"✔ Successfully synced {Path(local_path).name} to Google Drive!")
                     else:
-                        config_mgr.update_folder_status(entry["id"], "error", last_sync=now_str, error=msg)
+                        config_mgr.update_folder_status(entry["id"], "error", last_sync=now_str, error=msg, resync_needed=(entry.get("mode") == "bisync"))
                         send_notification("Google Drive Sync", f"⚠ Error syncing {Path(local_path).name}: {msg}", urgency="critical")
                     GLib.idle_add(Gtk.main_quit)
 
@@ -409,17 +818,95 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             dialog.destroy()
         return
 
+    # Handle Nemo Action: 'remove'
+    if start_mode == "remove":
+        target = str(Path(extra_arg).resolve()) if extra_arg else None
+        if not target:
+            return
+        folder_name = Path(target).name
+        folders = config_mgr.get_folders()
+        entry = next((f for f in folders if str(Path(f["local_path"]).resolve()) == target), None)
+        if not entry:
+            return
+
+        dialog = Gtk.MessageDialog(
+            transient_for=None,
+            flags=0,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL,
+            text=f"Remove '{folder_name}' from Google Drive Sync?",
+        )
+        dialog.set_title("Remove from Google Drive Sync")
+        remote_dest = entry.get("remote_path", f"{remote}:{folder_name}")
+        dialog.format_secondary_text(
+            f"Local Folder: {target}\n"
+            f"Google Drive Destination: {remote_dest}\n\n"
+            "This will remove the folder from automatic synchronization.\n"
+            "Existing files on your computer and Google Drive will NOT be deleted."
+        )
+        dialog.set_default_response(Gtk.ResponseType.CANCEL)
+        res = dialog.run()
+        dialog.destroy()
+
+        if res == Gtk.ResponseType.OK:
+            config_mgr.remove_folder(entry["id"])
+            send_notification("Google Drive Sync", f"Removed '{folder_name}' from Google Drive sync list.")
+        return
+
     class SettingsWindow(Gtk.Window):
         def __init__(self, tray_ref=None, standalone=False):
             super().__init__(title="Google Drive Sync Settings")
             self.tray_ref = tray_ref
             self.standalone = standalone
-            self.set_default_size(780, 500)
+            self.set_default_size(780, 560)
             self.set_position(Gtk.WindowPosition.CENTER)
             self.set_border_width(12)
 
             main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             self.add(main_box)
+
+            # Account Frame
+            acc_frame = Gtk.Frame(label="Google Drive Account")
+            acc_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14, border_width=10)
+            acc_frame.add(acc_box)
+
+            # Left: Avatar / Logo
+            self.avatar_img = Gtk.Image()
+            self.avatar_img.set_pixel_size(48)
+            acc_box.pack_start(self.avatar_img, False, False, 0)
+
+            # Middle: Name, Email, Quota, Progress bar
+            acc_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            acc_vbox.set_hexpand(True)
+            self.acc_user_lbl = Gtk.Label(xalign=0)
+            self.acc_user_lbl.set_use_markup(True)
+            self.acc_quota_lbl = Gtk.Label(xalign=0)
+            self.acc_quota_lbl.set_use_markup(True)
+            self.acc_progress = Gtk.ProgressBar()
+            self.acc_progress.set_show_text(False)
+            acc_vbox.pack_start(self.acc_user_lbl, False, False, 0)
+            acc_vbox.pack_start(self.acc_quota_lbl, False, False, 0)
+            acc_vbox.pack_start(self.acc_progress, False, False, 0)
+            acc_box.pack_start(acc_vbox, True, True, 0)
+
+            # Right: Action buttons
+            self.acc_btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            self.btn_switch_acc = Gtk.Button(label="🔄 Switch Account…")
+            self.btn_switch_acc.connect("clicked", self.on_switch_account_clicked)
+            self.btn_logout_acc = Gtk.Button(label="🚪 Sign Out")
+            self.btn_logout_acc.connect("clicked", self.on_logout_account_clicked)
+            self.btn_remove_acc = Gtk.Button(label="🗑 Remove")
+            self.btn_remove_acc.connect("clicked", self.on_remove_account_clicked)
+            self.btn_login_acc = Gtk.Button(label="🔑 Sign In with Google…")
+            self.btn_login_acc.connect("clicked", self.on_switch_account_clicked)
+
+            self.acc_btn_box.pack_start(self.btn_switch_acc, False, False, 0)
+            self.acc_btn_box.pack_start(self.btn_logout_acc, False, False, 0)
+            self.acc_btn_box.pack_start(self.btn_remove_acc, False, False, 0)
+            self.acc_btn_box.pack_start(self.btn_login_acc, False, False, 0)
+            acc_box.pack_start(self.acc_btn_box, False, False, 0)
+
+            main_box.pack_start(acc_frame, False, False, 0)
 
             # Mount status bar
             mount_frame = Gtk.Frame(label="Google Drive Cloud Mount (Nemo Drag-and-Drop)")
@@ -499,12 +986,18 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             self.interval_spin.connect("value-changed", self.on_interval_changed)
             opts_box.pack_start(self.interval_spin, False, False, 0)
 
+            self.chk_notifications = Gtk.CheckButton(label="Show sync popups")
+            self.chk_notifications.set_active(config_mgr.data.get("notify_on_sync", False))
+            self.chk_notifications.connect("toggled", self.on_notifications_toggled)
+            opts_box.pack_start(self.chk_notifications, False, False, 0)
+
             btn_sync_all = Gtk.Button(label="🔄 Sync All Folders")
             btn_sync_all.connect("clicked", self.on_sync_all)
             opts_box.pack_end(btn_sync_all, False, False, 0)
 
             main_box.pack_start(opts_box, False, False, 0)
 
+            self.refresh_account_ui()
             self.refresh_mount_status()
             self.refresh_folder_list()
             self.set_role("gdrive-settings")
@@ -517,6 +1010,122 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
                 self.connect("destroy", Gtk.main_quit)
             else:
                 self.connect("delete-event", lambda w, e: self.hide_on_delete())
+
+        def refresh_account_ui(self, force=False):
+            def worker():
+                info = AccountManager.get_account_info(remote, force=force)
+                GLib.idle_add(self._apply_account_info, info)
+            threading.Thread(target=worker, daemon=True).start()
+
+        def _apply_account_info(self, info: dict):
+            avatar_file = AccountManager.AVATAR_FILE
+            if info.get("logged_in"):
+                name = info.get("name") or "Google Drive User"
+                email = info.get("email") or ""
+                self.acc_user_lbl.set_markup(f"<b><span size='large'>{name}</span></b> ({email})")
+
+                usage = info.get("usage_str", "0 B")
+                limit = info.get("limit_str", "Unlimited")
+                pct = info.get("percent_str", "0%")
+                self.acc_quota_lbl.set_markup(f"<span color='#555555'>Storage Quota:</span> <b>{usage}</b> of <b>{limit}</b> used ({pct})")
+
+                frac = float(info.get("percent_float", 0.0))
+                self.acc_progress.set_fraction(frac)
+                self.acc_progress.show()
+
+                self.btn_switch_acc.show()
+                self.btn_logout_acc.show()
+                self.btn_remove_acc.show()
+                self.btn_login_acc.hide()
+
+                if avatar_file.exists():
+                    try:
+                        import gi
+                        gi.require_version("GdkPixbuf", "2.0")
+                        from gi.repository import GdkPixbuf
+                        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(avatar_file), 48, 48, True)
+                        self.avatar_img.set_from_pixbuf(pixbuf)
+                    except Exception:
+                        self.avatar_img.set_from_file(get_icon_path("gdrive"))
+                else:
+                    self.avatar_img.set_from_file(get_icon_path("gdrive"))
+            else:
+                self.acc_user_lbl.set_markup("<b><span size='large'>Not Signed In</span></b>")
+                err_text = info.get("error") or "No Google Drive account is currently linked."
+                self.acc_quota_lbl.set_markup(f"<span color='#d9534f'>{err_text}</span>")
+                self.acc_progress.set_fraction(0.0)
+                self.acc_progress.hide()
+
+                self.btn_switch_acc.hide()
+                self.btn_logout_acc.hide()
+                self.btn_remove_acc.hide()
+                self.btn_login_acc.show()
+
+                self.avatar_img.set_from_file(get_icon_path("gdrive"))
+
+        def on_switch_account_clicked(self, _btn):
+            proc = AccountManager.connect_account(remote)
+            def wait_proc():
+                proc.wait()
+                AccountManager.get_account_info(remote, force=True)
+                GLib.idle_add(self.refresh_account_ui, True)
+                GLib.idle_add(self.refresh_mount_status)
+                if self.tray_ref:
+                    GLib.idle_add(self.tray_ref.build_menu)
+                send_notification("Google Drive", "Account connected / re-authenticated.")
+            threading.Thread(target=wait_proc, daemon=True).start()
+
+        def on_logout_account_clicked(self, _btn):
+            info = AccountManager.get_account_info(remote)
+            name = info.get("name", "Google Drive Account")
+            email = info.get("email", "")
+
+            dlg = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.OK_CANCEL,
+                text=f"Sign Out of {name}?",
+            )
+            dlg.format_secondary_text(
+                f"Account: {email}\n\n"
+                "This will unmount Google Drive and disconnect your login credentials.\n"
+                "Your files on Google Drive will remain safe."
+            )
+            res = dlg.run()
+            dlg.destroy()
+            if res == Gtk.ResponseType.OK:
+                ok, msg = AccountManager.disconnect_account(remote, mount_point)
+                self.refresh_account_ui(force=True)
+                self.refresh_mount_status()
+                if self.tray_ref:
+                    self.tray_ref.build_menu()
+                send_notification("Google Drive", msg if ok else f"Sign out failed: {msg}")
+
+        def on_remove_account_clicked(self, _btn):
+            info = AccountManager.get_account_info(remote)
+            email = info.get("email", "")
+            dlg = Gtk.MessageDialog(
+                transient_for=self,
+                flags=0,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.OK_CANCEL,
+                text="Remove Google Drive Account Configuration?",
+            )
+            dlg.format_secondary_text(
+                f"Account: {email}\n\n"
+                "This will unmount Google Drive and completely remove the remote configuration.\n"
+                "You will need to sign in again to use Google Drive."
+            )
+            res = dlg.run()
+            dlg.destroy()
+            if res == Gtk.ResponseType.OK:
+                ok, msg = AccountManager.remove_account(remote, mount_point)
+                self.refresh_account_ui(force=True)
+                self.refresh_mount_status()
+                if self.tray_ref:
+                    self.tray_ref.build_menu()
+                send_notification("Google Drive", msg if ok else f"Removal failed: {msg}")
 
         def refresh_mount_status(self):
             mounted = RcloneOps.is_mounted(mount_point)
@@ -623,6 +1232,10 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             config_mgr.data["auto_sync_interval_minutes"] = int(spin.get_value())
             config_mgr.save()
 
+        def on_notifications_toggled(self, chk):
+            config_mgr.data["notify_on_sync"] = bool(chk.get_active())
+            config_mgr.save()
+
     # Handle Settings Standalone mode
     if start_mode == "settings":
         win = SettingsWindow(standalone=True)
@@ -666,6 +1279,16 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
 
             self.timer_source = None
             self.setup_timer()
+            GLib.timeout_add_seconds(2, self.check_config_changes)
+
+        def check_config_changes(self):
+            if config_mgr.has_changed_on_disk():
+                config_mgr.reload_if_needed()
+                self.setup_timer()
+                self.build_menu()
+                if self.settings_window and self.settings_window.get_visible():
+                    self.settings_window.refresh_folder_list()
+            return True
 
         def set_tray_icon(self, state: str):
             icon_path = get_icon_path(state)
@@ -689,6 +1312,69 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             for child in self.menu.get_children():
                 self.menu.remove(child)
 
+            # --- Account Section ---
+            acc = AccountManager.get_account_info(remote)
+            if acc.get("logged_in"):
+                name = acc.get("name") or "Google User"
+                email = acc.get("email") or ""
+                usage = acc.get("usage_str", "0 B")
+                limit = acc.get("limit_str", "Unlimited")
+                pct = acc.get("percent_str", "0%")
+
+                acc_header = Gtk.MenuItem(label=f"👤 {name} ({email})")
+                acc_header.set_sensitive(False)
+                self.menu.append(acc_header)
+
+                quota_item = Gtk.MenuItem(label=f"📊 Storage: {usage} / {limit} ({pct})")
+                quota_item.set_sensitive(False)
+                self.menu.append(quota_item)
+
+                acc_menu_item = Gtk.MenuItem(label="⚙ Account Settings")
+                acc_sub = Gtk.Menu()
+
+                item_switch = Gtk.MenuItem(label="🔄 Switch / Reconnect Account…")
+                item_switch.connect("activate", self.on_switch_account)
+                acc_sub.append(item_switch)
+
+                item_logout = Gtk.MenuItem(label="🚪 Sign Out / Disconnect")
+                item_logout.connect("activate", self.on_logout_account)
+                acc_sub.append(item_logout)
+
+                item_remove = Gtk.MenuItem(label="🗑 Remove Account…")
+                item_remove.connect("activate", self.on_remove_account)
+                acc_sub.append(item_remove)
+
+                acc_menu_item.set_submenu(acc_sub)
+                self.menu.append(acc_menu_item)
+            else:
+                acc_header = Gtk.MenuItem(label="👤 Not Signed In")
+                acc_header.set_sensitive(False)
+                self.menu.append(acc_header)
+
+                item_login = Gtk.MenuItem(label="🔑 Sign In with Google…")
+                item_login.connect("activate", self.on_switch_account)
+                self.menu.append(item_login)
+
+            self.menu.append(Gtk.SeparatorMenuItem())
+
+            # --- Cloud Mount Status & Actions ---
+            is_mounted = RcloneOps.is_mounted(mount_point)
+            if is_mounted:
+                item_open_drive = Gtk.MenuItem(label="☁ Open Google Drive (Cloud)")
+                item_open_drive.connect("activate", lambda _: subprocess.Popen(["nemo", mount_point]))
+                self.menu.append(item_open_drive)
+
+                item_mount = Gtk.MenuItem(label="⏏ Unmount Google Drive")
+                item_mount.connect("activate", self.on_toggle_mount_tray)
+                self.menu.append(item_mount)
+            else:
+                item_mount = Gtk.MenuItem(label="☁ Mount Google Drive")
+                item_mount.connect("activate", self.on_toggle_mount_tray)
+                self.menu.append(item_mount)
+
+            self.menu.append(Gtk.SeparatorMenuItem())
+
+            # --- Sync Status & Actions ---
             status_text = "✔ All folders synchronized"
             if self.syncing_folders:
                 status_text = f"⏳ Syncing ({len(self.syncing_folders)} in progress)..."
@@ -698,23 +1384,18 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             self.status_item = Gtk.MenuItem(label=status_text)
             self.status_item.set_sensitive(False)
             self.menu.append(self.status_item)
-            self.menu.append(Gtk.SeparatorMenuItem())
-
-            item_open_drive = Gtk.MenuItem(label="☁ Open Google Drive (Cloud)")
-            item_open_drive.connect("activate", lambda _: subprocess.Popen(["nemo", mount_point]))
-            self.menu.append(item_open_drive)
 
             item_sync = Gtk.MenuItem(label="🔄 Sync All Now")
             item_sync.connect("activate", lambda _: self.trigger_sync_all())
             self.menu.append(item_sync)
 
             folders = [f for f in config_mgr.get_folders() if f.get("enabled", True)]
-            folders_menu_item = Gtk.MenuItem(label="📂 Synced Folders")
+            folders_menu_item = Gtk.MenuItem(label=f"📂 Synced Folders ({len(folders)})")
             sub_menu = Gtk.Menu()
             if folders:
                 for f in folders:
-                    name = Path(f["local_path"]).name
-                    f_item = Gtk.MenuItem(label=f"{name} ({f.get('status', 'idle')})")
+                    folder_name = Path(f["local_path"]).name
+                    f_item = Gtk.MenuItem(label=f"{folder_name} ({f.get('status', 'idle')})")
                     f_item.connect("activate", lambda _, path=f["local_path"]: subprocess.Popen(["nemo", path]))
                     sub_menu.append(f_item)
             else:
@@ -739,10 +1420,51 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             self.menu.append(Gtk.SeparatorMenuItem())
 
             item_quit = Gtk.MenuItem(label="Quit Google Drive Tray")
-            item_quit.connect("activate", lambda _: Gtk.main_quit())
+            item_quit.connect("activate", self.on_quit)
             self.menu.append(item_quit)
 
             self.menu.show_all()
+
+        def on_toggle_mount_tray(self, _item):
+            if RcloneOps.is_mounted(mount_point):
+                ok, err = RcloneOps.unmount_drive(mount_point)
+            else:
+                ok, err = RcloneOps.mount_drive(remote, mount_point)
+            if not ok:
+                send_notification("Google Drive Mount", f"Error: {err}", urgency="critical")
+            self.build_menu()
+            if self.settings_window and self.settings_window.get_visible():
+                self.settings_window.refresh_mount_status()
+
+        def on_switch_account(self, _item):
+            proc = AccountManager.connect_account(remote)
+            def wait_proc():
+                proc.wait()
+                AccountManager.get_account_info(remote, force=True)
+                GLib.idle_add(self.build_menu)
+                if self.settings_window and self.settings_window.get_visible():
+                    GLib.idle_add(self.settings_window.refresh_account_ui, True)
+                    GLib.idle_add(self.settings_window.refresh_mount_status)
+                send_notification("Google Drive", "Account connected / re-authenticated.")
+            threading.Thread(target=wait_proc, daemon=True).start()
+
+        def on_logout_account(self, _item):
+            if not self.settings_window:
+                self.settings_window = SettingsWindow(tray_ref=self)
+            self.settings_window.on_logout_account_clicked(None)
+
+        def on_remove_account(self, _item):
+            if not self.settings_window:
+                self.settings_window = SettingsWindow(tray_ref=self)
+            self.settings_window.on_remove_account_clicked(None)
+
+        def on_quit(self, _item=None):
+            try:
+                subprocess.run(["systemctl", "--user", "stop", "gdrive-tray.service"], check=False, timeout=5)
+            except Exception:
+                pass
+            Gtk.main_quit()
+            os._exit(0)
 
         def update_menu(self):
             GLib.idle_add(self.build_menu)
@@ -757,6 +1479,7 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
         def open_settings(self, _item=None):
             if not self.settings_window:
                 self.settings_window = SettingsWindow(tray_ref=self)
+            self.settings_window.refresh_account_ui()
             self.settings_window.refresh_mount_status()
             self.settings_window.refresh_folder_list()
             self.settings_window.show_all()
@@ -773,18 +1496,25 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             config_mgr.update_folder_status(f_id, "syncing")
             GLib.idle_add(self.set_tray_icon, "gdrive-syncing")
             self.update_menu()
-            send_notification("Google Drive Sync", f"Syncing {Path(folder['local_path']).name}…")
+            if config_mgr.data.get("notify_on_sync", False):
+                send_notification("Google Drive Sync", f"Syncing {Path(folder['local_path']).name}…")
 
             def worker():
                 success, msg = RcloneOps.sync_folder(folder)
                 now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.syncing_folders.discard(f_id)
 
+                if "already in progress" in msg:
+                    config_mgr.update_folder_status(f_id, "syncing")
+                    GLib.idle_add(self._on_sync_finished)
+                    return
+
                 if success:
                     config_mgr.update_folder_status(f_id, "idle", last_sync=now_str, error="", resync_needed=False)
-                    send_notification("Google Drive Sync", f"✔ Completed: {Path(folder['local_path']).name}")
+                    if config_mgr.data.get("notify_on_sync", False):
+                        send_notification("Google Drive Sync", f"✔ Completed: {Path(folder['local_path']).name}")
                 else:
-                    config_mgr.update_folder_status(f_id, "error", last_sync=now_str, error=msg)
+                    config_mgr.update_folder_status(f_id, "error", last_sync=now_str, error=msg, resync_needed=(folder.get("mode") == "bisync"))
                     send_notification("Google Drive Sync", f"⚠ Error in {Path(folder['local_path']).name}: {msg}", urgency="critical")
 
                 GLib.idle_add(self._on_sync_finished)
@@ -821,16 +1551,39 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
 def main():
     parser = argparse.ArgumentParser(description="Google Drive Sync & Tray Tool")
     parser.add_argument("command", nargs="?", default="tray",
-                        choices=["tray", "settings", "add", "sync-all", "mount", "unmount", "status"],
+                        choices=["tray", "settings", "add", "remove", "is-synced", "not-synced", "sync-all", "mount", "unmount", "status"],
                         help="Action to perform")
-    parser.add_argument("target", nargs="?", default=None, help="Target folder for 'add'")
+    parser.add_argument("target", nargs="?", default=None, help="Target folder")
 
     args = parser.parse_args()
     config_mgr = ConfigManager()
     remote = config_mgr.data.get("remote", "gdrive")
     mount_point = config_mgr.data.get("mount_point", str(DEFAULT_MOUNT_POINT))
 
-    if args.command == "mount":
+    clean_target = args.target.strip("\"'") if args.target else None
+
+    if args.command == "is-synced":
+        if not clean_target:
+            sys.exit(1)
+        target = str(Path(clean_target).resolve())
+        is_synced = any(str(Path(f["local_path"]).resolve()) == target for f in config_mgr.get_folders())
+        sys.exit(0 if is_synced else 1)
+
+    elif args.command == "not-synced":
+        if not clean_target:
+            sys.exit(1)
+        target = Path(clean_target).resolve()
+        mount = Path(mount_point).resolve()
+        # Inside Google Drive mount: never show sync/unsync action
+        try:
+            target.relative_to(mount)
+            sys.exit(1)
+        except ValueError:
+            pass
+        is_synced = any(str(Path(f["local_path"]).resolve()) == str(target) for f in config_mgr.get_folders())
+        sys.exit(1 if is_synced else 0)
+
+    elif args.command == "mount":
         ok, msg = RcloneOps.mount_drive(remote, mount_point)
         print(f"[{'OK' if ok else 'ERROR'}] {msg}")
         sys.exit(0 if ok else 1)
@@ -850,14 +1603,17 @@ def main():
 
     elif args.command == "sync-all":
         folders = [f for f in config_mgr.get_folders() if f.get("enabled", True)]
+        all_ok = True
         for f in folders:
             print(f"Syncing {f['local_path']} ...")
             ok, msg = RcloneOps.sync_folder(f)
             print(f" -> {'OK' if ok else 'ERROR'}: {msg}")
-        sys.exit(0)
+            if not ok:
+                all_ok = False
+        sys.exit(0 if all_ok else 1)
 
-    elif args.command in ("tray", "settings", "add"):
-        run_gui_app(start_mode=args.command, extra_arg=args.target)
+    elif args.command in ("tray", "settings", "add", "remove"):
+        run_gui_app(start_mode=args.command, extra_arg=clean_target)
 
 
 if __name__ == "__main__":

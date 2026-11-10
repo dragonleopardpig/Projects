@@ -278,7 +278,15 @@ let
         pix.save(out)
 
         copied = ""
-        if shutil.which("wl-copy"):
+        if shutil.which("wl-copy-image"):
+            # wl-copy-image uses GTK to offer image/png, image/bmp, image/tiff, etc.
+            # simultaneously on Wayland. WinApps / FreeRDP / Wine require CF_DIB via
+            # image/bmp to paste into Windows, while Linux apps expect image/png.
+            subprocess.Popen(["wl-copy-image", out],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+            copied = " and copied to the clipboard"
+        elif shutil.which("wl-copy"):
             # Do not wait on wl-copy: on Wayland the copier has to stay resident to
             # serve the selection, so waiting for it never returns.
             with open(out, "rb") as fh:
@@ -296,11 +304,41 @@ let
         main()
   '';
 
+  wlCopyImage = pkgs.stdenv.mkDerivation {
+    name = "wl-copy-image";
+    nativeBuildInputs = [ pkgs.pkg-config ];
+    buildInputs = [ pkgs.gtk3 ];
+    dontUnpack = true;
+    buildPhase = ''
+      cat << 'EOF' > main.c
+      #include <gtk/gtk.h>
+
+      int main(int argc, char *argv[]) {
+          if (argc < 2) return 1;
+          gtk_init(&argc, &argv);
+          GtkClipboard *clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+          GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(argv[1], NULL);
+          if (!pixbuf) return 2;
+          gtk_clipboard_set_image(clipboard, pixbuf);
+          g_signal_connect(clipboard, "owner-change", G_CALLBACK(gtk_main_quit), NULL);
+          gtk_main();
+          return 0;
+      }
+      EOF
+      $CC -O2 main.c $(pkg-config --cflags --libs gtk+-3.0) -o wl-copy-image
+    '';
+    installPhase = ''
+      mkdir -p $out/bin
+      cp wl-copy-image $out/bin/
+    '';
+  };
+
   sioyekSnip = pkgs.writeShellApplication {
     name = "sioyek-snip";
     runtimeInputs = [
       (pkgs.python3.withPackages (ps: with ps; [ pillow pymupdf ]))
       pkgs.djvulibre
+      wlCopyImage
       pkgs.wl-clipboard
       pkgs.libnotify
     ];
@@ -377,10 +415,11 @@ in
   # Leave CPU and memory headroom for the desktop during source builds.
   nix.settings.max-jobs = 2;
   nix.settings.cores = 2;
+  nix.settings.auto-optimise-store = true;
   nix.gc = {
     automatic = true;
     dates = "daily";
-    options = "--delete-older-than 30d";
+    options = "--delete-older-than 7d";
   };
 
   # Limit boot entries to prevent /boot from filling up
@@ -423,6 +462,7 @@ in
 
   # Enable networking
   networking.networkmanager.enable = true;
+  networking.enableIPv6 = false;
 
   # Set your time zone.
   time.timeZone = "Asia/Singapore";
@@ -758,6 +798,7 @@ in
       ) licenses;
     in
       builtins.elem name [
+        "antigravity"
         "brother-udev-rule-type1"
         "brscan4"
         "claude-code"
@@ -820,6 +861,7 @@ in
     inetutils                  # Basic networking tools (ftp, telnet, etc.)
     ethtool                    # Ethernet device configuration
     filezilla                  # GUI FTP/SFTP client
+    rclone-browser
     remmina                    # Remote desktop client
     freerdp                    # RDP implementation (needed for Remmina RDP plugins)
     python3
@@ -1017,9 +1059,10 @@ in
                                # -m KrakenOS.UI.validate_open3d_...`.
 
     # ── AI Assistants ──
-    # claude-code                # Anthropic Claude CLI coding assistant
-    # claude-monitor             # Claude usage monitoring tool
-    # codex
+    antigravity                # Google Antigravity IDE (official agentic desktop IDE)
+    claude-code                # Anthropic Claude CLI coding assistant
+    claude-monitor             # Claude usage monitoring tool
+    codex                      # OpenAI Codex CLI
     # gemini-cli
 
     # ── Containers & Compatibility ──
@@ -1033,6 +1076,7 @@ in
          (base.targetPkgs pkgs) ++ (with pkgs; [
            pkg-config
            ncurses
+           zstd
            gtk2
            gnome-themes-extra
            gtk-engine-murrine
@@ -1080,6 +1124,7 @@ in
     djvuToPdf                  # djvu2pdf: DjVu → searchable PDF for Sioyek
     pdfPrep                    # pdf-prep: whiten, speed up and OCR a scanned PDF
     sioyekSnip                 # sioyek-snip: crop a dragged rectangle out of a page
+    wlCopyImage                # wl-copy-image: Wayland multi-format image clipboard (PNG, BMP for WinApps/Wine)
     djvulibre                  # ddjvu/djvused/djvudump for inspecting DjVu directly
     ocrmypdf                   # Adds a searchable text layer to scanned PDFs
     tesseract                  # OCR engine behind ocrmypdf
@@ -1097,6 +1142,7 @@ in
     ++ (lib.optionals (pkgs ? paraview) [ pkgs.paraview ]);
 
   services.blueman.enable = true;
+  systemd.user.services.blueman-applet.serviceConfig.ExecStart = lib.mkForce [ "" "${pkgs.blueman}/bin/blueman-applet" ];
   hardware.bluetooth = {
     enable = true;
     powerOnBoot = true;

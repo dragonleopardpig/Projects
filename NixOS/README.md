@@ -91,6 +91,15 @@ NixOS/
 - Volume/brightness on XF86 keys and F5/F6
 - Screenshots via `grim + slurp + swappy`
 
+**AGS bar**: Managed by the user `ags.service`, starts with the graphical
+session, and automatically restarts after an unexpected exit. `Super+A` or
+`systemctl --user restart ags.service` restarts it; inspect failures with
+`journalctl --user -u ags.service`. Use `systemctl --user stop ags.service`
+to stop it intentionally.
+
+**Rclone Browser**: Opens as a centered 1200×800 floating window rather than
+filling its workspace.
+
 **Hyprland autostart**: pyprland, ProtonVPN, swww wallpaper daemon, Solaar, HyprPolkitAgent
 
 **Waybar**: Cyberpunk-themed bar with workspaces, system monitors (cpu/mem/disk/temp), backlight & volume sliders, bluetooth, network, battery, idle inhibitor, keyboard state, language, tray, weather (wttr.in/Singapore), clock, swaync notification toggle, and wlogout power menu. Click handlers use `~/.local/bin/toggle-app` so a second click closes the spawned window.
@@ -154,6 +163,16 @@ sudo nixos-rebuild switch --flake .#M90aPro
    ```bash
    lspci | grep VGA
    ```
+
+## FileLu Mount Responsiveness
+
+- The FileLu mount disables online quota queries (`--disable=About`) so Nemo's
+  free-space checks do not wait for FileLu's servers when opening a window.
+- FileLu free-space figures in Nemo are placeholders, not the actual account
+  quota. Check FileLuSync or the FileLu website for account usage instead.
+- HTTP/2 is disabled after observed response-header timeouts. Connections time
+  out after 10 seconds and idle network operations after 30 seconds, with
+  low-level retries limited to two. The existing full VFS cache is preserved.
 
 ## Scramble Offline Reading
 

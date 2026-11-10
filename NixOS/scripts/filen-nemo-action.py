@@ -23,7 +23,7 @@ def copy_to_clipboard(text: str):
     wl_copy = shutil.which("wl-copy")
     if wl_copy:
         try:
-            subprocess.run([wl_copy, text], check=True)
+            subprocess.Popen([wl_copy, text])
             return True
         except Exception:
             pass
@@ -34,7 +34,7 @@ def focus_filen():
     hyprctl = shutil.which("hyprctl")
     if hyprctl:
         try:
-            res = subprocess.run([hyprctl, "dispatch", "focuswindow", "class:^([Ff]ilen[ -][Dd]esktop)$"], capture_output=True, text=True)
+            res = subprocess.run([hyprctl, "dispatch", "focuswindow", "title:^(Filen)"], capture_output=True, text=True)
             if "ok" in res.stdout.lower():
                 return True
         except Exception:

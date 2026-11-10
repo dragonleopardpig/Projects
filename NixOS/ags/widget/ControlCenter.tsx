@@ -7,6 +7,7 @@ import AstalPowerProfiles from "gi://AstalPowerProfiles"
 import GLib from "gi://GLib"
 import { ICON } from "../lib/icons"
 import { WEATHER_CMD, DISPLAY_SCALE_CMD, MOUSE_SPEED_CMD } from "../lib/paths"
+import { weather } from "./Weather"
 
 // ── Audio card ────────────────────────────────────────────────────
 function AudioCard() {
@@ -766,8 +767,6 @@ function PowerProfileCard() {
 }
 
 // ── Weather card ──────────────────────────────────────────────────
-const weather = Variable("").poll(30 * 60 * 1000, WEATHER_CMD)
-
 function WeatherCard() {
     return <box className="Card Tile" vertical spacing={2}>
         <box spacing={6}>

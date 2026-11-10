@@ -34,11 +34,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor, index: number) {
         anchor={TOP | LEFT | RIGHT}
         application={App}>
         <eventbox
+            hexpand
             // Press anywhere on the bar (including widgets) dismisses any
             // open drawer. Drawer-toggle buttons handle the open-vs-close
             // toggle themselves via bindToggleButton.
             onButtonPressEvent={() => { dismissDrawers(); return false }}>
-        <centerbox>
+        <centerbox hexpand>
             <box halign={Gtk.Align.START} spacing={6}>
                 <AppDrawerButton />
                 <Workspaces />

@@ -1,0 +1,39 @@
+diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
+index 9c92147..f8bfcbb 100644
+--- a/pdf_viewer/input.cpp
++++ b/pdf_viewer/input.cpp
+@@ -15,6 +15,9 @@
+ #include <qfileinfo.h>
+ #include <qclipboard.h>
+ #include <qguiapplication.h>
++#include <qmimedata.h>
++#include <qbuffer.h>
++#include <qimage.h>
+ 
+ #include "coordinates.h"
+ #include "utils.h"
+@@ -2288,7 +2291,23 @@ public:
+ 
+         //widget->render(&pixmap, QPoint(), QRegion(widget->rect()));
+         widget->render(&pixmap, QPoint(), QRegion(window_qrect));
+-        QApplication::clipboard()->setPixmap(pixmap);
++
++        // setPixmap() on Wayland offers the image as image/png and nothing
++        // else. Windows clipboards (FreeRDP for WinApps, Wine) want a CF_DIB,
++        // which they make from image/bmp but not from image/png, so a copied
++        // screenshot pasted nowhere on the Windows side. Offer BMP beside PNG,
++        // as screenshot tools such as swappy do.
++        QImage image = pixmap.toImage();
++        QMimeData* mime = new QMimeData();
++        for (const auto& [mime_type, format] : { std::pair{"image/png", "PNG"}, std::pair{"image/bmp", "BMP"} }) {
++            QByteArray bytes;
++            QBuffer buffer(&bytes);
++            buffer.open(QIODevice::WriteOnly);
++            if (image.save(&buffer, format)) {
++                mime->setData(mime_type, bytes);
++            }
++        }
++        QApplication::clipboard()->setMimeData(mime);
+ 
+         widget->set_rect_select_mode(false);
+         widget->invalidate_render();

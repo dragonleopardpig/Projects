@@ -122,6 +122,9 @@
             ./patches/sioyek-fuzzy-file-matching.patch
             ./patches/sioyek-lettered-section-references.patch
             ./patches/sioyek-reference-generalization.patch
+            # Built-in copy_screenshot_to_clipboard offered only image/png;
+            # also offer image/bmp for Windows RDP (WinApps) / Wine compatibility.
+            ./patches/sioyek-clipboard-bmp.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           # final, not prev: the jkqtplotter below is patched in this same
@@ -576,6 +579,14 @@
           }
         ];
       };
+      pkgsWithOverlays = import nixpkgs {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+        overlays = [
+          inputs.formulaocr-offline.overlays.default
+          localOverlay
+        ];
+      };
     in {
       # X299 Desktop (external SSD clone)
       nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
@@ -593,7 +604,7 @@
 
       # Standalone home-manager configurations (optional)
       homeConfigurations."thinky@M90aPro" = home-manager.lib.homeManagerConfiguration {
-        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        pkgs = pkgsWithOverlays;
         extraSpecialArgs = { inherit inputs; scrambleHostName = "M90aPro"; };
         modules = [
           ./home.nix

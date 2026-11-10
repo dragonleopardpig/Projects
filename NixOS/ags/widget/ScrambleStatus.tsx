@@ -1,4 +1,4 @@
-import { Variable, exec } from "astal"
+import { Variable, execAsync } from "astal"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=3.0"
@@ -19,15 +19,27 @@ type Status = {
 }
 const helperDirectory = `${GLib.get_home_dir()}/.local/bin`
 
-function readStatus(): Status {
+const defaultScrambleStatus: Status = {
+    state: "ok",
+    label: "Scramble",
+    summary: "Idle",
+}
+
+export async function fetchScrambleStatus(): Promise<Status> {
     try {
-        const status = JSON.parse(exec([`${helperDirectory}/scramble-sync-status`, "--json"])) as Status
-        if (!status.state || !status.label || !status.summary) throw new Error("Incomplete status")
-        return status
+        const output = (await execAsync([`${helperDirectory}/scramble-sync-status`, "--json"])).trim()
+        if (output) {
+            const status = JSON.parse(output) as Status
+            if (status.state && status.label && status.summary) return status
+        }
     } catch {
         return { state: "error", label: "Monitor error", summary: "Scramble status is unavailable; relaunch Scramble Desktop" }
     }
+    return defaultScrambleStatus
 }
+
+// Initial fetch in background
+void fetchScrambleStatus()
 const scrambleIcon = Gio.FileIcon.new(Gio.File.new_for_path(SCRAMBLE_ICON))
 
 function tooltip(status: Status): string {
@@ -50,7 +62,7 @@ function tooltip(status: Status): string {
 }
 
 export default function ScrambleStatus() {
-    const status = Variable(readStatus()).poll(2000, readStatus)
+    const status = Variable(defaultScrambleStatus).poll(5000, fetchScrambleStatus)
 
     return <box
         className={status().as(currentStatus => `ScrambleStatus ${currentStatus.state}`)}
@@ -61,7 +73,7 @@ export default function ScrambleStatus() {
         }}
         onDestroy={() => status.drop()}>
         <overlay halign={Gtk.Align.CENTER} valign={Gtk.Align.CENTER}>
-            <icon className="scramble-icon" gicon={scrambleIcon} />
+            <icon className="scramble-icon" pixelSize={18} gicon={scrambleIcon} />
             <box className="health" halign={Gtk.Align.END} valign={Gtk.Align.END} />
         </overlay>
     </box>
