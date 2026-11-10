@@ -640,6 +640,31 @@ in
     enable = true;
     allowImages = true;
   };
+
+  # Bridge Windows RDP (WinApps) / VM clipboard bitmaps (image/bmp) to image/png
+  # so GTK4 applications (like Pinta) and Linux desktop tools can paste screenshots seamlessly.
+  systemd.user.services.clipboard-bmp-to-png = {
+    Unit = {
+      Description = "Clipboard BMP to PNG bridge for Windows RDP / VM";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${pkgs.writeShellScript "clipboard-bmp-to-png" ''
+        exec ${pkgs.wl-clipboard}/bin/wl-paste -t image/bmp --watch ${pkgs.writeShellScript "bmp-to-png-handler" ''
+          types="$(${pkgs.wl-clipboard}/bin/wl-paste --list-types 2>/dev/null || true)"
+          if ! echo "$types" | ${pkgs.gnugrep}/bin/grep -q "image/png"; then
+            ${pkgs.imagemagick}/bin/magick - png:- | ${pkgs.wl-clipboard}/bin/wl-copy -t image/png
+          fi
+        ''}
+      ''}";
+      Restart = "always";
+      RestartSec = "2s";
+    };
+    Install = {
+      WantedBy = [ "graphical-session.target" ];
+    };
+  };
   xdg.dataFile."xdg-desktop-portal/portals/gtk.portal".source =
     "${pkgs.xdg-desktop-portal-gtk}/share/xdg-desktop-portal/portals/gtk.portal";
   xdg.configFile."distrobox/distrobox.conf".force = true;
