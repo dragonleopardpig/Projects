@@ -8,10 +8,11 @@ This directory contains source patches applied via the `localOverlay` in
 ### `swappy-multi-mime-clipboard.patch`
 
 Makes `swappy` offer the screenshot in multiple image MIME types via the GTK
-clipboard (PNG, BMP, TIFF, JPEG) so that other apps and Wayland-side
-clipboard consumers can paste it without conversion.
+clipboard (PNG, BMP, TIFF, JPEG) from swappy's focused window so that other apps
+(like Windows FreeRDP and Linux image editors) can paste it without conversion,
+and hands off to `wl-copy` (as PNG) on exit.
 
-Upstream PR: <https://github.com/jtheoof/swappy/pull/221> (open, no traction).
+Upstream PR: <https://github.com/jtheoof/swappy/pull/221> (approved, awaiting merge).
 
 ### `swappy-save-as-dialog.patch`
 

@@ -1,75 +1,133 @@
+From a7ac080654edfca9648446f52d9c4f1bcd40675d Mon Sep 17 00:00:00 2001
+From: dragonleopardpig <dragonleopardpig@gmail.com>
+Date: Sun, 8 Nov 2026 14:21:04 +0800
+Subject: [PATCH] feat(clipboard): offer every image type while swappy is open
+
+Copy sets the GTK clipboard from swappy's own window with
+gtk_clipboard_set_with_data() and GTK's image targets, so the image is
+offered as image/png, image/bmp, image/tiff, image/jpeg, ... like Pinta
+or GIMP do, and applications that need a format other than PNG (e.g.
+Remmina) can paste it. The window has focus when the user copies, so
+every compositor accepts the selection.
+
+When swappy exits and still owns the clipboard, the image is handed to
+wl-copy as PNG, as before, so it outlives swappy. If another application
+took the clipboard in the meantime (the clear callback fires), nothing
+is handed off. With early_exit=true, the clipboard is PNG only, as
+before.
+
+Fixes the regressions of the first version: no helper process, no
+serial-0 selection rejected by wlroots, KDE or GNOME, no execlp of
+whichever swappy is on PATH, and nothing left running.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01K8z2P5Z4RtBxMWi3qWQ1vE
+---
+ README.md           |  2 +-
+ include/clipboard.h |  4 +++
+ src/application.c   |  1 +
+ src/clipboard.c     | 72 +++++++++++++++++++++++++++++++++++++++++----
+ 4 files changed, 72 insertions(+), 7 deletions(-)
+
+diff --git a/README.md b/README.md
+index f533728..956c1ad 100644
+--- a/README.md
++++ b/README.md
+@@ -139,7 +139,7 @@ Other compositors usually have an equivalent rule that matches on app id.
+ 
+ ## Limitations
+ 
+-- **Copy**: If you don't have [wl-clipboard] installed, copy to clipboard won't work if you close swappy (the content of the clipboard is lost). This because GTK 3.24 [has not implemented persistent storage on wayland backend yet](https://gitlab.gnome.org/GNOME/gtk/blob/3.24.13/gdk/wayland/gdkdisplay-wayland.c#L857). We need to do it on the [Wayland level](https://github.com/swaywm/wlr-protocols/blob/master/unstable/wlr-data-control-unstable-v1.xml), or wait for GTK 4. For now, we use `wl-copy` if installed and revert to `gtk` clipboard if not found.
++- **Copy**: While swappy is open, the copied image is offered in every image format GTK supports (`image/png`, `image/bmp`, `image/tiff`, ...), so applications that need a format other than PNG (e.g. Remmina) can paste it. When swappy exits, it hands the image to `wl-copy`, as PNG only. If you don't have [wl-clipboard] installed, the clipboard is lost when you close swappy. This is because GTK 3.24 [has not implemented persistent storage on wayland backend yet](https://gitlab.gnome.org/GNOME/gtk/blob/3.24.13/gdk/wayland/gdkdisplay-wayland.c#L857). We need to do it on the [Wayland level](https://github.com/swaywm/wlr-protocols/blob/master/unstable/wlr-data-control-unstable-v1.xml), or wait for GTK 4.
+ - **Fonts**: Swappy relies on Font Awesome 5 being present to properly render the icons. On Arch you can simply install those with: `sudo pacman -S otf-font-awesome`
+ - **Output Format**: Only PNG is supported.
+ 
+diff --git a/include/clipboard.h b/include/clipboard.h
+index a701ebb..d819216 100644
+--- a/include/clipboard.h
++++ b/include/clipboard.h
+@@ -3,3 +3,7 @@
+ #include "swappy.h"
+ 
+ bool clipboard_copy_drawing_area_to_selection(struct swappy_state *state);
++
++// Before swappy exits: if it still owns the clipboard, hand the image to
++// `wl-copy` so it outlives swappy.
++void clipboard_hand_off_selection(void);
+diff --git a/src/application.c b/src/application.c
+index 16cbdf4..dce01c9 100644
+--- a/src/application.c
++++ b/src/application.c
+@@ -72,6 +72,7 @@ static void update_ui_transparent_toggle_button(struct swappy_state *state) {
+ 
+ void application_finish(struct swappy_state *state) {
+   g_debug("application finishing, cleaning up");
++  clipboard_hand_off_selection();
+   paint_free_all(state);
+   pixbuf_free(state);
+   cairo_surface_destroy(state->rendering_surface);
 diff --git a/src/clipboard.c b/src/clipboard.c
-index dd03dd9..62a59f2 100644
+index dd03dd9..1024fac 100644
 --- a/src/clipboard.c
 +++ b/src/clipboard.c
-@@ -10,32 +10,43 @@
+@@ -10,6 +10,10 @@
  #define gtk_clipboard_t GtkClipboard
  #define gdk_pixbuf_t GdkPixbuf
  
--static gboolean send_pixbuf_to_wl_copy(gdk_pixbuf_t *pixbuf) {
-+/*
-+ * Fork a child that execs "swappy --clipboard-serve".  The child reads PNG
-+ * from stdin and sets the GTK clipboard with gtk_clipboard_set_image(), which
-+ * advertises every image MIME type GTK supports (image/png, image/bmp,
-+ * image/tiff, …) — the same behaviour as Pinta or GIMP.  The child stays
-+ * alive to serve paste requests and exits when another app takes clipboard
-+ * ownership.
-+ */
-+static gboolean send_pixbuf_to_clipboard_serve(gdk_pixbuf_t *pixbuf) {
++// The image swappy holds on the clipboard while it owns it. Set back to NULL
++// when another application takes the clipboard (see on_clear).
++static gdk_pixbuf_t *owned_pixbuf = NULL;
++
+ static gboolean send_pixbuf_to_wl_copy(gdk_pixbuf_t *pixbuf) {
    pid_t clipboard_process = 0;
    int pipefd[2];
--  int status;
-   ssize_t written;
-   gsize size;
-   gchar *buffer = NULL;
-   GError *error = NULL;
+@@ -66,18 +70,56 @@ static gboolean send_pixbuf_to_wl_copy(gdk_pixbuf_t *pixbuf) {
+   return false;
+ }
  
-   if (pipe(pipefd) < 0) {
--    g_warning("unable to pipe for copy process to work");
-+    g_warning("unable to pipe for clipboard-serve process");
-     return false;
-   }
-   clipboard_process = fork();
-   if (clipboard_process == -1) {
--    g_warning("unable to fork process for copy");
-+    g_warning("unable to fork process for clipboard-serve");
-     return false;
-   }
-   if (clipboard_process == 0) {
-     close(pipefd[1]);
-     dup2(pipefd[0], STDIN_FILENO);
-     close(pipefd[0]);
-+    /* Detach so swappy can exit while the child keeps serving clipboard. */
-+    setsid();
-+    execlp("swappy", "swappy", "--clipboard-serve", NULL);
-+    /* Fallback: try wl-copy if swappy --clipboard-serve is unavailable. */
-     execlp("wl-copy", "wl-copy", "-t", "image/png", NULL);
-     g_warning(
--        "Unable to copy contents to clipboard. Please make sure you have "
--        "`wl-clipboard`, `xclip`, or `xsel` installed.");
-+        "Unable to copy contents to clipboard. Please make sure swappy or "
-+        "`wl-clipboard` is installed.");
-     exit(1);
-   }
-   close(pipefd[0]);
-@@ -57,27 +68,16 @@ static gboolean send_pixbuf_to_wl_copy(gdk_pixbuf_t *pixbuf) {
- 
-   close(pipefd[1]);
-   g_free(buffer);
--  waitpid(clipboard_process, &status, 0);
- 
--  if (WIFEXITED(status)) {
--    return WEXITSTATUS(status) == 0;  // Make sure the child exited properly
--  }
--
--  return false;
--}
--
 -static void send_pixbuf_to_gdk_clipboard(gdk_pixbuf_t *pixbuf) {
--  gtk_clipboard_t *clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
++static void on_get(gtk_clipboard_t *clipboard, GtkSelectionData *selection_data,
++                   guint info, gpointer data) {
++  gtk_selection_data_set_pixbuf(selection_data, GDK_PIXBUF(data));
++}
++
++static void on_clear(gtk_clipboard_t *clipboard, gpointer data) {
++  if (data == owned_pixbuf) {
++    owned_pixbuf = NULL;
++  }
++  g_object_unref(data);
++}
++
++// Offer the image in every format GTK can convert a pixbuf to (image/png,
++// image/bmp, image/tiff, ...), like Pinta or GIMP do. The selection is set from
++// swappy's own window, which has focus when the user copies, so every
++// compositor accepts it.
++static gboolean send_pixbuf_to_gtk_clipboard(gdk_pixbuf_t *pixbuf) {
+   gtk_clipboard_t *clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
 -  gtk_clipboard_set_image(clipboard, pixbuf);
 -  gtk_clipboard_store(clipboard);  // Does not work for Wayland gdk backend
-+  /* Don't waitpid — the child intentionally outlives swappy. */
++  GtkTargetList *list = gtk_target_list_new(NULL, 0);
++  GtkTargetEntry *targets;
++  gint count = 0;
++  gboolean done;
++
++  gtk_target_list_add_image_targets(list, 0, TRUE);
++  targets = gtk_target_table_new_from_list(list, &count);
++  gtk_target_list_unref(list);
++
++  // Replacing our own earlier copy calls on_clear for it first.
++  done = gtk_clipboard_set_with_data(clipboard, targets, count, on_get,
++                                     on_clear, g_object_ref(pixbuf));
++  gtk_target_table_free(targets, count);
++
++  if (!done) {
++    g_object_unref(pixbuf);
++    return false;
++  }
++
++  owned_pixbuf = pixbuf;
++  gtk_clipboard_set_can_store(clipboard, NULL, 0);
++
 +  return true;
  }
  
@@ -79,100 +137,32 @@ index dd03dd9..62a59f2 100644
 -  // Try `wl-copy` first and fall back to gtk function. See README.md.
 -  if (!send_pixbuf_to_wl_copy(pixbuf)) {
 -    send_pixbuf_to_gdk_clipboard(pixbuf);
-+  if (!send_pixbuf_to_clipboard_serve(pixbuf)) {
-+    g_warning("clipboard-serve failed, falling back to wl-copy");
++  // Hold the image on the GTK clipboard while swappy runs, and hand it to
++  // `wl-copy` when it exits (see clipboard_hand_off_selection). See README.md.
++  if (!send_pixbuf_to_gtk_clipboard(pixbuf)) {
++    send_pixbuf_to_wl_copy(pixbuf);
    }
  
    g_object_unref(pixbuf);
-diff --git a/src/main.c b/src/main.c
-index c04b96a..aad0593 100644
---- a/src/main.c
-+++ b/src/main.c
-@@ -1,9 +1,87 @@
- #define _POSIX_C_SOURCE 200809L
+@@ -88,3 +130,21 @@ bool clipboard_copy_drawing_area_to_selection(struct swappy_state *state) {
  
-+#include <string.h>
+   return true;
+ }
 +
- #include "application.h"
- #include "config.h"
-+#include "swappy.h"
++void clipboard_hand_off_selection(void) {
++  gdk_pixbuf_t *pixbuf = owned_pixbuf;
 +
-+/*
-+ * --clipboard-serve mode: read PNG from stdin, set the GTK clipboard with
-+ * gtk_clipboard_set_image() (which advertises all image MIME types just like
-+ * Pinta/GIMP), and stay alive to serve paste requests.  Exit when another app
-+ * takes clipboard ownership.
-+ */
-+static void on_owner_change(GtkClipboard *clipboard, GdkEvent *event,
-+                            gpointer data) {
-+  (void)clipboard;
-+  (void)event;
-+  (void)data;
-+  gtk_main_quit();
-+}
-+
-+static int clipboard_serve(void) {
-+  GdkPixbuf *pixbuf;
-+  GdkPixbufLoader *loader;
-+  GtkClipboard *clipboard;
-+  guchar buf[65536];
-+  ssize_t n;
-+  GError *error = NULL;
-+
-+  gtk_init(NULL, NULL);
-+
-+  loader = gdk_pixbuf_loader_new_with_type("png", &error);
-+  if (!loader) {
-+    g_printerr("clipboard-serve: cannot create PNG loader: %s\n",
-+               error->message);
-+    g_error_free(error);
-+    return 1;
++  // Another application took the clipboard, or nothing was copied.
++  if (pixbuf == NULL) {
++    return;
 +  }
 +
-+  while ((n = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
-+    if (!gdk_pixbuf_loader_write(loader, buf, (gsize)n, &error)) {
-+      g_printerr("clipboard-serve: loader write error: %s\n", error->message);
-+      g_error_free(error);
-+      g_object_unref(loader);
-+      return 1;
-+    }
-+  }
-+
-+  if (!gdk_pixbuf_loader_close(loader, &error)) {
-+    g_printerr("clipboard-serve: loader close error: %s\n", error->message);
-+    g_error_free(error);
-+    g_object_unref(loader);
-+    return 1;
-+  }
-+
-+  pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
-+  if (!pixbuf) {
-+    g_printerr("clipboard-serve: no pixbuf from loader\n");
-+    g_object_unref(loader);
-+    return 1;
-+  }
++  // GTK cannot keep the clipboard once swappy exits on Wayland: hand the image
++  // to `wl-copy`, as PNG, so it stays on the clipboard.
 +  g_object_ref(pixbuf);
-+  g_object_unref(loader);
-+
-+  clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
-+  gtk_clipboard_set_image(clipboard, pixbuf);
-+
-+  /* Exit when another app takes clipboard ownership. */
-+  g_signal_connect(clipboard, "owner-change", G_CALLBACK(on_owner_change),
-+                   NULL);
-+
-+  gtk_main();
-+
-+  g_object_unref(pixbuf);
-+  return 0;
-+}
- 
- int main(int argc, char *argv[]) {
-+  /* Handle --clipboard-serve before any swappy init. */
-+  if (argc == 2 && strcmp(argv[1], "--clipboard-serve") == 0) {
-+    return clipboard_serve();
++  if (!send_pixbuf_to_wl_copy(pixbuf)) {
++    // Only X11 clipboard managers can store it.
++    gtk_clipboard_store(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD));
 +  }
-+
-   struct swappy_state state = {0};
-   int status;
- 
++  g_object_unref(pixbuf);
++}
