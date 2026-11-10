@@ -212,12 +212,37 @@ if [ "$HOST" = "PortableSSD" ]; then
     esac
 fi
 
+# Reload desktop shell and compositor if running locally
+reload_desktop_environment() {
+    if [ "$HOST" = "$CURRENT_HOST" ]; then
+        local USER_RUNDIR="/run/user/$(id -u)"
+        if [ -d "$USER_RUNDIR" ]; then
+            export XDG_RUNTIME_DIR="$USER_RUNDIR"
+            if [ -S "$USER_RUNDIR/noctalia-wayland-0.sock" ]; then
+                print_info "Reloading Noctalia desktop shell..."
+                if noctalia msg config-reload 2>/dev/null; then
+                    print_success "Noctalia desktop shell reloaded"
+                fi
+            fi
+            if [ -S "$USER_RUNDIR/umbriel-wayland-0.sock" ]; then
+                print_info "Reloading Umbriel compositor..."
+                if umbriel msg config-reload 2>/dev/null; then
+                    print_success "Umbriel compositor reloaded"
+                fi
+            fi
+        fi
+    fi
+}
+
 # Execute based on command
 case "$COMMAND" in
     switch|test|boot|build)
         print_info "Running: sudo nixos-rebuild $COMMAND $IMPURE_FLAG --flake .#$HOST"
         sudo nixos-rebuild "$COMMAND" $IMPURE_FLAG --flake "path:$SCRIPT_DIR#$HOST"
         print_success "NixOS rebuild $COMMAND completed for $HOST"
+        if [ "$COMMAND" = "switch" ] || [ "$COMMAND" = "test" ]; then
+            reload_desktop_environment
+        fi
         ;;
 
     update)
@@ -228,6 +253,7 @@ case "$COMMAND" in
         print_info "Rebuilding with updated inputs..."
         sudo nixos-rebuild switch $IMPURE_FLAG --flake "path:$SCRIPT_DIR#$HOST"
         print_success "NixOS rebuild completed with updated inputs for $HOST"
+        reload_desktop_environment
         ;;
 
     clean)

@@ -38,7 +38,7 @@
         gpuSelection = suite.gpuSelectionCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
-      homeManagerModules.suite = { ... }: {
+      homeManagerModules.suite = { lib, ... }: {
         xdg.configFile."umbriel/config.toml" = {
           source = suite.userCompositorConfig;
           force = true;
@@ -59,6 +59,9 @@
           source = ./suite/plugins/kitty-control;
           force = true;
         };
+        home.activation.syncNoctaliaSuite = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          ${lib.getExe suite.syncSettings} || true
+        '';
       };
     };
 }
