@@ -158,16 +158,6 @@ in
     terminal = false;
   };
 
-  xdg.desktopEntries.f3d-xcb = {
-    name = "F3D";
-    exec = "/home/thinky/.local/bin/f3d-xcb %f";
-    icon = "f3d";
-    comment = "F3D viewer (XWayland software GL)";
-    mimeType = [ "model/step" "model/iges" "application/step" "model/stl" "model/obj" ];
-    categories = [ "Graphics" "Engineering" "Science" ];
-    terminal = false;
-  };
-
   xdg.desktopEntries.paraview-xcb = {
     name = "ParaView";
     exec = "/home/thinky/.local/bin/paraview-xcb %f";
@@ -1293,12 +1283,6 @@ in
   xdg.desktopEntries.sioyek                   = { name = "Sioyek";   exec = "true"; noDisplay = true; };
   xdg.desktopEntries.mayo                     = { name = "Mayo";     exec = "true"; noDisplay = true; };
   xdg.desktopEntries.gmsh                     = { name = "Gmsh";     exec = "true"; noDisplay = true; };
-  xdg.desktopEntries.f3d                      = { name = "F3D";      exec = "true"; noDisplay = true; };
-  xdg.desktopEntries."f3d-plugin-assimp"      = { name = "F3D";      exec = "true"; noDisplay = true; };
-  xdg.desktopEntries."f3d-plugin-hdf"         = { name = "F3D";      exec = "true"; noDisplay = true; };
-  xdg.desktopEntries."f3d-plugin-native"      = { name = "F3D";      exec = "true"; noDisplay = true; };
-  xdg.desktopEntries."f3d-plugin-occt"        = { name = "F3D";      exec = "true"; noDisplay = true; };
-  xdg.desktopEntries."f3d-plugin-usd"         = { name = "F3D";      exec = "true"; noDisplay = true; };
   xdg.desktopEntries."org.paraview.ParaView"  = { name = "ParaView"; exec = "true"; noDisplay = true; };
   xdg.desktopEntries.nemo                     = { name = "Files";    exec = "true"; noDisplay = true; };
   xdg.desktopEntries.iexplorer                = { name = "Internet Explorer"; exec = "true"; noDisplay = true; };
@@ -1317,21 +1301,6 @@ in
       export LIBGL_ALWAYS_SOFTWARE=1
       export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
       exec gmsh "$@"
-    '';
-  };
-
-  # F3D wrapper: force XWayland + software GL
-  home.file.".local/bin/f3d-xcb" = {
-    executable = true;
-    text = ''
-      #!/bin/sh
-      export QT_QPA_PLATFORM=xcb
-      export XDG_SESSION_TYPE=x11
-      export QT_XCB_GL_INTEGRATION=none
-      export LIBGL_DRI3_DISABLE=1
-      export LIBGL_ALWAYS_SOFTWARE=1
-      export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
-      exec f3d "$@"
     '';
   };
 

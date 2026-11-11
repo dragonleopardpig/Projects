@@ -1142,7 +1142,6 @@ in
     # ── Fun ──
     cowsay                     # Talking cow ASCII art
   ] ++ (lib.optionals (pkgs ? gmsh) [ pkgs.gmsh ])
-    ++ (lib.optionals (pkgs ? f3d) [ pkgs.f3d ])
     ++ (lib.optionals (pkgs ? paraview) [ pkgs.paraview ]);
 
   services.blueman.enable = true;
