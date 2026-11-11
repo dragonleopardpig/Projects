@@ -61,11 +61,8 @@
           patched = prev.lapce.overrideAttrs (old: {
             doCheck = false;
             patches = (old.patches or []) ++ [ ./modules/lapce-org.patch ];
-            postUnpack = (old.postUnpack or "") + ''
-              for f in $(find "$cargoDepsCopy" -name "window_handle.rs" 2>/dev/null); do
-                echo "Patching context menu in: $f"
-                ${prev.gnused}/bin/sed -i '/if self\.context_menu\.with_untracked/,+5d' "$f"
-              done
+            postPatch = (old.postPatch or "") + ''
+              ${prev.python3}/bin/python3 ${./modules/patch-floem.py} /build
             '';
           });
         in prev.symlinkJoin {
