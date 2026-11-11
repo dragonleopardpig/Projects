@@ -53,6 +53,31 @@
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
     let
       localOverlay = final: prev: {
+        # Lapce with:
+        # 1. Floem context menu bug fix (disappearing on mouse release)
+        # 2. Native Org mode (.org) language syntax definition
+        # 3. vulkan-loader and graphics driver wrapper in LD_LIBRARY_PATH
+        lapce = let
+          patched = prev.lapce.overrideAttrs (old: {
+            doCheck = false;
+            patches = (old.patches or []) ++ [ ./modules/lapce-org.patch ];
+            postUnpack = (old.postUnpack or "") + ''
+              for f in $(find "$cargoDepsCopy" -name "window_handle.rs" 2>/dev/null); do
+                echo "Patching context menu in: $f"
+                ${prev.gnused}/bin/sed -i '/if self\.context_menu\.with_untracked/,+5d' "$f"
+              done
+            '';
+          });
+        in prev.symlinkJoin {
+          name = "lapce-${prev.lapce.version}";
+          paths = [ patched ];
+          buildInputs = [ prev.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/lapce \
+              --prefix LD_LIBRARY_PATH : "${prev.lib.makeLibraryPath [ prev.vulkan-loader prev.libGL prev.wayland prev.libxkbcommon ]}:/run/opengl-driver/lib"
+          '';
+          meta = prev.lapce.meta;
+        };
         # Minder fork with local image-to-LaTeX recognition and inline Pango
         # formula shapes.  The non-flake input keeps the exact source revision
         # in flake.lock while allowing the fork to retain its upstream build.

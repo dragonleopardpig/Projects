@@ -65,6 +65,35 @@ let
     runtimeInputs = [ pkgs.procps pkgs.coreutils pkgs.libnotify ];
     text = builtins.readFile ./stop-recording.sh;
   };
+  agentStatus = pkgs.writeShellApplication {
+    name = "noctalia-agent-status";
+    runtimeInputs = [ pkgs.python3 ];
+    text = ''
+      exec python3 ${./agent-status.py} "$@"
+    '';
+  };
+  agentHooks = (pkgs.formats.json { }).generate "noctalia-agent-hooks.json" {
+    noctalia-desktop-status =
+      let
+        handler = event: {
+          type = "command";
+          command = "${lib.getExe agentStatus} hook ${event}";
+          timeout = 2;
+        };
+      in {
+        SessionStart = [ (handler "SessionStart") ];
+        PreInvocation = [ (handler "PreInvocation") ];
+        PreToolUse = [ { matcher = ".*"; hooks = [ (handler "PreToolUse") ]; } ];
+        PostToolUse = [ { matcher = ".*"; hooks = [ (handler "PostToolUse") ]; } ];
+        Stop = [ (handler "Stop") ];
+      };
+  };
+  agentStatusCheck = pkgs.runCommand "noctalia-agent-status-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    python3 ${./test-agent-status.py} ${./agent-status.py}
+    touch $out
+  '';
   syncPython = pkgs.python3.withPackages (ps: [ ps.tomlkit ]);
   syncSettings = pkgs.writeShellApplication {
     name = "noctalia-sync-settings";
@@ -114,6 +143,7 @@ let
     terminalCommand = "${lib.getExe pkgs.foot} --config=${theme.terminalConfig}";
     displayCycleCommand = lib.getExe displayCycle;
     stopRecordingCommand = lib.getExe stopRecording;
+    agentCommand = "${lib.getExe agentStatus} run";
     lockCommand = lib.getExe lockAndBlank;
     inherit (theme) dark neon;
   });
@@ -196,6 +226,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
+  inherit agentStatus agentHooks agentStatusCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;

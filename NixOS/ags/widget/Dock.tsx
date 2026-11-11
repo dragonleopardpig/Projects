@@ -13,7 +13,7 @@ const PINS = [
     "firefox",
     "kitty",
     "emacs",
-    "nemo",
+    "strata",
     "mpv",
     "blueman-manager",
 ] as const

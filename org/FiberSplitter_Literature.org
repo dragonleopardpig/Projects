@@ -1,0 +1,128 @@
+#+AUTHOR:	ChuPL
+#+EMAIL:	chupl@optics.expert
+#+TITLE:	Fiber Splitter Technology -- Literature Survey
+#+DATE:	2026-10-21
+#+STARTUP:	overview
+
+* Purpose
+Formal, highly cited references on optical fibre splitters -- how light is shared between
+guides, and how 1xN splitters are made (fused biconical taper, planar lightwave circuit,
+multimode interference, star couplers) -- in place of the vendor overview first read:
+[[https://www.weunionfiber.com/how-does-a-fiber-optic-splitter-work-a-comprehensive-guide/][How does a fiber optic splitter work? (WeUnion Fiber)]].
+
+Entries tagged =:library:= are already in [[file:~/Scramble Private/References/][Scramble Private / References]] (linked).
+
+* Suggested reading order
+1. Okamoto, /Fundamentals of Optical Waveguides/ -- coupled-mode theory, then the planar
+   lightwave circuit chapters (directional couplers, Y-branches, star couplers, AWGs).
+2. Love et al. (1991), Part 1 -- the adiabaticity criterion behind fused (FBT) splitters.
+3. Himeno, Kato, Miya (1998) -- how silica PLC splitters are designed and made.
+4. Soldano & Pennings (1995) -- multimode-interference (MMI) splitters.
+5. Lam (2007) -- where 1xN splitters are used, and how their datasheets specify them.
+
+* Books
+** "Optical Waveguide Theory"                                        :library:
+- Authors :: A. W. Snyder, J. D. Love
+- Published :: Chapman & Hall, London, 1983
+- Why :: The classic: modes, coupled power, tapers and couplers worked through in full.
+- File :: [[file:~/Scramble Private/References/Optical Waveguide Theory.pdf][Optical Waveguide Theory.pdf]]
+** "Fundamentals of Optical Waveguides"                              :library:
+- Authors :: K. Okamoto
+- Published :: Academic Press (Elsevier), 2nd ed. 2006
+- Why :: The best single book to start with: coupled-mode theory, directional couplers, star
+  couplers, planar lightwave circuit splitters and arrayed-waveguide gratings.
+- File :: [[file:~/Scramble Private/References/Fundamentals of Optical Waveguides.pdf][Fundamentals of Optical Waveguides.pdf]]
+** "Theory of Dielectric Optical Waveguides"                         :library:
+- Authors :: D. Marcuse
+- Published :: Academic Press, 2nd ed. 1991
+- Why :: Coupled-mode theory and losses of joints and bends, by the author of the splice-loss
+  formulas used throughout trident's fibre work.
+- File :: [[file:~/Scramble Private/References/Theory of dielectric optical waveguides.pdf][Theory of dielectric optical waveguides.pdf]]
+** "Integrated Optics: Theory and Technology"                        :library:
+- Authors :: R. G. Hunsperger
+- Published :: Springer (several editions)
+- Why :: Its coupler and integrated-component chapters: a gentler route into planar devices.
+- File :: [[file:~/Scramble Private/References/Integrated Optics - Theory and Technology.pdf][Integrated Optics - Theory and Technology.pdf]]
+** "Guided Optics: Optical Fibers and All-fiber Components"
+- Authors :: J. Bures
+- Published :: Wiley-VCH, 2009
+- Why :: From the Montreal group behind practical fused biconical taper couplers: fused
+  couplers and tapers in depth.
+** "Silica-based Buried Channel Waveguides and Devices"
+- Authors :: F. Ladouceur, J. D. Love
+- Published :: Chapman & Hall, 1996
+- Why :: Y-junction splitters and buried silica channel waveguides, design to loss.
+** "Passive Optical Networks: Principles and Practice"
+- Authors :: C. F. Lam (ed.)
+- Published :: Academic Press, 2007
+- Why :: System context: where 1xN splitters sit in PON, and their specifications --
+  insertion loss, uniformity, polarisation-dependent loss.
+
+* Journals
+** Foundations
+*** "Coupled-mode theory for optical waveguides: an overview"
+- Authors :: W.-P. Huang
+- Published :: J. Opt. Soc. Am. A 11(3), 963-983, 1994
+- Why :: The theory every directional-coupler splitter is designed with, reviewed.
+** Fused biconical taper (FBT) splitters
+*** "Biconical-taper single-mode fiber coupler"
+- Authors :: B. S. Kawasaki, K. O. Hill, R. G. Lamont
+- Published :: Optics Letters 6(7), 327-328, 1981
+- Why :: The origin of the fused biconical taper coupler.
+*** "Tapered single-mode fibres and devices. Part 1: Adiabaticity criteria"
+- Authors :: J. D. Love, W. M. Henry, W. J. Stewart, R. J. Black, S. Lacroix, F. Gonthier
+- Published :: IEE Proceedings J (Optoelectronics) 138(5), 1991 -- page range given
+  differently by different sources (343-354 most often): check before citing
+- Why :: The adiabaticity (delineation) criterion: how gently a taper must change for the
+  fundamental mode to survive -- the design rule of fused splitters. Highly cited.
+- Companion :: "Part 2: Experimental and theoretical quantification", R. J. Black,
+  S. Lacroix, F. Gonthier, J. D. Love, same issue.
+*** "The shape of fiber tapers"
+- Authors :: T. A. Birks, Y. W. Li
+- Published :: J. Lightwave Technol. 10(4), 432-438, 1992
+- Why :: How the heat-and-pull process sets the taper's profile.
+** Planar lightwave circuit (PLC) splitters
+*** "Silica waveguides on silicon and their application to integrated-optic components"
+- Authors :: M. Kawachi
+- Published :: Optical and Quantum Electronics 22, 391-416, 1990
+- Why :: The foundation of silica-on-silicon planar circuits, from which PLC splitters come.
+*** "Silica-based planar lightwave circuits"
+- Authors :: A. Himeno, K. Kato, T. Miya
+- Published :: IEEE J. Sel. Top. Quantum Electron. 4(6), 913-924, 1998
+- Why :: The standard review: power splitters, AWGs, thermo-optic switches, hybrid
+  integration -- how 1xN PLC chips are made.
+*** "Mode conversion in planar-dielectric separating waveguides"
+- Authors :: W. K. Burns, A. F. Milton
+- Published :: IEEE J. Quantum Electron. 11(1), 32-39, 1975
+- Why :: The theory of the adiabatic Y-branch, the building block of cascaded 1xN splitters.
+** Multimode interference (MMI) and star couplers
+*** "Optical multi-mode interference devices based on self-imaging: principles and applications"
+- Authors :: L. B. Soldano, E. C. M. Pennings
+- Published :: J. Lightwave Technol. 13(4), 615-627, 1995
+- Why :: One of the most cited papers in integrated optics: MMI 1xN splitters by
+  self-imaging.
+*** "Efficient NxN star couplers using Fourier optics"
+- Authors :: C. Dragone
+- Published :: J. Lightwave Technol. 7(3), 479-489, 1989
+- Why :: The free-propagation-region star coupler: large N in one region, and the heart of
+  the AWG.
+** On-chip silicon photonics splitters
+*** "A compact and low loss Y-junction for submicron silicon waveguide"
+- Authors :: Y. Zhang et al.
+- Published :: Optics Express 21(1), 1310-1316, 2013
+- Why :: The optimised silicon Y-junction -- relevant to splitting on a silicon chip such
+  as the device's.
+
+* Verification notes
+- Checked online 2026-10-21: Love et al. 1991 (exists; page range varies between sources).
+- Not confirmed, so left out: a 1990 Tekippe review of fused biconical taper components in
+  /Fiber and Integrated Optics/ -- Tekippe's SPIE papers on FBT couplers (1987, 1988) were
+  found, not that article.
+- The rest are cited from memory: standard, heavily cited works, but check volume and page
+  numbers before formal citation.
+
+* Sources used for the checks
+- [[https://publications.polymtl.ca/view/year/1991/Love,_J=2E_D=2E.html][Love et al. 1991 -- Polytechnique Montreal listing]]
+- [[https://arxiv.org/pdf/1411.2299][Ultra-low-loss tapered optical fibers (arXiv 1411.2299) -- cites Love et al.'s criterion]]
+- [[https://www.cambridge.org/core/journals/mrs-bulletin/article/abs/silicabased-planar-lightwave-circuits-and-their-applications/8C6EF22F94E2D45FDB2F2D1685433244][MRS Bulletin: Silica-based planar lightwave circuits and their applications]]
+- [[https://resolve.cambridge.org/core/journals/mrs-online-proceedings-library-archive/article/abs/silicabased-planar-lightwave-circuits/BC6F9570B73023954C69B8CA65A43CD8][Cambridge MRS Proceedings: Silica-based planar lightwave circuits]]

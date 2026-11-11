@@ -83,6 +83,7 @@
       "prponkshe/umbriel-displays"      # community: resolution/scale/arrangement -> umbriel/outputs.toml
       "tordex/xwayland"                 # community: is the focused window XWayland?
       "community/kitty-control"         # local/community: kitty terminal control panel
+      "local/agent-status"              # local: Antigravity lifecycle status + scratchpad toggle
     ];
     auto_update = "none";
   };
@@ -109,7 +110,7 @@
     background_opacity = 0.94;
     compositor_blur = true;
     reserve_space = true;
-    start = [ "launcher" "workspaces" "umbriel-companion" "taskbar" ];
+    start = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
     center = [ "active_window" "xwayland" ];
     end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "umbriel-displays" "kitty-control" "session" ];
   };
@@ -152,6 +153,7 @@
     umbriel-displays.color = barAccents.desktop;
     kitty-control.type = "community/kitty-control:bar";
     kitty-control.color = barAccents.neonPurple;
+    agent-status.type = "local/agent-status:bar";
     xwayland.type = "tordex/xwayland:bar";
     # ALWAYS-ON MODE (modules/always-on-umbriel.nix): either click switches it; the glyph a cup
     # when off, an infinity when on (the watcher sets it).

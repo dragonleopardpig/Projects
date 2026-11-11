@@ -946,3 +946,6 @@ buffer's text scale."
 		      ))))
 (add-hook 'text-scale-mode-hook #'my/text-scale-adjust-latex-previews)
 (advice-add 'org-fragtog--post-cmd :after #'my/text-scale-adjust-latex-previews)
+
+;; Antigravity editing of live Org tables, LaTeX and other buffers.
+(load "~/Projects/emacs/ai-agent.el")

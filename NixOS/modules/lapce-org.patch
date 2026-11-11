@@ -1,0 +1,26 @@
+--- a/lapce-core/src/language.rs	2026-11-10 17:02:28.664566905 +0800
++++ b/lapce-core/src/language.rs	2026-11-10 17:02:28.680332761 +0800
+@@ -362,6 +362,8 @@
+     Odin,
+     #[strum(message = "OpenCL")]
+     OpenCl,
++    #[strum(message = "Org")]
++    Org,
+     #[strum(message = "Pascal")]
+     Pascal,
+     #[strum(message = "Password file (/etc/passwd)")]
+@@ -1272,6 +1274,14 @@
+         tree_sitter: TreeSitterProperties::DEFAULT,
+     },
+     SyntaxProperties {
++        id: LapceLanguage::Org,
++        indent: Indent::space(2),
++        files: &[],
++        extensions: &["org"],
++        comment: comment_properties!("#"),
++        tree_sitter: TreeSitterProperties::DEFAULT,
++    },
++    SyntaxProperties {
+         id: LapceLanguage::Pascal,
+         indent: Indent::tab(),
+         files: &[],

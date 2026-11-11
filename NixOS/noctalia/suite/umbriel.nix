@@ -1,4 +1,4 @@
-{ lib, pkgs, shellCommand, terminalCommand, dark, neon, displayCycleCommand, stopRecordingCommand, lockCommand }:
+{ lib, pkgs, shellCommand, terminalCommand, dark, neon, displayCycleCommand, stopRecordingCommand, lockCommand, agentCommand }:
 let
   spawn = cmd: { action = "spawn:${cmd}"; repeat = false; };
   control = cmd: {
@@ -135,7 +135,7 @@ in {
   ]) (lib.range 1 9));
   scratchpad = [
     { name = "terminal"; spawn_when_empty = "kitty --class kitty-dropterm"; }
-    { name = "agent"; spawn_when_empty = "kitty --class kitty-agent -d /home/thinky/Projects -e /home/thinky/.local/bin/agy --dangerously-skip-permissions"; }
+    { name = "agent"; spawn_when_empty = "kitty --class kitty-agent -d /home/thinky/Projects -e ${agentCommand}"; }
     { name = "volume"; spawn_when_empty = "pavucontrol"; }
     { name = "notepad"; spawn_when_empty = "xed --name notepad --standalone"; }
   ];
@@ -145,6 +145,9 @@ in {
     { match.app_id = "^kitty-agent$"; default_scratchpad = "agent"; default_floating_size_px = { width = 1200; height = 850; }; }
     { match.app_id = "^(org.pulseaudio.pavucontrol|pavucontrol)$"; default_scratchpad = "volume"; default_floating_size_px = { width = 650; height = 850; }; }
     { match.app_id = "^notepad$"; default_scratchpad = "notepad"; default_floating_size_px = { width = 960; height = 950; }; }
+    { match.app_id = "^(io\\.github\\.winapps\\.Settings|yad)$"; default_floating = true; default_maximize = false; }
+    { match.app_id = "^(Microsoft .*|Command Prompt|Internet Explorer|Adobe .*|Affinity .*|Autodesk .*|SQL Server .*|LINQPad .*|Paint\\.NET|PDF Gear|xfreerdp|FreeRDP)$"; default_floating = true; default_maximize = false; }
+    { match.title = "^RemoteApp Marker Window$"; border_width = 0; shadow = false; default_floating = true; default_focused = false; }
   ];
   layer_rule = [ { match.namespace = "^noctalia-.*$"; blur = true; blur_ignore_alpha = 0.5; } ];
 }

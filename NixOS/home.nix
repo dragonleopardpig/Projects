@@ -17,12 +17,37 @@ let
   # as the prebuilt .so in ~/Projects/emacs/tree-sitter/.
   emacsTreesitGrammars =
     (pkgs.emacsPackagesFor pkgs.emacs-pgtk).treesit-grammars.with-all-grammars;
+
+  # Precompiled Tree-sitter grammars and syntax highlighting queries for Lapce.
+  # Lapce 0.4.6 attempts to download grammars from GitHub releases matching its version (v0.4.6),
+  # but tree-sitter-grammars releases only exist up to v0.4.5+1f9f9dd, causing syntax highlighting
+  # to fail silently without grammars.
+  lapceTreeSitter = let
+    grammarsTar = pkgs.fetchurl {
+      url = "https://github.com/lapce/tree-sitter-grammars/releases/download/v0.4.5%2B1f9f9dd/grammars-linux-x86_64.tar.zst";
+      sha256 = "sha256-5KIcQ4AeU7IMCAUy2dISJ+ET8+UlucxyrgOtHnFbyVU=";
+    };
+    queriesTar = pkgs.fetchurl {
+      url = "https://github.com/lapce/tree-sitter-grammars/releases/download/v0.4.5%2B1f9f9dd/queries.tar.zst";
+      sha256 = "sha256-zpNkEE/pG565tZYzMLOG12LPFATh10rDLAypmWVWaAY=";
+    };
+  in pkgs.runCommand "lapce-tree-sitter" {
+    nativeBuildInputs = [ pkgs.zstd ];
+  } ''
+    mkdir -p $out/grammars $out/queries
+    tar -I ${pkgs.zstd}/bin/zstd -xf ${grammarsTar} -C $out/grammars
+    tar -I ${pkgs.zstd}/bin/zstd -xf ${queriesTar} -C $out/queries
+  '';
+
+
 in
 {
   home.username = "thinky";
   home.homeDirectory = "/home/thinky";
   home.sessionVariables = {
     BROWSER = "firefox";
+    EDITOR = "lapce";
+    VISUAL = "lapce";
   };
   xdg.userDirs = {
     enable = true;
@@ -387,7 +412,7 @@ in
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
-      "inode/directory" = [ "nemo-x11.desktop" ];
+      "inode/directory" = [ "io.github.lgse.Strata.desktop" ];
       "application/pdf" = [ "sioyek-xcb.desktop" ];
       # Without this an EPUB falls through to whatever the system MIME cache
       # picks -- OnlyOffice, here. Nemo's "Set as default" cannot fix that,
@@ -404,16 +429,50 @@ in
       "image/bmp" = [ "nomacs-x11.desktop" ];
       "image/svg+xml" = [ "nomacs-x11.desktop" ];
       "text/html" = [ "firefox.desktop" ];
+      "application/xhtml+xml" = [ "firefox.desktop" ];
+      "text/xml" = [ "firefox.desktop" ];
+      "application/xml" = [ "firefox.desktop" ];
+      "application/rss+xml" = [ "firefox.desktop" ];
+      "application/rdf+xml" = [ "firefox.desktop" ];
       "x-scheme-handler/http" = [ "firefox.desktop" ];
       "x-scheme-handler/https" = [ "firefox.desktop" ];
       "x-scheme-handler/about" = [ "firefox.desktop" ];
       "x-scheme-handler/unknown" = [ "firefox.desktop" ];
-      "text/plain" = [ "org.x.editor.desktop" ];
-      "text/markdown" = [ "org.x.editor.desktop" ];
-      "text/x-log" = [ "org.x.editor.desktop" ];
+      "x-scheme-handler/chrome" = [ "firefox.desktop" ];
+      "x-scheme-handler/ftp" = [ "firefox.desktop" ];
+      "text/plain" = [ "lapce.desktop" ];
+      "text/markdown" = [ "lapce.desktop" ];
+      "text/x-log" = [ "lapce.desktop" ];
+    };
+    associations.removed = {
+      "text/html" = [ "iexplorer.desktop" ];
+      "application/xhtml+xml" = [ "iexplorer.desktop" ];
+      "text/xml" = [ "iexplorer.desktop" ];
+      "application/xml" = [ "iexplorer.desktop" ];
+      "application/rss+xml" = [ "iexplorer.desktop" ];
+      "application/rdf+xml" = [ "iexplorer.desktop" ];
+      "x-scheme-handler/http" = [ "iexplorer.desktop" ];
+      "x-scheme-handler/https" = [ "iexplorer.desktop" ];
+      "x-scheme-handler/about" = [ "iexplorer.desktop" ];
+      "x-scheme-handler/unknown" = [ "iexplorer.desktop" ];
+      "x-scheme-handler/chrome" = [ "iexplorer.desktop" ];
+      "x-scheme-handler/ftp" = [ "iexplorer.desktop" ];
+      "image/gif" = [ "iexplorer.desktop" ];
+      "image/jpeg" = [ "iexplorer.desktop" ];
+      "image/png" = [ "iexplorer.desktop" ];
+      "video/webm" = [ "iexplorer.desktop" ];
+      "inode/directory" = [ "nemo-x11.desktop" ];
     };
   };
   
+  # Lapce Tree-sitter grammars and syntax highlighting queries
+  xdg.dataFile."lapce-stable/grammars".source = "${lapceTreeSitter}/grammars";
+  xdg.configFile."lapce-stable/queries".source = "${lapceTreeSitter}/queries";
+
+  # GtkSourceView 5 language specifications for Emacs Lisp & Org Mode (Strata preview & GTK text editors)
+  xdg.dataFile."gtksourceview-5/language-specs/emacs-lisp.lang".source = ./modules/strata/emacs-lisp.lang;
+  xdg.dataFile."gtksourceview-5/language-specs/org.lang".source = ./modules/strata/org.lang;
+
   xdg.configFile."uwsm/env".source = "${config.home.sessionVariablesPackage}/etc/profile.d/hm-session-vars.sh";
 
   # ── AGS v2 (Astal) config ────────────────────────────────────────────
@@ -1242,6 +1301,7 @@ in
   xdg.desktopEntries."f3d-plugin-usd"         = { name = "F3D";      exec = "true"; noDisplay = true; };
   xdg.desktopEntries."org.paraview.ParaView"  = { name = "ParaView"; exec = "true"; noDisplay = true; };
   xdg.desktopEntries.nemo                     = { name = "Files";    exec = "true"; noDisplay = true; };
+  xdg.desktopEntries.iexplorer                = { name = "Internet Explorer"; exec = "true"; noDisplay = true; };
   xdg.desktopEntries."org.nomacs.ImageLounge" = { name = "nomacs";   exec = "true"; noDisplay = true; };
 
 
@@ -2876,7 +2936,7 @@ in
         -ovl -k \
         -c 8 -is 64 -spacing 20 \
         -term kitty \
-        -fm "$HOME/.local/bin/nemo-x11" \
+        -fm "strata" \
         -closebtn right \
         -pblock "$HOME/.local/bin/lock-and-blank" \
         -pbexit "hyprctl dispatch exit" \
@@ -3293,7 +3353,7 @@ in
           "$mod, P, exec, protonvpn-app"
           "$mod, W, exec, walker"
           "$mod, B, exec, kitty -e btop"
-          "$mod, N, exec, /home/thinky/.local/bin/nemo-x11"
+          "$mod, N, exec, strata"
           "$mod, S, exec, ~/.local/bin/sioyek --new-window"
           "$mod, Y, exec, kitty -e yazi"
           "$mod, Escape, exit,"
@@ -3835,7 +3895,7 @@ in
     tray = "auto";
     settings = {
       program_options = {
-        file_manager = "/home/thinky/.local/bin/nemo-x11";
+        file_manager = "strata";
       };
     };
   };
@@ -3952,6 +4012,7 @@ in
     pyprland
     pavucontrol
     xed-editor
+    lapce
     gtk3
     gobject-introspection
     poppler-utils
@@ -4176,25 +4237,7 @@ in
       ask = "agy";
     };
     initExtra = ''
-      # Smart rebuild: automatically offers to hand errors over to Antigravity
-      rebuild() {
-        local logfile
-        logfile=$(mktemp /tmp/nixos-rebuild-error.XXXXXX)
-        if ~/Projects/NixOS/rebuild.sh "$@" 2>&1 | tee "$logfile"; then
-          rm -f "$logfile"
-        else
-          echo -e "\n\033[1;33m[!] Rebuild failed.\033[0m Hand over to Antigravity to diagnose and fix? [Y/n] "
-          read -r answer
-          if [[ -z "$answer" || "$answer" =~ ^[Yy]$ ]]; then
-            agy -i "NixOS rebuild failed with the following error output:
-
-$(cat "$logfile")
-
-Please diagnose the issue in /home/thinky/Projects/NixOS, explain what went wrong, and propose a fix."
-          fi
-          rm -f "$logfile"
-        fi
-      }
+      ${builtins.readFile ./scripts/rebuild-agent.sh}
 
       # Quick command to diagnose whichever command failed last
       fix() {

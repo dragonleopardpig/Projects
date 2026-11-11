@@ -241,7 +241,7 @@ in
       if [ ! -e ${configDirectory}/memory.env ]; then
         (
           umask 077
-          printf 'WINAPPS_RAM_SIZE=4G\nWINAPPS_CPU_CORES=4\n' > ${configDirectory}/memory.env
+          printf 'WINAPPS_RAM_SIZE=4G\nWINAPPS_CPU_CORES=4\nWINAPPS_FULLSCREEN=0\n' > ${configDirectory}/memory.env
         )
       fi
       chmod 0600 ${configDirectory}/memory.env
@@ -261,6 +261,11 @@ in
           fi
         fi
       done
+
+      # Ensure Internet Explorer desktop file never declares MIME associations if present
+      if [ -f /home/thinky/.local/share/applications/iexplorer.desktop ] && [ ! -L /home/thinky/.local/share/applications/iexplorer.desktop ]; then
+        ${pkgs.gnused}/bin/sed -i -E 's|^MimeType=.*|MimeType=|' /home/thinky/.local/share/applications/iexplorer.desktop
+      fi
     '';
 
 

@@ -1,0 +1,13 @@
+id = "local/agent-status"
+name = "Desktop Agent Status"
+version = "1.0.2"
+plugin_api = 45
+author = "local"
+license = "MIT"
+tags = ["ai", "bar", "development"]
+icon = "sparkles"
+description = "Antigravity activity from lifecycle hooks; click to toggle the agent scratchpad."
+
+[[widget]]
+id = "bar"
+entry = "bar.luau"

@@ -107,6 +107,7 @@
 	rustic
 	ox-rst
 	alert
+	agent-shell
 	org-fragtog
 	ob-nix
 	latex-preview-pane

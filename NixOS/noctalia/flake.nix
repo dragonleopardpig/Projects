@@ -24,7 +24,7 @@
       packages.${system} = {
         default = suite.suiteSession;
         noctalia = shell;
-        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings;
+        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings agentStatus agentHooks;
         umbriel = suite.umbriel;
         greeter = suite.greeter;
       };
@@ -37,6 +37,7 @@
         suite = suite.validatedSuite;
         gpuSelection = suite.gpuSelectionCheck;
         syncSettings = suite.syncSettingsCheck;
+        agentStatus = suite.agentStatusCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
       homeManagerModules.suite = { lib, ... }: {
@@ -60,6 +61,11 @@
           source = ./suite/plugins/kitty-control;
           force = true;
         };
+        xdg.dataFile."noctalia-suite/noctalia/plugins/agent-status" = {
+          source = ./suite/plugins/agent-status;
+        };
+        home.file.".local/bin/noctalia-agent-status".source = lib.getExe suite.agentStatus;
+        home.file.".gemini/config/hooks.json".source = suite.agentHooks;
         home.activation.syncNoctaliaSuite = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
           ${lib.getExe suite.syncSettings} || true
         '';

@@ -104,13 +104,27 @@ new interpreter is picked up."
 (defun my/jupyter-setup-project-executable ()
   "Set Jupyter executable and default kernel for the current buffer."
   (when-let ((jupyter-bin (my/jupyter-project-executable)))
-    (setq-local jupyter-executable jupyter-bin))
+    (setq-local jupyter-executable jupyter-bin)
+    (unless (fboundp 'org-babel-execute:jupyter-python)
+      (require 'jupyter)
+      (require 'ob-jupyter)
+      (org-babel-jupyter-aliases-from-kernelspecs)))
   (setq-local org-babel-default-header-args:jupyter-python
               `((:kernel . ,(my/jupyter-project-kernel))
                 (:async . "yes")
                 (:session . "py")))
   (setq-local org-babel-default-header-args:jupyter-julia
               '((:async . "yes") (:session . "julia"))))
+
+;; Load jupyter + ob-jupyter now that the devenv bin dirs are on exec-path
+;; (scimax/packages.el checks `executable-find' before language.el adds them,
+;; and user.el resets `org-babel-load-languages' without `jupyter').
+(when (executable-find "jupyter")
+  (use-package jupyter)
+  (use-package scimax-jupyter :load-path scimax-dir)
+  (add-to-list 'org-babel-load-languages '(jupyter . t) t)
+  (org-babel-do-load-languages 'org-babel-load-languages org-babel-load-languages)
+  (org-babel-jupyter-aliases-from-kernelspecs))
 
 (add-hook 'org-mode-hook #'my/jupyter-setup-project-executable)
 

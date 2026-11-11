@@ -7,7 +7,6 @@
     ../universal-boot.nix
     ../X299-SSD/nvidia.nix
     ../../modules/winapps.nix
-    ../../modules/strata.nix
   ];
 
   desktop.noctaliaSuite.greeter.enable = true;

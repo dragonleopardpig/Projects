@@ -19,6 +19,7 @@
 **/.cache/
 **/target/
 **/__pycache__/
+**/.ob-jupyter/
 *.pyc
 *.elc
 
@@ -38,3 +39,5 @@
 # Lock files (top-level scratch devenv — intentionally untracked)
 /devenv.lock
 /flake.lock
+/result
+/result-*

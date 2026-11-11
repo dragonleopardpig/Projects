@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GtkSourceView language specification for Emacs Lisp (.el)
+-->
+<language id="emacs-lisp" name="Emacs Lisp" version="2.0" _section="Source">
+  <metadata>
+    <property name="mimetypes">text/x-emacs-lisp;text/x-elisp;application/x-elisp</property>
+    <property name="globs">*.el</property>
+    <property name="line-comment-start">;</property>
+  </metadata>
+
+  <styles>
+    <style id="comment" name="Comment" map-to="def:comment"/>
+    <style id="string" name="String" map-to="def:string"/>
+    <style id="keyword" name="Keyword" map-to="def:statement"/>
+    <style id="definition" name="Definition" map-to="def:type"/>
+    <style id="boolean" name="Boolean" map-to="def:boolean"/>
+    <style id="number" name="Number" map-to="def:number"/>
+    <style id="key" name="Key" map-to="def:type"/>
+    <style id="lambda-list" name="Lambda List" map-to="def:type"/>
+    <style id="character" name="Character" map-to="def:special-char"/>
+  </styles>
+
+  <default-regex-options case-sensitive="true"/>
+  <keyword-char-class>([^()"`,#\s])</keyword-char-class>
+
+  <definitions>
+    <define-regex id="token-start" extended="true">
+      ((?&lt;=[()'"`,@#\s])|^)
+    </define-regex>
+    <define-regex id="token-end" extended="true">
+      (?=([()';"`,#]|$|\s))
+    </define-regex>
+
+    <!-- Comments -->
+    <context id="line-comment" style-ref="comment" end-at-line-end="true" class="comment" class-disabled="no-spell-check">
+      <start>;</start>
+      <include>
+        <context ref="def:in-comment"/>
+      </include>
+    </context>
+
+    <!-- Strings -->
+    <context id="string" style-ref="string" class="string" class-disabled="no-spell-check">
+      <start>"</start>
+      <end>"</end>
+      <include>
+        <context ref="def:escape"/>
+      </include>
+    </context>
+
+    <!-- Characters (e.g. ?a, ?\n, ?\C-c) -->
+    <context id="character" style-ref="character">
+      <match extended="true">
+        \%{token-start}
+        \?(\\[MCsHA]-)*(\\.|[^\s()])
+        \%{token-end}
+      </match>
+    </context>
+
+    <!-- Numbers -->
+    <context id="number" style-ref="number">
+      <match extended="true">
+        \%{token-start}
+        ([+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?|\#[xX][0-9a-fA-F]+|\#[oO][0-7]+|\#[bB][01]+)
+        \%{token-end}
+      </match>
+    </context>
+
+    <!-- Booleans -->
+    <context id="boolean" style-ref="boolean">
+      <match extended="true">
+        \%{token-start}
+        (nil|t)
+        \%{token-end}
+      </match>
+    </context>
+
+    <!-- Definitions -->
+    <context id="definitions" style-ref="definition">
+      <prefix>(?&lt;=[(])</prefix>
+      <suffix>(?=[\s)])</suffix>
+      <keyword>defun</keyword>
+      <keyword>defmacro</keyword>
+      <keyword>defvar</keyword>
+      <keyword>defvar-local</keyword>
+      <keyword>defcustom</keyword>
+      <keyword>defconst</keyword>
+      <keyword>defgroup</keyword>
+      <keyword>defalias</keyword>
+      <keyword>defsubst</keyword>
+      <keyword>defface</keyword>
+      <keyword>defstruct</keyword>
+      <keyword>define-minor-mode</keyword>
+      <keyword>define-derived-mode</keyword>
+      <keyword>define-globalized-minor-mode</keyword>
+      <keyword>define-generic-mode</keyword>
+      <keyword>define-key</keyword>
+      <keyword>define-prefix-command</keyword>
+      <keyword>cl-defun</keyword>
+      <keyword>cl-defmacro</keyword>
+      <keyword>cl-defstruct</keyword>
+      <keyword>cl-defmethod</keyword>
+      <keyword>cl-defgeneric</keyword>
+      <keyword>cl-destructuring-bind</keyword>
+      <keyword>cl-loop</keyword>
+      <keyword>use-package</keyword>
+      <keyword>leaf</keyword>
+    </context>
+
+    <!-- Special forms and keywords -->
+    <context id="keywords" style-ref="keyword">
+      <prefix>(?&lt;=[(])</prefix>
+      <suffix>(?=[\s)])</suffix>
+      <keyword>if</keyword>
+      <keyword>when</keyword>
+      <keyword>unless</keyword>
+      <keyword>cond</keyword>
+      <keyword>case</keyword>
+      <keyword>pcase</keyword>
+      <keyword>pcase-let</keyword>
+      <keyword>pcase-let\*</keyword>
+      <keyword>pcase-exhaustive</keyword>
+      <keyword>pcase-lambda</keyword>
+      <keyword>while</keyword>
+      <keyword>dotimes</keyword>
+      <keyword>dolist</keyword>
+      <keyword>catch</keyword>
+      <keyword>throw</keyword>
+      <keyword>condition-case</keyword>
+      <keyword>condition-case-unless-debug</keyword>
+      <keyword>unwind-protect</keyword>
+      <keyword>let</keyword>
+      <keyword>let\*</keyword>
+      <keyword>lambda</keyword>
+      <keyword>progn</keyword>
+      <keyword>prog1</keyword>
+      <keyword>prog2</keyword>
+      <keyword>setq</keyword>
+      <keyword>setq-local</keyword>
+      <keyword>setq-default</keyword>
+      <keyword>setf</keyword>
+      <keyword>quote</keyword>
+      <keyword>function</keyword>
+      <keyword>require</keyword>
+      <keyword>provide</keyword>
+      <keyword>autoload</keyword>
+      <keyword>interactive</keyword>
+      <keyword>declare</keyword>
+      <keyword>eval-when-compile</keyword>
+      <keyword>eval-and-compile</keyword>
+      <keyword>with-eval-after-load</keyword>
+      <keyword>with-current-buffer</keyword>
+      <keyword>with-temp-buffer</keyword>
+      <keyword>with-temp-file</keyword>
+      <keyword>save-excursion</keyword>
+      <keyword>save-restriction</keyword>
+      <keyword>save-match-data</keyword>
+      <keyword>save-current-buffer</keyword>
+      <keyword>track-mouse</keyword>
+      <keyword>and</keyword>
+      <keyword>or</keyword>
+      <keyword>not</keyword>
+    </context>
+
+    <!-- Keywords starting with : (e.g. :ensure, :custom, :bind) -->
+    <context id="keyword-symbols" style-ref="key">
+      <match extended="true">
+        \%{token-start}
+        (:[^()'"`,#\s]+)
+        \%{token-end}
+      </match>
+    </context>
+
+    <!-- Lambda list keywords (&optional, &rest, &key) -->
+    <context id="lambda-list" style-ref="lambda-list">
+      <match extended="true">
+        \%{token-start}
+        (&amp;[^()'"`,#\s]+)
+        \%{token-end}
+      </match>
+    </context>
+
+    <context id="emacs-lisp" class="no-spell-check">
+      <include>
+        <context ref="line-comment"/>
+        <context ref="string"/>
+        <context ref="character"/>
+        <context ref="number"/>
+        <context ref="boolean"/>
+        <context ref="definitions"/>
+        <context ref="keywords"/>
+        <context ref="keyword-symbols"/>
+        <context ref="lambda-list"/>
+      </include>
+    </context>
+  </definitions>
+</language>

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GtkSourceView language specification for Emacs Org Mode (.org)
+-->
+<language id="org" name="Org Mode" version="2.0" _section="Markup">
+  <metadata>
+    <property name="mimetypes">text/x-org;text/org</property>
+    <property name="globs">*.org;*.org_archive</property>
+    <property name="line-comment-start"># </property>
+  </metadata>
+
+  <styles>
+    <style id="heading" name="Heading" map-to="def:heading"/>
+    <style id="todo" name="TODO Keyword" map-to="def:error"/>
+    <style id="done" name="DONE Keyword" map-to="def:statement"/>
+    <style id="priority" name="Priority" map-to="def:special-char"/>
+    <style id="tags" name="Tags" map-to="def:type"/>
+    <style id="comment" name="Comment" map-to="def:comment"/>
+    <style id="block-delimiter" name="Block Delimiter" map-to="def:preprocessor"/>
+    <style id="block-content" name="Block Content" map-to="def:string"/>
+    <style id="drawer" name="Drawer" map-to="def:preprocessor"/>
+    <style id="property" name="Property" map-to="def:type"/>
+    <style id="meta" name="Metadata Keyword" map-to="def:preprocessor"/>
+    <style id="timestamp" name="Timestamp" map-to="def:constant"/>
+    <style id="planning" name="Planning Keyword" map-to="def:statement"/>
+    <style id="link" name="Link" map-to="def:link-destination"/>
+    <style id="table" name="Table" map-to="def:identifier"/>
+    <style id="list-marker" name="List Marker" map-to="def:special-char"/>
+    <style id="checkbox" name="Checkbox" map-to="def:special-char"/>
+    <style id="bold" name="Bold" map-to="def:statement"/>
+    <style id="italic" name="Italic" map-to="def:comment"/>
+    <style id="code" name="Code / Verbatim" map-to="def:constant"/>
+  </styles>
+
+  <definitions>
+    <!-- Comments: lines starting with # followed by space, but not #+ -->
+    <context id="line-comment" style-ref="comment" end-at-line-end="true">
+      <start>^\s*#(?![\+])</start>
+      <include>
+        <context ref="def:in-comment"/>
+      </include>
+    </context>
+
+    <!-- Source and Example Blocks: #+BEGIN_... to #+END_... -->
+    <context id="src-block" class="no-spell-check" style-ref="block-content">
+      <start>^\s*#\+(?i:BEGIN_SRC|BEGIN_EXAMPLE|BEGIN_QUOTE|BEGIN_CENTER|BEGIN_EXPORT|BEGIN_VERSE).*$</start>
+      <end>^\s*#\+(?i:END_SRC|END_EXAMPLE|END_QUOTE|END_CENTER|END_EXPORT|END_VERSE).*$</end>
+      <include>
+        <context sub-pattern="0" where="start" style-ref="block-delimiter"/>
+        <context sub-pattern="0" where="end" style-ref="block-delimiter"/>
+      </include>
+    </context>
+
+    <!-- Metadata lines: #+TITLE:, #+AUTHOR:, etc. -->
+    <context id="meta-line" style-ref="meta" end-at-line-end="true">
+      <start>^\s*#\+\w+:</start>
+    </context>
+
+    <!-- Planning keywords: DEADLINE:, SCHEDULED:, CLOSED: -->
+    <context id="planning" style-ref="planning">
+      <match>\b(SCHEDULED|DEADLINE|CLOSED):</match>
+    </context>
+
+    <!-- Active and inactive timestamps: <2026-11-10 Tue> or [2026-11-10 Tue] -->
+    <context id="timestamp" style-ref="timestamp">
+      <match>[&lt;\[]\d{4}-\d{2}-\d{2}(\s+[A-Za-z]+)?(\s+\d{1,2}:\d{2}((-\d{1,2}:\d{2})|\+)?)*(\s+[.+-]\d+[dwmy])*[&gt;\]]</match>
+    </context>
+
+    <!-- Headings: *+ Title -->
+    <context id="heading" style-ref="heading" end-at-line-end="true">
+      <start>^\*+\s+</start>
+      <include>
+        <context id="todo-keyword" style-ref="todo">
+          <match>\b(TODO|NEXT|WAITING|HOLD)\b</match>
+        </context>
+        <context id="done-keyword" style-ref="done">
+          <match>\b(DONE|CANCELLED|CANCELED)\b</match>
+        </context>
+        <context id="priority" style-ref="priority">
+          <match>\[#[A-Z]\]</match>
+        </context>
+        <context id="tags" style-ref="tags">
+          <match>:[a-zA-Z0-9_@#%:]+:\s*$</match>
+        </context>
+      </include>
+    </context>
+
+    <!-- Drawers: :PROPERTIES: ... :END: -->
+    <context id="drawer" style-ref="drawer">
+      <match>^\s*:[A-Za-z0-9_-]+:\s*$</match>
+    </context>
+
+    <!-- Property lines: :PROP: value -->
+    <context id="property" style-ref="property">
+      <match>^\s*:[A-Za-z0-9_-]+:\s+.*$</match>
+    </context>
+
+    <!-- Links: [[url][text]] or [[url]] -->
+    <context id="link" style-ref="link">
+      <match>\[\[[^\]]+\](\[[^\]]+\])?\]</match>
+    </context>
+
+    <!-- Tables: lines starting with | -->
+    <context id="table" style-ref="table">
+      <match>^\s*\|.*\|.*$</match>
+    </context>
+
+    <!-- List markers and Checkboxes -->
+    <context id="checkbox" style-ref="checkbox">
+      <match>\[[ X-]\]</match>
+    </context>
+    <context id="list-marker" style-ref="list-marker">
+      <match>^\s*([-+*]|\d+[.)])\s+</match>
+    </context>
+
+    <!-- Inline formatting -->
+    <context id="bold" style-ref="bold">
+      <match>(?&lt;=[\s('\"{])\*[^\s*][^*]*[^\s*]\*(?=[\s,.;:!?)'\"}])</match>
+    </context>
+    <context id="italic" style-ref="italic">
+      <match>(?&lt;=[\s('\"{])\/[^\s/][^/]*[^\s/]\/(?=[\s,.;:!?)'\"}])</match>
+    </context>
+    <context id="code" style-ref="code">
+      <match>(?&lt;=[\s('\"{])[~=][^\s~=][^~=]*[^\s~=][~=](?=[\s,.;:!?)'\"}])</match>
+    </context>
+
+    <context id="org" class="no-spell-check">
+      <include>
+        <context ref="src-block"/>
+        <context ref="line-comment"/>
+        <context ref="meta-line"/>
+        <context ref="heading"/>
+        <context ref="planning"/>
+        <context ref="timestamp"/>
+        <context ref="drawer"/>
+        <context ref="property"/>
+        <context ref="link"/>
+        <context ref="table"/>
+        <context ref="checkbox"/>
+        <context ref="list-marker"/>
+        <context ref="bold"/>
+        <context ref="italic"/>
+        <context ref="code"/>
+      </include>
+    </context>
+  </definitions>
+</language>

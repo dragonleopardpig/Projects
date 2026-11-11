@@ -46,3 +46,4 @@ Noctalia and Umbriel expose rich command-line interfaces for live management wit
 1. **Declarative First**: When making permanent changes, update the files in `/home/thinky/Projects/NixOS` and test via `rebuild.sh`.
 2. **Immediate Testing**: For compositor keybinds or scratchpad adjustments, you can draft them in `~/.config/umbriel/overrides.toml` and run `umbriel msg config-reload` to test them instantly.
 3. **Safety & Rollbacks**: Never edit `/nix/store` directly. NixOS ensures atomic generations; if an update fails, use `nixos-rebuild rollback`.
+4. **Always Commit, Push & Multi-Host Availability**: Whenever completing configuration or system changes, always commit to git, push to the remote repository, and verify/make available across all flake hosts (`CRUCIAL-SSD`, `X299-SSD`, `M90aPro`, `PortableSSD`).

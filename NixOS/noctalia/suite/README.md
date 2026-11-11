@@ -41,6 +41,27 @@ and `end` overrides so the Nix-defined widget order takes effect. GUI appearance
 choices, including bar opacity, and per-monitor settings persist across rebuilds.
 The sync runs after Home Manager links the new configuration.
 
+## Desktop agent
+
+The **AI** widget beside the workspaces toggles the same Antigravity scratchpad
+as **Super+C**. It shows **Working**, **Waiting** (a question needs an answer),
+**Done** or **Error**, using the active shell palette. The agent retains fully
+automatic tool permissions. **Super+Shift+C** detaches its window as before.
+
+Antigravity's global lifecycle hooks in `~/.gemini/config/hooks.json` call
+`~/.local/bin/noctalia-agent-status`. The bridge handles simultaneous conversations
+and detects exited processes using PID plus process start time. Status files live
+under `$XDG_RUNTIME_DIR/noctalia-agent`, contain only lifecycle/workspace metadata,
+and never store prompts, tool arguments or transcripts. A completed or interrupted
+session remains visible for ten minutes after its process exits. Restart an
+already-running agent to load newly installed hooks.
+
+The Bash `rebuild` helper preserves the rebuild's failure code even through `tee`
+and an optional agent handoff. Its pipeline option is local to the function;
+accepting the existing handoff prompt launches the agent with automatic permissions.
+Regression checks can be run with `bash scripts/test-rebuild-agent.sh` from the
+NixOS directory, and the status bridge is included in the Suite flake checks.
+
 ## Appearance and scaling
 
 [OLO-Neon](theme/README.md) uses teal control fills with dark text, mint/cyan

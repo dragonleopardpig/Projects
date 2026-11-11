@@ -19,6 +19,7 @@ The existing Hyprland bindings in `home.nix` are the source for these bindings.
 | Super+M | Minder |
 | Super+T | Toggle terminal scratchpad |
 | Super+C | Toggle Antigravity AI agent scratchpad |
+| Click AI/status widget | Toggle the same agent scratchpad; Working/Waiting/Done/Error follow lifecycle hooks |
 | Super+Shift+C | Pop/detach AI agent scratchpad into regular workspace window |
 | Super+V | Toggle Pavucontrol scratchpad |
 | Super+X | Toggle Xed scratchpad |

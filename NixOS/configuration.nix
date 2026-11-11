@@ -348,7 +348,10 @@ let
   };
 in
 {
-  imports = [ ./modules/always-on.nix ];
+  imports = [
+    ./modules/always-on.nix
+    ./modules/strata.nix
+  ];
 
   boot = {
     kernelPackages = pkgs.linuxPackages_latest;
@@ -1050,6 +1053,7 @@ in
     nix-output-monitor         # Pretty nix build output (nom)
     devenv                     # Developer environment manager
     repomix                    # Repository content mixer for LLM context
+    lapce                      # Lightning-fast Rust-based code editor
     xvfb-run                   # Run a GUI/render command on a throwaway X display. `Xvfb` itself
                                # already comes in transitively via xorg-server, but only the
                                # wrapper allocates a free display AND tears it down: a leftover
@@ -1181,8 +1185,9 @@ in
     };
   };
 
-  # Set the default editor to vim
-  environment.variables.EDITOR = "xed";
+  # Set the default editor
+  environment.variables.EDITOR = "lapce";
+  environment.variables.VISUAL = "lapce";
   environment.variables.MINDER_FORMULA_OCR = "/run/current-system/sw/bin/formulaocr-offline";
   environment.variables.MINDER_POTRACE = lib.getExe' pkgs.potrace "potrace";
   environment.variables.GTK_IM_MODULE = lib.mkForce "";

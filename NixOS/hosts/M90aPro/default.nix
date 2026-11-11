@@ -4,7 +4,6 @@
   imports = [
     ./hardware-configuration.nix
     ./nvidia-prime.nix
-    ../../modules/strata.nix
   ];
 
   # Noctalia Suite desktop (Shell, Umbriel, Greeter + Strata), as on CRUCIAL-SSD.
