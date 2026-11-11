@@ -1141,8 +1141,7 @@ in
     
     # ── Fun ──
     cowsay                     # Talking cow ASCII art
-  ] ++ (lib.optionals (pkgs ? gmsh) [ pkgs.gmsh ])
-    ++ (lib.optionals (pkgs ? paraview) [ pkgs.paraview ]);
+  ] ++ (lib.optionals (pkgs ? gmsh) [ pkgs.gmsh ]);
 
   services.blueman.enable = true;
   hardware.bluetooth = {
