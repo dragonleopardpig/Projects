@@ -266,6 +266,7 @@ in
       if [ -f /home/thinky/.local/share/applications/iexplorer.desktop ] && [ ! -L /home/thinky/.local/share/applications/iexplorer.desktop ]; then
         ${pkgs.gnused}/bin/sed -i -E 's|^MimeType=.*|MimeType=|' /home/thinky/.local/share/applications/iexplorer.desktop
       fi
+      ${appControl}/bin/winapps-apps sync
     '';
 
 

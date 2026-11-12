@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import configparser
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 import shlex
 import shutil
@@ -19,6 +20,7 @@ DATA = Path.home() / ".local/share/winapps"
 APPLICATIONS = Path.home() / ".local/share/applications"
 CATALOG = DATA / "app-catalog.json"
 STATE = Path.home() / ".local/state/winapps/app-shortcuts.json"
+VISIBILITY = STATE.with_name("app-shortcut-visibility.json")
 COMMAND = os.environ.get("WINAPPS_COMMAND", "winapps")
 DEFAULT_ICON = Path(os.environ.get("WINAPPS_DEFAULT_ICON", "/dev/null"))
 
@@ -152,20 +154,94 @@ def normalize(name):
     return re.sub(r"[^a-z0-9]", "", name.lower().removeprefix("microsoft "))
 
 
-def existing_names():
-    names = set()
-    for info in (DATA / "apps").glob("*/info"):
-        if (info.parent / "managed-by-winapps-apps").exists() or info.parent.name == "winapps-catalog":
+def existing_shortcuts():
+    shortcuts = {}
+    for desktop in sorted(APPLICATIONS.glob("*.desktop")):
+        if desktop.is_symlink() or not desktop.is_file():
             continue
+        entry = configparser.ConfigParser(interpolation=None, strict=False)
+        try:
+            entry.read_string(desktop.read_text())
+        except configparser.Error:
+            continue
+        if not entry.has_section("Desktop Entry"):
+            continue
+        entry = entry["Desktop Entry"]
+        if entry.get("X-WinApps-ManagedBy") == "winapps-apps":
+            continue
+        try:
+            command = shlex.split(entry.get("Exec", ""))
+        except ValueError:
+            continue
+        if len(command) < 2 or Path(command[0]).name != "winapps":
+            continue
+        key = command[1]
+        if key in ("windows", "winapps-catalog") or not re.fullmatch(r"[\w-]+", key):
+            continue
+        info = DATA / "apps" / key / "info"
+        if not info.is_file():
+            continue
+        values = {}
         for line in info.read_text().splitlines():
-            if line.startswith(("NAME=", "FULL_NAME=")):
+            if line.startswith(("NAME=", "FULL_NAME=", "WIN_EXECUTABLE=")):
                 try:
-                    values = shlex.split(line.split("=", 1)[1])
-                    if len(values) == 1:
-                        names.add(normalize(values[0]))
+                    field, value = line.split("=", 1)
+                    parsed = shlex.split(value)
+                    if len(parsed) == 1:
+                        values[field] = parsed[0]
                 except ValueError:
                     pass
-    return names
+        shortcuts[desktop.name] = {
+            "path": desktop,
+            "name": entry.get("Name", values.get("NAME", key)),
+            "names": {normalize(values[field]) for field in ("NAME", "FULL_NAME") if field in values},
+            "executable": PureWindowsPath(values.get("WIN_EXECUTABLE", "")).name.lower(),
+            "visible": not any(entry.get(flag, "false").lower() == "true" for flag in ("Hidden", "NoDisplay")),
+        }
+    return shortcuts
+
+
+def selection_apps(apps, shortcuts):
+    remaining = dict(shortcuts)
+    choices = []
+    for app in apps:
+        matches = []
+        app_id = app["app_id"].lower()
+        if "!" not in app_id:
+            for key, shortcut in remaining.items():
+                executable = shortcut["executable"]
+                if (executable and (app_id.endswith("\\" + executable) or f".{executable}." in app_id)) or (
+                    normalize(app["name"]) in shortcut["names"]
+                ) or (app_id == "microsoft.windows.explorer" and executable == "explorer.exe"):
+                    matches.append(key)
+        choices.append({**app, "shortcuts": matches})
+        for key in matches:
+            remaining.pop(key)
+    for key, shortcut in remaining.items():
+        choices.append({"app_id": f"winapps-shortcut:{key}", "name": shortcut["name"], "shortcuts": [key]})
+    return choices
+
+
+def set_shortcut_visibility(desktop, visible):
+    text = desktop.read_text()
+    def update(match):
+        body = re.sub(r"(?m)^NoDisplay=.*(?:\n|$)", "", match[2])
+        if visible:
+            body = re.sub(r"(?m)^Hidden=.*$", "Hidden=false", body)
+        return match[1] + body.rstrip("\n") + f"\nNoDisplay={str(not visible).lower()}\n"
+    updated = re.sub(r"(?ms)(^\[Desktop Entry\]\n)(.*?)(?=^\[|\Z)", update, text, count=1)
+    if updated != text:
+        write_atomic(desktop, updated)
+
+
+def sync_visibility():
+    visibility = json.loads(VISIBILITY.read_text()) if VISIBILITY.exists() else {}
+    for shortcut in existing_shortcuts().values():
+        visible = visibility.get(shortcut["path"].name)
+        if isinstance(visible, bool):
+            set_shortcut_visibility(shortcut["path"], visible)
+    if shutil.which("update-desktop-database"):
+        subprocess.run(["update-desktop-database", str(APPLICATIONS)], capture_output=True)
 
 
 def cached_icons():
@@ -250,14 +326,23 @@ def remove_shortcut(record):
 
 def apply_selection(apps, selected):
     managed = load_state()
-    existing = existing_names()
+    shortcuts = existing_shortcuts()
+    choices = selection_apps(apps, shortcuts)
+    selected_shortcuts = {key for app in choices if app["app_id"] in selected for key in app["shortcuts"]}
+    visibility = json.loads(VISIBILITY.read_text()) if VISIBILITY.exists() else {}
+    for key, shortcut in shortcuts.items():
+        visible = key in selected_shortcuts
+        set_shortcut_visibility(shortcut["path"], visible)
+        visibility[shortcut["path"].name] = visible
+    write_atomic(VISIBILITY, json.dumps(visibility, indent=2) + "\n")
     icons = cached_icons()
-    for app in apps:
-        if app["app_id"] in selected and normalize(app["name"]) not in existing:
+    existing_ids = {app["app_id"] for app in choices if app["shortcuts"]}
+    for app in choices:
+        if app["app_id"] in selected and not app["shortcuts"]:
             managed[app["app_id"]] = install_shortcut(app, icons)
             write_atomic(STATE, json.dumps(managed, indent=2) + "\n")
     for app_id in list(managed):
-        if app_id not in selected:
+        if app_id not in selected or app_id in existing_ids:
             remove_shortcut(managed.pop(app_id))
             write_atomic(STATE, json.dumps(managed, indent=2) + "\n")
     if shutil.which("update-desktop-database"):
@@ -268,23 +353,23 @@ def gui():
     while True:
         catalog = load_catalog()
         managed = load_state()
-        existing = existing_names()
+        shortcuts = existing_shortcuts()
         scanned = catalog.get("error") or catalog.get("scanned", "not scanned yet")
         arguments = [
             "yad", "--list", "--checklist", "--title=Choose Windows Apps", "--width=800", "--height=600",
-            f"--text=Choose installed Windows apps to show independently in AGS/Walker.\n"
+            f"--text=Choose installed Windows apps to show independently in the launcher.\n"
             f"Last scan: {scanned}\n"
-            "Unchecking removes only this picker's shortcuts, not Windows software.\n"
-            "Existing Office shortcuts are kept. Some apps do not support RemoteApp.",
+            "Unchecking also hides existing Office and WinApps shortcuts.\n"
+            "Windows software stays installed. Some apps do not support RemoteApp.",
             "--column=Show", "--column=Application", "--column=Status", "--column=App ID",
             "--hide-column=4", "--print-column=4", "--separator=\n", "--search-column=2",
             "--button=Refresh from Windows:10", "--button=Cancel:1", "--button=Apply selection:0",
         ]
-        for app in catalog["apps"]:
-            already = normalize(app["name"]) in existing
+        for app in selection_apps(catalog["apps"], shortcuts):
+            visible = app["app_id"] in managed or any(shortcuts[key]["visible"] for key in app["shortcuts"])
             arguments.extend([
-                "TRUE" if app["app_id"] in managed or already else "FALSE",
-                app["name"], "Existing shortcut (kept)" if already else "Managed here", app["app_id"],
+                "TRUE" if visible else "FALSE",
+                app["name"], "Existing WinApps shortcut" if app["shortcuts"] else "Managed here", app["app_id"],
             ])
         selected = subprocess.run(arguments, capture_output=True, text=True)
         if selected.returncode == 10:
@@ -301,7 +386,7 @@ def gui():
         apply_selection(catalog["apps"], set(selected.stdout.splitlines()))
         subprocess.run([
             "zenity", "--info", "--title=Windows Apps", "--text=Windows shortcuts updated.\n"
-            "Search for the app name followed by (Windows) in AGS/Walker.\n"
+            "Only checked apps are shown in the launcher.\n"
             "Launching one may take over the shared Windows desktop connection.",
         ])
         return
@@ -309,13 +394,17 @@ def gui():
 
 def main():
     parser = argparse.ArgumentParser(description="Choose Windows apps to expose as NixOS launchers.")
-    parser.add_argument("command", choices=("gui", "refresh", "list"), nargs="?", default="gui")
+    parser.add_argument("command", choices=("gui", "refresh", "list", "sync", "hide-all"), nargs="?", default="gui")
     arguments = parser.parse_args()
     try:
         if arguments.command == "refresh":
             print(json.dumps(refresh()))
         elif arguments.command == "list":
             print(json.dumps(load_catalog()))
+        elif arguments.command == "sync":
+            sync_visibility()
+        elif arguments.command == "hide-all":
+            apply_selection(load_catalog()["apps"], set())
         else:
             gui()
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:

@@ -291,12 +291,15 @@ After editing the fork, run `nix flake update winapps` in `~/Projects/NixOS`
 before rebuilding; no Git commit is needed to build local changes.
 
 In the same **WinApps** app, click **Choose Windows apps…** to select
-Windows Start-menu apps, including Microsoft Teams, for independent AGS/Walker
+Windows Start-menu apps, including Microsoft Teams, for independent desktop
 launchers. Click **Refresh from Windows** after installing an app; refreshing
 briefly reconnects an existing Windows viewer without closing Windows apps.
 Selected shortcuts are named **App name (Windows)**, so they remain distinct
-from Linux alternatives. Unchecking removes only picker-managed Linux shortcuts;
-it does not uninstall Windows software or remove existing Office launchers.
+from Linux alternatives. Unchecking also hides existing Office and WinApps
+launchers while keeping Windows software installed. Rechecking restores the
+existing shortcut and its file associations. Visibility choices survive rebuilds;
+`winapps-apps hide-all` hides all standalone entries while keeping the Windows
+desktop and WinApps controls available.
 The picker uses Windows application IDs rather than version-specific MSIX paths,
 so packaged-app updates do not invalidate their shortcuts. Not every Windows
 app supports RemoteApp; use the full desktop for incompatible apps.
