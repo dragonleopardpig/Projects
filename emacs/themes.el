@@ -115,3 +115,6 @@
   :hook (after-init . heaven-and-hell-init-hook)
   :bind (("C-c <f4>" . heaven-and-hell-load-default-theme)
          ("<f4>" . heaven-and-hell-toggle-theme)))
+
+;; Run after the existing theme setup and saved Custom values.
+(load (expand-file-name "noctalia.el" (file-name-directory (or load-file-name buffer-file-name))))

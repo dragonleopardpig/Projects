@@ -62,7 +62,7 @@
     source = "custom";
     custom_palette = themeName;
     sync_color_scheme = true;
-    templates = { builtin_ids = [ ]; community_ids = [ ]; };
+    templates = { builtin_ids = [ "emacs" ]; community_ids = [ ]; };
   };
   notification.enable_daemon = true;
   location = { auto_locate = false; latitude = 1.3521; longitude = 103.8198; };
