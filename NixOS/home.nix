@@ -1086,7 +1086,6 @@ in
         --vfs-cache-max-age=24h \
         --umask=077 \
         --dir-cache-time=1m \
-        --disable=About \
         --disable-http2 \
         --contimeout=10s \
         --timeout=30s \
