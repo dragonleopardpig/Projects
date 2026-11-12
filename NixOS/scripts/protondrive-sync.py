@@ -382,8 +382,17 @@ class RcloneOps:
             return ret, "".join(stdout_chunks), "".join(stderr_chunks)
 
         timeout_s = 14400 if needs_resync else 3600
+        rclone_conf = Path.home() / ".config/rclone/rclone.conf"
+        conf_mtime_before = rclone_conf.stat().st_mtime if rclone_conf.exists() else 0.0
         try:
             retcode, stdout_str, stderr_str = run_logged_cmd(cmd, timeout_s)
+            conf_mtime_after = rclone_conf.stat().st_mtime if rclone_conf.exists() else 0.0
+            if conf_mtime_after > conf_mtime_before and cls.is_mounted(str(DEFAULT_MOUNT_POINT)):
+                subprocess.run(
+                    ["systemctl", "--user", "restart", "protondrive-mount.service"],
+                    check=False,
+                    timeout=15,
+                )
 
             if retcode == 0:
                 return True, "Sync completed successfully"
@@ -504,17 +513,41 @@ class AccountManager:
                 name = username.split("@")[0] if "@" in username else username
                 email_display = username
 
-            # Fetch quota via rclone about
-            about_res = subprocess.run([rclone, "about", f"{remote}:", "--json"], capture_output=True, text=True, timeout=25)
+            # Prefer querying quota via the active FUSE mount's statvfs so we do not
+            # spawn a separate `rclone about` process that could rotate Proton's
+            # single-use OAuth refresh token out from under `protondrive-mount.service`.
             usage = 0
             limit = 0
-            if about_res.returncode == 0:
+            if RcloneOps.is_mounted(str(DEFAULT_MOUNT_POINT)):
                 try:
-                    about_data = json.loads(about_res.stdout)
-                    limit = int(about_data.get("total", 0))
-                    usage = int(about_data.get("used", 0))
+                    st = os.statvfs(DEFAULT_MOUNT_POINT)
+                    block = st.f_frsize if st.f_frsize > 0 else max(1, st.f_bsize)
+                    total_bytes = st.f_blocks * block
+                    avail_bytes = st.f_bavail * block
+                    if 0 < total_bytes < (1 << 50):
+                        limit = total_bytes
+                        usage = max(0, total_bytes - avail_bytes)
                 except Exception:
                     pass
+
+            if limit == 0:
+                rclone_conf = Path.home() / ".config/rclone/rclone.conf"
+                conf_mtime_before = rclone_conf.stat().st_mtime if rclone_conf.exists() else 0.0
+                about_res = subprocess.run([rclone, "about", f"{remote}:", "--json"], capture_output=True, text=True, timeout=25)
+                conf_mtime_after = rclone_conf.stat().st_mtime if rclone_conf.exists() else 0.0
+                if conf_mtime_after > conf_mtime_before and RcloneOps.is_mounted(str(DEFAULT_MOUNT_POINT)):
+                    subprocess.run(
+                        ["systemctl", "--user", "restart", "protondrive-mount.service"],
+                        check=False,
+                        timeout=15,
+                    )
+                if about_res.returncode == 0:
+                    try:
+                        about_data = json.loads(about_res.stdout)
+                        limit = int(about_data.get("total", 0))
+                        usage = int(about_data.get("used", 0))
+                    except Exception:
+                        pass
 
             pct = (usage / limit * 100) if limit > 0 else 0.0
 

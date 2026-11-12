@@ -122,6 +122,23 @@ def collect_status() -> dict:
     mounted = is_mounted(mount_point)
     rclone_alive = mounted and (main_pid > 0 and check_alive(main_pid))
 
+    # If a separate rclone process rotated `client_refresh_token` in rclone.conf after
+    # `protondrive-mount.service` started, restart the mount service so it reloads the
+    # fresh token instead of returning EIO on directory access.
+    if rclone_alive and main_pid > 0:
+        try:
+            rclone_conf = Path.home() / ".config/rclone/rclone.conf"
+            proc_dir = Path(f"/proc/{main_pid}")
+            if rclone_conf.exists() and proc_dir.exists():
+                if rclone_conf.stat().st_mtime > proc_dir.stat().st_mtime + 2.0:
+                    subprocess.run(
+                        ["systemctl", "--user", "restart", "protondrive-mount.service"],
+                        check=False,
+                        timeout=10,
+                    )
+        except Exception:
+            pass
+
     workers = get_workers(main_pid)
     paused = cfg.get("paused", False)
     folders = cfg.get("folders", [])
