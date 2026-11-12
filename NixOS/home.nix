@@ -148,6 +148,23 @@ in
     terminal = false;
   };
 
+  # trident-optics: its window says it is "trident" (Qt's desktop file name), and the desktop
+  # portal looks for trident.desktop to register it -- without one, every start warned "Could
+  # not register app ID: App info not found for 'trident'". Launched in its devenv, as the
+  # `trident-ui` script runs there (xcb; see trident-optics/devenv.nix).
+  xdg.desktopEntries.trident = {
+    name = "trident";
+    genericName = "Optics design and simulation";
+    # (bash by its full path: the portal's own PATH has none, and an entry whose program it
+    # cannot find is no entry to it -- "App info not found" still)
+    exec = ''${pkgs.bash}/bin/bash -lc "cd /home/thinky/Projects/trident-optics && exec direnv exec . trident-ui"'';
+    icon = "applications-science";
+    comment = "trident-optics: optical design, simulation and fabrication workbenches";
+    categories = [ "Science" "Physics" "Engineering" ];
+    terminal = false;
+    settings.StartupWMClass = "trident";
+  };
+
   xdg.desktopEntries.gmsh-xcb = {
     name = "Gmsh";
     exec = "/home/thinky/.local/bin/gmsh-xcb %f";
