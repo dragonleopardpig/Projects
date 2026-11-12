@@ -17,6 +17,7 @@
         patches = (previous.patches or [ ]) ++ [
           ./suite/noctalia-umbriel-ipc.patch
           ./suite/fullscreen-launcher.patch
+          ./suite/tray-menu-modal-layer.patch
         ];
       });
       suite = import ./suite { inherit pkgs shell; };

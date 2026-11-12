@@ -1,0 +1,64 @@
+diff --git a/src/shell/wayland/layer_surface.h b/src/shell/wayland/layer_surface.h
+--- a/src/shell/wayland/layer_surface.h
++++ b/src/shell/wayland/layer_surface.h
+@@ -81,6 +81,7 @@
+   // Rects are surface-local, so they may legitimately sit partly or fully outside.
+   static bool regionIntersectsBounds(const std::vector<InputRect>& rects, std::uint32_t width, std::uint32_t height);
+   LayerShellKeyboard keyboardInteractivity() const noexcept { return m_config.keyboard; }
++  LayerShellLayer layer() const noexcept { return m_config.layer; }
+   std::uint32_t anchor() const noexcept { return m_config.anchor; }
+   std::int32_t marginTop() const noexcept { return m_config.marginTop; }
+   std::int32_t marginRight() const noexcept { return m_config.marginRight; }
+diff --git a/src/shell/tray/tray_menu.h b/src/shell/tray/tray_menu.h
+--- a/src/shell/tray/tray_menu.h
++++ b/src/shell/tray/tray_menu.h
+@@ -91,11 +91,11 @@
+   std::vector<TrayMenuEntry> m_entries;
+   std::unique_ptr<MenuInstance> m_instance;
+ 
+-  // Bar layer surface (owned by the bar) whose keyboard interactivity is flipped
+-  // to OnDemand while the menu is open so the grabbing popup inherits keyboard
+-  // focus, then restored to None on close.
++  // The bar temporarily lends its popup an overlay layer and exclusive keyboard
++  // focus. Restore its configured layer and non-interactive keyboard mode on close.
+   zwlr_layer_surface_v1* m_keyboardBarLayerSurface = nullptr;
+   wl_surface* m_keyboardBarWlSurface = nullptr;
++  std::uint32_t m_keyboardBarLayer = 2;
+   float m_contentScale = 1.0F;
+   bool m_visible = false;
+   std::string m_lastClosedItemId;
+diff --git a/src/shell/tray/tray_menu.cpp b/src/shell/tray/tray_menu.cpp
+--- a/src/shell/tray/tray_menu.cpp
++++ b/src/shell/tray/tray_menu.cpp
+@@ -739,17 +739,17 @@
+   };
+   popup_chrome::applyToConfig(popupConfig, chrome, placement.chromeAttachment);
+ 
+-  // Layer-shell popups inherit their parent's keyboard interactivity. A bar is
+-  // None, so without this the grabbing popup would get no keyboard focus and ESC
+-  // could not reach it. Flip a None parent to OnDemand before the popup maps; a
+-  // parent that already takes keyboard (the tray drawer panel) is left alone. The
+-  // focus-grab path carries keyboard itself, so only the plain grab path needs it.
++  // Native popups inherit the bar's layer and keyboard mode. Keep menus above
++  // application windows and retain focus while the pointer crosses their edges.
++  // The tray drawer and Hyprland focus-grab paths already manage their own focus.
+   const LayerSurface* parentOwner = m_wayland->extension<LayerShell>().layerSurfaceOwnerFor(parentWlSurface);
+   if (!useFocusGrab && parentOwner != nullptr && parentOwner->keyboardInteractivity() == LayerShellKeyboard::None) {
+     m_keyboardBarLayerSurface = parentLayerSurface;
+     m_keyboardBarWlSurface = parentWlSurface;
++    m_keyboardBarLayer = static_cast<std::uint32_t>(parentOwner->layer());
++    zwlr_layer_surface_v1_set_layer(parentLayerSurface, static_cast<std::uint32_t>(LayerShellLayer::Overlay));
+     zwlr_layer_surface_v1_set_keyboard_interactivity(
+-        parentLayerSurface, static_cast<std::uint32_t>(LayerShellKeyboard::OnDemand)
++        parentLayerSurface, static_cast<std::uint32_t>(LayerShellKeyboard::Exclusive)
+     );
+     wl_surface_commit(parentWlSurface);
+   }
+@@ -847,6 +847,7 @@
+       || m_wayland->extension<LayerShell>().layerSurfaceFor(wlSurface) != layerSurface) {
+     return;
+   }
++  zwlr_layer_surface_v1_set_layer(layerSurface, m_keyboardBarLayer);
+   zwlr_layer_surface_v1_set_keyboard_interactivity(layerSurface, static_cast<std::uint32_t>(LayerShellKeyboard::None));
+   wl_surface_commit(wlSurface);
+ }

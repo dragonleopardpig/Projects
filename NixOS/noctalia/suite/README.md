@@ -41,6 +41,11 @@ and `end` overrides so the Nix-defined widget order takes effect. GUI appearance
 choices, including bar opacity, and per-monitor settings persist across rebuilds.
 The sync runs after Home Manager links the new configuration.
 
+Tray context menus temporarily place their bar on the overlay layer and retain
+exclusive keyboard focus. Menus stay above application windows while moving
+through menu items or across their edges. Closing the menu restores the bar's
+configured layer and keyboard mode, including its normal fullscreen behavior.
+
 ## Desktop agent
 
 The **AI** widget beside the workspaces toggles the same Antigravity scratchpad
