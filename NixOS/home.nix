@@ -1709,6 +1709,13 @@ in
         on)
           if lock_black; then
             dim
+            # UNLOCKED, PUT BACK -- however the lock came (idle, F1, Mod+L). Only
+            # swayidle's resume put the monitor back, and a lock from F1 is no
+            # idle: unlocked, its contrast stayed at 0 under a "100%" brightness
+            # (2026-11-12: "After unlock the screen, the brightness is low even
+            # 100%"). A waiter of its own, the lock (fd 9) not held by it.
+            setsid bash -c 'while pgrep swaylock >/dev/null 2>&1; do sleep 1; done
+                            exec "$0" off' "$0" 9>&- >/dev/null 2>&1 < /dev/null &
           else
             notify-send -a Display -i dialog-warning -t 6000 "Lock failed" \
               "swaylock did not start; the screen was left as it was." >/dev/null 2>&1 || true
