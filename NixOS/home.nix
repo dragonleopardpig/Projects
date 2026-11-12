@@ -3044,12 +3044,19 @@ in
     Install.WantedBy = [ "graphical-session.target" ];
   };
 
+  home.pointerCursor = {
+    name = "Hyprland-Logo";
+    package = pkgs.callPackage ./packages/hyprland-logo-cursor.nix { };
+    size = 24;
+    gtk.enable = true;
+    x11.enable = true;
+  };
+
   gtk = {
     enable = true;
     theme = { name = "Orchis-Dark"; package = pkgs.orchis-theme; };
     gtk4.theme = null;
     iconTheme = { name = "Tela-circle"; package = pkgs.tela-circle-icon-theme; };
-    cursorTheme = { name = "Adwaita"; package = pkgs.adwaita-icon-theme; };
   };
 
   qt = {
