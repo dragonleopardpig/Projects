@@ -40,6 +40,7 @@ in {
     mouse.natural_scroll = true;
     touchpad.natural_scroll = true;
     focus.follows_mouse = true;
+    cursor = { theme = "Adwaita"; size = 24; };
   };
   layout = {
     mode = "dwindle";

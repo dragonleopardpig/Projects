@@ -32,6 +32,7 @@ Home Manager supplies `~/.config/umbriel/config.toml`, which includes the
 immutable suite defaults followed by the optional writable
 `~/.config/umbriel/outputs.toml`. A user service drop-in selects that entrypoint
 on every login. The ASUS VP327Q has a saved scale of `1.25` by monitor identity.
+The compositor uses the same Adwaita cursor at size 24 as the Hyprland/GTK setup.
 Noctalia's palette/config files live under `~/.config/noctalia-suite/noctalia`;
 its GUI overrides and encrypted data use the separate `noctalia-suite` state
 and data profiles. The Secret Service provides the storage key.
