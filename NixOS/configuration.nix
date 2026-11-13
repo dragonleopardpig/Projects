@@ -937,7 +937,7 @@ in
     nemo-fileroller
     cinnamon-desktop           # gsettings schemas for Nemo (terminal, etc.)
     file-roller
-    spacedrive                 # Cross-platform file manager
+    (callPackage ./packages/spacedrive-compatible.nix { })
 
     # ── Image & Media Tools ──
     imagemagick                # Image conversion and manipulation (CLI)
