@@ -4,129 +4,103 @@ Install a LUKS-encrypted, UEFI-bootable NixOS on an external SSD that boots on a
 
 ## Partition Layout
 
-| Partition | Size | Format      | Purpose                          |
-|-----------|------|-------------|----------------------------------|
-| 1 (ESP)   | 10G  | FAT32       | `/boot` (EFI System Partition)   |
-| 2 (root)  | 90G  | LUKS → ext4 | `/` (encrypted NixOS root)       |
-| 3 (data)  | Rest | FAT32       | Portable data (not auto-mounted) |
+| Partition | Size | Format        | Purpose                          |
+|-----------|------|---------------|----------------------------------|
+| 1 (ESP)   | 10G  | FAT32         | `/boot` (EFI System Partition)   |
+| 2 (root)  | 90G  | LUKS → btrfs  | subvolumes below                 |
+| 3 (data)  | Rest | FAT32         | Portable data (not auto-mounted) |
+
+Btrfs subvolumes inside the LUKS container:
+
+| Subvolume  | Mount      | Survives reboot?                                      |
+|------------|------------|-------------------------------------------------------|
+| `@root`    | `/`        | **No**: replaced with an empty one on every boot      |
+| `@nix`     | `/nix`     | Yes                                                   |
+| `@persist` | `/persist` | Yes: system state bind-mounted from here              |
+| `@home`    | `/home`    | Yes                                                   |
+
+The root wipe ("impermanence") is configured in
+[`modules/impermanence.nix`](../../modules/impermanence.nix), which also lists
+what is kept under `/persist` (Wi-Fi, Bluetooth, logs, machine-id, ...).
+Wiped roots are kept in `old_roots/` on the top-level subvolume for 14 days:
+
+```bash
+sudo mount -o subvol=/ /dev/mapper/cryptroot /mnt && ls /mnt/old_roots
+```
+
+A VM test boots this exact layout twice and checks the wipe:
+`nix build --impure .#checks.x86_64-linux.impermanence -L`
 
 ## Prerequisites
 
 - NixOS flake repo at `~/Projects/NixOS` with the `PortableSSD` host configured
-- External SSD plugged in (identify with `lsblk`)
-- The `PortableSSD` host files must be tracked by git (`git add`) for the flake to see them
+- External SSD plugged in
+- New/modified files tracked by git (`git add`) so the flake can see them
 
 ## Step 1: Identify the SSD
 
 ```bash
-lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+lsblk -o NAME,SIZE,MODEL,TRAN,FSTYPE,MOUNTPOINTS
+ls -l /dev/disk/by-id/ | grep usb
 ```
 
-Find your external SSD (e.g. `/dev/sdb`). **Make sure you identify the correct device — all data will be erased.**
+Use the stable `/dev/disk/by-id/usb-...` path, not `/dev/sdX`, which can change
+between plugs. **Everything on that device will be erased.**
 
-## Step 2: Update disko.nix device path
-
-Edit `hosts/PortableSSD/disko.nix` and set the correct device:
-
-```nix
-device = "/dev/sdX";  # Replace with your actual device
-```
-
-## Step 3: Unmount the SSD
+## Step 2: Unmount the SSD
 
 ```bash
-sudo umount /dev/sdX1  # Unmount all existing partitions
-sudo umount /dev/sdX2
-# ... etc for all mounted partitions
+sudo umount /dev/disk/by-id/usb-XXXX-part*   # every mounted partition
 ```
 
-## Step 4: Write the LUKS password file
+## Step 3: Write the LUKS password file
 
 ```bash
 printf '%s' 'YOUR_LUKS_PASSWORD' | sudo tee /tmp/luks-password > /dev/null
 ```
 
-Disko reads the LUKS passphrase from `/tmp/luks-password` during setup.
-
-## Step 5: Stage files for the flake
-
-The flake only sees git-tracked files. Make sure new/modified files are staged:
+## Step 4: Partition, encrypt, and format with disko
 
 ```bash
-cd ~/Projects
-git add NixOS/hosts/PortableSSD/ NixOS/flake.nix
+sudo nix run github:nix-community/disko -- --mode destroy,format,mount \
+  --argstr device /dev/disk/by-id/usb-XXXX \
+  ~/Projects/NixOS/hosts/PortableSSD/disko.nix
 ```
 
-## Step 6: Partition, encrypt, and format with disko
+This wipes the disk, creates the partitions and btrfs subvolumes, opens LUKS
+as `cryptroot`, and mounts everything under `/mnt`. No UUIDs need copying:
+the NixOS config finds the partitions by GPT label.
+
+## Step 5: Write the password hashes (required)
+
+`/etc/shadow` is wiped on every boot, so passwords are read from `/persist`.
+**Without these files nobody can log in.**
 
 ```bash
-sudo nix run github:nix-community/disko -- --mode disko ~/Projects/NixOS/hosts/PortableSSD/disko.nix
+sudo mkdir -p /mnt/persist/passwords
+nix shell nixpkgs#mkpasswd -c mkpasswd -m yescrypt | sudo tee /mnt/persist/passwords/thinky
+sudo cp /mnt/persist/passwords/thinky /mnt/persist/passwords/root   # or a different hash
+sudo chmod 600 /mnt/persist/passwords/*
 ```
 
-This will:
-- Wipe the disk and create a GPT partition table
-- Create the ESP (FAT32), LUKS-encrypted root (ext4), and data (FAT32) partitions
-- Open the LUKS container
-- Mount root to `/mnt` and boot to `/mnt/boot`
-
-## Step 7: Get UUIDs and update hardware-configuration.nix
+## Step 6: Install NixOS
 
 ```bash
-lsblk -o NAME,SIZE,FSTYPE,UUID,MOUNTPOINT /dev/sdX
-sudo blkid /dev/sdX2   # LUKS partition UUID
+sudo nixos-install --flake ~/Projects/NixOS#PortableSSD --root /mnt --no-root-passwd --impure
 ```
 
-Update `hosts/PortableSSD/hardware-configuration.nix` with the actual UUIDs:
+This builds the entire system closure and installs GRUB to the EFI fallback
+path (`EFI/BOOT/BOOTX64.EFI`).
 
-```nix
-# LUKS device — use the UUID of the crypto_LUKS partition (sdX2)
-boot.initrd.luks.devices."cryptroot".device = "/dev/disk/by-uuid/<LUKS-UUID>";
-
-# Root filesystem — use /dev/mapper/cryptroot (fixed name)
-fileSystems."/" = {
-  device = "/dev/mapper/cryptroot";
-  fsType = "ext4";
-};
-
-# Boot/ESP — use the UUID of the vfat partition (sdX1)
-fileSystems."/boot" = {
-  device = "/dev/disk/by-uuid/<ESP-UUID>";
-  fsType = "vfat";
-  options = [ "fmask=0077" "dmask=0077" ];
-};
-```
-
-Re-stage after editing:
-
-```bash
-git add NixOS/hosts/PortableSSD/hardware-configuration.nix
-```
-
-## Step 8: Install NixOS
-
-```bash
-sudo nixos-install --flake ~/Projects/NixOS#PortableSSD --root /mnt
-```
-
-This builds the entire system closure and installs GRUB to the EFI fallback path (`EFI/BOOT/BOOTX64.EFI`).
-
-## Step 9: Set user passwords
-
-```bash
-sudo nixos-enter --root /mnt -c 'echo "thinky:YOUR_PASSWORD" | chpasswd'
-sudo nixos-enter --root /mnt -c 'echo "root:YOUR_PASSWORD" | chpasswd'
-```
-
-## Step 10: Clean up and unmount
+## Step 7: Clean up and unmount
 
 ```bash
 sudo rm /tmp/luks-password
-sudo umount /mnt/boot
-sudo umount /mnt
+sudo umount -R /mnt
 sudo cryptsetup close cryptroot
 ```
 
-## Step 11: Boot
+## Step 8: Boot
 
 Plug the SSD into any x86_64 UEFI machine, enter the boot menu (usually F12/F2/Esc/Del), and select the external SSD. You'll be prompted for the LUKS passphrase, then GRUB loads NixOS.
 
@@ -148,7 +122,7 @@ These settings in `default.nix` make it boot on any machine:
 - `boot.plymouth.enable = lib.mkForce false` — disabled for GPU driver compatibility
 - Broad `initrd.availableKernelModules` — covers USB, AHCI, NVMe, SD card controllers
 - Both `kvm-intel` and `kvm-amd` included
-- All filesystems referenced by UUID, not device path
+- Filesystems referenced by GPT partition label (generated by `disko.nix`), not device path
 
 ## Troubleshooting
 
@@ -162,7 +136,7 @@ echo "- - -" | sudo tee /sys/class/scsi_host/host*/scan
 sleep 5
 lsblk  # Device may come back as a different letter (e.g. sdc)
 ```
-Update `disko.nix` with the new device path before proceeding.
+Pass the new device path to `--argstr device` before proceeding.
 
 **Data partition auto-mounts after disko:**
 ```bash

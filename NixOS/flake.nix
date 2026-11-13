@@ -46,6 +46,12 @@
       inputs.elephant.follows = "elephant";
     };
     noctalia-suite.url = "path:./noctalia";
+    # Opt-in root wiping (modules/impermanence.nix); only PortableSSD enables it.
+    impermanence = {
+      url = "github:nix-community/impermanence";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
     # Share the reviewed feature branch across hosts through the fork.
     strata.url = "github:dragonleopardpig/strata/feat/1-pane-controls-compact-search";
   };
@@ -596,6 +602,8 @@
           inputs.noctalia-suite.nixosModules.suite
           hostModule
           disko.nixosModules.disko
+          inputs.impermanence.nixosModules.impermanence
+          ./modules/impermanence.nix
           grub2-themes.nixosModules.default
           home-manager.nixosModules.home-manager
           {
@@ -623,6 +631,13 @@
         ];
       };
     in {
+      # VM test: PortableSSD disk layout + root wipe across two boots.
+      checks.x86_64-linux.impermanence = import ./tests/impermanence.nix {
+        inherit inputs;
+        inherit (nixpkgs) lib;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      };
+
       # X299 Desktop (external SSD clone)
       nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
 

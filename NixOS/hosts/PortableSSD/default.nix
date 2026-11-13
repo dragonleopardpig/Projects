@@ -6,8 +6,12 @@
 {
   imports = [
     ./hardware-configuration.nix
+    ./disko.nix
     ../universal-boot.nix
   ];
 
   networking.hostName = "PortableSSD";
+
+  # Wipe / on every boot; see modules/impermanence.nix for what survives.
+  custom.impermanence.enable = true;
 }
