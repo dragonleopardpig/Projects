@@ -309,6 +309,21 @@ in
     '';
   };
 
+  xdg.desktopEntries.hyprfm = {
+    name = "HyprFM";
+    genericName = "File Manager";
+    comment = "A lightweight Qt6/QML file manager for Hyprland";
+    exec = "hyprfm %U";
+    icon = "io.github.soyeb_jim285.HyprFM";
+    categories = [ "System" "FileManager" "Utility" "Qt" ];
+    mimeType = [ "inode/directory" ];
+    terminal = false;
+    settings = {
+      StartupWMClass = "hyprfm";
+      Keywords = "files;explorer;manager;browser;filesystem;";
+    };
+  };
+
   xdg.desktopEntries.nemo-x11 = {
     name = "Nemo";
     exec = "/home/thinky/.local/bin/nemo-x11 %U";
