@@ -1116,7 +1116,6 @@ in
       PathModified = "%h/Downloads/filelusync_amd.zip";
       Unit = "filelu-update.service";
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   systemd.user.services.filelu-update = {
@@ -1149,7 +1148,6 @@ in
       StartLimitIntervalSec = 300;
       StartLimitBurst = 5;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   xdg.desktopEntries.filelu-update = {
@@ -1267,9 +1265,6 @@ in
       ExecStart = "${config.home.homeDirectory}/.local/bin/mega-runner mega-cmd-server";
       Restart = "on-failure";
       RestartSec = 10;
-    };
-    Install = {
-      WantedBy = [ "graphical-session.target" ];
     };
   };
 
@@ -3470,13 +3465,6 @@ in
                     "uwsm app -- awww-daemon"
                     "env GDK_BACKEND=x11 copyq --daemon"
                     "protonvpn-app"
-                    # Filen sync client, started straight to the tray. --hidden
-                    # suppresses both the launcher and main window (index.js
-                    # checks process.argv for it); minimize-to-tray comes from
-                    # the filen-desktop overlay patch in flake.nix.
-                    # Keep Filen out of the login critical path. Its initial
-                    # scan can be I/O-heavy even when no files need syncing.
-                    "sleep 15; ~/.local/bin/filen-desktop --hidden"
                     "~/.local/bin/random-wallpaper"
                     "while true; do sleep 60; ~/.local/bin/random-wallpaper; done"
                     "systemctl --user start hyprpolkitagent"

@@ -306,7 +306,6 @@ in
       RestartSec = 30;
       RestartMaxDelaySec = 300;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   # Systemd User Service: Proton Drive Tray Icon & Sync Daemon
@@ -321,6 +320,5 @@ in
       Restart = "on-failure";
       RestartSec = 5;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 }

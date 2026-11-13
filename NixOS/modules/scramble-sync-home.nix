@@ -176,7 +176,6 @@ in
       RestartSec = 5;
       TimeoutStopSec = 15;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   # Keep the quiet helpers selected even when boot-time activation restores
@@ -207,14 +206,16 @@ in
       ExecCondition = "${pkgs.writeShellScript "check-scramble-private-remote" ''
         ${rclone} listremotes | ${pkgs.gnugrep}/bin/grep -qx 'scramble_private:'
       ''}";
-      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p -m 700 '${cloudMounted}'";
+      ExecStartPre = [
+        "-/run/wrappers/bin/fusermount3 -u -z '${cloudMounted}'"
+        "${pkgs.coreutils}/bin/mkdir -p -m 700 '${cloudMounted}'"
+      ];
       ExecStart = "${rclone} mount scramble_private:Current '${cloudMounted}' --devname='Scramble Cloud' --webdav-encoding=Colon --read-only --vfs-cache-mode=off --umask=077 --poll-interval=0 --dir-cache-time=15s --contimeout=10s --timeout=1m";
-      ExecStop = "/run/wrappers/bin/fusermount3 -u '${cloudMounted}'";
+      ExecStop = "/run/wrappers/bin/fusermount3 -u -z '${cloudMounted}'";
       TimeoutStopSec = "30s";
       Restart = "on-failure";
       RestartSec = 10;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   systemd.user.services.scramble-desktop = {
@@ -232,7 +233,6 @@ in
       Restart = "on-failure";
       RestartSec = 10;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   systemd.user.services.scramble-session = {
@@ -259,7 +259,6 @@ in
       AccuracySec = "30s";
       Unit = "scramble-private-sync.service";
     };
-    Install.WantedBy = [ "timers.target" ];
   };
 
   systemd.user.services.scramble-consolidate = {
@@ -296,6 +295,5 @@ in
       Restart = "on-failure";
       RestartSec = 10;
     };
-    Install.WantedBy = [ "default.target" ];
   };
 }

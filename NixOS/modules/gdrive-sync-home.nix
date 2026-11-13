@@ -236,14 +236,16 @@ in
     Service = {
       Type = "notify";
       Environment = [ "RCLONE_CONFIG=${home}/.config/rclone/rclone.conf" ];
-      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${mountPoint}'";
+      ExecStartPre = [
+        "-/run/wrappers/bin/fusermount3 -u -z '${mountPoint}'"
+        "${pkgs.coreutils}/bin/mkdir -p '${mountPoint}'"
+      ];
       ExecStart = "${rclone} mount gdrive: '${mountPoint}' --vfs-cache-mode=full --vfs-cache-max-size=10G --vfs-cache-max-age=24h --umask=077 --dir-cache-time=1m";
-      ExecStop = "/run/wrappers/bin/fusermount3 -u '${mountPoint}'";
+      ExecStop = "/run/wrappers/bin/fusermount3 -u -z '${mountPoint}'";
       Restart = "on-failure";
       RestartSec = 30;
       RestartMaxDelaySec = 300;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   # Systemd User Service: MEGA Cloud FUSE Mount
@@ -262,14 +264,16 @@ in
       ExecCondition = "${pkgs.writeShellScript "check-mega-remote" ''
         ${rclone} listremotes | ${pkgs.gnugrep}/bin/grep -qx 'mega:'
       ''}";
-      ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p '${home}/MEGA'";
+      ExecStartPre = [
+        "-/run/wrappers/bin/fusermount3 -u -z '${home}/MEGA'"
+        "${pkgs.coreutils}/bin/mkdir -p '${home}/MEGA'"
+      ];
       ExecStart = "${rclone} mount mega: '${home}/MEGA' --vfs-cache-mode=full --vfs-cache-max-size=10G --vfs-cache-max-age=24h --umask=077 --dir-cache-time=1m";
-      ExecStop = "/run/wrappers/bin/fusermount3 -u '${home}/MEGA'";
+      ExecStop = "/run/wrappers/bin/fusermount3 -u -z '${home}/MEGA'";
       Restart = "on-failure";
       RestartSec = 30;
       RestartMaxDelaySec = 300;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   # Systemd User Service: Google Drive Tray Icon & Sync Daemon
@@ -285,6 +289,5 @@ in
       Restart = "on-failure";
       RestartSec = 5;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 }
