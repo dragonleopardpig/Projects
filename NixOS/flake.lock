@@ -149,6 +149,28 @@
         "type": "github"
       }
     },
+    "hyprfm": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "quill": "quill",
+        "quill-icons": "quill-icons"
+      },
+      "locked": {
+        "lastModified": 1794469118,
+        "narHash": "sha256-QMlxM4vTy7CFsHmHDXZX4B0QSi3OEs14RSKw9hcR9ik=",
+        "owner": "dragonleopardpig",
+        "repo": "hyprfm",
+        "rev": "232f5656fe9c42cffc1be80c143d0ee4cc28588d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "hyprfm",
+        "type": "github"
+      }
+    },
     "impermanence": {
       "inputs": {
         "home-manager": [
@@ -350,6 +372,40 @@
         "type": "github"
       }
     },
+    "quill": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793427375,
+        "narHash": "sha256-ySCOy8qdcr0kijmWsF0JPPFZ4NPYMRHtQSR2Yk7Dw1E=",
+        "owner": "soyeb-jim285",
+        "repo": "quill",
+        "rev": "1fe3afd493838b9799ee056a7367cfd5cdc185fd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "soyeb-jim285",
+        "repo": "quill",
+        "rev": "1fe3afd493838b9799ee056a7367cfd5cdc185fd",
+        "type": "github"
+      }
+    },
+    "quill-icons": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787955508,
+        "narHash": "sha256-NFUw1NlCAh48O7rpHyjU33C3DAhhSaGFDjLzi3DKJEk=",
+        "owner": "soyeb-jim285",
+        "repo": "quill-icons",
+        "rev": "69b653672ece8652cfef52c1c228abe9e2c4fce0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "soyeb-jim285",
+        "repo": "quill-icons",
+        "rev": "69b653672ece8652cfef52c1c228abe9e2c4fce0",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "disko": "disko",
@@ -358,6 +414,7 @@
         "formulaocr-offline": "formulaocr-offline",
         "grub2-themes": "grub2-themes",
         "home-manager": "home-manager",
+        "hyprfm": "hyprfm",
         "impermanence": "impermanence",
         "minder-src": "minder-src",
         "nixpkgs": "nixpkgs_3",

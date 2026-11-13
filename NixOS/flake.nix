@@ -54,6 +54,10 @@
     };
     # Share the reviewed feature branch across hosts through the fork.
     strata.url = "github:dragonleopardpig/strata/feat/1-pane-controls-compact-search";
+    hyprfm = {
+      url = "github:dragonleopardpig/hyprfm";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:

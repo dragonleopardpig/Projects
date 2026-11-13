@@ -351,6 +351,7 @@ in
   imports = [
     ./modules/always-on.nix
     ./modules/strata.nix
+    ./modules/hyprfm.nix
   ];
 
   boot = {
