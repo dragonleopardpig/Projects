@@ -4367,6 +4367,14 @@ Please diagnose what caused them and explain how to resolve them."
     enable = true;
     enableBashIntegration = true;
     nix-direnv.enable = true;
+    stdlib = lib.mkIf ((osConfig.custom.impermanence.enable or false) && (osConfig.custom.impermanence.cleanDevArtifacts or false)) ''
+      direnv_layout_dir() {
+        local hash name
+        hash=$(printf '%s' "$PWD" | ${pkgs.coreutils}/bin/sha1sum | ${pkgs.coreutils}/bin/cut -c1-12)
+        name=''${PWD##*/}
+        echo "${osConfig.custom.impermanence.devScratchDir}/''${USER:-${osConfig.custom.impermanence.devTargetUser}}/direnv/''${hash}-''${name}"
+      }
+    '';
   };
 
   programs.fastfetch = {

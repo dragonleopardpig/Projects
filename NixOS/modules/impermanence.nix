@@ -15,10 +15,47 @@
 #   mkpasswd -m yescrypt | sudo tee /mnt/persist/passwords/thinky
 #   sudo cp /mnt/persist/passwords/thinky /mnt/persist/passwords/root
 #   sudo chmod 600 /mnt/persist/passwords/*
-{ config, lib, utils, ... }:
+{ config, lib, pkgs, utils, ... }:
 let
   cfg = config.custom.impermanence;
   deviceUnit = "${utils.escapeSystemdPath cfg.device}.device";
+  targetGroup = config.users.users.${cfg.devTargetUser}.group or "users";
+  targetHome = config.users.users.${cfg.devTargetUser}.home or "/home/${cfg.devTargetUser}";
+  userScratch = "${cfg.devScratchDir}/${cfg.devTargetUser}";
+  scratchSubdirs = [
+    "cargo-target"
+    "cargo-home"
+    "direnv"
+    "pycache"
+    "uv"
+    "pip"
+    "npm"
+    "ruff"
+    "mypy"
+    "ccache"
+    "gradle"
+    "go"
+    "go/pkg"
+    "go/pkg/mod"
+    "go/build"
+  ];
+  cleanDevChecked = pkgs.runCommand "impermanence-clean-dev-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    python3 ${../tests/test-impermanence-clean-dev.py} ${./impermanence-clean-dev.py}
+    touch $out
+  '';
+  cleanDevScript = pkgs.writeShellApplication {
+    name = "clean-dev-cache";
+    runtimeInputs = [ pkgs.python3 ];
+    text = ''
+      test -e ${cleanDevChecked}
+      exec python3 ${./impermanence-clean-dev.py} \
+        --home-dir ${lib.escapeShellArg targetHome} \
+        --projects-dir ${lib.escapeShellArg cfg.devProjectsDir} \
+        "$@"
+    '';
+  };
 in
 {
   options.custom.impermanence = {
@@ -44,6 +81,34 @@ in
         being deleted at once, so a forgotten file can still be recovered.  They
         are deleted after this many days.
       '';
+    };
+
+    cleanDevArtifacts = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Redirect regenerable dev/build caches onto an immediately-wiped
+        @dev-scratch subvolume and scrub non-source build/environment artifacts
+        under devProjectsDir and user caches on every boot.
+      '';
+    };
+
+    devScratchDir = lib.mkOption {
+      type = lib.types.str;
+      default = "/var/cache/dev";
+      description = "Mount point for the immediately-wiped @dev-scratch btrfs subvolume.";
+    };
+
+    devTargetUser = lib.mkOption {
+      type = lib.types.str;
+      default = "thinky";
+      description = "User whose Projects/ and home tool caches are scrubbed on boot.";
+    };
+
+    devProjectsDir = lib.mkOption {
+      type = lib.types.str;
+      default = "/home/thinky/Projects";
+      description = "Projects directory scrubbed on boot for regenerable build/env artifacts.";
     };
   };
 
@@ -103,6 +168,12 @@ in
         done
 
         btrfs subvolume create /btrfs_tmp/@root
+        ${lib.optionalString cfg.cleanDevArtifacts ''
+          if [ -e /btrfs_tmp/@dev-scratch ]; then
+            delete_subvolume_recursively /btrfs_tmp/@dev-scratch
+          fi
+          btrfs subvolume create /btrfs_tmp/@dev-scratch
+        ''}
         umount /btrfs_tmp
       '';
     };
@@ -111,6 +182,59 @@ in
     # Mount @home in initrd too so initrd user activation hits @home
     # instead of creating an empty /home/thinky on @root and overmounting later.
     fileSystems."/home".neededForBoot = true;
+
+    fileSystems.${cfg.devScratchDir} = lib.mkIf cfg.cleanDevArtifacts {
+      device = cfg.device;
+      fsType = "btrfs";
+      options = [ "subvol=@dev-scratch" "compress=zstd" "noatime" ];
+    };
+
+    systemd.tmpfiles.rules = lib.mkIf cfg.cleanDevArtifacts (
+      [
+        "d ${cfg.devScratchDir} 0755 root root -"
+        "d ${userScratch} 0700 ${cfg.devTargetUser} ${targetGroup} -"
+      ]
+      ++ map (sub: "d ${userScratch}/${sub} 0700 ${cfg.devTargetUser} ${targetGroup} -") scratchSubdirs
+    );
+
+    environment.sessionVariables = lib.mkIf cfg.cleanDevArtifacts {
+      CARGO_TARGET_DIR = "${userScratch}/cargo-target";
+      CARGO_HOME = "${userScratch}/cargo-home";
+      PYTHONPYCACHEPREFIX = "${userScratch}/pycache";
+      UV_CACHE_DIR = "${userScratch}/uv";
+      PIP_CACHE_DIR = "${userScratch}/pip";
+      NPM_CONFIG_CACHE = "${userScratch}/npm";
+      RUFF_CACHE_DIR = "${userScratch}/ruff";
+      MYPY_CACHE_DIR = "${userScratch}/mypy";
+      CCACHE_DIR = "${userScratch}/ccache";
+      GRADLE_USER_HOME = "${userScratch}/gradle";
+      GOMODCACHE = "${userScratch}/go/pkg/mod";
+      GOCACHE = "${userScratch}/go/build";
+    };
+
+    environment.systemPackages = lib.mkIf cfg.cleanDevArtifacts [ cleanDevScript ];
+    system.extraDependencies = lib.mkIf cfg.cleanDevArtifacts [ cleanDevChecked ];
+
+    systemd.services.impermanence-clean-dev = lib.mkIf cfg.cleanDevArtifacts {
+      description = "Wipe regenerable development artifacts before user login";
+      wantedBy = [ "multi-user.target" ];
+      requires = [ "home.mount" ];
+      after = [ "home.mount" "local-fs.target" ];
+      before = [
+        "systemd-user-sessions.service"
+        "home-manager-${cfg.devTargetUser}.service"
+        "multi-user.target"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        User = cfg.devTargetUser;
+        Group = targetGroup;
+        ExecStart = "${lib.getExe cleanDevScript} --verbose";
+        ProtectSystem = "strict";
+        ReadWritePaths = [ "-${targetHome}" "-${cfg.devProjectsDir}" ];
+        NoNewPrivileges = true;
+      };
+    };
 
     # /etc/shadow is wiped, so passwords must come from the persisted hashes.
     users.mutableUsers = false;
