@@ -61,6 +61,7 @@ in {
     system = "#4EF2C2";
     audio = "#C27DFF";
     neonPurple = "#BF40FF";
+    neonYellowGreen = "#CCFF00";
   };
   fontConfig = pkgs.writeText "olo-neon-fonts.conf" ''
     <?xml version="1.0"?>

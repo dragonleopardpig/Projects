@@ -124,10 +124,10 @@
     workspaces = { labels_only_when_occupied = true; hide_when_empty = true; };
     taskbar = { only_active_workspace = true; taskbar_max_width = 280; };
     active_window = { display = "text_only"; max_length = 800; title_scroll = "none"; show_empty_label = false; };
-    # Right-side controls use the Fastfetch hues plus a neon-purple accent.
+    # Right-side controls use the Fastfetch hues and neon accents.
     # Native warning/mute/attention colors still communicate exceptional states.
     media = { color = barAccents.audio; hide_when_no_media = true; hide_artist = true; max_length = 100; };
-    clock = { color = barAccents.distro; format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
+    clock = { color = barAccents.neonYellowGreen; format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
     weather = { color = barAccents.distro; show_condition = false; actions.left = "panel-toggle control-center weather"; };
     privacy = { color = barAccents.system; hide_inactive = true; };
     caffeine.color = barAccents.neonPurple;
