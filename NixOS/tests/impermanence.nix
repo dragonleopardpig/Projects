@@ -1,6 +1,6 @@
 # VM test for modules/impermanence.nix on the real PortableSSD disk layout.
 #
-#   nix build --impure .#checks.x86_64-linux.impermanence -L
+#   nix build .#checks.x86_64-linux.impermanence -L
 #
 # Formats a virtual disk with hosts/PortableSSD/disko.nix (partitions shrunk
 # to fit a 4 GiB test disk), installs a minimal system with the impermanence
@@ -49,6 +49,7 @@ inputs.disko.lib.testLib.makeDiskoTest {
   extraTestScript = ''
     machine.wait_for_unit("multi-user.target")
     machine.succeed("findmnt -no OPTIONS / | grep -q 'subvol=/@root'")
+    machine.succeed("findmnt -no OPTIONS /home | grep -q 'subvol=/@home'")
     machine.succeed("grep -qF 'thinky:${testHash}:' /etc/shadow")
 
     machine.succeed("touch /root-canary /etc/etc-canary /var/lib/nixos/state-canary")
@@ -75,5 +76,9 @@ inputs.disko.lib.testLib.makeDiskoTest {
     # The previous root is kept for recovery.
     machine.succeed("mkdir -p /top && mount -t btrfs -o subvol=/ /dev/mapper/cryptroot /top")
     machine.succeed("ls /top/old_roots/*/root-canary")
+
+    # Shutdown explicitly: disko's makeDiskoTest adds booted_machine to Driver.machines
+    # (a temporary list property), so Driver.__exit__ otherwise leaves QEMU running.
+    machine.shutdown()
   '';
 }

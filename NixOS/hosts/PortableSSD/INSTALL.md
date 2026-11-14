@@ -29,7 +29,7 @@ sudo mount -o subvol=/ /dev/mapper/cryptroot /mnt && ls /mnt/old_roots
 ```
 
 A VM test boots this exact layout twice and checks the wipe:
-`nix build --impure .#checks.x86_64-linux.impermanence -L`
+`nix build .#checks.x86_64-linux.impermanence -L`
 
 ## Prerequisites
 
@@ -86,7 +86,7 @@ sudo chmod 600 /mnt/persist/passwords/*
 ## Step 6: Install NixOS
 
 ```bash
-sudo nixos-install --flake ~/Projects/NixOS#PortableSSD --root /mnt --no-root-passwd --impure
+sudo nixos-install --flake ~/Projects/NixOS#PortableSSD --root /mnt --no-root-passwd
 ```
 
 This builds the entire system closure and installs GRUB to the EFI fallback
@@ -106,10 +106,14 @@ Plug the SSD into any x86_64 UEFI machine, enter the boot menu (usually F12/F2/E
 
 ## Rebuilding from the portable SSD
 
-When booted into the portable NixOS and you want to apply config changes:
+When booted into the portable NixOS and you want to apply config changes, use
+`boot` (followed by a reboot) rather than `switch` — running `switch` restarts
+the display manager and logs you out mid-rebuild (`rebuild.sh` enforces this):
 
 ```bash
-sudo nixos-rebuild switch --flake ~/Projects/NixOS#PortableSSD
+~/Projects/NixOS/rebuild.sh boot PortableSSD
+# or:
+sudo nixos-rebuild boot --flake ~/Projects/NixOS#PortableSSD
 ```
 
 ## Key portability settings

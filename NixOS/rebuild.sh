@@ -76,36 +76,77 @@ Current hostname: $CURRENT_HOST
 EOF
 }
 
-# Build the PortableSSD config on THIS host and install it onto the mounted
-# PortableSSD disk. Uses 'boot' semantics inside a chroot: it copies the closure,
-# registers a new system generation, and writes the bootloader to the disk's ESP —
-# but never activates services, so the host you're sitting at is untouched (no
-# logout). Boot the PortableSSD afterwards to land on the new generation.
+# Build the PortableSSD config on THIS host and install it onto the attached
+# PortableSSD disk (LUKS + Btrfs subvolumes: @root, @nix, @persist, @home).
+# Uses 'boot' semantics inside a chroot: copies the closure, registers a new
+# system generation, and writes the bootloader to the disk's ESP — without
+# activating services on the host you're sitting at (no logout). Boot the
+# PortableSSD afterwards to land on the new generation.
 build_portablessd_mounted() {
-    # Identifiers of THIS PortableSSD disk (decrypted ext4 root + its ESP).
-    local PORTABLE_ROOT_UUID="39ecb7ec-6f24-4d0e-8558-26b8281fcc86"
-    local PORTABLE_BOOT_UUID="931F-04BC"
+    local PART_ROOT="/dev/disk/by-partlabel/disk-portable-root"
+    local PART_BOOT="/dev/disk/by-partlabel/disk-portable-ESP"
 
-    local MNT
-    MNT=$(findmnt -n -o TARGET "UUID=$PORTABLE_ROOT_UUID" 2>/dev/null | head -1) || true
-    if [ -z "$MNT" ]; then
-        print_error "PortableSSD root (UUID=$PORTABLE_ROOT_UUID) is not mounted."
-        print_error "Plug in + unlock the PortableSSD (open it in your file manager), then retry."
+    if [ ! -e "$PART_ROOT" ] || [ ! -e "$PART_BOOT" ]; then
+        print_error "PortableSSD partitions not found ($PART_ROOT / $PART_BOOT)."
+        print_error "Plug in the PortableSSD, then retry."
         exit 1
     fi
-    print_info "PortableSSD root mounted at: $MNT"
 
-    # The ESP must be mounted at <root>/boot for the bootloader install.
-    local ESP_WAS_MOUNTED=1
-    if ! findmnt -n "$MNT/boot" >/dev/null 2>&1; then
-        ESP_WAS_MOUNTED=0
-        print_info "Mounting PortableSSD ESP (UUID=$PORTABLE_BOOT_UUID) at $MNT/boot"
-        sudo mount "/dev/disk/by-uuid/$PORTABLE_BOOT_UUID" "$MNT/boot"
+    _PORTABLE_CRYPT_DEV=""
+    _PORTABLE_OPENED_LUKS=0
+    _PORTABLE_MNT=""
+
+    cleanup_portablessd_mounts() {
+        if [ -n "${_PORTABLE_MNT:-}" ]; then
+            sudo umount -R "$_PORTABLE_MNT" 2>/dev/null || true
+            rmdir "$_PORTABLE_MNT" 2>/dev/null || true
+            _PORTABLE_MNT=""
+        fi
+        if [ "${_PORTABLE_OPENED_LUKS:-0}" -eq 1 ] && [ -n "${_PORTABLE_CRYPT_DEV:-}" ]; then
+            sudo cryptsetup close "$(basename "$_PORTABLE_CRYPT_DEV")" 2>/dev/null || true
+            _PORTABLE_OPENED_LUKS=0
+        fi
+    }
+    trap cleanup_portablessd_mounts EXIT
+
+    _PORTABLE_CRYPT_DEV=$(lsblk -nr -p -o PATH,TYPE "$PART_ROOT" 2>/dev/null | awk '$2 == "crypt" {print $1; exit}') || true
+    if [ -z "$_PORTABLE_CRYPT_DEV" ]; then
+        print_info "Unlocking PortableSSD LUKS container ($PART_ROOT)..."
+        local MAPPER_NAME="portablessd-cryptroot"
+        [ -e "/dev/mapper/$MAPPER_NAME" ] && MAPPER_NAME="portablessd-cryptroot-$$"
+        sudo cryptsetup open "$PART_ROOT" "$MAPPER_NAME"
+        _PORTABLE_CRYPT_DEV="/dev/mapper/$MAPPER_NAME"
+        _PORTABLE_OPENED_LUKS=1
     fi
 
+    local FSTYPE
+    FSTYPE=$(sudo blkid -s TYPE -o value "$_PORTABLE_CRYPT_DEV" 2>/dev/null || true)
+    if [ "$FSTYPE" != "btrfs" ]; then
+        print_error "Expected btrfs inside $_PORTABLE_CRYPT_DEV (found '${FSTYPE:-unknown}')."
+        print_error "Install the impermanence btrfs layout first (see hosts/PortableSSD/INSTALL.md)."
+        exit 1
+    fi
+
+    _PORTABLE_MNT=$(mktemp -d /tmp/portablessd-mnt.XXXXXX)
+    print_info "Mounting PortableSSD Btrfs subvolumes at: $_PORTABLE_MNT"
+    sudo mount -t btrfs -o subvol=@root,compress=zstd,noatime "$_PORTABLE_CRYPT_DEV" "$_PORTABLE_MNT"
+    sudo mkdir -p "$_PORTABLE_MNT/nix" "$_PORTABLE_MNT/persist" "$_PORTABLE_MNT/boot" "$_PORTABLE_MNT/etc"
+    sudo mount -t btrfs -o subvol=@nix,compress=zstd,noatime "$_PORTABLE_CRYPT_DEV" "$_PORTABLE_MNT/nix"
+    sudo mount -t btrfs -o subvol=@persist,compress=zstd,noatime "$_PORTABLE_CRYPT_DEV" "$_PORTABLE_MNT/persist"
+
+    local EXISTING_ESP
+    EXISTING_ESP=$(findmnt -n -o TARGET "$PART_BOOT" 2>/dev/null | head -1) || true
+    if [ -n "$EXISTING_ESP" ]; then
+        sudo mount --bind "$EXISTING_ESP" "$_PORTABLE_MNT/boot"
+    else
+        sudo mount -o fmask=0077,dmask=0077 "$PART_BOOT" "$_PORTABLE_MNT/boot"
+    fi
+
+    [ -e "$_PORTABLE_MNT/etc/NIXOS" ] || sudo touch "$_PORTABLE_MNT/etc/NIXOS"
+
     local AVAIL_MB
-    AVAIL_MB=$(( $(df --output=avail -k "$MNT" | tail -1 | tr -d ' ') / 1024 ))
-    print_info "Free space on the PortableSSD root: ${AVAIL_MB} MB"
+    AVAIL_MB=$(( $(df --output=avail -k "$_PORTABLE_MNT/nix" | tail -1 | tr -d ' ') / 1024 ))
+    print_info "Free space on PortableSSD (@nix): ${AVAIL_MB} MB"
     if [ "$AVAIL_MB" -lt 1024 ]; then
         print_warning "Under 1 GiB free. The closure delta is small, but run"
         print_warning "'nix-collect-garbage -d' on the PortableSSD after booting it."
@@ -118,18 +159,16 @@ build_portablessd_mounted() {
     print_success "Built: $SYS"
 
     print_info "Copying the closure into the PortableSSD store (only missing paths transfer)..."
-    sudo nix copy --no-check-sigs --to "$MNT" "$SYS"
+    sudo nix copy --no-check-sigs --to "$_PORTABLE_MNT" "$SYS"
 
     print_info "Registering it as a new system generation on the PortableSSD..."
-    sudo nix-env --profile "$MNT/nix/var/nix/profiles/system" --set "$SYS"
+    sudo nix-env --profile "$_PORTABLE_MNT/nix/var/nix/profiles/system" --set "$SYS"
 
     print_info "Installing the bootloader inside the disk (boot mode — no activation, no logout)..."
-    sudo nixos-enter --root "$MNT" -c "NIXOS_INSTALL_BOOTLOADER=1 $SYS/bin/switch-to-configuration boot"
+    sudo nixos-enter --root "$_PORTABLE_MNT" -c "NIXOS_INSTALL_BOOTLOADER=1 $SYS/bin/switch-to-configuration boot"
 
-    if [ "$ESP_WAS_MOUNTED" -eq 0 ]; then
-        print_info "Unmounting the ESP we mounted at $MNT/boot"
-        sudo umount "$MNT/boot" || print_warning "Could not unmount $MNT/boot (in use?)"
-    fi
+    cleanup_portablessd_mounts
+    trap - EXIT
 
     print_success "PortableSSD updated from $CURRENT_HOST. Nothing on $CURRENT_HOST was activated."
     print_info "Boot the PortableSSD to use the new generation."
@@ -250,10 +289,21 @@ case "$COMMAND" in
         nix flake update
         print_success "Flake inputs updated"
 
-        print_info "Rebuilding with updated inputs..."
-        sudo nixos-rebuild switch $IMPURE_FLAG --flake "path:$SCRIPT_DIR#$HOST"
-        print_success "NixOS rebuild completed with updated inputs for $HOST"
-        reload_desktop_environment
+        if [ "$HOST" = "PortableSSD" ]; then
+            if [ "$CURRENT_HOST" != "PortableSSD" ]; then
+                print_info "Installing updated PortableSSD configuration onto the mounted disk..."
+                build_portablessd_mounted
+            else
+                print_info "Running: sudo nixos-rebuild boot --flake .#PortableSSD"
+                sudo nixos-rebuild boot --flake "path:$SCRIPT_DIR#PortableSSD"
+                print_success "NixOS boot completed for PortableSSD (reboot to activate)."
+            fi
+        else
+            print_info "Rebuilding with updated inputs..."
+            sudo nixos-rebuild switch $IMPURE_FLAG --flake "path:$SCRIPT_DIR#$HOST"
+            print_success "NixOS rebuild completed with updated inputs for $HOST"
+            reload_desktop_environment
+        fi
         ;;
 
     clean)

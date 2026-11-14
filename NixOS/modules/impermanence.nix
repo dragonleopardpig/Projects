@@ -108,6 +108,9 @@ in
     };
 
     fileSystems.${cfg.persistDir}.neededForBoot = true;
+    # Mount @home in initrd too so initrd user activation hits @home
+    # instead of creating an empty /home/thinky on @root and overmounting later.
+    fileSystems."/home".neededForBoot = true;
 
     # /etc/shadow is wiped, so passwords must come from the persisted hashes.
     users.mutableUsers = false;
@@ -127,8 +130,6 @@ in
         "/var/lib/NetworkManager"
         "/etc/NetworkManager/system-connections"
         "/var/lib/AccountsService"
-        "/var/lib/sddm"
-        "/var/lib/noctalia-greeter"
         "/var/lib/always-on"
         "/var/lib/cups"
         "/var/lib/upower"
@@ -136,7 +137,20 @@ in
         "/var/lib/udisks2"
         "/var/lib/containers"
         { directory = "/var/lib/private"; mode = "0700"; }
-      ];
+      ]
+      ++ lib.optional config.services.displayManager.sddm.enable {
+        directory = "/var/lib/sddm";
+        user = "sddm";
+        group = "sddm";
+        mode = "0750";
+      }
+      ++ lib.optional (config.desktop.noctaliaSuite.greeter.enable or false) {
+        directory = "/var/lib/noctalia-greeter";
+        user = "greeter";
+        group = "greeter";
+        mode = "0750";
+      }
+      ++ lib.optional config.services.usbmuxd.enable "/var/lib/lockdown";
       files = [ "/etc/machine-id" ]
         ++ lib.optionals config.services.openssh.enable [
           "/etc/ssh/ssh_host_ed25519_key"
