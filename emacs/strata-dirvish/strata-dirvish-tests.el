@@ -414,7 +414,18 @@
                        (lambda (d &rest _)
                          (error "Blocked directory-files on %s" d))))
               (should (equal (dirvish-collapse--cache "/home/thinky/Scramble Drive")
-                             '(nil . nil))))))
+                             '(nil . nil))))
+            ;; Auto-revert and notify must be disabled buffer-locally inside FUSE mounts.
+            (with-temp-buffer
+              (setq-local dired-auto-revert-buffer t)
+              (setq-local auto-revert-use-notify t)
+              (let ((default-directory "/home/thinky/Scramble Drive/"))
+                (strata-dirvish--sync-auto-revert)
+                (should-not dired-auto-revert-buffer)
+                (should-not auto-revert-use-notify))
+              (let ((default-directory "/home/thinky/Projects/"))
+                (strata-dirvish--sync-auto-revert)
+                (should (eq dired-auto-revert-buffer (default-value 'dired-auto-revert-buffer)))))))
       (ignore-errors (kill-buffer "*Strata Sidebar*"))
       (ignore-errors (delete-directory tmp t)))))
 

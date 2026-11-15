@@ -144,6 +144,8 @@
   (interactive)
   (let ((dir (and default-directory
                   (not (file-remote-p default-directory))
+                  (not (and (fboundp 'strata-path-unsafe-probe-p)
+                            (strata-path-unsafe-probe-p default-directory)))
                   (file-directory-p default-directory)
                   (expand-file-name default-directory))))
     ;; Re-attach if the buffer's directory changed (e.g. dired-up-directory).

@@ -19,8 +19,17 @@
 (require 'strata-dirvish-ops)
 (require 'strata-dirvish-keys)
 
+(defun strata-dirvish--sync-auto-revert ()
+  "Disable Dired auto-revert and notify watches on FUSE/cloud/remote mounts."
+  (if (and default-directory (strata-path-unsafe-probe-p default-directory))
+      (setq-local dired-auto-revert-buffer nil
+                  auto-revert-use-notify nil)
+    (kill-local-variable 'dired-auto-revert-buffer)
+    (kill-local-variable 'auto-revert-use-notify)))
+
 (defun strata-dirvish--enable-in-browser ()
   "Enable `strata-dirvish-mode' in Strata/Dirvish browser buffers cleanly."
+  (strata-dirvish--sync-auto-revert)
   (unless (strata-terminal-focused-p)
     (strata-dirvish-mode 1)))
 
@@ -155,6 +164,7 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
                     strata-trash-mode-hook
                     strata-recent-mode-hook))
       (add-hook hook #'strata-dirvish--enable-in-browser))
+    (add-hook 'dired-after-readin-hook #'strata-dirvish--sync-auto-revert)
     (add-hook 'after-make-frame-functions #'strata-dirvish--on-frame-created)
     (add-hook 'server-after-make-frame-hook #'strata-dirvish--on-frame-created)
     (add-hook 'kill-emacs-hook #'strata-media-stop)
