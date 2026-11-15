@@ -133,8 +133,10 @@
 ;;;; Editable Location Prompt (`C-l' / `g SPC')
 
 (defun strata-location-prompt ()
-  "Open Strata location bar prompt supporting paths, `~', virtual & remote URIs (`C-l')."
+  "Open Strata location prompt for active pane (`C-l')."
   (interactive)
+  (when (fboundp 'strata-panes--sync-active-pane-from-window)
+    (strata-panes--sync-active-pane-from-window (selected-window)))
   (let* ((cur (or (ignore-errors (strata-pane-state-dir (strata-active-pane)))
                   default-directory))
          (cands (append strata-virtual-locations

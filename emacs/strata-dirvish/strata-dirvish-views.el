@@ -21,15 +21,28 @@
 (require 'strata-dirvish-devices)
 
 (declare-function strata-open-location "strata-dirvish-panes" (loc &optional record-history))
+(declare-function strata-active-pane "strata-dirvish-panes" ())
+(declare-function strata-active-tab "strata-dirvish-panes" ())
 (declare-function strata-pane-active-p "strata-dirvish-panes" (&optional win))
+(declare-function strata-panes--pane-for-window "strata-dirvish-panes" (win))
+(declare-function strata-panes--sync-active-pane-from-window "strata-dirvish-panes" (&optional win))
+(declare-function strata-panes--valid-main-window-p "strata-dirvish-panes" (win))
+(declare-function strata-panes--window-dir "strata-dirvish-panes" (&optional win))
+(declare-function strata-pane-state-id "strata-dirvish-panes" (cl-x))
+(declare-function strata-pane-state-buffer "strata-dirvish-panes" (cl-x))
+(declare-function strata-tab-state-pane1 "strata-dirvish-panes" (cl-x))
+(declare-function strata-tab-state-pane2 "strata-dirvish-panes" (cl-x))
 (declare-function strata-split-active-p "strata-dirvish-panes" ())
 (declare-function strata-dirvish--flatten-layout "strata-dirvish-panes" ())
 (declare-function strata-pane-clipboard-summary "strata-dirvish-ops" ())
+(declare-function strata--transfer-files "strata-dirvish-ops" (files dest-dir mode &optional keep-both-default replace-default))
+(declare-function strata-clear-all-marks "strata-dirvish-keys" ())
 (declare-function strata-preview-at-point "strata-dirvish-previews" ())
 (declare-function strata-preview-enter-at-point "strata-dirvish-previews" ())
 (declare-function strata-preview-edit-file "strata-dirvish-previews" (file))
 (declare-function strata-open-or-edit-at-point "strata-dirvish-previews" ())
 (defvar strata-preview-standalone-window)
+(defvar strata-sidebar-window)
 
 (defvar strata-active-chord nil
   "Current active multi-key chord label shown in footer (e.g. \"g _\").")
@@ -62,20 +75,34 @@
         (plist-get tr :file))
       (get-text-property (line-beginning-position) 'strata-recent-path)))
 
-(defun strata-selected-files ()
-  "Return list of marked/selected file paths in current Strata view, or file at point."
+(defvar-local strata--selection-anchor-entry nil
+  "Anchor path for Shift-click and Shift-arrow range multi-selection.")
+
+(defun strata--path-key (path)
+  "Normalize PATH into a canonical comparison key."
+  (and path (directory-file-name (expand-file-name path))))
+
+(defun strata-marked-files-only ()
+  "Return explicitly marked paths in the current browser buffer, or nil."
   (cond
    ((derived-mode-p 'dired-mode)
     (let ((marked (ignore-errors (dired-get-marked-files nil nil nil t))))
       (cond
        ((and marked (eq (car marked) t)) (cdr marked))
-       (marked marked)
-       (t (when-let ((cur (strata-current-file))) (list cur))))))
-   ((or (derived-mode-p 'strata-compact-mode)
-        (derived-mode-p 'strata-icons-mode))
-    (or (bound-and-true-p strata-marked-entries)
-        (when-let ((cur (strata-current-file))) (list cur))))
-   (t (when-let ((cur (strata-current-file))) (list cur)))))
+       ((and marked
+             (save-excursion
+               (goto-char (point-min))
+               (re-search-forward dired-re-mark nil t)))
+        marked))))
+   ((derived-mode-p 'strata-compact-mode 'strata-icons-mode)
+    (when-let ((m (bound-and-true-p strata-marked-entries)))
+      (cl-remove-if-not #'file-exists-p (reverse m))))))
+
+(defun strata-selected-files ()
+  "Return marked file paths in current Strata view, or file at point."
+  (or (strata-marked-files-only)
+      (when-let ((cur (strata-current-file)))
+        (list cur))))
 
 (defvar-local strata--selection-overlays nil
   "Buffer-local selection overlays highlighting the active file or folder name.")
@@ -106,55 +133,89 @@
              (end (or (next-single-property-change pos prop nil le) le)))
         (cons beg end)))))
 
-(defun strata-view--update-selection-highlight ()
-  "Highlight the entire selected file or directory name in all view layouts."
-  (when (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
-    (strata--clear-selection-highlight)
-    (cond
-     ((derived-mode-p 'dired-mode)
-      (ignore-errors
-        (save-excursion
+(defun strata--highlight-marked-dired (cur-beg cur-end)
+  "Overlay marked filenames in Dired excluding CUR-BEG..CUR-END."
+  (when (derived-mode-p 'dired-mode)
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward dired-re-mark nil t)
+        (ignore-errors
           (when-let* ((beg (dired-move-to-filename))
                       (end (dired-move-to-end-of-filename t)))
-            (strata--add-selection-overlay beg end)))))
-     ((derived-mode-p 'strata-compact-mode)
-      (let* ((p (point))
-             (lb (line-beginning-position))
-             (le (line-end-position))
-             (span (or (strata--prop-span-at p 'strata-entry-label lb le)
-                       (when-let ((cur-entry (get-text-property p 'strata-entry)))
-                         (let ((cand (next-single-property-change p 'strata-entry-label nil le)))
-                           (when (and cand (< cand le)
-                                      (equal (get-text-property cand 'strata-entry) cur-entry))
-                             (strata--prop-span-at cand 'strata-entry-label lb le)))))))
-        (when span
-          (strata--add-selection-overlay (car span) (cdr span)))))
-     ((derived-mode-p 'strata-icons-mode)
-      (let* ((p (point))
-             (idx (and (< p (point-max)) (get-text-property p 'strata-grid-idx)))
-             (lb (line-beginning-position))
-             (le (line-end-position))
-             (span1 (and idx
-                         (or (strata--prop-span-at p 'strata-grid-label lb le)
-                             (when-let ((cand (next-single-property-change p 'strata-grid-label nil le)))
-                               (when (and (< cand le)
-                                          (eql (get-text-property cand 'strata-grid-idx) idx))
-                                 (strata--prop-span-at cand 'strata-grid-label lb le)))))))
-        (when span1
-          (strata--add-selection-overlay (car span1) (cdr span1))
-          (save-excursion
-            (goto-char (car span1))
-            (when (= (forward-line 1) 0)
-              (let ((q (line-beginning-position))
-                    (qe (line-end-position))
-                    (found2 nil))
-                (while (and (< q qe) (not found2))
-                  (let ((nxt (or (next-single-property-change q 'strata-grid-label-cont nil qe) qe)))
-                    (when (and (get-text-property q 'strata-grid-label-cont)
-                               (eql (get-text-property q 'strata-grid-idx) idx))
-                      (strata--add-selection-overlay q nxt)
-                      (setq found2 t))
-                    (setq q nxt))))))))))))
+            (unless (and cur-beg cur-end (= beg cur-beg) (= end cur-end))
+              (strata--add-selection-overlay beg end))))))))
+
+(defun strata--highlight-marked-spans (prop marked-keys &optional cur-span)
+  "Overlay spans carrying PROP whose `strata-entry' is in MARKED-KEYS."
+  (when marked-keys
+    (let ((pos (point-min)))
+      (while (< pos (point-max))
+        (let ((next (or (next-single-property-change pos prop) (point-max))))
+          (when (get-text-property pos prop)
+            (when-let ((key (strata--path-key (get-text-property pos 'strata-entry))))
+              (when (and (member key marked-keys)
+                         (not (and cur-span (= pos (car cur-span)) (= next (cdr cur-span)))))
+                (strata--add-selection-overlay pos next))))
+          (setq pos next))))))
+
+(defun strata-view--update-selection-highlight ()
+  "Highlight the active and multi-marked file or directory names across all views."
+  (when (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
+    (strata--clear-selection-highlight)
+    (let ((marked-keys (mapcar #'strata--path-key (bound-and-true-p strata-marked-entries))))
+      (cond
+       ((derived-mode-p 'dired-mode)
+        (let (cur-beg cur-end)
+          (ignore-errors
+            (save-excursion
+              (when-let* ((beg (dired-move-to-filename))
+                          (end (dired-move-to-end-of-filename t)))
+                (setq cur-beg beg cur-end end)
+                (strata--add-selection-overlay beg end))))
+          (strata--highlight-marked-dired cur-beg cur-end)))
+       ((derived-mode-p 'strata-compact-mode)
+        (let* ((p (point))
+               (lb (line-beginning-position))
+               (le (line-end-position))
+               (span (or (strata--prop-span-at p 'strata-entry-label lb le)
+                         (when-let ((cur-entry (get-text-property p 'strata-entry)))
+                           (let ((cand (next-single-property-change p 'strata-entry-label nil le)))
+                             (when (and cand (< cand le)
+                                        (equal (get-text-property cand 'strata-entry) cur-entry))
+                               (strata--prop-span-at cand 'strata-entry-label lb le)))))))
+          (when span
+            (strata--add-selection-overlay (car span) (cdr span)))
+          (strata--highlight-marked-spans 'strata-entry-label marked-keys span)))
+       ((derived-mode-p 'strata-icons-mode)
+        (let* ((p (point))
+               (idx (and (< p (point-max)) (get-text-property p 'strata-grid-idx)))
+               (lb (line-beginning-position))
+               (le (line-end-position))
+               (span1 (and idx
+                           (or (strata--prop-span-at p 'strata-grid-label lb le)
+                               (when-let ((cand (next-single-property-change p 'strata-grid-label nil le)))
+                                 (when (and (< cand le)
+                                            (eql (get-text-property cand 'strata-grid-idx) idx))
+                                   (strata--prop-span-at cand 'strata-grid-label lb le))))))
+               (span2 nil))
+          (when span1
+            (strata--add-selection-overlay (car span1) (cdr span1))
+            (save-excursion
+              (goto-char (car span1))
+              (when (= (forward-line 1) 0)
+                (let ((q (line-beginning-position))
+                      (qe (line-end-position))
+                      (found2 nil))
+                  (while (and (< q qe) (not found2))
+                    (let ((nxt (or (next-single-property-change q 'strata-grid-label-cont nil qe) qe)))
+                      (when (and (get-text-property q 'strata-grid-label-cont)
+                                 (eql (get-text-property q 'strata-grid-idx) idx))
+                        (setq span2 (cons q nxt))
+                        (strata--add-selection-overlay q nxt)
+                        (setq found2 t))
+                      (setq q nxt)))))))
+          (strata--highlight-marked-spans 'strata-grid-label marked-keys span1)
+          (strata--highlight-marked-spans 'strata-grid-label-cont marked-keys span2)))))))
 
 (defun strata-goto-file (path)
   "Move point to entry matching PATH in current Strata buffer."
@@ -634,8 +695,12 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
   (let ((km (make-sparse-keymap))
         (open-fn (lambda (ev)
                    (interactive "e")
-                   (when (posn-window (event-end ev))
-                     (select-window (posn-window (event-end ev))))
+                   (let ((win (or (posn-window (event-start ev))
+                                  (posn-window (event-end ev)))))
+                     (when (window-live-p win)
+                       (select-window win)
+                       (when (fboundp 'strata-panes--sync-active-pane-from-window)
+                         (strata-panes--sync-active-pane-from-window win))))
                    (strata-open-location target t))))
     (define-key km [header-line mouse-1] open-fn)
     (define-key km [header-line mouse-2] open-fn)
@@ -660,10 +725,31 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
          (acc (if (string-prefix-p "~" clean) "~" "/"))
          (pane-badge
           (when (and (fboundp 'strata-split-active-p) (strata-split-active-p))
-            (propertize (if (strata-pane-active-p) " [P1 ACTIVE] " " [P2] ")
-                        'face (if (strata-pane-active-p)
-                                  'strata-pane-active-badge
-                                'strata-pane-inactive-badge))))
+            (let* ((ap (and (fboundp 'strata-active-pane) (strata-active-pane)))
+                   (active-id (if ap (strata-pane-state-id ap) 1))
+                   (other-id (if (= active-id 1) 2 1))
+                   (this-pane
+                    (or (when (and (fboundp 'mode-line-window-selected-p)
+                                   (fboundp 'strata-panes--valid-main-window-p)
+                                   (strata-panes--valid-main-window-p (selected-window)))
+                          (if (mode-line-window-selected-p) active-id other-id))
+                        (when-let* ((tab (and (fboundp 'strata-active-tab) (strata-active-tab)))
+                                    (p1 (strata-tab-state-pane1 tab))
+                                    (p2 (strata-tab-state-pane2 tab)))
+                          (let ((b1 (strata-pane-state-buffer p1))
+                                (b2 (strata-pane-state-buffer p2)))
+                            (cond
+                             ((and (not (eq b1 b2)) (eq (current-buffer) b1)) 1)
+                             ((and (not (eq b1 b2)) (eq (current-buffer) b2)) 2)
+                             (t active-id))))
+                        active-id))
+                   (active-p (= this-pane active-id)))
+              (propertize (if active-p
+                              (format " [P%d ACTIVE] " this-pane)
+                            (format " [P%d] " this-pane))
+                          'face (if active-p
+                                    'strata-pane-active-badge
+                                  'strata-pane-inactive-badge)))))
          (crumbs
           (if (string-prefix-p "~" clean)
               (let ((segs (cdr parts)))
@@ -717,10 +803,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 (dirvish-define-mode-line strata-footer
   "Strata footer: selection summary, clipboard, chord indicator, and hints."
   (let* ((p (strata-prefs))
-         (sel (and (derived-mode-p 'dired-mode)
-                   (ignore-errors (dired-get-marked-files nil nil nil t))))
-         (marked-p (and sel (eq (car sel) t)))
-         (count (if marked-p (length (cdr sel)) 0))
+         (count (length (strata-marked-files-only)))
          (clip (when (fboundp 'strata-pane-clipboard-summary)
                  (strata-pane-clipboard-summary)))
          (chord (when strata-active-chord
@@ -1311,18 +1394,121 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
         ((derived-mode-p 'dired-mode) (dired-previous-line 1))
         (t (call-interactively #'previous-line))))
 
+(defun strata-view--entry-order ()
+  "Return ordered list of entry paths visible in the current browser buffer."
+  (cond
+   ((derived-mode-p 'dired-mode)
+    (let (out)
+      (save-excursion
+        (goto-char (point-min))
+        (while (not (eobp))
+          (when-let ((f (ignore-errors (dired-get-filename nil t))))
+            (push f out))
+          (forward-line 1)))
+      (nreverse out)))
+   ((derived-mode-p 'strata-compact-mode 'strata-icons-mode)
+    (mapcar (lambda (e) (plist-get e :path))
+            (strata-list-directory-entries
+             (or strata-view-directory default-directory)
+             (strata-prefs))))))
+
+(defun strata-view--set-entry-mark (path mark-p &optional no-refresh)
+  "Mark or unmark PATH according to MARK-P across all Strata views."
+  (when path
+    (let ((key (strata--path-key path)))
+      (cond
+       ((derived-mode-p 'dired-mode)
+        (save-excursion
+          (when (or (ignore-errors (dired-goto-file key))
+                    (ignore-errors (dired-goto-file (concat key "/"))))
+            (let ((marked (save-excursion
+                            (beginning-of-line)
+                            (looking-at-p dired-re-mark))))
+              (cond
+               ((and mark-p (not marked)) (dired-mark 1))
+               ((and (not mark-p) marked) (dired-unmark 1)))))))
+       ((derived-mode-p 'strata-compact-mode 'strata-icons-mode)
+        (setq strata-marked-entries
+              (cl-remove-if (lambda (e) (equal (strata--path-key e) key))
+                            strata-marked-entries))
+        (when mark-p
+          (push path strata-marked-entries))))
+      (unless no-refresh
+        (strata-view--refresh-after-mark)))))
+
+(defun strata-view--refresh-after-mark ()
+  "Refresh visual marks, selection overlays, and footer count."
+  (cond
+   ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+   ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
+  (strata-view--update-selection-highlight)
+  (force-mode-line-update t))
+
+(defun strata-view--mark-range (anchor-path target-path)
+  "Mark all entries cleanly from ANCHOR-PATH through TARGET-PATH inclusive."
+  (let* ((order (strata-view--entry-order))
+         (keys (mapcar #'strata--path-key order))
+         (i1 (and anchor-path (cl-position (strata--path-key anchor-path) keys :test #'equal)))
+         (i2 (and target-path (cl-position (strata--path-key target-path) keys :test #'equal))))
+    (cond
+     ((and i1 i2)
+      (cl-loop for i from (min i1 i2) to (max i1 i2)
+               do (strata-view--set-entry-mark (nth i order) t t))
+      (strata-view--refresh-after-mark))
+     (target-path
+      (strata-view--set-entry-mark target-path t nil)))))
+
+(defun strata-shift-select-move (move-fn)
+  "Extend multi-selection across entries while moving via MOVE-FN."
+  (let ((cur (strata-current-file)))
+    (when cur
+      (unless strata--selection-anchor-entry
+        (setq-local strata--selection-anchor-entry cur))
+      (strata-view--set-entry-mark cur t t))
+    (funcall move-fn)
+    (let ((nxt (strata-current-file)))
+      (when nxt
+        (strata-view--set-entry-mark nxt t t))
+      (strata-view--refresh-after-mark))))
+
+(defun strata-shift-select-next ()
+  "Extend selection to the next entry row (`S-<down>')."
+  (interactive)
+  (strata-shift-select-move #'strata-nav-next-line))
+
+(defun strata-shift-select-prev ()
+  "Extend selection to the previous entry row (`S-<up>')."
+  (interactive)
+  (strata-shift-select-move #'strata-nav-prev-line))
+
+(defun strata-shift-select-right ()
+  "Extend selection right in grid/compact views or down in list (`S-<right>')."
+  (interactive)
+  (strata-shift-select-move
+   (cond ((derived-mode-p 'strata-icons-mode) #'strata-icons-next-cell)
+         ((derived-mode-p 'strata-compact-mode) #'strata-compact-next-col)
+         (t #'strata-nav-next-line))))
+
+(defun strata-shift-select-left ()
+  "Extend selection left in grid/compact views or up in list (`S-<left>')."
+  (interactive)
+  (strata-shift-select-move
+   (cond ((derived-mode-p 'strata-icons-mode) #'strata-icons-prev-cell)
+         ((derived-mode-p 'strata-compact-mode) #'strata-compact-prev-col)
+         (t #'strata-nav-prev-line))))
+
 (defun strata-view-toggle-mark ()
   "Toggle selection mark on item at point across Compact/Icons/Dired views."
   (interactive)
   (if (derived-mode-p 'dired-mode)
-      (dired-mark 1)
+      (progn
+        (dired-mark 1)
+        (strata-view--update-selection-highlight))
     (when-let ((f (strata-current-file)))
-      (if (member f strata-marked-entries)
-          (setq strata-marked-entries (delete f strata-marked-entries))
-        (push f strata-marked-entries))
-      (if (derived-mode-p 'strata-compact-mode)
-          (strata-compact-refresh)
-        (strata-icons-refresh)))))
+      (let* ((key (strata--path-key f))
+             (present (cl-some (lambda (e) (equal (strata--path-key e) key))
+                               strata-marked-entries)))
+        (strata-view--set-entry-mark f (not present) nil)))))
 
 (defun strata-mouse--entry-at-point ()
   "Resolve clicked entry path in Dired, Dirvish DIRview, Compact, or Icons."
@@ -1378,21 +1564,160 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
        ((not dir-only-p)
         (strata-mouse--edit-or-open-file path))))))
 
-(defun strata-mouse-click-entry (event)
-  "Handle single `<mouse-1>' click: open clicked directory, or select file to preview."
-  (interactive "e")
+(defun strata-mouse--sync-event (event)
+  "Move window selection & point to EVENT and sync active split pane."
   (mouse-set-point event)
+  (when (fboundp 'strata-panes--sync-active-pane-from-window)
+    (strata-panes--sync-active-pane-from-window (selected-window))))
+
+(defun strata-mouse-down-entry (event)
+  "Accept button-down EVENT cleanly without starting raw text region drag."
+  (interactive "e")
+  (ignore event))
+
+(defun strata-mouse-toggle-select (event)
+  "Toggle multi-selection mark on clicked entry (`C-<mouse-1>')."
+  (interactive "e")
+  (strata-mouse--sync-event event)
   (when-let ((p (strata-mouse--entry-at-point)))
-    (if (file-directory-p p)
-        (strata-mouse--open-path p t)
-      (when (derived-mode-p 'strata-icons-mode)
-        (strata-goto-file p))
-      (strata-view--sync-preview-on-move))))
+    (let* ((key (strata--path-key p))
+           (marked (cl-some (lambda (e) (equal (strata--path-key e) key))
+                            (strata-marked-files-only))))
+      (setq-local strata--selection-anchor-entry p)
+      (strata-view--set-entry-mark p (not marked) nil))))
+
+(defun strata-mouse-range-select (event)
+  "Select contiguous range of entries from anchor to EVENT (`S-<mouse-1>')."
+  (interactive "e")
+  (let* ((ev-win (or (posn-window (event-start event)) (selected-window)))
+         (prev-anchor (when (window-live-p ev-win)
+                        (with-current-buffer (window-buffer ev-win)
+                          (or strata--selection-anchor-entry
+                              (strata-current-file))))))
+    (strata-mouse--sync-event event)
+    (when-let ((target (strata-mouse--entry-at-point)))
+      (let ((anchor (or prev-anchor target)))
+        (setq-local strata--selection-anchor-entry anchor)
+        (strata-view--mark-range anchor target)))))
+
+(defun strata-mouse--drag-target-dir (dst-win end-posn)
+  "Resolve writable drop folder for drag-and-drop into DST-WIN at END-POSN."
+  (when (window-live-p dst-win)
+    (cond
+     ((eq dst-win (bound-and-true-p strata-sidebar-window))
+      (with-current-buffer (window-buffer dst-win)
+        (let* ((pt (or (and (integerp (posn-point end-posn)) (posn-point end-posn))
+                       (point)))
+               (loc (or (get-text-property pt 'strata-sidebar-loc)
+                        (save-excursion
+                          (goto-char (min pt (point-max)))
+                          (get-text-property (line-beginning-position) 'strata-sidebar-loc)))))
+          (when (and (stringp loc) (file-directory-p loc))
+            loc))))
+     ((and (fboundp 'strata-panes--valid-main-window-p)
+           (strata-panes--valid-main-window-p dst-win)
+           (fboundp 'strata-panes--window-dir))
+      (strata-panes--window-dir dst-win)))))
+
+(defun strata-mouse-drag-drop (event &optional forced-mode)
+  "Drag highlighted files inside a pane to select, or across panes to copy/move."
+  (interactive "e")
+  (let* ((start (event-start event))
+         (end (event-end event))
+         (src-win (posn-window start))
+         (dst-win (or (posn-window end) src-win)))
+    (when (window-live-p src-win)
+      (select-window src-win)
+      (when (fboundp 'strata-panes--sync-active-pane-from-window)
+        (strata-panes--sync-active-pane-from-window src-win))
+      (let* ((src-entry (save-excursion
+                          (when (integerp (posn-point start))
+                            (goto-char (min (posn-point start) (point-max))))
+                          (strata-mouse--entry-at-point)))
+             (marked (strata-marked-files-only)))
+        (cond
+         ((eq src-win dst-win)
+          (let ((end-entry (when (integerp (posn-point end))
+                             (goto-char (min (posn-point end) (point-max)))
+                             (strata-mouse--entry-at-point))))
+            (cond
+             ((and src-entry end-entry
+                   (not (equal (strata--path-key src-entry)
+                               (strata--path-key end-entry))))
+              (setq-local strata--selection-anchor-entry src-entry)
+              (strata-view--mark-range src-entry end-entry)
+              (when (derived-mode-p 'strata-icons-mode 'strata-compact-mode)
+                (strata-goto-file end-entry)))
+             (src-entry
+              (setq-local strata--selection-anchor-entry src-entry)
+              (if (file-directory-p src-entry)
+                  (strata-mouse--open-path src-entry t)
+                (when (derived-mode-p 'strata-icons-mode)
+                  (strata-goto-file src-entry))
+                (strata-view--sync-preview-on-move))))))
+         (t
+          (let* ((marked-keys (mapcar #'strata--path-key marked))
+                 (files (if (and marked
+                                 (or (not src-entry)
+                                     (member (strata--path-key src-entry) marked-keys)))
+                            marked
+                          (when src-entry (list src-entry))))
+                 (dest-dir (strata-mouse--drag-target-dir dst-win end))
+                 (src-dir (and (fboundp 'strata-panes--window-dir)
+                               (strata-panes--window-dir src-win))))
+            (unless files
+              (user-error "No file or folder selected to drag"))
+            (unless (and dest-dir (file-directory-p dest-dir))
+              (user-error "Drop onto another split pane folder or Places directory"))
+            (when (and src-dir
+                       (equal (file-truename src-dir) (file-truename dest-dir)))
+              (user-error "Source and destination folders are identical"))
+            (let* ((mode (or forced-mode
+                             (pcase (read-char-choice
+                                     (format "Drop %d item(s) into %s: [c] Copy  [m] Move  [q] Cancel? "
+                                             (length files) (abbreviate-file-name dest-dir))
+                                     '(?c ?C ?m ?M ?q ?Q ?\e))
+                               ((or ?c ?C) 'copy)
+                               ((or ?m ?M) 'cut)
+                               (_ nil)))))
+              (when mode
+                (strata--transfer-files files dest-dir mode)
+                (when (eq mode 'cut)
+                  (when (derived-mode-p 'dired-mode)
+                    (dired-unmark-all-marks))
+                  (when (boundp 'strata-marked-entries)
+                    (setq strata-marked-entries nil))
+                  (strata-view--refresh-after-mark)))))))))))
+
+(defun strata-mouse-drag-copy (event)
+  "Drag highlighted files into another split pane and copy (`C-<drag-mouse-1>')."
+  (interactive "e")
+  (strata-mouse-drag-drop event 'copy))
+
+(defun strata-mouse-drag-move (event)
+  "Drag highlighted files into another split pane and move (`S-<drag-mouse-1>')."
+  (interactive "e")
+  (strata-mouse-drag-drop event 'cut))
+
+(defun strata-mouse-click-entry (event)
+  "Handle single `<mouse-1>' click: open clicked directory or preview file."
+  (interactive "e")
+  (strata-mouse--sync-event event)
+  (if-let ((p (strata-mouse--entry-at-point)))
+      (progn
+        (setq-local strata--selection-anchor-entry p)
+        (if (file-directory-p p)
+            (strata-mouse--open-path p t)
+          (when (derived-mode-p 'strata-icons-mode)
+            (strata-goto-file p))
+          (strata-view--sync-preview-on-move)))
+    (when (and (strata-marked-files-only) (fboundp 'strata-clear-all-marks))
+      (strata-clear-all-marks))))
 
 (defun strata-mouse-activate-at-event (event)
   "Handle `<mouse-2>' or `<double-mouse-1>' click: open directory or file."
   (interactive "e")
-  (mouse-set-point event)
+  (strata-mouse--sync-event event)
   (when-let ((p (strata-mouse--entry-at-point)))
     (strata-mouse--open-path p nil)))
 

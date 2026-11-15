@@ -117,13 +117,65 @@
         (user-error "Other pane location is not a local folder: %s" dir))
       dir)))
 
+(defun strata-panes--pane-for-window (win)
+  "Return `strata-pane-state' owning live browser window WIN in split mode, or nil."
+  (when (and (strata-split-active-p)
+             (strata-panes--valid-main-window-p win))
+    (let* ((tab (strata-active-tab))
+           (p1 (strata-tab-state-pane1 tab))
+           (p2 (strata-tab-state-pane2 tab))
+           (w1 (and p1 (strata-pane-state-window p1)))
+           (w2 (and p2 (strata-pane-state-window p2)))
+           (b1 (and p1 (strata-pane-state-buffer p1)))
+           (b2 (and p2 (strata-pane-state-buffer p2)))
+           (wbuf (window-buffer win)))
+      (cond
+       ((and p1 (eq win w1)) p1)
+       ((and p2 (eq win w2)) p2)
+       ((and p1 (not (window-live-p w1)) (not (eq b1 b2)) (eq wbuf b1)) p1)
+       ((and p2 (not (window-live-p w2)) (not (eq b1 b2)) (eq wbuf b2)) p2)))))
+
+(defun strata-panes--sync-active-pane-from-window (&optional win)
+  "Sync active split pane to match main browser WIN (default `selected-window')."
+  (let ((w (or win (selected-window))))
+    (when-let ((matched (strata-panes--pane-for-window w)))
+      (let* ((tab (strata-active-tab))
+             (id (strata-pane-state-id matched))
+             (changed (/= (strata-tab-state-active-pane tab) id)))
+        (setf (strata-pane-state-window matched) w)
+        (when changed
+          (setf (strata-tab-state-active-pane tab) id)
+          (force-mode-line-update t)
+          (strata-sidebar-refresh)))
+      matched)))
+
+(defun strata-panes--on-window-selection-change (&optional frame)
+  "Track which split pane owns focus when selection moves in FRAME."
+  (strata-panes--sync-active-pane-from-window (frame-selected-window frame)))
+
+(add-hook 'window-selection-change-functions #'strata-panes--on-window-selection-change)
+
+(defun strata-panes--window-dir (&optional win)
+  "Return directory path displayed inside browser window WIN."
+  (let ((w (or win (selected-window))))
+    (when (strata-panes--valid-main-window-p w)
+      (with-current-buffer (window-buffer w)
+        (or (when-let ((p (strata-panes--pane-for-window w)))
+              (strata-pane-state-dir p))
+            (bound-and-true-p strata-view-directory)
+            (ignore-errors (dirvish-prop :root))
+            (ignore-errors (dired-current-directory))
+            default-directory)))))
+
 (defun strata-pane-active-p (&optional win)
   "Return non-nil if WIN (default `selected-window') corresponds to active pane."
   (let* ((w (or win (selected-window)))
-         (p (strata-active-pane)))
+         (p (strata-active-pane))
+         (pw (and p (strata-pane-state-window p))))
     (or (not (strata-split-active-p))
-        (eq w (strata-pane-state-window p))
-        (eq (window-buffer w) (strata-pane-state-buffer p)))))
+        (eq w pw)
+        (and (not (window-live-p pw))
+             (eq (window-buffer w) (strata-pane-state-buffer p))))))
 
 ;;;; Bookmarks / Pinned Folders (~/.config/gtk-3.0/bookmarks sync)
 
@@ -262,9 +314,10 @@ Return non-nil if the sidebar was newly opened and rendered."
                    (file-exists-p resolved)))))))
 
 (defun strata-open-location (loc &optional record-history)
-  "Open LOC (filesystem path, URI, or `computer:///'/`trash:///'/`recent:///'/`network:///')
-in the currently active pane cleanly."
+  "Open LOC (path, virtual, or remote URI) cleanly inside the active pane."
   (interactive "sLocation or path: ")
+  (when (strata-panes--valid-main-window-p (selected-window))
+    (strata-panes--sync-active-pane-from-window (selected-window)))
   (let* ((resolved (strata-resolve-location-uri loc))
          (tab (strata-active-tab))
          (pane (strata-active-pane))

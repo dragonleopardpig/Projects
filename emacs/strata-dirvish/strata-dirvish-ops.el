@@ -32,14 +32,31 @@
 
 ;;;; Refresh Helper & Undo/Redo Helpers
 
+(defun strata--refresh-buffer (buf)
+  "Refresh Strata browser buffer BUF safely without changing window focus."
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (when (bound-and-true-p strata-marked-entries)
+        (setq strata-marked-entries (cl-remove-if-not #'file-exists-p strata-marked-entries)))
+      (cond
+       ((derived-mode-p 'dired-mode) (revert-buffer nil t t))
+       ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+       ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh))
+       ((derived-mode-p 'strata-computer-mode) (strata-computer-refresh))
+       ((derived-mode-p 'strata-trash-mode) (strata-trash-refresh))))))
+
 (defun strata-refresh-active-view ()
-  "Refresh current Strata browser buffer and sidebar cleanly."
-  (cond
-   ((derived-mode-p 'dired-mode) (revert-buffer nil t t))
-   ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-   ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh))
-   ((derived-mode-p 'strata-computer-mode) (strata-computer-refresh))
-   ((derived-mode-p 'strata-trash-mode) (strata-trash-refresh)))
+  "Refresh active Strata browser buffer, opposite split pane, and sidebar."
+  (strata--refresh-buffer (current-buffer))
+  (when (and (fboundp 'strata-split-active-p) (strata-split-active-p))
+    (when-let* ((other (and (fboundp 'strata-other-pane) (strata-other-pane)))
+                (obuf (strata-pane-state-buffer other)))
+      (unless (eq obuf (current-buffer))
+        (let ((owin (strata-pane-state-window other)))
+          (if (window-live-p owin)
+              (with-selected-window owin
+                (strata--refresh-buffer obuf))
+            (strata--refresh-buffer obuf))))))
   (strata-sidebar-refresh))
 
 (defun strata-undo--push (op)
