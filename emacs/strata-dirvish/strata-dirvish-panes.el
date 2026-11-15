@@ -188,7 +188,8 @@
       (set-buffer (window-buffer (selected-window))))))
 
 (defun strata-sidebar-ensure ()
-  "Display `*Strata Sidebar*' if `sidebar-expanded' pref is enabled."
+  "Display `*Strata Sidebar*' if `sidebar-expanded' pref is enabled.
+Return non-nil if the sidebar was newly opened and rendered."
   (let ((p (strata-prefs)))
     (when (and (strata-prefs-sidebar-expanded p)
                (not (window-live-p strata-sidebar-window)))
@@ -199,7 +200,8 @@
             (strata-sidebar-mode)))
         (strata-sidebar-render)
         (setq strata-sidebar-window
-              (display-buffer-in-side-window buf `((side . left) (slot . -1) (window-width . ,w))))))))
+              (display-buffer-in-side-window buf `((side . left) (slot . -1) (window-width . ,w))))
+        t))))
 
 ;;;; Location Navigation Inside Active Pane
 
@@ -292,8 +294,8 @@ in the currently active pane cleanly."
           (strata-pane-state-window pane) (selected-window))
     (ignore record-history)
     (strata-tabs-save)
-    (strata-sidebar-ensure)
-    (strata-sidebar-refresh)))
+    (unless (strata-sidebar-ensure)
+      (strata-sidebar-refresh))))
 
 ;;;; Split Extra Pane Controls (F3 / F6)
 
@@ -606,7 +608,7 @@ Keeps shell process & CWD alive while hidden."
     (define-key map (kbd "E") #'strata-sidebar-eject-at-point)
     (define-key map (kbd "X") #'strata-trash-empty)
     (define-key map (kbd "c") #'strata-sidebar-toggle-rail)
-    (define-key map (kbd "g") #'strata-sidebar-refresh)
+    (define-key map (kbd "g") #'strata-sidebar-force-refresh)
     map)
   "Keymap for `*Strata Sidebar*' buffer.")
 
@@ -685,29 +687,44 @@ Keeps shell process & CWD alive while hidden."
                   (insert txt))))))
         (unless (strata-prefs-sidebar-devices-collapsed p)
           (insert "\n" (propertize (if rail " Devs\n" "  DEVICES\n") 'face 'strata-section-heading))
-          (dolist (dev (strata-devices-list))
-            (let* ((icon (strata-device-icon dev))
-                   (name (strata-device-name dev))
-                   (mp (strata-device-mountpoint dev))
-                   (bar (when (and (not rail) (strata-device-usage dev))
-                          (concat "\n     " (strata-format-capacity-bar (strata-device-usage dev) 10 t))))
-                   (txt (if rail
-                            (format "  %s\n" icon)
-                          (format "  %s  %s%s\n" icon name (or bar "")))))
-              (add-text-properties 0 (length txt)
-                                   (list 'strata-device dev 'strata-sidebar-loc mp
-                                         'mouse-face 'highlight
-                                         'pointer 'hand
-                                         'help-echo (or mp (strata-device-device dev)))
-                                   txt)
-              (insert txt))))
+          (if (null strata-devices-cache)
+              (let ((txt (if rail "  [Scan]\n" "  [Scan drives (g)]\n")))
+                (add-text-properties 0 (length txt)
+                                     '(strata-sidebar-action scan-devices
+                                       mouse-face highlight
+                                       pointer hand
+                                       help-echo "Scan block and mounted devices (g)")
+                                     txt)
+                (insert txt))
+            (dolist (dev strata-devices-cache)
+              (let* ((icon (strata-device-icon dev))
+                     (name (strata-device-name dev))
+                     (mp (strata-device-mountpoint dev))
+                     (bar (when (and (not rail) (strata-device-usage dev))
+                            (concat "\n     " (strata-format-capacity-bar (strata-device-usage dev) 10 t))))
+                     (txt (if rail
+                              (format "  %s\n" icon)
+                            (format "  %s  %s%s\n" icon name (or bar "")))))
+                (add-text-properties 0 (length txt)
+                                     (list 'strata-device dev 'strata-sidebar-loc mp
+                                           'mouse-face 'highlight
+                                           'pointer 'hand
+                                           'help-echo (or mp (strata-device-device dev)))
+                                     txt)
+                (insert txt)))))
         (goto-char (min pt (point-max)))))))
 
 (defun strata-sidebar-refresh ()
-  "Refresh `*Strata Sidebar*' when visible."
+  "Refresh `*Strata Sidebar*' when visible without triggering a device rescan."
   (interactive)
   (when (get-buffer "*Strata Sidebar*")
     (strata-sidebar-render)))
+
+(defun strata-sidebar-force-refresh ()
+  "Scan devices and refresh `*Strata Sidebar*'."
+  (interactive)
+  (strata-devices-list t)
+  (strata-sidebar-refresh))
 
 (defun strata-sidebar-toggle ()
   "Toggle visibility of the left Strata Sidebar (`C-b` / `C-n`)."
@@ -751,9 +768,12 @@ Keeps shell process & CWD alive while hidden."
 (defun strata-sidebar-activate-at-point ()
   "Activate place, pin, or device on current Sidebar row."
   (interactive)
-  (let ((dev (get-text-property (point) 'strata-device))
+  (let ((action (get-text-property (point) 'strata-sidebar-action))
+        (dev (get-text-property (point) 'strata-device))
         (loc (get-text-property (point) 'strata-sidebar-loc)))
     (cond
+     ((eq action 'scan-devices)
+      (strata-sidebar-force-refresh))
      ((and dev (not (strata-device-mounted-p dev)))
       (strata-device-mount dev #'strata-open-location))
      (loc (strata-open-location loc))

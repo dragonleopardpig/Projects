@@ -38,8 +38,7 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
                      default-directory
                      (expand-file-name "~/"))))
     (strata-tabs-load)
-    (strata-open-location target t)
-    (strata-sidebar-ensure)))
+    (strata-open-location target t)))
 
 (defun strata-dirvish-launch-computer ()
   "Open Strata `computer:///' virtual view."
@@ -91,6 +90,12 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
               (lambda (&rest _) (strata-open-settings))
               shadow "" ""))))))
 
+(defun strata-dirvish--collapse-guard (orig-fn f-name)
+  "Skip `dirvish-collapse--cache' for F-NAME on FUSE, cloud, or remote mounts."
+  (if (strata-path-unsafe-probe-p f-name)
+      '(nil . nil)
+    (funcall orig-fn f-name)))
+
 (defun strata-dirvish--parent-buffer-filter (buf)
   "Ensure Dirvish Miller-column parent buffer BUF renders Strata icons & hand cursor."
   (when (buffer-live-p buf)
@@ -128,9 +133,9 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
           dirvish-use-header-line 'global
           dirvish-attributes
           '(strata-icon strata-dir-mouse strata-color strata-size strata-time
-            vc-state subtree-state collapse)
+            vc-state subtree-state)
           dirvish-preview-dispatchers
-          '(strata-rich-image strata-rich-pdf strata-rich-document
+          '(strata-mount-guard strata-rich-image strata-rich-pdf strata-rich-document
             image gif video audio epub pdf archive)
           dirvish-header-line-format '(:left (strata-breadcrumb) :right (strata-view-info))
           dirvish-mode-line-format '(:left (strata-footer) :right (sort omit yank index)))
@@ -141,6 +146,8 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
     (add-hook 'dirvish-directory-view-mode-hook #'strata-dirvish--dirview-setup)
     (when (fboundp 'dirvish--create-parent-buffer)
       (advice-add 'dirvish--create-parent-buffer :filter-return #'strata-dirvish--parent-buffer-filter))
+    (with-eval-after-load 'dirvish-collapse
+      (advice-add 'dirvish-collapse--cache :around #'strata-dirvish--collapse-guard))
     (dolist (hook '(dired-mode-hook
                     strata-compact-mode-hook
                     strata-icons-mode-hook

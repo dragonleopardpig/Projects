@@ -179,35 +179,39 @@
          (let ((inhibit-read-only t))
            (erase-buffer)
            (if (file-directory-p file)
-               (let ((items (ignore-errors (directory-files file nil "\\`[^.]" t))))
-                 (insert (concat "  "
-                                 (strata-icon-glyph 'folder 'strata-header-accent)
-                                 (propertize (format " %s (%d items)\n\n"
-                                                     (file-name-nondirectory (directory-file-name file))
-                                                     (length items))
-                                             'face 'strata-header-accent)))
-                 (dolist (it (seq-take items 60))
-                   (let* ((sub (expand-file-name it file))
-                          (dirp (file-directory-p sub))
-                          (row (format "   %s  %s\n"
-                                       (strata-icon-glyph (if dirp 'folder 'file))
-                                       it)))
-                     (when dirp
-                       (let ((km (make-sparse-keymap)))
-                         (define-key km [mouse-1]
-                                     (lambda (ev)
-                                       (interactive "e")
-                                       (when (fboundp 'strata-open-location)
-                                         (when (posn-window (event-end ev))
-                                           (select-window (posn-window (event-end ev))))
-                                         (strata-open-location sub t))))
-                         (add-text-properties 0 (length row)
-                                              (list 'mouse-face 'highlight
-                                                    'pointer 'hand
-                                                    'keymap km
-                                                    'help-echo sub)
-                                              row)))
-                     (insert row))))
+               (if (strata-path-unsafe-probe-p file)
+                   (insert (propertize (format "  Remote / Cloud / External mount: %s\n\n  Auto-preview skipped (press RET to open).\n"
+                                               (file-name-nondirectory (directory-file-name file)))
+                                       'face 'shadow))
+                 (let ((items (ignore-errors (directory-files file nil "\\`[^.]" t))))
+                   (insert (concat "  "
+                                   (strata-icon-glyph 'folder 'strata-header-accent)
+                                   (propertize (format " %s (%d items)\n\n"
+                                                       (file-name-nondirectory (directory-file-name file))
+                                                       (length items))
+                                               'face 'strata-header-accent)))
+                   (dolist (it (seq-take items 60))
+                     (let* ((sub (expand-file-name it file))
+                            (dirp (file-directory-p sub))
+                            (row (format "   %s  %s\n"
+                                         (strata-icon-glyph (if dirp 'folder 'file))
+                                         it)))
+                       (when dirp
+                         (let ((km (make-sparse-keymap)))
+                           (define-key km [mouse-1]
+                                       (lambda (ev)
+                                         (interactive "e")
+                                         (when (fboundp 'strata-open-location)
+                                           (when (posn-window (event-end ev))
+                                             (select-window (posn-window (event-end ev))))
+                                           (strata-open-location sub t))))
+                           (add-text-properties 0 (length row)
+                                                (list 'mouse-face 'highlight
+                                                      'pointer 'hand
+                                                      'keymap km
+                                                      'help-echo sub)
+                                                row)))
+                       (insert row)))))
              (when (file-readable-p file)
                (insert-file-contents file nil 0 65536)))
            (special-mode)
@@ -468,13 +472,25 @@ except Exception as e:
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (erase-buffer)
-        (insert (propertize (format "  📐 %s Preview — %s\n\n"
-                                    (upcase ext) (file-name-nondirectory file))
-                            'face 'strata-header-accent))
+        (insert (concat "  "
+                        (strata-icon-glyph 'file-3d 'strata-header-accent)
+                        (propertize (format "  %s Preview — %s\n\n"
+                                            (upcase ext) (file-name-nondirectory file))
+                                    'face 'strata-header-accent)))
         (insert "  " summary "\n")
         (goto-char (point-min))))))
 
 ;;;; Dirvish Preview Dispatchers
+
+(dirvish-define-preview strata-mount-guard (file)
+  "Prevent synchronous hover preview freezes on FUSE/cloud/remote/removable mounts."
+  (when (and file (strata-path-unsafe-probe-p file))
+    (let ((kind (strata-path-mount-kind file)))
+      (when (or (not (eq kind 'removable))
+                (file-directory-p file))
+        `(info . ,(format "  %s mount: %s\n\n  Auto-preview skipped for instant startup/navigation (press RET to open)."
+                          (capitalize (symbol-name (if (eq kind 'local) 'remote kind)))
+                          (file-name-nondirectory (directory-file-name file))))))))
 
 (dirvish-define-preview strata-rich-image (file ext preview-window _dv)
   "Strata Image & Camera RAW preview honoring independent `preview-image-scale' & EXIF."
@@ -537,7 +553,8 @@ except Exception as e:
                         file base)))
       (with-current-buffer buf
         (let ((inhibit-read-only t))
-          (insert (propertize (format "  📕 PDF Page %d · Zoom %.0f%%  ([C-+/C--/C-0] · [M-PgUp/Dn] Page)\n\n"
+          (insert (propertize (format "  %s PDF Page %d · Zoom %.0f%%  ([C-+/C--/C-0] · [M-PgUp/Dn] Page)\n\n"
+                                      (strata-icon-glyph 'file-pdf 'strata-header-accent)
                                       strata-preview-pdf-page (* 100 scale))
                               'face 'strata-header-accent))
           (when (and (display-graphic-p) (file-exists-p png))

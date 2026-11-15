@@ -211,11 +211,16 @@
     (cond
      (custom (propertize custom 'face (or cface 'dired-directory)))
      (dir-p
-      (let ((kind (cond
-                   ((file-symlink-p path) 'folder-open)
-                   ((file-exists-p (expand-file-name ".git" path)) 'folder-git)
-                   (t 'folder))))
-        (strata-icon-glyph kind (or cface 'dired-directory) "▸")))
+      (let* ((mkind (strata-path-mount-kind path))
+             (kind (cond
+                    ((eq mkind 'cloud) 'cloud)
+                    ((eq mkind 'network) 'network)
+                    ((file-symlink-p path) 'folder-open)
+                    ((strata-path-unsafe-probe-p path) 'folder)
+                    ((file-exists-p (expand-file-name ".git" path)) 'folder-git)
+                    (t 'folder))))
+        (strata-icon-glyph kind (or cface 'dired-directory)
+                           (unless (memq kind '(cloud network)) "▸"))))
      ((string-prefix-p ".git" fname)
       (strata-icon-glyph 'git 'warning "·"))
      ((file-symlink-p path)
@@ -469,7 +474,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 
 (defun strata-dired-decorate-dirs ()
   "Ensure plain Dired buffers (e.g., split pane 2) mark directories as clickable."
-  (when (derived-mode-p 'dired-mode 'dirvish-directory-view-mode)
+  (when (and (derived-mode-p 'dired-mode)
+             (not (and (fboundp 'dirvish-curr) (dirvish-curr)
+                       (assq 'strata-dir-mouse (dirvish-prop :attrs)))))
     (save-excursion
       (goto-char (point-min))
       (while (not (eobp))

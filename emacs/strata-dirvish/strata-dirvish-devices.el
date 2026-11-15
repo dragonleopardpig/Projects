@@ -158,6 +158,87 @@ Returns nil when TOTAL <= 0 or TOTAL >= `strata-synthetic-capacity-threshold'."
       (string= mp "/boot")
       (string= mp "/boot/efi")))
 
+(defvar strata-mounts--cache nil
+  "Cached parsed mount list (TIMESTAMP . ENTRIES) from /proc/mounts.")
+
+(defconst strata-mounts--cache-ttl 10.0
+  "Seconds to cache /proc/mounts entries for instant path safety checks.")
+
+(defvar strata-devices-cache nil
+  "Cached list of `strata-device' structs to keep startup and browsing instant.")
+
+(defvar strata-devices-cache-time 0.0
+  "Timestamp when `strata-devices-cache' was last populated.")
+
+(defvar strata-devices-async-proc nil
+  "Active background `lsblk' process if currently refreshing devices.")
+
+(defun strata-mounts--classify (dev mp fs)
+  "Classify mount at MP of FSTYPE FS from DEV into cloud/network/removable/local."
+  (cond
+   ((or (member fs '("cifs" "smbfs" "nfs" "nfs4" "sshfs" "davfs"))
+        (string-prefix-p (format "/run/user/%d/gvfs/sftp" (user-uid)) mp)
+        (string-prefix-p (format "/run/user/%d/gvfs/smb" (user-uid)) mp))
+    'network)
+   ((strata-mount--fuse-or-remote-p dev mp fs)
+    'cloud)
+   ((or (string-prefix-p "/run/media/" mp)
+        (string-prefix-p "/media/" mp))
+    'removable)
+   (t 'local)))
+
+(defun strata-mounts--entries (&optional force)
+  "Return cached mount entries ((CLEAN-MP KIND FS DEV) ...) from /proc/mounts."
+  (let ((now (float-time)))
+    (if (and (not force)
+             strata-mounts--cache
+             (< (- now (car strata-mounts--cache)) strata-mounts--cache-ttl))
+        (cdr strata-mounts--cache)
+      (let (out)
+        (dolist (m (strata-parse-proc-mounts))
+          (let ((dev (plist-get m :device))
+                (mp (plist-get m :mount))
+                (fs (plist-get m :fstype)))
+            (unless (strata-mount--hidden-system-p dev mp fs)
+              (push (list (if (string= mp "/") "/" (directory-file-name mp))
+                          (strata-mounts--classify dev mp fs)
+                          fs dev)
+                    out))))
+        (setq strata-mounts--cache (cons now out))
+        out))))
+
+(defun strata-path-mount-kind (path)
+  "Return mount kind symbol for PATH (`cloud', `network', `removable', `remote', `local').
+Reads only cached /proc/mounts entries cleanly with zero blocking I/O."
+  (cond
+   ((not (and (stringp path) (not (string-empty-p path)))) 'local)
+   ((file-remote-p path) 'remote)
+   (t
+    (let* ((norm (let ((p (directory-file-name (expand-file-name path))))
+                   (if (string-empty-p p) "/" p)))
+           (best-kind 'local)
+           (best-len 0))
+      (dolist (e (strata-mounts--entries))
+        (let* ((mp (nth 0 e))
+               (len (length mp)))
+          (when (and (> len best-len)
+                     (or (string= norm mp)
+                         (string-prefix-p (if (string= mp "/") "/" (concat mp "/"))
+                                          norm)))
+            (setq best-len len
+                  best-kind (nth 1 e)))))
+      best-kind))))
+
+(defun strata-path-unsafe-probe-p (path)
+  "Return non-nil if probing inside PATH could hang on FUSE/network/removable mounts."
+  (when (and (stringp path) (not (string-empty-p path)))
+    (or (file-remote-p path)
+        (memq (strata-path-mount-kind path) '(cloud network remote removable))
+        (when-let ((target (ignore-errors (file-symlink-p path))))
+          (when (stringp target)
+            (let ((resolved (expand-file-name target (or (file-name-directory path) "/"))))
+              (memq (strata-path-mount-kind resolved) '(cloud network remote removable))))))))
+
 (defun strata-mount--fuse-or-remote-p (dev mp fstype)
   "Return non-nil if mount requires non-blocking async probe instead of sync statvfs."
   (or (string-prefix-p "fuse." fstype)
@@ -175,7 +256,7 @@ Returns nil when TOTAL <= 0 or TOTAL >= `strata-synthetic-capacity-threshold'."
     (error nil)))
 
 (defun strata-probe-mount-async (mountpoint)
-  "Launch non-blocking background capacity probe for MOUNTPOINT via `timeout 2 df -B1'."
+  "Launch non-blocking background capacity probe for MOUNTPOINT via `timeout -k'."
   (when (and mountpoint
              (not (gethash mountpoint strata-devices-pending-probes))
              (executable-find "df")
@@ -186,7 +267,7 @@ Returns nil when TOTAL <= 0 or TOTAL >= `strata-synthetic-capacity-threshold'."
        :name (format "strata-df-%s" mountpoint)
        :buffer buf
        :noquery t
-       :command (list "timeout" "2" "df" "-B1" "--output=size,avail" mountpoint)
+       :command (list "timeout" "-k" "0.5" "2" "df" "-B1" "--output=size,avail" mountpoint)
        :sentinel
        (lambda (proc _event)
          (when (memq (process-status proc) '(exit signal))
@@ -209,10 +290,10 @@ Returns nil when TOTAL <= 0 or TOTAL >= `strata-synthetic-capacity-threshold'."
                (kill-buffer (process-buffer proc)))
              (run-hooks 'strata-devices-refresh-hook))))))))
 
-(defun strata-filesystem-usage (path &optional fusermount-p)
+(defun strata-filesystem-usage (path &optional fusermount-p allow-async-probe)
   "Return (TOTAL . AVAIL) for PATH cleanly without ever blocking on FUSE/cloud.
 If FUSERMOUNT-P is non-nil (or PATH matches FUSE/GVfs), uses cache and triggers
-async background probe when stale."
+async background probe only when ALLOW-ASYNC-PROBE is non-nil."
   (when (and path (stringp path) (not (string-empty-p path)))
     (if (and (not fusermount-p)
              (not (string-prefix-p (format "/run/user/%d/gvfs" (user-uid)) path))
@@ -224,21 +305,25 @@ async background probe when stale."
              (usage (car cached))
              (ts (or (cdr cached) 0.0))
              (ttl (if usage strata-usage-valid-ttl strata-usage-unknown-ttl)))
-        (when (or (null cached) (>= (- now ts) ttl))
+        (when (and allow-async-probe
+                   (or (null cached) (>= (- now ts) ttl)))
           (strata-probe-mount-async path))
         usage))))
 
 ;;;; Device Discovery & Drive Grouping
 
+(defconst strata-devices--lsblk-cols
+  "NAME,KNAME,PKNAME,TYPE,FSTYPE,LABEL,MOUNTPOINT,SIZE,RM,HOTPLUG,TRAN,MODEL,UUID,FSSIZE,FSAVAIL"
+  "Columns queried from `lsblk -J -b'.")
+
 (defun strata-devices--lsblk ()
-  "Run `lsblk -J -b' synchronously (<50ms) and return parsed blockdevices vector."
+  "Run `lsblk -J -b' synchronously (<50ms) and return parsed blockdevices list."
   (when (executable-find "lsblk")
     (condition-case nil
         (with-temp-buffer
           (when (= 0 (process-file
                       "lsblk" nil t nil
-                      "-J" "-b" "-o"
-                      "NAME,KNAME,PKNAME,TYPE,FSTYPE,LABEL,MOUNTPOINT,SIZE,RM,HOTPLUG,TRAN,MODEL,UUID"))
+                      "-J" "-b" "-o" strata-devices--lsblk-cols))
             (let* ((json-object-type 'alist)
                    (json-array-type 'list)
                    (json-key-type 'symbol)
@@ -259,6 +344,7 @@ async background probe when stale."
       (push (cons id (string-trim label)) tbl))
     (setf (strata-prefs-device-labels p) tbl)
     (strata-prefs-save)
+    (setq strata-devices-cache nil)
     (run-hooks 'strata-devices-refresh-hook)))
 
 (defun strata-devices--flatten-lsblk (nodes &optional parent-tran parent-rm parent-model parent-pk)
@@ -273,6 +359,8 @@ async background probe when stale."
              (label (alist-get 'label node))
              (mp (alist-get 'mountpoint node))
              (size (alist-get 'size node))
+             (fssize (alist-get 'fssize node))
+             (fsavail (alist-get 'fsavail node))
              (rm (or (alist-get 'rm node) parent-rm))
              (hotplug (alist-get 'hotplug node))
              (tran (or (alist-get 'tran node) parent-tran ""))
@@ -300,8 +388,10 @@ async background probe when stale."
                             (t name)))
                  (placement (if removable 'removable 'fixed))
                  (usage (cond
-                         ((and mp (file-directory-p mp)) (strata-local-statvfs mp))
-                         ((numberp size) nil)
+                         ((and (numberp fssize) (numberp fsavail))
+                          (strata-sanitize-capacity fssize fsavail))
+                         ((and mp (string= mp "/"))
+                          (strata-local-statvfs mp))
                          (t nil))))
             (push (make-strata-device
                    :id id
@@ -325,18 +415,15 @@ async background probe when stale."
                                  children tran rm model (or pk parent-pk kname name)))))))
     (nreverse out)))
 
-(defun strata-devices-list ()
-  "Return ordered list of `strata-device' objects grouped by drive placement.
-Ordering mirrors Strata: fixed internal drives -> removable -> cloud -> network.
-FUSE/cloud mounts NEVER block synchronously."
-  (let* ((block-devs (strata-devices--flatten-lsblk (strata-devices--lsblk)))
+(defun strata-devices--assemble (raw-block-devs &optional probe-fuse)
+  "Assemble sorted `strata-device' list from RAW-BLOCK-DEVS and /proc/mounts."
+  (let* ((block-devs (strata-devices--flatten-lsblk raw-block-devs))
          (seen-mps (let ((ht (make-hash-table :test #'equal)))
                      (dolist (d block-devs)
                        (when (strata-device-mountpoint d)
                          (puthash (strata-device-mountpoint d) t ht)))
                      ht))
          (extra-devs nil))
-    ;; Ensure "/" root always appears first if somehow missing
     (unless (gethash "/" seen-mps)
       (puthash "/" t seen-mps)
       (push (make-strata-device
@@ -350,7 +437,6 @@ FUSE/cloud mounts NEVER block synchronously."
              :mounted-p t
              :usage (strata-local-statvfs "/"))
             extra-devs))
-    ;; Scan /proc/mounts for FUSE, rclone cloud, GVfs, SMB, SSHFS mounts
     (dolist (m (strata-parse-proc-mounts))
       (let ((dev (plist-get m :device))
             (mp (plist-get m :mount))
@@ -377,7 +463,7 @@ FUSE/cloud mounts NEVER block synchronously."
                      :placement placement
                      :mounted-p t
                      :fusermount-p fusep
-                     :usage (strata-filesystem-usage mp fusep))
+                     :usage (strata-filesystem-usage mp fusep probe-fuse))
                     extra-devs))))))
     (let* ((all (append block-devs (nreverse extra-devs)))
            (rank (lambda (pl)
@@ -386,20 +472,62 @@ FUSE/cloud mounts NEVER block synchronously."
                      ('removable 1)
                      ('cloud 2)
                      ('network 3)
-                     (_ 4)))))
-      (cl-stable-sort
-       all
-       (lambda (a b)
-         (let ((ra (funcall rank (strata-device-placement a)))
-               (rb (funcall rank (strata-device-placement b))))
-           (if (/= ra rb)
-               (< ra rb)
-             (if (and (equal (strata-device-mountpoint a) "/"))
-                 t
-               (if (equal (strata-device-mountpoint b) "/")
-                   nil
-                 (string-lessp (or (strata-device-pkname a) "")
-                               (or (strata-device-pkname b) "")))))))))))
+                     (_ 4))))
+           (sorted
+            (cl-stable-sort
+             all
+             (lambda (a b)
+               (let ((ra (funcall rank (strata-device-placement a)))
+                     (rb (funcall rank (strata-device-placement b))))
+                 (if (/= ra rb)
+                     (< ra rb)
+                   (if (equal (strata-device-mountpoint a) "/")
+                       t
+                     (if (equal (strata-device-mountpoint b) "/")
+                         nil
+                       (string-lessp (or (strata-device-pkname a) "")
+                                     (or (strata-device-pkname b) ""))))))))))
+      (setq strata-devices-cache sorted
+            strata-devices-cache-time (float-time))
+      sorted)))
+
+(defun strata-devices-list (&optional probe-fuse)
+  "Return ordered list of `strata-device' objects grouped by drive placement.
+Updates `strata-devices-cache'. FUSE/cloud mounts only probe async when
+PROBE-FUSE is non-nil."
+  (strata-devices--assemble (strata-devices--lsblk) probe-fuse))
+
+(defun strata-devices-refresh-async (&optional probe-fuse callback)
+  "Populate `strata-devices-cache' asynchronously via non-blocking `lsblk'."
+  (when (and (not (process-live-p strata-devices-async-proc))
+             (executable-find "lsblk"))
+    (let ((buf (generate-new-buffer " *strata-lsblk*")))
+      (setq strata-devices-async-proc
+            (make-process
+             :name "strata-lsblk"
+             :buffer buf
+             :noquery t
+             :connection-type 'pipe
+             :command (list "lsblk" "-J" "-b" "-o" strata-devices--lsblk-cols)
+             :sentinel
+             (lambda (proc _ev)
+               (when (memq (process-status proc) '(exit signal))
+                 (unwind-protect
+                     (when (and (= 0 (process-exit-status proc))
+                                (buffer-live-p (process-buffer proc)))
+                       (let* ((json-object-type 'alist)
+                              (json-array-type 'list)
+                              (json-key-type 'symbol)
+                              (data (ignore-errors
+                                      (with-current-buffer (process-buffer proc)
+                                        (json-read-from-string (buffer-string)))))
+                              (raw (alist-get 'blockdevices data)))
+                         (strata-devices--assemble raw probe-fuse)
+                         (run-hooks 'strata-devices-refresh-hook)
+                         (when callback (funcall callback strata-devices-cache))))
+                   (setq strata-devices-async-proc nil)
+                   (when (buffer-live-p (process-buffer proc))
+                     (kill-buffer (process-buffer proc)))))))))))
 
 ;;;; Device Actions (Mount / Unmount / Eject / Unlock / Lock with GVfs Fallback)
 
@@ -646,7 +774,7 @@ FUSE/cloud mounts NEVER block synchronously."
   "Render grouped drives and capacity bars into current `computer:///' buffer."
   (let ((inhibit-read-only t)
         (pt (point))
-        (devs (strata-devices-list))
+        (devs (strata-devices-list t))
         (last-group nil))
     (erase-buffer)
     (insert (propertize "  Locations & Drives\n" 'face 'strata-section-heading))
@@ -1080,7 +1208,7 @@ FUSE/cloud mounts NEVER block synchronously."
   (let ((buf (get-buffer-create "*Strata Network*"))
         (devs (cl-remove-if-not (lambda (d)
                                   (memq (strata-device-placement d) '(network cloud)))
-                                (strata-devices-list))))
+                                (strata-devices-list t))))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (erase-buffer)

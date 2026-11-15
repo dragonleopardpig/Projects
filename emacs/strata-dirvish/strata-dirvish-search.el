@@ -281,7 +281,7 @@
 (defun strata-search--roots ()
   "Return search root directories (~ plus local mounted removable drives)."
   (let ((roots (list (expand-file-name "~/"))))
-    (dolist (d (strata-devices-list))
+    (dolist (d (or strata-devices-cache (strata-devices-list)))
       (let ((mp (strata-device-mountpoint d)))
         (when (and mp (memq (strata-device-placement d) '(fixed removable))
                    (not (string= mp "/"))
