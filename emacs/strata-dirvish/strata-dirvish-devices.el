@@ -1,0 +1,1013 @@
+;;; strata-dirvish-devices.el --- Async devices, capacity bars, cloud/GVfs, and virtual locations -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Device discovery, async non-blocking FUSE/cloud capacity probing,
+;; synthetic placeholder capacity filtering (>= 1 PiB), custom per-drive
+;; icons, LUKS/udisksctl/gio mount actions, and interactive virtual buffers for
+;; `computer:///', `trash:///', `recent:///', `network:///', and `admin:///'.
+
+;;; Code:
+
+(require 'cl-lib)
+(require 'json)
+(require 'subr-x)
+(require 'strata-dirvish-prefs)
+
+(defconst strata-synthetic-capacity-threshold (expt 2 50)
+  "Capacities >= 1 PiB reported by FUSE/rclone placeholders are treated as unknown.")
+
+(defconst strata-usage-valid-ttl 60.0
+  "Seconds to cache valid disk capacity measurements for remote/FUSE mounts.")
+
+(defconst strata-usage-unknown-ttl 5.0
+  "Seconds before retrying an unknown/unmeasured FUSE/remote capacity probe.")
+
+(defvar strata-devices-usage-cache (make-hash-table :test #'equal)
+  "Cache mapping mount-point -> (USAGE . FLOAT-TIMESTAMP).
+USAGE is nil or (TOTAL-BYTES . AVAIL-BYTES).")
+
+(defvar strata-devices-pending-probes (make-hash-table :test #'equal)
+  "Set of mount-points currently being probed asynchronously.")
+
+(defvar strata-devices-refresh-hook nil
+  "Hook run after async mount capacity probes or mount operations complete.")
+
+(cl-defstruct strata-device
+  id                ; unique key (uuid or kname or mountpoint)
+  name              ; display name
+  device            ; e.g. /dev/nvme0n1p2 or rclone remote
+  pkname            ; parent physical disk kname for grouping
+  fstype            ; ext4, vfat, btrfs, crypto_LUKS, fuse.rclone, etc.
+  mountpoint        ; local path or nil if unmounted/locked
+  uuid
+  model
+  tran              ; nvme, usb, sata, etc.
+  size              ; block size in bytes from lsblk
+  placement         ; fixed | removable | cloud | network
+  mounted-p
+  locked-p          ; crypto_LUKS not unlocked yet
+  fusermount-p      ; FUSE/network/cloud filesystem requiring async df probe
+  usage)            ; nil or (TOTAL . AVAIL)
+
+;;;; Synthetic Capacity Filtering & Formatting
+
+(defun strata-sanitize-capacity (total avail)
+  "Sanitize raw filesystem capacity (TOTAL AVAIL).
+Returns nil when TOTAL <= 0 or TOTAL >= `strata-synthetic-capacity-threshold'."
+  (when (and (numberp total) (numberp avail)
+             (> total 0)
+             (< total strata-synthetic-capacity-threshold))
+    (cons (truncate total) (truncate (min (max 0 avail) total)))))
+
+(defun strata-format-capacity-bar (usage &optional width compact)
+  "Render a color-coded disk space capacity bar for USAGE = (TOTAL . AVAIL)."
+  (when usage
+    (pcase-let ((`(,total . ,avail) usage))
+      (when (> total 0)
+        (let* ((used (max 0 (- total avail)))
+               (ratio (min 1.0 (/ (float used) (float total))))
+               (pct (* 100.0 ratio))
+               (bar-w (or width 12))
+               (filled (min bar-w (max 0 (round (* ratio bar-w)))))
+               (empty (- bar-w filled))
+               (face (cond
+                      ((>= pct 90.0) 'strata-bar-danger)
+                      ((>= pct 80.0) 'strata-bar-warn)
+                      (t 'strata-bar-ok)))
+               (bar (concat
+                     (propertize (make-string filled ?█) 'face face)
+                     (propertize (make-string empty ?░) 'face 'shadow)))
+               (free-str (strata-format-drive-free-size avail total))
+               (tot-str (strata-format-bytes total)))
+          (if compact
+              (format "%s %s" bar free-str)
+            (format "%s  %s free of %s (%.0f%%)" bar free-str tot-str pct)))))))
+
+;;;; Custom Per-Drive / Cloud Icons
+
+(defun strata-nixos-system-p ()
+  "Return non-nil when running on NixOS."
+  (or (file-exists-p "/etc/NIXOS") (file-directory-p "/nix/store")))
+
+(defun strata-device-icon (dev)
+  "Return a crisp icon glyph for `strata-device' DEV."
+  (let* ((name (downcase (or (strata-device-name dev) "")))
+         (mp (downcase (or (strata-device-mountpoint dev) "")))
+         (fstype (downcase (or (strata-device-fstype dev) "")))
+         (tran (downcase (or (strata-device-tran dev) "")))
+         (blob (concat name " " mp " " (downcase (or (strata-device-device dev) ""))))
+         (matches (lambda (needles)
+                    (cl-some (lambda (n) (string-search n blob)) needles))))
+    (cond
+     ((strata-device-locked-p dev) "🔒")
+     ((funcall matches '("google drive" "google-drive" "gdrive")) "▲")
+     ((funcall matches '("proton drive" "proton-drive" "protondrive")) "◆")
+     ((funcall matches '("filelu")) "☁")
+     ((funcall matches '("scramble")) "☁")
+     ((funcall matches '("mega" "filen" "onedrive" "dropbox" "nextcloud" "rclone" "cloud")) "☁")
+     ((string= mp "/") (if (strata-nixos-system-p) "❄" "🐧"))
+     ((eq (strata-device-placement dev) 'network) "🌐")
+     ((string= fstype "iso9660") "💿")
+     ((or (string= tran "usb") (eq (strata-device-placement dev) 'removable)) "🔌")
+     ((string-search "nvme" (concat tran " " (or (strata-device-device dev) ""))) "⚡")
+     (t "🖴"))))
+
+;;;; Safe Mount Table Parsing & Async Probing
+
+(defun strata-parse-proc-mounts ()
+  "Read /proc/mounts and return list of plists (:device :mount :fstype)."
+  (when (file-readable-p "/proc/mounts")
+    (with-temp-buffer
+      (insert-file-contents "/proc/mounts")
+      (let (res)
+        (dolist (line (split-string (buffer-string) "\n" t))
+          (let ((cols (split-string line " " t)))
+            (when (>= (length cols) 3)
+              (let ((dev (car cols))
+                    (mp (cadr cols))
+                    (fs (caddr cols)))
+                ;; Decode octal escapes such as \040 for spaces
+                (setq mp (replace-regexp-in-string
+                          "\\\\040" " "
+                          (replace-regexp-in-string "\\\\011" "\t" mp)))
+                (push (list :device dev :mount mp :fstype fs) res)))))
+        (nreverse res)))))
+
+(defun strata-mount--hidden-system-p (dev mp fstype)
+  "Return non-nil if mount DEV at MP with FSTYPE should be hidden."
+  (or (string-prefix-p "/dev/loop" dev)
+      (string-prefix-p "/dev/zram" dev)
+      (string-prefix-p "/dev/ram" dev)
+      (member fstype '("proc" "sysfs" "devtmpfs" "devpts" "tmpfs" "cgroup" "cgroup2"
+                       "pstore" "bpf" "tracefs" "debugfs" "securityfs" "efivarfs"
+                       "configfs" "fusectl" "mqueue" "hugetlbfs" "ramfs" "autofs"
+                       "squashfs" "overlay" "rpc_pipefs" "binfmt_misc" "nsfs"
+                       "fuse.portal"))
+      (string-prefix-p "/proc" mp)
+      (string-prefix-p "/sys" mp)
+      (string-prefix-p "/dev" mp)
+      (string-prefix-p "/nix/" mp)
+      (and (string-prefix-p "/run/" mp)
+           (not (string-prefix-p "/run/media/" mp))
+           (not (string-prefix-p (format "/run/user/%d/gvfs" (user-uid)) mp)))
+      (string= mp "/boot")
+      (string= mp "/boot/efi")))
+
+(defun strata-mount--fuse-or-remote-p (dev mp fstype)
+  "Return non-nil if mount requires non-blocking async probe instead of sync statvfs."
+  (or (string-prefix-p "fuse." fstype)
+      (member fstype '("fuse" "cifs" "smbfs" "nfs" "nfs4" "sshfs" "davfs" "9p"))
+      (string-search ":" dev)
+      (string-prefix-p (format "/run/user/%d/gvfs" (user-uid)) mp)))
+
+(defun strata-local-statvfs (path)
+  "Query disk capacity cleanly ONLY for fast local block filesystems at PATH."
+  (condition-case nil
+      (when (and path (file-directory-p path))
+        (let ((info (file-system-info path)))
+          (when (and (listp info) (= (length info) 3))
+            (strata-sanitize-capacity (car info) (caddr info)))))
+    (error nil)))
+
+(defun strata-probe-mount-async (mountpoint)
+  "Launch non-blocking background capacity probe for MOUNTPOINT via `timeout 2 df -B1'."
+  (when (and mountpoint
+             (not (gethash mountpoint strata-devices-pending-probes))
+             (executable-find "df")
+             (executable-find "timeout"))
+    (puthash mountpoint t strata-devices-pending-probes)
+    (let ((buf (generate-new-buffer (format " *strata-df-%s*" (md5 mountpoint)))))
+      (make-process
+       :name (format "strata-df-%s" mountpoint)
+       :buffer buf
+       :noquery t
+       :command (list "timeout" "2" "df" "-B1" "--output=size,avail" mountpoint)
+       :sentinel
+       (lambda (proc _event)
+         (when (memq (process-status proc) '(exit signal))
+           (unwind-protect
+               (let ((usage nil))
+                 (when (and (= (process-exit-status proc) 0)
+                            (buffer-live-p (process-buffer proc)))
+                   (with-current-buffer (process-buffer proc)
+                     (let ((lines (split-string (buffer-string) "\n" t)))
+                       (when (>= (length lines) 2)
+                         (let ((cols (split-string (string-trim (cadr lines)) "[ \t]+" t)))
+                           (when (= (length cols) 2)
+                             (setq usage
+                                   (strata-sanitize-capacity
+                                    (string-to-number (car cols))
+                                    (string-to-number (cadr cols))))))))))
+                 (puthash mountpoint (cons usage (float-time)) strata-devices-usage-cache))
+             (remhash mountpoint strata-devices-pending-probes)
+             (when (buffer-live-p (process-buffer proc))
+               (kill-buffer (process-buffer proc)))
+             (run-hooks 'strata-devices-refresh-hook))))))))
+
+(defun strata-filesystem-usage (path &optional fusermount-p)
+  "Return (TOTAL . AVAIL) for PATH cleanly without ever blocking on FUSE/cloud.
+If FUSERMOUNT-P is non-nil (or PATH matches FUSE/GVfs), uses cache and triggers
+async background probe when stale."
+  (when (and path (stringp path) (not (string-empty-p path)))
+    (if (and (not fusermount-p)
+             (not (string-prefix-p (format "/run/user/%d/gvfs" (user-uid)) path))
+             (not (string-search "Drive" path))
+             (or (string= path "/") (string-prefix-p "/run/media/" path)))
+        (strata-local-statvfs path)
+      (let* ((now (float-time))
+             (cached (gethash path strata-devices-usage-cache))
+             (usage (car cached))
+             (ts (or (cdr cached) 0.0))
+             (ttl (if usage strata-usage-valid-ttl strata-usage-unknown-ttl)))
+        (when (or (null cached) (>= (- now ts) ttl))
+          (strata-probe-mount-async path))
+        usage))))
+
+;;;; Device Discovery & Drive Grouping
+
+(defun strata-devices--lsblk ()
+  "Run `lsblk -J -b' synchronously (<50ms) and return parsed blockdevices vector."
+  (when (executable-find "lsblk")
+    (condition-case nil
+        (with-temp-buffer
+          (when (= 0 (process-file
+                      "lsblk" nil t nil
+                      "-J" "-b" "-o"
+                      "NAME,KNAME,PKNAME,TYPE,FSTYPE,LABEL,MOUNTPOINT,SIZE,RM,HOTPLUG,TRAN,MODEL,UUID"))
+            (let* ((json-object-type 'alist)
+                   (json-array-type 'list)
+                   (json-key-type 'symbol)
+                   (data (json-read-from-string (buffer-string))))
+              (alist-get 'blockdevices data))))
+      (error nil))))
+
+(defun strata-devices--custom-label (id default-name)
+  "Return user's custom label for device ID, or DEFAULT-NAME."
+  (or (cdr (assoc id (strata-prefs-device-labels (strata-prefs))))
+      default-name))
+
+(defun strata-devices-set-label (id label)
+  "Set custom display LABEL for device ID (blank clears custom label)."
+  (let* ((p (strata-prefs))
+         (tbl (assoc-delete-all id (strata-prefs-device-labels p))))
+    (unless (string-empty-p (string-trim label))
+      (push (cons id (string-trim label)) tbl))
+    (setf (strata-prefs-device-labels p) tbl)
+    (strata-prefs-save)
+    (run-hooks 'strata-devices-refresh-hook)))
+
+(defun strata-devices--flatten-lsblk (nodes &optional parent-tran parent-rm parent-model parent-pk)
+  "Flatten nested `lsblk' tree NODES into usable `strata-device' structs."
+  (let (out)
+    (dolist (node nodes)
+      (let* ((name (alist-get 'name node))
+             (kname (or (alist-get 'kname node) name))
+             (pk (or (alist-get 'pkname node) parent-pk kname))
+             (dtype (alist-get 'type node))
+             (fstype (or (alist-get 'fstype node) ""))
+             (label (alist-get 'label node))
+             (mp (alist-get 'mountpoint node))
+             (size (alist-get 'size node))
+             (rm (or (alist-get 'rm node) parent-rm))
+             (hotplug (alist-get 'hotplug node))
+             (tran (or (alist-get 'tran node) parent-tran ""))
+             (model (or (alist-get 'model node) parent-model ""))
+             (uuid (alist-get 'uuid node))
+             (children (alist-get 'children node))
+             (devpath (when kname (concat "/dev/" kname)))
+             (removable (or (eq rm t) (equal rm 1) (eq hotplug t) (equal hotplug 1)
+                            (string= tran "usb")))
+             (locked (and (string= fstype "crypto_LUKS") (null children)))
+             (interesting (and (not (member dtype '("loop" "zram" "ram" "rom")))
+                               (not (string= fstype "swap"))
+                               (or (and mp (not (strata-mount--hidden-system-p (or devpath "") mp fstype)))
+                                   locked
+                                   (and (member dtype '("part" "crypt"))
+                                        (not (string-empty-p fstype))
+                                        (not (member mp '("/boot" "/boot/efi" "[SWAP]"))))))))
+        (when interesting
+          (let* ((id (or uuid kname mp))
+                 (raw-name (cond
+                            ((string= mp "/") "File System")
+                            ((and label (not (string-empty-p label))) label)
+                            ((and mp (not (string-empty-p mp))) (file-name-nondirectory (directory-file-name mp)))
+                            ((and model (not (string-empty-p model))) (string-trim model))
+                            (t name)))
+                 (placement (if removable 'removable 'fixed))
+                 (usage (cond
+                         ((and mp (file-directory-p mp)) (strata-local-statvfs mp))
+                         ((numberp size) nil)
+                         (t nil))))
+            (push (make-strata-device
+                   :id id
+                   :name (strata-devices--custom-label id raw-name)
+                   :device devpath
+                   :pkname pk
+                   :fstype fstype
+                   :mountpoint mp
+                   :uuid uuid
+                   :model (and model (string-trim model))
+                   :tran tran
+                   :size (and (numberp size) size)
+                   :placement placement
+                   :mounted-p (not (null mp))
+                   :locked-p locked
+                   :fusermount-p nil
+                   :usage usage)
+                  out)))
+        (when children
+          (setq out (append out (strata-devices--flatten-lsblk
+                                 children tran rm model (or pk parent-pk kname name)))))))
+    (nreverse out)))
+
+(defun strata-devices-list ()
+  "Return ordered list of `strata-device' objects grouped by drive placement.
+Ordering mirrors Strata: fixed internal drives -> removable -> cloud -> network.
+FUSE/cloud mounts NEVER block synchronously."
+  (let* ((block-devs (strata-devices--flatten-lsblk (strata-devices--lsblk)))
+         (seen-mps (let ((ht (make-hash-table :test #'equal)))
+                     (dolist (d block-devs)
+                       (when (strata-device-mountpoint d)
+                         (puthash (strata-device-mountpoint d) t ht)))
+                     ht))
+         (extra-devs nil))
+    ;; Ensure "/" root always appears first if somehow missing
+    (unless (gethash "/" seen-mps)
+      (puthash "/" t seen-mps)
+      (push (make-strata-device
+             :id "root-fs"
+             :name (strata-devices--custom-label "root-fs" "File System")
+             :device "/"
+             :pkname "root"
+             :fstype "root"
+             :mountpoint "/"
+             :placement 'fixed
+             :mounted-p t
+             :usage (strata-local-statvfs "/"))
+            extra-devs))
+    ;; Scan /proc/mounts for FUSE, rclone cloud, GVfs, SMB, SSHFS mounts
+    (dolist (m (strata-parse-proc-mounts))
+      (let ((dev (plist-get m :device))
+            (mp (plist-get m :mount))
+            (fs (plist-get m :fstype)))
+        (unless (or (gethash mp seen-mps)
+                    (strata-mount--hidden-system-p dev mp fs))
+          (when (or (strata-mount--fuse-or-remote-p dev mp fs)
+                    (string-prefix-p "/run/media/" mp))
+            (puthash mp t seen-mps)
+            (let* ((fusep (strata-mount--fuse-or-remote-p dev mp fs))
+                   (netp (or (member fs '("cifs" "smbfs" "nfs" "nfs4" "sshfs" "davfs"))
+                             (string-prefix-p (format "/run/user/%d/gvfs/sftp" (user-uid)) mp)
+                             (string-prefix-p (format "/run/user/%d/gvfs/smb" (user-uid)) mp)))
+                   (placement (cond (netp 'network) (fusep 'cloud) (t 'removable)))
+                   (base-name (file-name-nondirectory (directory-file-name mp)))
+                   (id (concat "mp:" mp)))
+              (push (make-strata-device
+                     :id id
+                     :name (strata-devices--custom-label id base-name)
+                     :device dev
+                     :pkname id
+                     :fstype fs
+                     :mountpoint mp
+                     :placement placement
+                     :mounted-p t
+                     :fusermount-p fusep
+                     :usage (strata-filesystem-usage mp fusep))
+                    extra-devs))))))
+    (let* ((all (append block-devs (nreverse extra-devs)))
+           (rank (lambda (pl)
+                   (pcase pl
+                     ('fixed 0)
+                     ('removable 1)
+                     ('cloud 2)
+                     ('network 3)
+                     (_ 4)))))
+      (cl-stable-sort
+       all
+       (lambda (a b)
+         (let ((ra (funcall rank (strata-device-placement a)))
+               (rb (funcall rank (strata-device-placement b))))
+           (if (/= ra rb)
+               (< ra rb)
+             (if (and (equal (strata-device-mountpoint a) "/"))
+                 t
+               (if (equal (strata-device-mountpoint b) "/")
+                   nil
+                 (string-lessp (or (strata-device-pkname a) "")
+                               (or (strata-device-pkname b) "")))))))))))
+
+;;;; Device Actions (Mount / Unmount / Eject / Unlock / Lock with GVfs Fallback)
+
+(defun strata-device--run-async (label cmd on-done &optional stdin-text env-extra)
+  "Run external device command CMD asynchronously with optional STDIN-TEXT & ENV-EXTRA."
+  (let* ((process-environment (if env-extra
+                                  (append env-extra process-environment)
+                                process-environment))
+         (buf (generate-new-buffer (format " *strata-dev-%s*" label)))
+         (proc (make-process
+                :name (format "strata-%s" label)
+                :buffer buf
+                :noquery t
+                :connection-type 'pipe
+                :command cmd
+                :sentinel
+                (lambda (p _ev)
+                  (when (memq (process-status p) '(exit signal))
+                    (let ((ok (= 0 (process-exit-status p)))
+                          (out (if (buffer-live-p (process-buffer p))
+                                   (with-current-buffer (process-buffer p)
+                                     (string-trim (buffer-string)))
+                                 "")))
+                      (when (buffer-live-p (process-buffer p))
+                        (kill-buffer (process-buffer p)))
+                      (run-hooks 'strata-devices-refresh-hook)
+                      (when on-done (funcall on-done ok out))))))))
+    (when stdin-text
+      (process-send-string proc (concat stdin-text "\n"))
+      (process-send-eof proc))
+    proc))
+
+(defun strata-device-mount (dev &optional callback)
+  "Mount or unlock `strata-device' DEV cleanly without freezing Emacs."
+  (cond
+   ((strata-device-mounted-p dev)
+    (when callback (funcall callback (strata-device-mountpoint dev))))
+   ((strata-device-locked-p dev)
+    (let ((pw (read-passwd (format "Unlock passphrase for %s (%s): "
+                                   (strata-device-name dev)
+                                   (strata-device-device dev)))))
+      (when (executable-find "udisksctl")
+        (strata-device--run-async
+         "unlock"
+         (list "udisksctl" "unlock" "-b" (strata-device-device dev) "--no-user-interaction")
+         (lambda (ok out)
+           (if (not ok)
+               (message "Unlock failed: %s" out)
+             (message "Unlocked %s" (strata-device-name dev))
+             (clear-string pw)
+             ;; Auto-mount the newly unlocked mapper device after short delay
+             (run-at-time 0.4 nil
+                          (lambda ()
+                            (when-let ((found (cl-find-if
+                                               (lambda (d)
+                                                 (and (not (strata-device-locked-p d))
+                                                      (string-search (or (file-name-nondirectory
+                                                                          (strata-device-device dev))
+                                                                         "")
+                                                                     (or (strata-device-pkname d) ""))))
+                                               (strata-devices-list))))
+                              (if (strata-device-mountpoint found)
+                                  (when callback (funcall callback (strata-device-mountpoint found)))
+                                (strata-device-mount found callback)))))))
+         pw))))
+   ((and (strata-device-device dev) (executable-find "udisksctl"))
+    (strata-device--run-async
+     "mount"
+     (list "udisksctl" "mount" "-b" (strata-device-device dev) "--no-user-interaction")
+     (lambda (ok out)
+       (if (not ok)
+           (message "Mount failed: %s" out)
+         (let ((mp (when (string-match "Mounted .* at \\(.+\\)\\.?\\'" out)
+                     (string-trim-right (match-string 1 out) "."))))
+           (message "Mounted %s%s" (strata-device-name dev)
+                    (if mp (format " at %s" mp) ""))
+           (when (and mp callback) (funcall callback mp)))))))))
+
+(defun strata-device-unmount (dev)
+  "Unmount `strata-device' DEV safely, falling back to GVfs unix monitor if needed."
+  (let ((mp (strata-device-mountpoint dev))
+        (blk (strata-device-device dev)))
+    (cond
+     ((not (strata-device-mounted-p dev))
+      (message "%s is not mounted" (strata-device-name dev)))
+     ((string= mp "/")
+      (user-error "Cannot unmount root File System"))
+     ((and (strata-device-fusermount-p dev) mp)
+      (if (executable-find "gio")
+          (strata-device--run-async
+           "gio-unmount"
+           (list "gio" "mount" "-u" mp)
+           (lambda (ok out)
+             (if ok
+                 (message "Unmounted %s" (strata-device-name dev))
+               (if (executable-find "fusermount3")
+                   (strata-device--run-async
+                    "fusermount" (list "fusermount3" "-u" mp)
+                    (lambda (ok2 out2)
+                      (message "%s" (if ok2 (format "Unmounted %s" (strata-device-name dev)) out2))))
+                 (message "Unmount failed: %s" out))))
+           nil '("GIO_USE_VOLUME_MONITOR=unix"))
+        (strata-device--run-async
+         "fusermount" (list "fusermount" "-u" mp)
+         (lambda (ok out) (message "%s" (if ok "Unmounted" out))))))
+     ((and blk (string-prefix-p "/dev/" blk) (executable-find "udisksctl"))
+      (strata-device--run-async
+       "unmount"
+       (list "udisksctl" "unmount" "-b" blk "--no-user-interaction")
+       (lambda (ok out)
+         (message "%s" (if ok (format "Unmounted %s" (strata-device-name dev)) out))))))))
+
+(defun strata-device-eject (dev)
+  "Unmount and safely power off removable drive DEV."
+  (let ((blk (strata-device-device dev)))
+    (if (not (and blk (string-prefix-p "/dev/" blk) (executable-find "udisksctl")))
+        (strata-device-unmount dev)
+      (let ((eject-fn (lambda ()
+                        (strata-device--run-async
+                         "power-off"
+                         (list "udisksctl" "power-off" "-b" blk)
+                         (lambda (ok out)
+                           (message "%s" (if ok (format "Safely removed %s" (strata-device-name dev)) out)))))))
+        (if (strata-device-mounted-p dev)
+            (strata-device--run-async
+             "unmount-eject"
+             (list "udisksctl" "unmount" "-b" blk "--no-user-interaction")
+             (lambda (ok out)
+               (if ok (funcall eject-fn) (message "Unmount failed: %s" out))))
+          (funcall eject-fn))))))
+
+;;;; URI / Virtual Location Helpers
+
+(defconst strata-virtual-locations
+  '("computer:///" "trash:///" "recent:///" "network:///")
+  "Virtual URIs supported natively inside `strata-dirvish'.")
+
+(defun strata-location-virtual-p (loc)
+  "Return non-nil if LOC is a Strata virtual location (not a writable directory)."
+  (and (stringp loc)
+       (or (string-prefix-p "computer://" loc)
+           (string-prefix-p "trash://" loc)
+           (string-prefix-p "recent://" loc)
+           (string-prefix-p "network://" loc))))
+
+(defun strata-computer-location-p (loc)
+  "Return non-nil when LOC is inside `computer:///'."
+  (and (stringp loc) (string-prefix-p "computer://" loc)))
+
+(defun strata-guard-writable-location (loc &optional op-name)
+  "Signal a clear `user-error' if LOC is read-only / virtual for OP-NAME."
+  (when (strata-location-virtual-p loc)
+    (user-error "%s is not allowed inside virtual view %s"
+                (or op-name "This action") loc)))
+
+(defun strata-resolve-location-uri (uri)
+  "Translate URI (`~', `admin:///', `sftp://', `smb://', virtual URIs) to an open target."
+  (let ((u (string-trim (or uri ""))))
+    (cond
+     ((member u '("computer://" "computer:///")) "computer:///")
+     ((member u '("trash://" "trash:///")) "trash:///")
+     ((member u '("recent://" "recent:///")) "recent:///")
+     ((member u '("network://" "network:///")) "network:///")
+     ((string-prefix-p "admin:///" u)
+      (concat "/sudo::/" (string-remove-prefix "admin:///" u)))
+     ((string-prefix-p "file:///" u)
+      (url-unhex-string (string-remove-prefix "file://" u)))
+     ((string-match "\\`\\(sftp\\|ssh\\)://\\([^/@]+@\\)?\\([^/:]+\\)\\(:[0-9]+\\)?\\(/.*\\)?\\'" u)
+      (let ((user (or (match-string 2 u) ""))
+            (host (match-string 3 u))
+            (port (let ((p (match-string 4 u)))
+                    (if p (concat "#" (substring p 1)) "")))
+            (path (or (match-string 5 u) "/")))
+        (format "/ssh:%s%s%s:%s" user host port path)))
+     ((string-match "\\`smb://\\([^/@]+@\\)?\\([^/]+\\)\\(/.*\\)?\\'" u)
+      (let* ((gvfs-dir (format "/run/user/%d/gvfs" (user-uid)))
+             (host (match-string 2 u))
+             (path (or (match-string 3 u) "")))
+        ;; Prefer mounted gvfs smb share if present, else try gio mount
+        (or (car (directory-files gvfs-dir t (format "smb-share.*server=%s" (regexp-quote host)) t))
+            (progn
+              (when (executable-find "gio")
+                (ignore-errors (process-file "gio" nil nil nil "mount" u)))
+              (or (car (directory-files gvfs-dir t (format "smb-share.*server=%s" (regexp-quote host)) t))
+                  (concat "/smb:" host ":" path))))))
+     (t (expand-file-name u)))))
+
+;;;; Virtual Buffer Modes: computer:///, trash:///, recent:///, network:///
+
+(declare-function strata-open-location "strata-dirvish-panes" (loc))
+(declare-function strata-show-properties-for-path "strata-dirvish-ops" (path &optional device))
+
+(defvar strata-computer-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "RET") #'strata-computer-open-at-point)
+    (define-key map (kbd "l") #'strata-computer-open-at-point)
+    (define-key map (kbd "<right>") #'strata-computer-open-at-point)
+    (define-key map (kbd "j") #'next-line)
+    (define-key map (kbd "k") #'previous-line)
+    (define-key map (kbd "n") #'next-line)
+    (define-key map (kbd "p") #'previous-line)
+    (define-key map (kbd "m") #'strata-computer-mount-at-point)
+    (define-key map (kbd "u") #'strata-computer-unmount-at-point)
+    (define-key map (kbd "E") #'strata-computer-eject-at-point)
+    (define-key map (kbd "e") #'strata-computer-rename-label-at-point)
+    (define-key map (kbd "P") #'strata-computer-properties-at-point)
+    (define-key map (kbd "M-RET") #'strata-computer-properties-at-point)
+    (define-key map (kbd "<f5>") #'strata-computer-refresh)
+    (define-key map (kbd "g") #'strata-computer-refresh)
+    map)
+  "Keymap for `computer:///' buffer.")
+
+(define-derived-mode strata-computer-mode special-mode "Strata-Computer"
+  "Interactive Strata `computer:///' view with drive grouping & live capacity bars."
+  (setq-local truncate-lines t)
+  (setq-local header-line-format
+              (propertize "  🖥  Computer (computer:///)  —  RET: Open  m: Mount/Unlock  u: Unmount  E: Eject  e: Rename Label  g: Refresh"
+                          'face 'strata-header-accent))
+  (hl-line-mode 1)
+  (add-hook 'strata-devices-refresh-hook #'strata-computer-refresh-all nil t))
+
+(defun strata-computer-render ()
+  "Render grouped drives and capacity bars into current `computer:///' buffer."
+  (let ((inhibit-read-only t)
+        (pt (point))
+        (devs (strata-devices-list))
+        (last-group nil))
+    (erase-buffer)
+    (insert (propertize "  Locations & Drives\n" 'face 'strata-section-heading))
+    (dolist (dev devs)
+      (let* ((grp (pcase (strata-device-placement dev)
+                    ('fixed "Internal Drives")
+                    ('removable "Removable Drives")
+                    ('cloud "Cloud Drives")
+                    ('network "Network Shares")
+                    (_ "Other Drives"))))
+        (unless (equal grp last-group)
+          (setq last-group grp)
+          (insert "\n  " (propertize (upcase grp) 'face 'strata-section-heading) "\n"))
+        (let* ((icon (strata-device-icon dev))
+               (name (strata-device-name dev))
+               (mp (strata-device-mountpoint dev))
+               (sub (cond
+                     ((strata-device-locked-p dev)
+                      (propertize (format "Encrypted (%s) — press [m] to unlock"
+                                          (or (strata-device-device dev) ""))
+                                  'face 'warning))
+                     ((not (strata-device-mounted-p dev))
+                      (propertize (format "Unmounted · %s%s — press [m] to mount"
+                                          (or (strata-device-device dev) "")
+                                          (if (strata-device-size dev)
+                                              (format " · %s" (strata-format-bytes (strata-device-size dev)))
+                                            ""))
+                                  'face 'shadow))
+                     ((strata-device-usage dev)
+                      (strata-format-capacity-bar (strata-device-usage dev) 18 nil))
+                     ((strata-device-fusermount-p dev)
+                      (propertize (format "Mounted at %s (probing capacity…)" mp) 'face 'shadow))
+                     (t (propertize (format "Mounted at %s" mp) 'face 'shadow))))
+               (line (format "   %s  %-26s  %s\n"
+                             icon
+                             (propertize name 'face (if (strata-device-mounted-p dev)
+                                                       'dired-directory
+                                                     'default))
+                             sub)))
+          (add-text-properties 0 (length line) (list 'strata-device dev) line)
+          (insert line))))
+    (goto-char (min pt (point-max)))))
+
+(defun strata-computer-refresh ()
+  "Refresh current `computer:///' buffer."
+  (interactive)
+  (when (derived-mode-p 'strata-computer-mode)
+    (strata-computer-render)))
+
+(defun strata-computer-refresh-all ()
+  "Refresh all open `computer:///' buffers silently."
+  (dolist (b (buffer-list))
+    (when (and (buffer-live-p b)
+               (with-current-buffer b (derived-mode-p 'strata-computer-mode)))
+      (with-current-buffer b
+        (strata-computer-render)))))
+
+(defun strata-computer--device-at-point ()
+  "Return `strata-device' on current line."
+  (or (get-text-property (line-beginning-position) 'strata-device)
+      (user-error "No drive on this line")))
+
+(defun strata-computer-open-at-point ()
+  "Open mounted drive at point or mount/unlock it first then open."
+  (interactive)
+  (let ((dev (strata-computer--device-at-point)))
+    (if (strata-device-mounted-p dev)
+        (strata-open-location (strata-device-mountpoint dev))
+      (strata-device-mount dev #'strata-open-location))))
+
+(defun strata-computer-mount-at-point ()
+  "Mount or unlock drive at point."
+  (interactive)
+  (strata-device-mount (strata-computer--device-at-point)))
+
+(defun strata-computer-unmount-at-point ()
+  "Unmount drive at point."
+  (interactive)
+  (strata-device-unmount (strata-computer--device-at-point)))
+
+(defun strata-computer-eject-at-point ()
+  "Safely eject drive at point."
+  (interactive)
+  (strata-device-eject (strata-computer--device-at-point)))
+
+(defun strata-computer-rename-label-at-point ()
+  "Set a custom display label for drive at point."
+  (interactive)
+  (let* ((dev (strata-computer--device-at-point))
+         (lbl (read-string (format "Custom label for %s (empty resets): "
+                                   (strata-device-name dev))
+                           (cdr (assoc (strata-device-id dev)
+                                       (strata-prefs-device-labels (strata-prefs)))))))
+    (strata-devices-set-label (strata-device-id dev) lbl)
+    (strata-computer-refresh)))
+
+(defun strata-computer-properties-at-point ()
+  "Show properties for drive at point."
+  (interactive)
+  (let ((dev (strata-computer--device-at-point)))
+    (if (fboundp 'strata-show-properties-for-path)
+        (strata-show-properties-for-path (strata-device-mountpoint dev) dev)
+      (message "%s: %s (%s)"
+               (strata-device-name dev)
+               (or (strata-device-mountpoint dev) "unmounted")
+               (or (strata-device-fstype dev) "unknown")))))
+
+(defun strata-open-computer-buffer ()
+  "Create/display `*Strata Computer*' buffer and return it."
+  (let ((buf (get-buffer-create "*Strata Computer*")))
+    (with-current-buffer buf
+      (unless (derived-mode-p 'strata-computer-mode)
+        (strata-computer-mode))
+      (setq default-directory (expand-file-name "~/"))
+      (strata-computer-render)
+      (goto-char (point-min)))
+    buf))
+
+;;;; Virtual Buffer: trash:///
+
+(defun strata-trash--dir ()
+  "Return XDG Trash base directory."
+  (expand-file-name "Trash" (or (getenv "XDG_DATA_HOME") "~/.local/share")))
+
+(defun strata-trash-items ()
+  "List trashed items as plists (:name :file :info :orig :deleted :size :dir-p)."
+  (let* ((base (strata-trash--dir))
+         (files-dir (expand-file-name "files" base))
+         (info-dir (expand-file-name "info" base))
+         out)
+    (when (file-directory-p files-dir)
+      (dolist (f (directory-files files-dir nil "\\`[^.]" t))
+        (let* ((fpath (expand-file-name f files-dir))
+               (ipath (expand-file-name (concat f ".trashinfo") info-dir))
+               (orig f)
+               (del "")
+               (attrs (file-attributes fpath)))
+          (when (file-readable-p ipath)
+            (with-temp-buffer
+              (insert-file-contents ipath)
+              (goto-char (point-min))
+              (when (re-search-forward "^Path=\\(.+\\)$" nil t)
+                (setq orig (url-unhex-string (match-string 1))))
+              (goto-char (point-min))
+              (when (re-search-forward "^DeletionDate=\\(.+\\)$" nil t)
+                (setq del (match-string 1)))))
+          (push (list :name f :file fpath :info ipath :orig orig :deleted del
+                      :size (or (file-attribute-size attrs) 0)
+                      :dir-p (eq t (file-attribute-type attrs)))
+                out))))
+    (sort out (lambda (a b) (string-greaterp (plist-get a :deleted) (plist-get b :deleted))))))
+
+(defvar strata-trash-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "j") #'next-line)
+    (define-key map (kbd "k") #'previous-line)
+    (define-key map (kbd "R") #'strata-trash-restore-at-point)
+    (define-key map (kbd "D") #'strata-trash-delete-at-point)
+    (define-key map (kbd "X") #'strata-trash-empty)
+    (define-key map (kbd "RET") #'strata-trash-restore-at-point)
+    (define-key map (kbd "g") #'strata-trash-refresh)
+    (define-key map (kbd "<f5>") #'strata-trash-refresh)
+    map))
+
+(define-derived-mode strata-trash-mode special-mode "Strata-Trash"
+  "Interactive Strata `trash:///' buffer."
+  (setq-local truncate-lines t)
+  (setq-local header-line-format
+              (propertize "  🗑  Trash (trash:///)  —  R/RET: Restore  D: Delete Permanently  X: Empty Trash  g: Refresh"
+                          'face 'strata-header-accent))
+  (hl-line-mode 1))
+
+(defun strata-trash-refresh ()
+  "Re-render `trash:///' buffer."
+  (interactive)
+  (when (derived-mode-p 'strata-trash-mode)
+    (let ((inhibit-read-only t)
+          (items (strata-trash-items)))
+      (erase-buffer)
+      (if (null items)
+          (insert "\n   Trash is empty.\n")
+        (dolist (it items)
+          (let* ((line (format "   %s  %-28s  %-10s  %-19s  <- %s\n"
+                               (if (plist-get it :dir-p) "📁" "📄")
+                               (truncate-string-to-width (plist-get it :name) 28 nil nil "…")
+                               (strata-format-bytes (plist-get it :size))
+                               (replace-regexp-in-string "T" " " (plist-get it :deleted))
+                               (abbreviate-file-name (plist-get it :orig)))))
+            (add-text-properties 0 (length line) (list 'strata-trash-item it) line)
+            (insert line)))))))
+
+(defun strata-trash--item-at-point ()
+  "Return trash plist on current line."
+  (or (get-text-property (line-beginning-position) 'strata-trash-item)
+      (user-error "No trashed item on this line")))
+
+(defun strata-trash-restore-item (item)
+  "Restore trashed ITEM back to its original path (preserving non-overwrite safety)."
+  (let* ((src (plist-get item :file))
+         (info (plist-get item :info))
+         (dest (plist-get item :orig))
+         (parent (file-name-directory dest)))
+    (unless (file-exists-p src)
+      (user-error "Trashed item no longer exists: %s" src))
+    (make-directory parent t)
+    (when (file-exists-p dest)
+      (unless (y-or-n-p (format "Target %s already exists. Replace? " dest))
+        (user-error "Restore cancelled")))
+    (rename-file src dest t)
+    (when (file-exists-p info) (delete-file info))
+    (message "Restored -> %s" dest)))
+
+(defun strata-trash-restore-at-point ()
+  "Restore trashed item at point."
+  (interactive)
+  (strata-trash-restore-item (strata-trash--item-at-point))
+  (strata-trash-refresh))
+
+(defun strata-trash-delete-at-point ()
+  "Permanently delete trashed item at point."
+  (interactive)
+  (let ((it (strata-trash--item-at-point)))
+    (when (yes-or-no-p (format "Permanently delete '%s'? " (plist-get it :name)))
+      (let ((f (plist-get it :file))
+            (i (plist-get it :info)))
+        (when (file-exists-p f)
+          (if (file-directory-p f) (delete-directory f t) (delete-file f)))
+        (when (file-exists-p i) (delete-file i))
+        (strata-trash-refresh)))))
+
+(defun strata-trash-empty ()
+  "Empty XDG Trash safely."
+  (interactive)
+  (let ((items (strata-trash-items)))
+    (if (null items)
+        (message "Trash is already empty")
+      (when (yes-or-no-p (format "Permanently delete all %d items in Trash? " (length items)))
+        (dolist (it items)
+          (ignore-errors
+            (let ((f (plist-get it :file)) (i (plist-get it :info)))
+              (when (file-exists-p f)
+                (if (file-directory-p f) (delete-directory f t) (delete-file f)))
+              (when (file-exists-p i) (delete-file i)))))
+        (strata-trash-refresh)
+        (message "Trash emptied")))))
+
+(defun strata-open-trash-buffer ()
+  "Return populated `*Strata Trash*' buffer."
+  (let ((buf (get-buffer-create "*Strata Trash*")))
+    (with-current-buffer buf
+      (unless (derived-mode-p 'strata-trash-mode)
+        (strata-trash-mode))
+      (setq default-directory (expand-file-name "~/"))
+      (strata-trash-refresh)
+      (goto-char (point-min)))
+    buf))
+
+;;;; Virtual Buffer: recent:///
+
+(defun strata-recent-files ()
+  "Collect recent existing local files from `recently-used.xbel' and `recentf-list'."
+  (let ((seen (make-hash-table :test #'equal))
+        out
+        (xbel (expand-file-name "recently-used.xbel"
+                                (or (getenv "XDG_DATA_HOME") "~/.local/share"))))
+    (when (file-readable-p xbel)
+      (with-temp-buffer
+        (insert-file-contents xbel)
+        (goto-char (point-min))
+        (while (re-search-forward "bookmark href=\"file://\\([^\"]+\\)\"" nil t)
+          (let ((path (url-unhex-string (match-string 1))))
+            (when (and (not (gethash path seen)) (file-exists-p path))
+              (puthash path t seen)
+              (push path out))))))
+    (when (boundp 'recentf-list)
+      (dolist (f recentf-list)
+        (let ((path (expand-file-name f)))
+          (when (and (not (gethash path seen)) (file-exists-p path))
+            (puthash path t seen)
+            (push path out)))))
+    (nreverse out)))
+
+(defvar strata-recent-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "j") #'next-line)
+    (define-key map (kbd "k") #'previous-line)
+    (define-key map (kbd "RET") #'strata-recent-open-at-point)
+    (define-key map (kbd "M-RET") #'strata-recent-open-folder-at-point)
+    (define-key map (kbd "g") #'strata-recent-refresh)
+    (define-key map (kbd "<f5>") #'strata-recent-refresh)
+    map))
+
+(define-derived-mode strata-recent-mode special-mode "Strata-Recent"
+  "Interactive Strata `recent:///' view."
+  (setq-local truncate-lines t)
+  (setq-local header-line-format
+              (propertize "  🕒  Recent Files (recent:///)  —  RET: Open  M-RET: Open Containing Folder  g: Refresh"
+                          'face 'strata-header-accent))
+  (hl-line-mode 1))
+
+(defun strata-recent-refresh ()
+  "Refresh `recent:///' buffer."
+  (interactive)
+  (when (derived-mode-p 'strata-recent-mode)
+    (let ((inhibit-read-only t)
+          (files (seq-take (strata-recent-files) 150)))
+      (erase-buffer)
+      (if (null files)
+          (insert "\n   No recent files recorded.\n")
+        (dolist (f files)
+          (let* ((dirp (file-directory-p f))
+                 (attrs (file-attributes f))
+                 (line (format "   %s  %-34s  %-9s  %s\n"
+                               (if dirp "📁" "📄")
+                               (truncate-string-to-width (file-name-nondirectory f) 34 nil nil "…")
+                               (if dirp "<dir>" (strata-format-bytes (or (file-attribute-size attrs) 0)))
+                               (propertize (abbreviate-file-name (or (file-name-directory f) "/"))
+                                           'face 'shadow))))
+            (add-text-properties 0 (length line) (list 'strata-recent-path f) line)
+            (insert line)))))))
+
+(defun strata-recent-open-at-point ()
+  "Open recent file or folder at point."
+  (interactive)
+  (let ((p (or (get-text-property (line-beginning-position) 'strata-recent-path)
+               (user-error "No entry on this line"))))
+    (if (file-directory-p p)
+        (strata-open-location p)
+      (find-file p))))
+
+(defun strata-recent-open-folder-at-point ()
+  "Open containing folder for recent file at point."
+  (interactive)
+  (let ((p (or (get-text-property (line-beginning-position) 'strata-recent-path)
+               (user-error "No entry on this line"))))
+    (strata-open-location (file-name-directory p))))
+
+(defun strata-open-recent-buffer ()
+  "Return populated `*Strata Recent*' buffer."
+  (let ((buf (get-buffer-create "*Strata Recent*")))
+    (with-current-buffer buf
+      (unless (derived-mode-p 'strata-recent-mode)
+        (strata-recent-mode))
+      (setq default-directory (expand-file-name "~/"))
+      (strata-recent-refresh)
+      (goto-char (point-min)))
+    buf))
+
+;;;; Network View: network:///
+
+(defun strata-connect-server (&optional uri)
+  "Prompt for a network or admin URI (`sftp://', `smb://', `ssh://', `admin:///') and open it."
+  (interactive)
+  (let ((raw (or uri (read-string "Connect to server (sftp://, smb://, ssh://, admin:///): "
+                                  "sftp://"))))
+    (strata-open-location (strata-resolve-location-uri raw))))
+
+(defun strata-open-network-buffer ()
+  "Return `*Strata Network*' listing active GVfs/TRAMP mounts and quick connect."
+  (let ((buf (get-buffer-create "*Strata Network*"))
+        (devs (cl-remove-if-not (lambda (d)
+                                  (memq (strata-device-placement d) '(network cloud)))
+                                (strata-devices-list))))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (special-mode)
+        (setq-local header-line-format
+                    (propertize "  🌐  Network & Cloud (network:///)  —  RET: Open  c: Connect to Server"
+                                'face 'strata-header-accent))
+        (local-set-key (kbd "c") #'strata-connect-server)
+        (local-set-key (kbd "RET") #'strata-computer-open-at-point)
+        (insert (propertize "\n  Mounted Network & Cloud Shares\n\n" 'face 'strata-section-heading))
+        (if (null devs)
+            (insert "   No active network/cloud mounts found. Press [c] to connect via sftp:// or smb://\n")
+          (dolist (d devs)
+            (let ((line (format "   %s  %-26s  %s\n"
+                                (strata-device-icon d)
+                                (strata-device-name d)
+                                (propertize (or (strata-device-mountpoint d) "") 'face 'shadow))))
+              (add-text-properties 0 (length line) (list 'strata-device d) line)
+              (insert line))))
+        (goto-char (point-min))))
+    buf))
+
+(provide 'strata-dirvish-devices)
+;;; strata-dirvish-devices.el ends here

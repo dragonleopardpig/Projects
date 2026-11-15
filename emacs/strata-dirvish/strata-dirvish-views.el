@@ -1,0 +1,1024 @@
+;;; strata-dirvish-views.el --- Browser views, sorting, tree, icons, compact, chrome -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Implements all four Strata browser views (Columns/Miller, List+Tree,
+;; Compact horizontal multi-column, Icons thumbnail grid), unified sorting &
+;; grouping, per-folder LRU memory, custom folder colors/icons, Dirvish
+;; attributes, and Strata header breadcrumbs / footer mode-line.
+
+;;; Code:
+
+(require 'cl-lib)
+(require 'dired)
+(require 'dirvish)
+(require 'dirvish-widgets nil t)
+(require 'dirvish-vc nil t)
+(require 'dirvish-subtree nil t)
+(require 'dirvish-collapse nil t)
+(require 'dirvish-emerge nil t)
+(require 'subr-x)
+(require 'strata-dirvish-prefs)
+(require 'strata-dirvish-devices)
+
+(declare-function all-the-icons-icon-for-file "all-the-icons" (file &rest arg-overrides))
+(declare-function all-the-icons-icon-for-dir "all-the-icons" (dir &rest arg-overrides))
+(declare-function strata-open-location "strata-dirvish-panes" (loc))
+(declare-function strata-pane-active-p "strata-dirvish-panes" (&optional win))
+(declare-function strata-split-active-p "strata-dirvish-panes" ())
+(declare-function strata-pane-clipboard-summary "strata-dirvish-ops" ())
+
+(defvar strata-active-chord nil
+  "Current active multi-key chord label shown in footer (e.g. \"g _\").")
+
+(defvar strata-thumbnail-dir
+  (expand-file-name "thumbnails" strata-dirvish-state-dir)
+  "Directory storing cached PNG thumbnails for Icons view.")
+
+(defvar strata-thumbnail-pending (make-hash-table :test #'equal)
+  "Pending async thumbnail jobs keyed by path.")
+
+(defvar-local strata-local-view-mode nil
+  "Buffer-local active view mode overriding/mirroring global preference.")
+
+(defvar-local strata-local-filter nil
+  "Active filter string inside current pane buffer.")
+
+(defvar-local strata-visual-anchor nil
+  "Line number or file path where 10xer visual selection started.")
+
+;;;; File Selection & Cursor Introspection Across All 4 Views
+
+(defun strata-current-file ()
+  "Return absolute path of entry under point in any Strata view buffer."
+  (or (get-text-property (point) 'strata-entry)
+      (get-text-property (line-beginning-position) 'strata-entry)
+      (and (derived-mode-p 'dired-mode)
+           (ignore-errors (dired-get-filename nil t)))
+      (when-let ((tr (get-text-property (line-beginning-position) 'strata-trash-item)))
+        (plist-get tr :file))
+      (get-text-property (line-beginning-position) 'strata-recent-path)))
+
+(defun strata-selected-files ()
+  "Return list of marked/selected file paths in current Strata view, or file at point."
+  (cond
+   ((derived-mode-p 'dired-mode)
+    (let ((marked (ignore-errors (dired-get-marked-files nil nil nil t))))
+      (cond
+       ((and marked (eq (car marked) t)) (cdr marked))
+       (marked marked)
+       (t (when-let ((cur (strata-current-file))) (list cur))))))
+   ((or (derived-mode-p 'strata-compact-mode)
+        (derived-mode-p 'strata-icons-mode))
+    (or (bound-and-true-p strata-marked-entries)
+        (when-let ((cur (strata-current-file))) (list cur))))
+   (t (when-let ((cur (strata-current-file))) (list cur)))))
+
+(defun strata-goto-file (path)
+  "Move point to entry matching PATH in current Strata buffer."
+  (when path
+    (let ((target (directory-file-name (expand-file-name path))))
+      (cond
+       ((derived-mode-p 'dired-mode)
+        (or (ignore-errors (dired-goto-file target))
+            (ignore-errors (dired-goto-file (concat target "/")))))
+       ((or (derived-mode-p 'strata-compact-mode)
+            (derived-mode-p 'strata-icons-mode))
+        (let ((pos (point-min))
+              (found nil))
+          (while (and (< pos (point-max)) (not found))
+            (let ((next (or (next-single-property-change pos 'strata-entry) (point-max)))
+                  (val (get-text-property pos 'strata-entry)))
+              (when (and val (string= (directory-file-name (expand-file-name val)) target))
+                (goto-char pos)
+                (setq found t))
+              (setq pos next)))))))))
+
+;;;; Folder Colors & Custom Icons
+
+(defun strata-folder-color-set (dir color-name)
+  "Assign COLOR-NAME badge to DIR (`nil' or empty removes customization)."
+  (let* ((p (strata-prefs))
+         (key (directory-file-name (expand-file-name dir)))
+         (tbl (assoc-delete-all key (strata-prefs-folder-colors p))))
+    (when (and color-name (not (string-empty-p color-name)))
+      (push (cons key color-name) tbl))
+    (setf (strata-prefs-folder-colors p) tbl)
+    (strata-prefs-save)))
+
+(defun strata-custom-icon-set (path icon-str)
+  "Assign custom ICON-STR badge to PATH (`nil' or empty clears it)."
+  (let* ((p (strata-prefs))
+         (key (directory-file-name (expand-file-name path)))
+         (tbl (assoc-delete-all key (strata-prefs-custom-icons p))))
+    (when (and icon-str (not (string-empty-p icon-str)))
+      (push (cons key icon-str) tbl))
+    (setf (strata-prefs-custom-icons p) tbl)
+    (strata-prefs-save)))
+
+(defun strata-file--badge-face (path)
+  "Return custom face for folder PATH if customized."
+  (when-let* ((key (and path (directory-file-name (expand-file-name path))))
+              (color (cdr (assoc key (strata-prefs-folder-colors (strata-prefs))))))
+    (cdr (assoc (downcase color) strata-folder-color-alist))))
+
+(defun strata-file--glyph (path &optional dir-p)
+  "Return icon glyph for PATH honoring custom icons and `all-the-icons'."
+  (let* ((key (and path (directory-file-name (expand-file-name path))))
+         (custom (cdr (assoc key (strata-prefs-custom-icons (strata-prefs)))))
+         (cface (strata-file--badge-face path)))
+    (cond
+     (custom (propertize custom 'face (or cface 'dired-directory)))
+     ((and (display-graphic-p) (featurep 'all-the-icons))
+      (condition-case nil
+          (let ((ic (if dir-p
+                        (all-the-icons-icon-for-dir path)
+                      (all-the-icons-icon-for-file (file-name-nondirectory path)))))
+            (if cface (propertize ic 'face cface) ic))
+        (error (if dir-p "📁" "📄"))))
+     (dir-p (propertize "▸" 'face (or cface 'dired-directory)))
+     (t "·"))))
+
+;;;; Sorting, Natural Order & Type Classification Engine
+
+(defun strata-natural-compare (a b &optional case-sensitive)
+  "Compare strings A and B naturally so file2 < file10."
+  (let ((sa (if case-sensitive a (downcase a)))
+        (sb (if case-sensitive b (downcase b)))
+        (i 0) (j 0)
+        (la (length a)) (lb (length b))
+        (cmp 0))
+    (while (and (= cmp 0) (< i la) (< j lb))
+      (let ((ca (aref sa i))
+            (cb (aref sb j)))
+        (if (and (<= ?0 ca ?9) (<= ?0 cb ?9))
+            (let ((ni i) (nj j))
+              (while (and (< ni la) (<= ?0 (aref sa ni) ?9)) (setq ni (1+ ni)))
+              (while (and (< nj lb) (<= ?0 (aref sb nj) ?9)) (setq nj (1+ nj)))
+              (let* ((va (string-to-number (substring sa i ni)))
+                     (vb (string-to-number (substring sb j nj))))
+                (cond ((< va vb) (setq cmp -1))
+                      ((> va vb) (setq cmp 1))
+                      ((< (- ni i) (- nj j)) (setq cmp -1))
+                      ((> (- ni i) (- nj j)) (setq cmp 1)))
+                (setq i ni j nj)))
+          (cond ((< ca cb) (setq cmp -1))
+                ((> ca cb) (setq cmp 1)))
+          (setq i (1+ i) j (1+ j)))))
+    (when (= cmp 0)
+      (cond ((< (- la i) (- lb j)) (setq cmp -1))
+            ((> (- la i) (- lb j)) (setq cmp 1))))
+    cmp))
+
+(defun strata-file-type-group (path &optional dir-p)
+  "Classify PATH into a Strata type group symbol."
+  (if (or dir-p (file-directory-p path))
+      'folders
+    (let ((ext (downcase (or (file-name-extension path) ""))))
+      (cond
+       ((member ext '("png" "jpg" "jpeg" "gif" "webp" "svg" "bmp" "tif" "tiff" "avif" "heic" "cr2" "nef" "arw" "dng")) 'images)
+       ((member ext '("mp3" "flac" "wav" "ogg" "opus" "m4a" "aac" "wma")) 'audio)
+       ((member ext '("mp4" "mkv" "mov" "webm" "avi" "m4v" "flv")) 'video)
+       ((member ext '("pdf" "md" "org" "txt" "docx" "odt" "rtf" "epub" "html" "csv" "tsv" "xlsx" "ods")) 'documents)
+       ((member ext '("zip" "tar" "gz" "tgz" "bz2" "xz" "zst" "7z" "rar" "iso")) 'archives)
+       ((member ext '("el" "rs" "py" "nix" "js" "ts" "tsx" "c" "cpp" "h" "go" "sh" "toml" "json" "yaml" "yml" "css")) 'code)
+       (t 'other)))))
+
+(defun strata-file-group-label (grp)
+  "Human heading label for group symbol GRP."
+  (pcase grp
+    ('folders "Folders")
+    ('images "Images")
+    ('audio "Audio")
+    ('video "Video")
+    ('documents "Documents")
+    ('archives "Archives")
+    ('code "Code & Config")
+    (_ "Other Files")))
+
+(defun strata-list-directory-entries (dir &optional prefs)
+  "Return sorted entry plists for DIR honoring PREFS & active filter.
+Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
+  (let* ((p (or prefs (strata-prefs)))
+         (show-hidden (strata-prefs-show-hidden p))
+         (sort-key (strata-prefs-sort-key p))
+         (sort-dir (strata-prefs-sort-direction p))
+         (folders-first (strata-prefs-folders-first p))
+         (natural (strata-prefs-natural-sort p))
+         (case-sens (strata-prefs-case-sensitive-sort p))
+         (group-type (strata-prefs-group-by-type p))
+         (dir (file-name-as-directory (expand-file-name dir)))
+         (names (when (file-directory-p dir)
+                  (condition-case nil
+                      (directory-files dir nil "\\`[^.]\\|\\`.[^.]" t)
+                    (error nil))))
+         (flt (when (and strata-local-filter (not (string-empty-p strata-local-filter)))
+                strata-local-filter))
+         entries)
+    (dolist (n names)
+      (when (and (or show-hidden (not (string-prefix-p "." n)))
+                 (or (null flt) (let ((case-fold-search t))
+                                  (string-match-p (regexp-quote flt) n))))
+        (let* ((path (expand-file-name n dir))
+               (attrs (file-attributes path 'integer))
+               (dir-p (eq t (file-attribute-type attrs)))
+               (size (or (file-attribute-size attrs) 0))
+               (mtime (file-attribute-modification-time attrs))
+               (ctime (file-attribute-status-change-time attrs))
+               (ext (downcase (or (file-name-extension n) "")))
+               (grp (strata-file-type-group path dir-p)))
+          (push (list :name n :path path :dir-p dir-p :size size
+                      :mtime mtime :ctime ctime :ext ext :group grp)
+                entries))))
+    (setq entries (nreverse entries))
+    (unless (eq sort-key 'unsorted)
+      (let* ((group-rank (lambda (g)
+                           (pcase g
+                             ('folders 0) ('images 1) ('audio 2) ('video 3)
+                             ('documents 4) ('code 5) ('archives 6) (_ 7))))
+             (desc (eq sort-dir 'desc)))
+        (setq entries
+              (sort entries
+                    (lambda (a b)
+                      (let ((da (plist-get a :dir-p))
+                            (db (plist-get b :dir-p)))
+                        (cond
+                         ((and folders-first (not (eq da db))) da)
+                         ((and group-type (not (eq (plist-get a :group) (plist-get b :group))))
+                          (< (funcall group-rank (plist-get a :group))
+                             (funcall group-rank (plist-get b :group))))
+                         (t
+                          (let ((cmp
+                                 (pcase sort-key
+                                   ('size (cond ((< (plist-get a :size) (plist-get b :size)) -1)
+                                                ((> (plist-get a :size) (plist-get b :size)) 1)
+                                                (t 0)))
+                                   ('modified (if (time-less-p (plist-get a :mtime) (plist-get b :mtime))
+                                                  -1
+                                                (if (time-less-p (plist-get b :mtime) (plist-get a :mtime)) 1 0)))
+                                   ('created (if (time-less-p (plist-get a :ctime) (plist-get b :ctime))
+                                                 -1
+                                               (if (time-less-p (plist-get b :ctime) (plist-get a :ctime)) 1 0)))
+                                   ('extension
+                                    (let ((ea (plist-get a :ext)) (eb (plist-get b :ext)))
+                                      (if (string= ea eb) 0 (if (string-lessp ea eb) -1 1))))
+                                   ('type
+                                    (let ((ra (funcall group-rank (plist-get a :group)))
+                                          (rb (funcall group-rank (plist-get b :group))))
+                                      (cond ((< ra rb) -1) ((> ra rb) 1) (t 0))))
+                                   (_ 0))))
+                            (when (= cmp 0)
+                              (setq cmp (if natural
+                                            (strata-natural-compare (plist-get a :name)
+                                                                    (plist-get b :name)
+                                                                    case-sens)
+                                          (let ((na (if case-sens (plist-get a :name) (downcase (plist-get a :name))))
+                                                (nb (if case-sens (plist-get b :name) (downcase (plist-get b :name)))))
+                                            (if (string= na nb) 0 (if (string-lessp na nb) -1 1))))))
+                            (if desc (> cmp 0) (< cmp 0)))))))))))
+    entries))
+
+(defun strata-compute-dired-switches (&optional prefs)
+  "Compute `dired-listing-switches' string matching PREFS."
+  (let* ((p (or prefs (strata-prefs)))
+         (flags (list "-lh"))
+         (sk (strata-prefs-sort-key p)))
+    (if (strata-prefs-show-hidden p)
+        (push "-A" flags)
+      (setq flags (delete "-a" flags)))
+    (when (strata-prefs-folders-first p)
+      (push "--group-directories-first" flags))
+    (when (eq (strata-prefs-sort-direction p) 'desc)
+      (push "-r" flags))
+    (pcase sk
+      ('modified (push "-t" flags))
+      ('created (push "--sort=time" flags) (push "--time=birth" flags))
+      ('size (push "-S" flags))
+      ('extension (push "-X" flags))
+      ('unsorted (push "-U" flags))
+      (_ (when (strata-prefs-natural-sort p)
+           (push "-v" flags))))
+    (string-join (nreverse flags) " ")))
+
+(defun strata-apply-sort-to-dired ()
+  "Apply Strata sort & hidden settings directly to active Dired/Dirvish buffer."
+  (when (derived-mode-p 'dired-mode)
+    (let ((sw (strata-compute-dired-switches)))
+      (setq-local dired-actual-switches sw)
+      (setq dired-listing-switches sw)
+      (revert-buffer))))
+
+;;;; Per-Folder View Memory (LRU 128)
+
+(defun strata-folder-view-remember (dir &optional prefs)
+  "Save current view/sort/cursor preferences for DIR into LRU (max 128)."
+  (let ((p (or prefs (strata-prefs))))
+    (when (and (strata-prefs-remember-folder-views p)
+               dir
+               (not (strata-location-virtual-p dir))
+               (file-directory-p dir))
+      (let* ((key (directory-file-name (expand-file-name dir)))
+             (snapshot (list :mode (strata-prefs-browser-mode p)
+                             :sort-key (strata-prefs-sort-key p)
+                             :sort-dir (strata-prefs-sort-direction p)
+                             :folders-first (strata-prefs-folders-first p)
+                             :natural-sort (strata-prefs-natural-sort p)
+                             :group-by-type (strata-prefs-group-by-type p)
+                             :show-hidden (strata-prefs-show-hidden p)
+                             :compact-full-names (strata-prefs-compact-full-names p)
+                             :cursor (strata-current-file))))
+        (setq strata-folder-view-lru
+              (cons (cons key snapshot)
+                    (assoc-delete-all key strata-folder-view-lru)))
+        (when (> (length strata-folder-view-lru) strata-folder-view-lru-limit)
+          (setcdr (nthcdr (1- strata-folder-view-lru-limit) strata-folder-view-lru) nil))))))
+
+(defun strata-folder-view-restore (dir &optional prefs)
+  "Restore remembered view/sort preferences for DIR if available and return snapshot."
+  (let ((p (or prefs (strata-prefs))))
+    (when (and (strata-prefs-remember-folder-views p)
+               dir
+               (not (strata-location-virtual-p dir)))
+      (let* ((key (directory-file-name (expand-file-name dir)))
+             (entry (cdr (assoc key strata-folder-view-lru))))
+        (when entry
+          (setf (strata-prefs-browser-mode p) (or (plist-get entry :mode) 'columns))
+          (setf (strata-prefs-sort-key p) (or (plist-get entry :sort-key) 'name))
+          (setf (strata-prefs-sort-direction p) (or (plist-get entry :sort-dir) 'asc))
+          (setf (strata-prefs-folders-first p) (plist-get entry :folders-first))
+          (setf (strata-prefs-natural-sort p) (plist-get entry :natural-sort))
+          (setf (strata-prefs-group-by-type p) (plist-get entry :group-by-type))
+          (setf (strata-prefs-show-hidden p) (plist-get entry :show-hidden))
+          (setf (strata-prefs-compact-full-names p) (plist-get entry :compact-full-names)))
+        entry))))
+
+;;;; Dirvish Custom Attributes & Formatters
+
+(dirvish-define-attribute strata-icon
+  "Render Strata custom folder icons and `all-the-icons' glyph before filenames."
+  :width 3
+  (let* ((dir-p (eq (car f-type) 'dir))
+         (g (copy-sequence (strata-file--glyph f-name dir-p)))
+         (icon-str (concat g " "))
+         (ov (make-overlay (max (point-min) (1- f-beg)) f-beg)))
+    (when hl-face
+      (add-face-text-property 0 (length icon-str) hl-face t icon-str))
+    (overlay-put ov 'after-string icon-str)
+    `(ov . ,ov)))
+
+(dirvish-define-attribute strata-color
+  "Apply Strata custom folder color faces to tagged directory names."
+  :width 0
+  (let ((badge (strata-file--badge-face f-name)))
+    (when badge
+      (let ((ov (make-overlay f-beg f-end)))
+        (overlay-put ov 'face badge)
+        `(ov . ,ov)))))
+
+(dirvish-define-attribute strata-size
+  "Format file size honoring Metric (1000) / Binary (1024) and `columns-show-sizes'."
+  :right 9
+  :when (and (strata-prefs-columns-show-sizes (strata-prefs))
+             (>= win-width 20))
+  (let* ((dir-p (eq (car f-type) 'dir))
+         (sz (and f-attrs (file-attribute-size f-attrs)))
+         (str (cond
+               (dir-p "")
+               ((numberp sz) (strata-format-bytes sz))
+               (t "")))
+         (out (format "%8s " str)))
+    (add-face-text-property 0 (length out) (or hl-face 'dirvish-file-size) t out)
+    `(right . ,out)))
+
+(dirvish-define-attribute strata-time
+  "Format modification time using Strata relative or ISO date preference."
+  :right 17
+  :when (>= win-width 38)
+  (let* ((tm (and f-attrs (file-attribute-modification-time f-attrs)))
+         (str (or (strata-format-time tm) ""))
+         (out (format " %-15s" str)))
+    (add-face-text-property 0 (length out) (or hl-face 'dirvish-file-time) t out)
+    `(right . ,out)))
+
+;;;; Dirvish Header Breadcrumbs & Strata Footer Mode-Line
+
+(dirvish-define-mode-line strata-breadcrumb
+  "Interactive clickable breadcrumb header with active pane badge & view pill."
+  (let* ((dir (abbreviate-file-name (or (dirvish-prop :root) default-directory "~/")))
+         (clean (directory-file-name dir))
+         (parts (split-string clean "/" t))
+         (acc (if (string-prefix-p "~" clean) "~" "/"))
+         (pane-badge
+          (when (and (fboundp 'strata-split-active-p) (strata-split-active-p))
+            (propertize (if (strata-pane-active-p) " [P1 ACTIVE] " " [P2] ")
+                        'face (if (strata-pane-active-p)
+                                  'strata-pane-active-badge
+                                'strata-pane-inactive-badge))))
+         (crumbs
+          (if (string-prefix-p "~" clean)
+              (let ((segs (cdr parts)))
+                (concat
+                 (propertize "🏠 ~" 'face 'strata-crumb-segment)
+                 (mapconcat
+                  (lambda (seg)
+                    (setq acc (concat acc "/" seg))
+                    (concat (propertize " › " 'face 'strata-crumb-separator)
+                            (propertize seg 'face 'strata-crumb-segment
+                                        'help-echo acc)))
+                  segs "")))
+            (concat
+             (propertize "/" 'face 'strata-crumb-segment)
+             (mapconcat
+              (lambda (seg)
+                (setq acc (concat (if (string= acc "/") "" acc) "/" seg))
+                (concat (propertize " › " 'face 'strata-crumb-separator)
+                        (propertize seg 'face 'strata-crumb-segment
+                                    'help-echo acc)))
+              parts ""))))
+         (filter-pill (when strata-local-filter
+                        (propertize (format " 🔍 %s " strata-local-filter)
+                                    'face 'strata-pill-filter))))
+    (concat (or pane-badge "") " " crumbs (when filter-pill (concat "  " filter-pill)))))
+
+(dirvish-define-mode-line strata-view-info
+  "Compact view, sort, and zoom indicator pills in header right."
+  (let* ((p (strata-prefs))
+         (vmode (or strata-local-view-mode (strata-prefs-browser-mode p)))
+         (view-lbl (pcase vmode
+                     ('columns "Columns")
+                     ('icons "Icons")
+                     ('list (if (strata-prefs-expandable-tree p) "Tree" "List"))
+                     ('compact "Compact")
+                     (_ "Columns")))
+         (arrow (if (eq (strata-prefs-sort-direction p) 'desc) "↓" "↑"))
+         (sort-lbl (capitalize (symbol-name (strata-prefs-sort-key p))))
+         (tenx (when (strata-prefs-tenxer-mode p)
+                 (propertize " 10X " 'face 'strata-pill-10x))))
+    (concat
+     (or tenx "")
+     (propertize (format " [%s · %s %s] " view-lbl sort-lbl arrow)
+                 'face 'strata-hint-desc))))
+
+(dirvish-define-mode-line strata-footer
+  "Strata footer: selection summary, clipboard, chord indicator, and hints."
+  (let* ((p (strata-prefs))
+         (sel (and (derived-mode-p 'dired-mode)
+                   (ignore-errors (dired-get-marked-files nil nil nil t))))
+         (marked-p (and sel (eq (car sel) t)))
+         (count (if marked-p (length (cdr sel)) 0))
+         (clip (when (fboundp 'strata-pane-clipboard-summary)
+                 (strata-pane-clipboard-summary)))
+         (chord (when strata-active-chord
+                  (propertize (format " %s " strata-active-chord) 'face 'strata-pill-chord)))
+         (hints (when (and (strata-prefs-show-keybinding-hints p) (not chord))
+                  (if (strata-prefs-tenxer-mode p)
+                      " j/k Nav  g Go  , Sort  ; Act  t Tabs  i Peek  f Filter  F1 Keys"
+                    " ←/→ Nav  C-1..4 View  F3 Split  F4 Term  C-k Search  C-, Prefs  F1 Keys"))))
+    (concat
+     (if (> count 0)
+         (propertize (format " %d selected " count) 'face 'strata-header-accent)
+       "")
+     (when clip (propertize (format " %s " clip) 'face 'strata-hint-key))
+     (or chord "")
+     (when hints (propertize hints 'face 'strata-hint-desc)))))
+
+;;;; Async Thumbnail Generator (Icons View)
+
+(defun strata-thumbnail-path (file size)
+  "Return cache PNG path for FILE at SIZE."
+  (make-directory strata-thumbnail-dir t)
+  (expand-file-name (format "%s-%d.png" (md5 file) size) strata-thumbnail-dir))
+
+(defun strata-thumbnail-maybe-generate (file size callback)
+  "Return cached thumbnail path if fresh, or generate asynchronously via CALLBACK."
+  (let ((out (strata-thumbnail-path file size))
+        (ext (downcase (or (file-name-extension file) ""))))
+    (if (and (file-exists-p out)
+             (file-newer-than-file-p out file))
+        out
+      (unless (gethash out strata-thumbnail-pending)
+        (let ((cmd
+               (cond
+                ((and (member ext '("png" "jpg" "jpeg" "webp" "bmp" "tif" "tiff" "gif" "svg"))
+                      (executable-find "vipsthumbnail"))
+                 (list "vipsthumbnail" file "-s" (number-to-string size) "-o" out))
+                ((and (member ext '("mp4" "mkv" "mov" "webm" "avi" "m4v"))
+                      (executable-find "ffmpegthumbnailer"))
+                 (list "ffmpegthumbnailer" "-i" file "-o" out "-s" (number-to-string size)))
+                ((and (string= ext "pdf") (executable-find "pdftoppm"))
+                 (list "pdftoppm" "-png" "-singlefile" "-f" "1" "-scale-to"
+                       (number-to-string size) file (file-name-sans-extension out))))))
+          (when cmd
+            (puthash out t strata-thumbnail-pending)
+            (make-process
+             :name (format "strata-thumb-%s" (file-name-nondirectory file))
+             :noquery t
+             :command cmd
+             :sentinel
+             (lambda (proc _ev)
+               (when (memq (process-status proc) '(exit signal))
+                 (remhash out strata-thumbnail-pending)
+                 (when (and (= 0 (process-exit-status proc)) (file-exists-p out))
+                   (funcall callback out))))))))
+      nil)))
+
+;;;; Compact View (Horizontal Multi-Column Flow + Sideways Scroll + Full-Names Toggle)
+
+(defvar-local strata-view-directory nil "Directory displayed in compact/icons view buffer.")
+(defvar-local strata-marked-entries nil "Marked file paths in compact/icons view buffer.")
+(defvar-local strata-compact-col-width 28 "Current column stride in Compact view.")
+(defvar-local strata-compact-rows 20 "Row count per vertical column in Compact view.")
+
+(defvar strata-compact-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "j") #'strata-compact-next-item)
+    (define-key map (kbd "<down>") #'strata-compact-next-item)
+    (define-key map (kbd "k") #'strata-compact-prev-item)
+    (define-key map (kbd "<up>") #'strata-compact-prev-item)
+    (define-key map (kbd "l") #'strata-compact-next-col)
+    (define-key map (kbd "<right>") #'strata-compact-next-col)
+    (define-key map (kbd "h") #'strata-compact-prev-col)
+    (define-key map (kbd "<left>") #'strata-compact-prev-col)
+    (define-key map (kbd "<wheel-up>") (lambda () (interactive) (scroll-right 6)))
+    (define-key map (kbd "<wheel-down>") (lambda () (interactive) (scroll-left 6)))
+    (define-key map (kbd "<wheel-left>") (lambda () (interactive) (scroll-right 6)))
+    (define-key map (kbd "<wheel-right>") (lambda () (interactive) (scroll-left 6)))
+    (define-key map (kbd "RET") #'strata-view-activate-at-point)
+    (define-key map (kbd "SPC") #'strata-view-toggle-mark)
+    (define-key map (kbd "<backspace>") #'strata-view-up-directory)
+    (define-key map (kbd "g") #'strata-compact-refresh)
+    (define-key map (kbd "<f5>") #'strata-compact-refresh)
+    map)
+  "Keymap for `strata-compact-mode'.")
+
+(declare-function strata-preview-update-standalone "strata-dirvish-previews" (file &optional window))
+(declare-function dirvish-strata-breadcrumb-ml "strata-dirvish-views" ())
+(declare-function dirvish-strata-view-info-ml "strata-dirvish-views" ())
+(declare-function dirvish-strata-footer-ml "strata-dirvish-views" ())
+
+(define-derived-mode strata-compact-mode special-mode "Strata-Compact"
+  "Strata Compact view: vertical columns flowing left-to-right with sideways scroll."
+  (setq-local truncate-lines t)
+  (setq-local header-line-format
+              '(:eval (concat (dirvish-strata-breadcrumb-ml) "   " (dirvish-strata-view-info-ml))))
+  (setq-local mode-line-format
+              '(:eval (dirvish-strata-footer-ml)))
+  (add-hook 'post-command-hook #'strata-view--sync-preview-on-move nil t))
+
+(defun strata-view--sync-preview-on-move ()
+  "Keep Dirvish or standalone preview synchronized across Columns/Compact/Icons."
+  (when-let ((f (strata-current-file)))
+    (let ((dv (ignore-errors (dirvish-curr))))
+      (cond
+       ((and dv (window-live-p (dv-preview-window dv)))
+        (dirvish-prop :index f)
+        (dirvish--preview-update dv f))
+       ((when-let ((pwin (get-buffer-window "*Strata Preview*")))
+          (when (fboundp 'strata-preview-update-standalone)
+            (strata-preview-update-standalone f pwin))))))))
+
+(defun strata-compact--fit-name (name maxw full-p)
+  "Truncate NAME cleanly to MAXW unless FULL-P is non-nil."
+  (if (or full-p (<= (length name) maxw))
+      name
+    (concat (substring name 0 (max 4 (- maxw 1))) "…")))
+
+(defun strata-compact-render (&optional dir)
+  "Render DIR into vertical top-to-bottom, left-to-right columns."
+  (let* ((d (or dir strata-view-directory default-directory))
+         (p (strata-prefs))
+         (full-p (strata-prefs-compact-full-names p))
+         (entries (strata-list-directory-entries d p))
+         (rows (max 6 (- (window-body-height) 2)))
+         (max-name (if entries (apply #'max (mapcar (lambda (e) (length (plist-get e :name))) entries)) 16))
+         (cell-w (if full-p (min 64 (+ 5 max-name)) 26))
+         (ncols (max 1 (ceiling (max 1 (length entries)) (float rows))))
+         (inhibit-read-only t)
+         (cur (strata-current-file)))
+    (setq strata-view-directory d
+          default-directory (file-name-as-directory d)
+          strata-compact-col-width cell-w
+          strata-compact-rows rows)
+    (erase-buffer)
+    (dotimes (r rows)
+      (dotimes (c ncols)
+        (let ((idx (+ (* c rows) r)))
+          (when (< idx (length entries))
+            (let* ((e (nth idx entries))
+                   (path (plist-get e :path))
+                   (name (plist-get e :name))
+                   (dir-p (plist-get e :dir-p))
+                   (marked (member path strata-marked-entries))
+                   (icon (strata-file--glyph path dir-p))
+                   (shown (strata-compact--fit-name name (- cell-w 4) full-p))
+                   (face (cond (marked 'dired-marked)
+                               ((strata-file--badge-face path))
+                               (dir-p 'dired-directory)
+                               (t 'default)))
+                   (cell (concat
+                          (propertize (if marked "*" " ") 'face 'dired-marked)
+                          icon " "
+                          (propertize shown 'face face)))
+                   (pad (max 1 (- cell-w (string-width cell)))))
+              (add-text-properties 0 (length cell)
+                                   (list 'strata-entry path
+                                         'strata-entry-dir dir-p
+                                         'help-echo path)
+                                   cell)
+              (insert cell (make-string pad ?\s))))))
+      (insert "\n"))
+    (goto-char (point-min))
+    (when cur (strata-goto-file cur))))
+
+(defun strata-compact-refresh ()
+  "Refresh Compact view buffer."
+  (interactive)
+  (when (derived-mode-p 'strata-compact-mode)
+    (strata-compact-render strata-view-directory)))
+
+(defun strata-compact--jump-offset (delta-items)
+  "Move cursor by DELTA-ITEMS across Compact column cells."
+  (let ((entries (strata-list-directory-entries strata-view-directory))
+        (cur (strata-current-file)))
+    (when entries
+      (let* ((paths (mapcar (lambda (e) (plist-get e :path)) entries))
+             (idx (or (cl-position cur paths :test #'equal) 0))
+             (next (max 0 (min (1- (length paths)) (+ idx delta-items)))))
+        (strata-goto-file (nth next paths))))))
+
+(defun strata-compact-next-item () (interactive) (strata-compact--jump-offset 1))
+(defun strata-compact-prev-item () (interactive) (strata-compact--jump-offset -1))
+(defun strata-compact-next-col ()
+  "Jump right one Compact column or open directory if scoped right."
+  (interactive)
+  (strata-compact--jump-offset strata-compact-rows))
+(defun strata-compact-prev-col ()
+  "Jump left one Compact column."
+  (interactive)
+  (strata-compact--jump-offset (- strata-compact-rows)))
+
+;;;; Icons Thumbnail Grid View
+
+(defvar strata-icons-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map (kbd "j") #'next-line)
+    (define-key map (kbd "k") #'previous-line)
+    (define-key map (kbd "l") #'strata-icons-next-cell)
+    (define-key map (kbd "<right>") #'strata-icons-next-cell)
+    (define-key map (kbd "h") #'strata-icons-prev-cell)
+    (define-key map (kbd "<left>") #'strata-icons-prev-cell)
+    (define-key map (kbd "RET") #'strata-view-activate-at-point)
+    (define-key map (kbd "SPC") #'strata-view-toggle-mark)
+    (define-key map (kbd "<backspace>") #'strata-view-up-directory)
+    (define-key map (kbd "g") #'strata-icons-refresh)
+    (define-key map (kbd "<f5>") #'strata-icons-refresh)
+    map)
+  "Keymap for `strata-icons-mode'.")
+
+(define-derived-mode strata-icons-mode special-mode "Strata-Icons"
+  "Strata Icons thumbnail grid view with live thumbnail caching."
+  (setq-local truncate-lines t)
+  (setq-local header-line-format
+              '(:eval (concat (dirvish-strata-breadcrumb-ml) "   " (dirvish-strata-view-info-ml))))
+  (setq-local mode-line-format
+              '(:eval (dirvish-strata-footer-ml)))
+  (add-hook 'post-command-hook #'strata-view--sync-preview-on-move nil t))
+
+(defun strata-icons-render (&optional dir)
+  "Render thumbnail/icon grid cards for DIR into current buffer."
+  (let* ((d (or dir strata-view-directory default-directory))
+         (p (strata-prefs))
+         (entries (strata-list-directory-entries d p))
+         (thumb-px (max 32 (min 256 (or (strata-prefs-icons-thumbnail-size p) 64))))
+         (win-w (max 40 (window-body-width)))
+         (cell-chars (max 14 (+ 4 (/ thumb-px (max 6 (frame-char-width))))))
+         (ncols (max 1 (floor win-w cell-chars)))
+         (inhibit-read-only t)
+         (cur (strata-current-file))
+         (buf (current-buffer)))
+    (setq strata-view-directory d
+          default-directory (file-name-as-directory d))
+    (erase-buffer)
+    (let ((row-chunks nil)
+          (i 0))
+      (dolist (e entries)
+        (let* ((path (plist-get e :path))
+               (name (plist-get e :name))
+               (dir-p (plist-get e :dir-p))
+               (marked (member path strata-marked-entries))
+               (thumb (when (and (not dir-p)
+                                 (display-graphic-p)
+                                 (strata-prefs-show-thumbnails p))
+                        (or (strata-thumbnail-maybe-generate
+                             path thumb-px
+                             (lambda (_out)
+                               (when (buffer-live-p buf)
+                                 (with-current-buffer buf
+                                   (when (derived-mode-p 'strata-icons-mode)
+                                     (strata-icons-render d))))))
+                            (let ((cand (strata-thumbnail-path path thumb-px)))
+                              (when (file-exists-p cand) cand)))))
+               (img (when (and thumb (image-type-available-p 'png))
+                      (create-image thumb 'png nil :max-height thumb-px :max-width thumb-px)))
+               (glyph (if img
+                          (propertize "  [img]  " 'display img)
+                        (format "   %s   " (strata-file--glyph path dir-p))))
+               (lbl (truncate-string-to-width name (- cell-chars 2) nil nil "…"))
+               (face (cond (marked 'dired-marked)
+                           ((strata-file--badge-face path))
+                           (dir-p 'dired-directory)
+                           (t 'default)))
+               (top-cell (propertize (concat (if marked "*" " ") glyph)
+                                     'strata-entry path 'strata-entry-dir dir-p))
+               (lbl-text (concat " " lbl (make-string (max 0 (- (1- cell-chars) (string-width lbl))) ?\s)))
+               (lbl-cell (propertize lbl-text
+                                     'face face 'strata-entry path
+                                     'strata-entry-dir dir-p 'help-echo path)))
+          (push (cons top-cell lbl-cell) row-chunks)
+          (setq i (1+ i))
+          (when (= (% i ncols) 0)
+            (let ((chunk (nreverse row-chunks)))
+              (setq row-chunks nil)
+              (dolist (c chunk) (insert (car c) (make-string (max 1 (- cell-chars (string-width (car c)))) ?\s)))
+              (insert "\n")
+              (dolist (c chunk) (insert (cdr c)))
+              (insert "\n\n")))))
+      (when row-chunks
+        (let ((chunk (nreverse row-chunks)))
+          (dolist (c chunk) (insert (car c) (make-string (max 1 (- cell-chars (string-width (car c)))) ?\s)))
+          (insert "\n")
+          (dolist (c chunk) (insert (cdr c)))
+          (insert "\n"))))
+    (goto-char (point-min))
+    (when cur (strata-goto-file cur))))
+
+(defun strata-icons-refresh ()
+  "Refresh Icons grid view."
+  (interactive)
+  (when (derived-mode-p 'strata-icons-mode)
+    (strata-icons-render strata-view-directory)))
+
+(defun strata-icons-next-cell ()
+  "Move forward to next grid item in Icons view."
+  (interactive)
+  (when-let ((next (next-single-property-change (point) 'strata-entry)))
+    (goto-char next)
+    (when (not (get-text-property (point) 'strata-entry))
+      (when-let ((n2 (next-single-property-change (point) 'strata-entry)))
+        (goto-char n2)))))
+
+(defun strata-icons-prev-cell ()
+  "Move backward to previous grid item in Icons view."
+  (interactive)
+  (when-let ((prev (previous-single-property-change (point) 'strata-entry)))
+    (goto-char (max (point-min) (1- prev)))))
+
+(defun strata-view-toggle-mark ()
+  "Toggle selection mark on item at point across Compact/Icons/Dired views."
+  (interactive)
+  (if (derived-mode-p 'dired-mode)
+      (dired-mark 1)
+    (when-let ((f (strata-current-file)))
+      (if (member f strata-marked-entries)
+          (setq strata-marked-entries (delete f strata-marked-entries))
+        (push f strata-marked-entries))
+      (if (derived-mode-p 'strata-compact-mode)
+          (strata-compact-refresh)
+        (strata-icons-refresh)))))
+
+(defun strata-view-activate-at-point ()
+  "Open directory or file at point from Compact or Icons view."
+  (interactive)
+  (when-let ((f (strata-current-file)))
+    (if (file-directory-p f)
+        (strata-open-location f)
+      (find-file f))))
+
+(defun strata-view-up-directory ()
+  "Navigate to parent directory from Compact or Icons view."
+  (interactive)
+  (let ((parent (file-name-directory (directory-file-name default-directory))))
+    (when parent (strata-open-location parent))))
+
+;;;; View Mode Switcher & Appearance Toggles
+
+(defun strata-switch-view-mode (mode)
+  "Switch active browser pane to Strata view MODE (`columns', `icons', `list', `compact')."
+  (interactive
+   (list (intern (completing-read "View mode: " '("columns" "icons" "list" "compact") nil t))))
+  (let* ((p (strata-prefs))
+         (dir (or (bound-and-true-p strata-view-directory)
+                  (dirvish-prop :root)
+                  default-directory))
+         (cur (strata-current-file)))
+    (setf (strata-prefs-browser-mode p) mode)
+    (strata-prefs-save)
+    (setq-local strata-local-view-mode mode)
+    (pcase mode
+      ('columns
+       (unless (and (derived-mode-p 'dired-mode) (dirvish-curr))
+         (dirvish dir)
+         (set-buffer (window-buffer (selected-window))))
+       (when-let ((dv (dirvish-curr)))
+         (setf (dv-ff-layout dv) '(1 0.14 0.48))
+         (if (dv-curr-layout dv)
+             (progn
+               (setf (dv-curr-layout dv) '(1 0.14 0.48))
+               (dirvish--build-layout dv))
+           (dirvish-layout-toggle))
+         (set-buffer (window-buffer (selected-window))))
+       (when (fboundp 'strata-sidebar-ensure)
+         (strata-sidebar-ensure))
+       (when (derived-mode-p 'dired-mode)
+         (dired-hide-details-mode 1)))
+      ('list
+       (unless (derived-mode-p 'dired-mode)
+         (dirvish dir)
+         (set-buffer (window-buffer (selected-window))))
+       (when (fboundp 'strata-dirvish--flatten-layout)
+         (strata-dirvish--flatten-layout))
+       (set-buffer (window-buffer (selected-window)))
+       (when (fboundp 'strata-sidebar-ensure)
+         (strata-sidebar-ensure))
+       (when (derived-mode-p 'dired-mode)
+         (dired-hide-details-mode -1)))
+      ('compact
+       (when (fboundp 'strata-dirvish--flatten-layout)
+         (strata-dirvish--flatten-layout))
+       (let ((buf (get-buffer-create (format "*Strata Compact: %s*"
+                                             (file-name-nondirectory (directory-file-name dir))))))
+         (switch-to-buffer buf)
+         (strata-compact-mode)
+         (setq-local strata-local-view-mode 'compact)
+         (strata-compact-render dir))
+       (when (fboundp 'strata-sidebar-ensure)
+         (strata-sidebar-ensure)))
+      ('icons
+       (when (fboundp 'strata-dirvish--flatten-layout)
+         (strata-dirvish--flatten-layout))
+       (let ((buf (get-buffer-create (format "*Strata Icons: %s*"
+                                             (file-name-nondirectory (directory-file-name dir))))))
+         (switch-to-buffer buf)
+         (strata-icons-mode)
+         (setq-local strata-local-view-mode 'icons)
+         (strata-icons-render dir))
+       (when (fboundp 'strata-sidebar-ensure)
+         (strata-sidebar-ensure))))
+    (when cur (strata-goto-file cur))
+    (strata-folder-view-remember dir p)))
+
+(defun strata-view-columns () (interactive) (strata-switch-view-mode 'columns))
+(defun strata-view-icons () (interactive) (strata-switch-view-mode 'icons))
+(defun strata-view-list () (interactive) (strata-switch-view-mode 'list))
+(defun strata-view-compact () (interactive) (strata-switch-view-mode 'compact))
+
+(defun strata-toggle-hidden-files ()
+  "Toggle visibility of hidden dot-files across Strata views."
+  (interactive)
+  (let ((p (strata-prefs)))
+    (setf (strata-prefs-show-hidden p) (not (strata-prefs-show-hidden p)))
+    (strata-prefs-save)
+    (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
+          ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
+    (message "Hidden files %s" (if (strata-prefs-show-hidden p) "shown" "hidden"))))
+
+(defun strata-toggle-compact-full-names ()
+  "Toggle full filename display vs truncated columns in Compact view."
+  (interactive)
+  (let ((p (strata-prefs)))
+    (setf (strata-prefs-compact-full-names p) (not (strata-prefs-compact-full-names p)))
+    (strata-prefs-save)
+    (when (derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+    (message "Compact full names %s" (if (strata-prefs-compact-full-names p) "ON" "OFF"))))
+
+(defun strata-toggle-expandable-tree ()
+  "Toggle expandable folders (`dirvish-subtree') in List view."
+  (interactive)
+  (let ((p (strata-prefs)))
+    (setf (strata-prefs-expandable-tree p) (not (strata-prefs-expandable-tree p)))
+    (strata-prefs-save)
+    (message "Expandable folders in List view: %s"
+             (if (strata-prefs-expandable-tree p) "ON" "OFF"))))
+
+(defun strata-tree-expand-or-open ()
+  "In Tree List view expand/collapse directory; in Columns descend with `dired-find-file'."
+  (interactive)
+  (let ((p (strata-prefs))
+        (f (strata-current-file)))
+    (if (and (derived-mode-p 'dired-mode)
+             (eq (strata-prefs-browser-mode p) 'list)
+             (strata-prefs-expandable-tree p)
+             f
+             (file-directory-p f))
+        (dirvish-subtree-toggle)
+      (if (derived-mode-p 'dired-mode)
+          (dired-find-file)
+        (strata-view-activate-at-point)))))
+
+(defun strata-tree-collapse-or-up ()
+  "In Tree List view collapse subtree or jump to parent; else navigate up."
+  (interactive)
+  (if (and (derived-mode-p 'dired-mode)
+           (eq (strata-prefs-browser-mode (strata-prefs)) 'list)
+           (strata-prefs-expandable-tree (strata-prefs))
+           (dirvish-subtree--expanded-p))
+      (dirvish-subtree-remove)
+    (if (derived-mode-p 'dired-mode)
+        (dired-up-directory)
+      (strata-view-up-directory))))
+
+(defun strata-sort-set (key)
+  "Sort active browser by KEY (`name', `modified', `size', `type', `extension', `created', `unsorted').
+Clicking the already active sort key toggles ascending/descending."
+  (interactive
+   (list (intern (completing-read "Sort by: "
+                                  '("name" "modified" "size" "type" "extension" "created" "unsorted")
+                                  nil t))))
+  (let ((p (strata-prefs)))
+    (if (eq (strata-prefs-sort-key p) key)
+        (setf (strata-prefs-sort-direction p)
+              (if (eq (strata-prefs-sort-direction p) 'asc) 'desc 'asc))
+      (setf (strata-prefs-sort-key p) key
+            (strata-prefs-sort-direction p) 'asc))
+    (strata-prefs-save)
+    (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
+          ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
+    (message "Sorted by %s (%s)" key (strata-prefs-sort-direction p))))
+
+(defun strata-sort-toggle-folders-first ()
+  "Toggle Folders First sorting while keeping sort key and direction."
+  (interactive)
+  (unless (strata-location-virtual-p (dirvish-prop :root))
+    (let ((p (strata-prefs)))
+      (setf (strata-prefs-folders-first p) (not (strata-prefs-folders-first p)))
+      (strata-prefs-save)
+      (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
+            ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+            ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
+      (message "Folders first: %s" (if (strata-prefs-folders-first p) "ON" "OFF")))))
+
+(defun strata-sort-toggle-natural ()
+  "Toggle Natural numeric sorting."
+  (interactive)
+  (let ((p (strata-prefs)))
+    (setf (strata-prefs-natural-sort p) (not (strata-prefs-natural-sort p)))
+    (strata-prefs-save)
+    (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
+          ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
+    (message "Natural sort: %s" (if (strata-prefs-natural-sort p) "ON" "OFF"))))
+
+(defun strata-sort-toggle-direction ()
+  "Toggle ascending / descending sort order."
+  (interactive)
+  (let ((p (strata-prefs)))
+    (setf (strata-prefs-sort-direction p)
+          (if (eq (strata-prefs-sort-direction p) 'asc) 'desc 'asc))
+    (strata-prefs-save)
+    (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
+          ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))))
+
+(defun strata-toggle-group-by-type ()
+  "Toggle Group by Type section grouping."
+  (interactive)
+  (let ((p (strata-prefs)))
+    (setf (strata-prefs-group-by-type p) (not (strata-prefs-group-by-type p)))
+    (strata-prefs-save)
+    (when (require 'dirvish-emerge nil t)
+      (setq-local dirvish-emerge-groups
+                  '(("Folders" (predicate . directories))
+                    ("Images" (extensions "png" "jpg" "jpeg" "gif" "webp" "svg" "cr2" "nef" "dng"))
+                    ("Audio" (extensions "mp3" "flac" "wav" "ogg" "opus" "m4a" "aac"))
+                    ("Video" (extensions "mp4" "mkv" "mov" "webm" "avi" "m4v"))
+                    ("Documents" (extensions "pdf" "md" "org" "txt" "docx" "odt" "rtf" "csv" "xlsx"))
+                    ("Archives" (extensions "zip" "7z" "tar" "gz" "tgz" "zst" "xz" "iso"))))
+      (dirvish-emerge-mode (if (strata-prefs-group-by-type p) 1 -1)))
+    (cond ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
+          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
+    (message "Group by type: %s" (if (strata-prefs-group-by-type p) "ON" "OFF"))))
+
+(defun strata-thumbnails-scale (delta)
+  "Adjust Icons view thumbnail size by DELTA px (0 resets to 64px)."
+  (interactive "P")
+  (let* ((p (strata-prefs))
+         (cur (strata-prefs-icons-thumbnail-size p))
+         (next (if (= delta 0) 64 (max 32 (min 256 (+ cur delta))))))
+    (setf (strata-prefs-icons-thumbnail-size p) next)
+    (strata-prefs-save)
+    (when (derived-mode-p 'strata-icons-mode) (strata-icons-refresh))
+    (message "Icon thumbnail size: %dpx" next)))
+
+(defun strata-make-first-column ()
+  "Alt+Down (`columns'): descend or focus current folder as primary view."
+  (interactive)
+  (when-let ((f (strata-current-file)))
+    (if (file-directory-p f)
+        (strata-open-location f)
+      (strata-switch-view-mode 'list))))
+
+(provide 'strata-dirvish-views)
+;;; strata-dirvish-views.el ends here

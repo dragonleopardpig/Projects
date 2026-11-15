@@ -4,6 +4,8 @@
   :config 
   (setq dashboard-startup-banner "~/Projects/emacs/Emacs-logo.xpm") ;convert svg to xpm
   ;; Other dashboard configurations
+  (when (fboundp 'strata-dirvish-dashboard-install)
+    (strata-dirvish-dashboard-install))
   (dashboard-setup-startup-hook)
   (setq dashboard-items '((recents . 10)
 			  (bookmarks . 10)

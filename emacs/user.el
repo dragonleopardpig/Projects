@@ -20,17 +20,15 @@
 ;; * Dired
 (add-hook 'dired-mode-hook 'dired-hide-details-mode)
 
-;; * Dirvish — Yazi-style miller-columns file manager built on Dired.
-;; Layout numbers are (parent-width-cells current-ratio preview-ratio).
-;; The leftmost pane is the parent directory (read-only context, like Yazi);
-;; navigate inside the middle pane and use <left>/<right> to traverse.
+;; * Dirvish + Strata — Miller columns, multi-view, split pane, terminal & rich previews.
 (use-package dirvish
   :ensure t
+  :demand t
   :init
   (dirvish-override-dired-mode)
   :bind
-  (("C-c d" . dirvish)
-   ("C-c D" . dirvish-side)
+  (("C-c d" . strata-dirvish-launch)
+   ("C-c D" . strata-sidebar-toggle)
    :map dirvish-mode-map
    ("a"        . dirvish-quick-access)
    ("f"        . dirvish-file-info-menu)
@@ -43,16 +41,10 @@
    ("TAB"      . dirvish-toggle-subtree)
    ("M-l"      . dirvish-ls-switches-menu)
    ("M-t"      . dirvish-layout-toggle))
-  :custom
-  ;; ls flags: -l long, -a hidden, -h human sizes, -v natural sort, dirs first.
-  (dired-listing-switches "-lahv --group-directories-first")
-  (dirvish-default-layout '(1 0.11 0.5))
-  (dirvish-attributes '(file-size file-time vc-state subtree-state collapse))
-  (dirvish-mode-line-format
-   '(:left (sort symlink) :right (omit yank index)))
-  (dirvish-preview-dispatchers
-   '(image gif video audio epub pdf archive))
-  (dirvish-use-header-line 'global))
+  :config
+  (add-to-list 'load-path (expand-file-name "~/Projects/emacs/strata-dirvish"))
+  (require 'strata-dirvish)
+  (strata-dirvish-setup))
 
 ;; Live refresh for Dired/Dirvish: watch dirs via inotify and re-read the
 ;; listing when the filesystem changes. Without this, dired-buffers (which
