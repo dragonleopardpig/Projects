@@ -261,10 +261,25 @@
         agent-shell-permission-responder-function #'agent-shell-permission-allow-always)
   (add-to-list 'agent-shell-mcp-servers (lambda () (my/agent--mcp-server))))
 
+(defun my/agent--ensure-agent-shell ()
+  "Ensure `agent-shell' (and its `acp' dependency) is available."
+  (unless (require 'agent-shell nil t)
+    (when (fboundp 'ensure-package)
+      (ignore-errors (ensure-package 'agent-shell)))
+    (unless (require 'agent-shell nil t)
+      (user-error
+       "Package `agent-shell' (and `acp') is not available; check network and run M-x package-refresh-contents"))))
+
+(defun my/agent-open-shell ()
+  "Open or return to the Antigravity `agent-shell' buffer."
+  (interactive)
+  (my/agent--ensure-agent-shell)
+  (call-interactively #'agent-shell))
+
 (defun my/agent-ask (prompt)
   "Ask Antigravity to edit the current buffer using live Emacs tools."
   (interactive "sAsk Antigravity: ")
-  (require 'agent-shell)
+  (my/agent--ensure-agent-shell)
   (let* ((id (my/agent-capture-context))
          (context (json-serialize (my/agent-context id) :null-object :null))
          (shell-buffer (agent-shell--shell-buffer)))
@@ -299,7 +314,7 @@
 (define-key my/agent-map (kbd "i") #'my/agent-insert-symbol)
 (define-key my/agent-map (kbd "l") #'my/agent-repair-latex)
 (define-key my/agent-map (kbd "s") #'my/agent-sum-column)
-(define-key my/agent-map (kbd "e") #'agent-shell)
+(define-key my/agent-map (kbd "e") #'my/agent-open-shell)
 
 (provide 'ai-agent)
 ;;; ai-agent.el ends here

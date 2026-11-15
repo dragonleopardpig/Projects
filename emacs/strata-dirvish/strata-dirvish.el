@@ -46,7 +46,8 @@
 (defun strata-dirvish-launch (&optional dir)
   "Launch or focus the Strata-enhanced Dirvish file browser (`C-c d').
 When called from `*dashboard*', honors `restore-tabs' and opens `~/' (or last
-valid saved tab) along with the collapsible Strata Sidebar if enabled."
+valid saved tab) along with the collapsible Strata Sidebar if enabled.
+Always falls back to `~/' when the target or saved directory does not exist."
   (interactive)
   (strata-tabs-load)
   (when strata-workspace-tabs
@@ -59,16 +60,16 @@ valid saved tab) along with the collapsible Strata Sidebar if enabled."
               (max 0 (min strata-active-tab-index
                           (1- (length strata-workspace-tabs))))
             0)))
-  (let* ((from-dash (string= (buffer-name) "*dashboard*"))
+  (let* ((home (expand-file-name "~/"))
+         (from-dash (string= (buffer-name) "*dashboard*"))
          (tab-dir (and from-dash
                        strata-workspace-tabs
                        (strata-tab-state-dir (strata-active-tab))))
-         (pref-dir (strata-prefs-default-directory (strata-prefs)))
-         (target (if (and dir (strata-valid-location-p dir))
-                     dir
-                   (cl-find-if #'strata-valid-location-p
-                               (list dir tab-dir default-directory pref-dir
-                                     (expand-file-name "~/") "/")))))
+         (candidate (cond
+                     (dir dir)
+                     (from-dash tab-dir)
+                     (t default-directory)))
+         (target (if (strata-valid-location-p candidate) candidate home)))
     (strata-open-location target t)))
 
 (defun strata-dirvish-launch-computer ()

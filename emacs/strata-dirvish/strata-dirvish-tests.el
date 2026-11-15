@@ -1142,10 +1142,11 @@
       (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
 
 (ert-deftest strata-test-launch-skips-stale-or-missing-tab-directories ()
-  "Launching `C-c d' ignores stale/non-existent saved or in-memory tab directories."
+  "Launching `C-c d' skips stale tabs and always falls back to `~/'."
   (let* ((tmp (make-temp-file "strata-stale-" t))
          (live-dir (expand-file-name "live" tmp))
          (missing-dir (expand-file-name "gone-dv-Q7Cf5Q" tmp))
+         (home (directory-file-name (expand-file-name "~/")))
          (strata-dirvish-state-dir (make-temp-file "strata-stale-state-" t))
          (strata-dirvish-state-file (expand-file-name "prefs.eld" strata-dirvish-state-dir))
          (strata-tabs-state-file (expand-file-name "tabs.eld" strata-dirvish-state-dir))
@@ -1172,7 +1173,8 @@
               (should (equal (directory-file-name opened)
                              (directory-file-name live-dir)))
               (should (= (length strata-workspace-tabs) 1))))
-          ;; 2. All saved/in-memory tabs stale AND buffer `default-directory' deleted -> falls back safely.
+          ;; 2. All saved/in-memory tabs stale from `*dashboard*' (even with another
+          ;; buffer `default-directory' or `prefs' default-directory) -> falls back to `~/'.
           (setq strata-workspace-tabs
                 (list (make-strata-tab-state
                        :id 99 :label "gone" :dir missing-dir
@@ -1180,13 +1182,33 @@
                 strata-active-tab-index 0
                 opened nil)
           (with-current-buffer (get-buffer-create "*dashboard*")
-            (let ((default-directory (file-name-as-directory missing-dir)))
+            (let ((default-directory (file-name-as-directory live-dir)))
               (cl-letf (((symbol-function 'strata-open-location)
                          (lambda (loc &optional _rec) (setq opened loc))))
                 (strata-dirvish-launch)
-                (should (equal (directory-file-name opened)
-                               (directory-file-name live-dir)))
-                (should (null strata-workspace-tabs))))))
+                (should (equal (directory-file-name opened) home))
+                (should (null strata-workspace-tabs)))))
+          ;; 3. Explicit non-existent `dir' falls back to `~/'.
+          (setq opened nil)
+          (with-temp-buffer
+            (let ((default-directory (file-name-as-directory live-dir)))
+              (cl-letf (((symbol-function 'strata-open-location)
+                         (lambda (loc &optional _rec) (setq opened loc))))
+                (strata-dirvish-launch missing-dir)
+                (should (equal (directory-file-name opened) home)))))
+          ;; 4. `strata-open-location' on non-existent path falls back to `~/' without error.
+          (setq strata-workspace-tabs nil
+                strata-active-tab-index 0
+                opened nil)
+          (let ((strata-prefs-current (strata-prefs--create :restore-tabs nil)))
+            (save-window-excursion
+              (cl-letf (((symbol-function 'strata-sidebar-ensure) (lambda () t))
+                        ((symbol-function 'strata-sidebar-refresh) (lambda () nil))
+                        ((symbol-function 'strata-dirvish--flatten-layout) (lambda () nil))
+                        ((symbol-function 'dirvish-find-entry-a) (lambda (&rest _) nil)))
+                (strata-open-location missing-dir)
+                (should (equal (directory-file-name (strata-tab-state-dir (strata-active-tab)))
+                               home))))))
       (when (get-buffer "*dashboard*")
         (kill-buffer "*dashboard*"))
       (delete-directory tmp t)

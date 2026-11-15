@@ -68,12 +68,10 @@
 (defun strata-active-tab ()
   "Return the currently active `strata-tab-state', creating one if empty."
   (unless strata-workspace-tabs
-    (let* ((d (or (cl-find-if #'strata-valid-location-p
-                              (list (strata-prefs-default-directory (strata-prefs))
-                                    default-directory
-                                    (expand-file-name "~/")
-                                    "/"))
-                  (expand-file-name "~/")))
+    (let* ((pref-dir (strata-prefs-default-directory (strata-prefs)))
+           (d (if (strata-valid-location-p pref-dir)
+                  pref-dir
+                (expand-file-name "~/")))
            (p1 (make-strata-pane-state :id 1 :dir d))
            (tab (make-strata-tab-state :id (cl-incf strata-next-tab-id)
                                        :label (let ((nm (file-name-nondirectory
@@ -345,7 +343,15 @@ in the currently active pane cleanly."
      ((file-exists-p resolved)
       (strata-dirvish--flatten-layout)
       (find-file resolved))
-     (t (user-error "Location does not exist: %s" resolved)))
+     (t
+      (let ((home (expand-file-name "~/")))
+        (if (and (file-directory-p home)
+                 (not (equal (directory-file-name resolved)
+                             (directory-file-name home))))
+            (progn
+              (message "Location does not exist: %s — falling back to ~/" resolved)
+              (strata-open-location home record-history))
+          (user-error "Location does not exist: %s" resolved)))))
     (setf (strata-pane-state-buffer pane) (current-buffer)
           (strata-pane-state-window pane) (selected-window))
     (ignore record-history)

@@ -78,10 +78,42 @@
 (setq custom-safe-themes t) 
 (setq scimax-theme nil)
 
+(require 'cl-lib)
+(require 'package)
+
+(defun my/ensure-melpa-archive ()
+  "Ensure MELPA is present in `package-archives' before package installs."
+  (let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
+                      (not (gnutls-available-p))))
+         (proto (if no-ssl "http" "https")))
+    (add-to-list 'package-archives
+                 (cons "melpa" (concat proto "://melpa.org/packages/"))
+                 t)))
+
+(defun my/run-package-install (pkgs install-fn)
+  "Ensure archives know about PKGS, run INSTALL-FN, and refresh on stale 404s."
+  (my/ensure-melpa-archive)
+  (unless (bound-and-true-p package--initialized)
+    (package-initialize))
+  (when (null package-archive-contents)
+    (package-read-all-archive-contents))
+  (when (cl-some (lambda (p) (null (assq p package-archive-contents))) pkgs)
+    (package-refresh-contents))
+  (condition-case _err
+      (funcall install-fn)
+    (error
+     ;; Refresh once when cached MELPA tarball versions have rotated (404).
+     (package-refresh-contents)
+     (funcall install-fn))))
+
 (defun ensure-package (pkg)
-  "Install PKG unless already installed."
+  "Install PKG from configured archives, refreshing stale contents if needed."
+  (my/ensure-melpa-archive)
+  (unless (bound-and-true-p package--initialized)
+    (package-initialize))
   (unless (package-installed-p pkg)
-    (package-install pkg)))
+    (my/run-package-install (list pkg)
+                            (apply-partially #'package-install pkg))))
 
 ;; * Auto Install My Packages
 (setq package-selected-packages
@@ -129,10 +161,24 @@
 	direnv
 	magik-mode
 	treemacs
-	airdermacs
+	aidermacs
         ;; org-pandoc-import
 	))
-(package-install-selected-packages)
+
+(defun my/ensure-selected-packages ()
+  "Install missing `package-selected-packages', refreshing stale archives."
+  (my/ensure-melpa-archive)
+  (unless (bound-and-true-p package--initialized)
+    (package-initialize))
+  (when-let* ((missing (cl-remove-if #'package-installed-p package-selected-packages)))
+    (condition-case err
+        (my/run-package-install
+         missing
+         (apply-partially #'package-install-selected-packages t))
+      (error
+       (message "Package bootstrap warning: %s" (error-message-string err))))))
+
+(my/ensure-selected-packages)
 
 ;; * Pyvenv
 ;; envrc-global-mode (in language.el) sets up per-buffer PATH/VIRTUAL_ENV
