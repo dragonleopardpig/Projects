@@ -68,10 +68,17 @@
 (defun strata-active-tab ()
   "Return the currently active `strata-tab-state', creating one if empty."
   (unless strata-workspace-tabs
-    (let* ((d (or (strata-prefs-default-directory (strata-prefs)) (expand-file-name "~/")))
+    (let* ((d (or (cl-find-if #'strata-valid-location-p
+                              (list (strata-prefs-default-directory (strata-prefs))
+                                    default-directory
+                                    (expand-file-name "~/")
+                                    "/"))
+                  (expand-file-name "~/")))
            (p1 (make-strata-pane-state :id 1 :dir d))
            (tab (make-strata-tab-state :id (cl-incf strata-next-tab-id)
-                                       :label (file-name-nondirectory (directory-file-name d))
+                                       :label (let ((nm (file-name-nondirectory
+                                                         (directory-file-name d))))
+                                                (if (string-empty-p nm) "/" nm))
                                        :dir d :active-pane 1 :pane1 p1)))
       (setq strata-workspace-tabs (list tab)
             strata-active-tab-index 0)))
@@ -244,6 +251,17 @@ Return non-nil if the sidebar was newly opened and rendered."
         t))))
 
 ;;;; Location Navigation Inside Active Pane
+
+(defun strata-valid-location-p (loc)
+  "Return non-nil when LOC resolves to a live path or virtual location."
+  (when (and (stringp loc) (not (string-empty-p loc)))
+    (let ((resolved (if (fboundp 'strata-resolve-location-uri)
+                        (ignore-errors (strata-resolve-location-uri loc))
+                      loc)))
+      (or (member resolved '("computer:///" "trash:///" "recent:///" "network:///"))
+          (and resolved
+               (or (file-directory-p resolved)
+                   (file-exists-p resolved)))))))
 
 (defun strata-open-location (loc &optional record-history)
   "Open LOC (filesystem path, URI, or `computer:///'/`trash:///'/`recent:///'/`network:///')
@@ -489,15 +507,20 @@ Keeps shell process & CWD alive while hidden."
 (defun strata-tabs-save ()
   "Save open Strata workspace tabs to `strata-tabs-state-file'."
   (when (strata-prefs-restore-tabs (strata-prefs))
-    (make-directory (file-name-directory strata-tabs-state-file) t)
-    (with-temp-file strata-tabs-state-file
-      (prin1 (list :active strata-active-tab-index
-                   :tabs (mapcar (lambda (tab)
-                                   (list :dir (strata-tab-state-dir tab)
-                                         :split-p (strata-tab-state-split-p tab)))
-                                 strata-workspace-tabs))
-             (current-buffer))
-      (insert "\n"))))
+    (let ((live (cl-remove-if-not
+                 (lambda (tab) (strata-valid-location-p (strata-tab-state-dir tab)))
+                 strata-workspace-tabs)))
+      (make-directory (file-name-directory strata-tabs-state-file) t)
+      (with-temp-file strata-tabs-state-file
+        (prin1 (list :active (if live
+                                 (max 0 (min strata-active-tab-index (1- (length live))))
+                               0)
+                     :tabs (mapcar (lambda (tab)
+                                     (list :dir (strata-tab-state-dir tab)
+                                           :split-p (strata-tab-state-split-p tab)))
+                                   live))
+               (current-buffer))
+        (insert "\n")))))
 
 (defun strata-tabs-load ()
   "Restore saved tabs if `restore-tabs' is enabled and no tabs are loaded yet."
@@ -511,19 +534,30 @@ Keeps shell process & CWD alive while hidden."
                  (saved (plist-get data :tabs))
                  (idx (or (plist-get data :active) 0)))
             (when (consp saved)
-              (setq strata-workspace-tabs
-                    (mapcar (lambda (entry)
-                              (let ((d (or (plist-get entry :dir) "~/")))
-                                (make-strata-tab-state
-                                 :id (cl-incf strata-next-tab-id)
-                                 :label (file-name-nondirectory (directory-file-name d))
-                                 :dir d
-                                 :split-p (plist-get entry :split-p)
-                                 :active-pane 1
-                                 :pane1 (make-strata-pane-state :id 1 :dir d))))
-                            saved))
-              (setq strata-active-tab-index
-                    (max 0 (min idx (1- (length strata-workspace-tabs))))))))
+              (let ((live nil)
+                    (orig-active (nth (max 0 (min idx (1- (length saved)))) saved))
+                    (new-idx 0)
+                    (i 0))
+                (dolist (entry saved)
+                  (let ((d (or (plist-get entry :dir) "~/")))
+                    (when (strata-valid-location-p d)
+                      (when (eq entry orig-active)
+                        (setq new-idx i))
+                      (push (make-strata-tab-state
+                             :id (cl-incf strata-next-tab-id)
+                             :label (let ((nm (file-name-nondirectory (directory-file-name d))))
+                                      (if (string-empty-p nm) "/" nm))
+                             :dir d
+                             :split-p (plist-get entry :split-p)
+                             :active-pane 1
+                             :pane1 (make-strata-pane-state :id 1 :dir d))
+                            live)
+                      (cl-incf i))))
+                (setq strata-workspace-tabs (nreverse live)
+                      strata-active-tab-index
+                      (if strata-workspace-tabs
+                          (max 0 (min new-idx (1- (length strata-workspace-tabs))))
+                        0))))))
       (error nil))))
 
 (defun strata-tab-new (&optional dir)

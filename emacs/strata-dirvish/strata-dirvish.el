@@ -8,6 +8,7 @@
 
 (add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
 
+(require 'cl-lib)
 (require 'dired)
 (require 'dirvish)
 (require 'strata-dirvish-prefs)
@@ -45,17 +46,29 @@
 (defun strata-dirvish-launch (&optional dir)
   "Launch or focus the Strata-enhanced Dirvish file browser (`C-c d').
 When called from `*dashboard*', honors `restore-tabs' and opens `~/' (or last
-saved tab) along with the collapsible Strata Sidebar if enabled."
+valid saved tab) along with the collapsible Strata Sidebar if enabled."
   (interactive)
+  (strata-tabs-load)
+  (when strata-workspace-tabs
+    (setq strata-workspace-tabs
+          (cl-remove-if-not
+           (lambda (tab) (strata-valid-location-p (strata-tab-state-dir tab)))
+           strata-workspace-tabs))
+    (setq strata-active-tab-index
+          (if strata-workspace-tabs
+              (max 0 (min strata-active-tab-index
+                          (1- (length strata-workspace-tabs))))
+            0)))
   (let* ((from-dash (string= (buffer-name) "*dashboard*"))
-         (target (or dir
-                     (and from-dash
-                          (progn (strata-tabs-load)
-                                 (when strata-workspace-tabs
-                                   (strata-tab-state-dir (strata-active-tab)))))
-                     default-directory
-                     (expand-file-name "~/"))))
-    (strata-tabs-load)
+         (tab-dir (and from-dash
+                       strata-workspace-tabs
+                       (strata-tab-state-dir (strata-active-tab))))
+         (pref-dir (strata-prefs-default-directory (strata-prefs)))
+         (target (if (and dir (strata-valid-location-p dir))
+                     dir
+                   (cl-find-if #'strata-valid-location-p
+                               (list dir tab-dir default-directory pref-dir
+                                     (expand-file-name "~/") "/")))))
     (strata-open-location target t)))
 
 (defun strata-dirvish-launch-computer ()
@@ -72,6 +85,11 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
   "Open Strata `recent:///' virtual view."
   (interactive)
   (strata-open-location "recent:///" t))
+
+(defun strata-dirvish--save-tabs-on-exit ()
+  "Persist Strata workspace tabs on interactive Emacs exit."
+  (unless noninteractive
+    (strata-tabs-save)))
 
 (defun strata-dirvish-dashboard-install ()
   "Blend crisp Strata navigator buttons into Emacs Dashboard."
@@ -241,7 +259,8 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
     (add-hook 'after-make-frame-functions #'strata-dirvish--on-frame-created)
     (add-hook 'server-after-make-frame-hook #'strata-dirvish--on-frame-created)
     (add-hook 'kill-emacs-hook #'strata-media-stop)
-    (add-hook 'kill-emacs-hook #'strata-tabs-save)
+    (remove-hook 'kill-emacs-hook #'strata-tabs-save)
+    (add-hook 'kill-emacs-hook #'strata-dirvish--save-tabs-on-exit)
     (with-eval-after-load 'dashboard
       (strata-dirvish-dashboard-install))
     (when (featurep 'dashboard)
