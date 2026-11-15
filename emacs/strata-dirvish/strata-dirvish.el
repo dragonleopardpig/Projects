@@ -30,6 +30,15 @@
 (defun strata-dirvish--enable-in-browser ()
   "Enable `strata-dirvish-mode' in Strata/Dirvish browser buffers cleanly."
   (strata-dirvish--sync-auto-revert)
+  (when (and (derived-mode-p 'strata-compact-mode 'strata-icons-mode)
+             (fboundp 'strata--enforce-no-wrap))
+    (strata--enforce-no-wrap))
+  (when (derived-mode-p 'dired-mode)
+    (when (bound-and-true-p hl-line-mode)
+      (hl-line-mode -1))
+    (add-hook 'post-command-hook #'strata-view--update-selection-highlight nil t)
+    (add-hook 'dired-after-readin-hook #'strata-view--update-selection-highlight nil t)
+    (strata-view--update-selection-highlight))
   (unless (strata-terminal-focused-p)
     (strata-dirvish-mode 1)))
 

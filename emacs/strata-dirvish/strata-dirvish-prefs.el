@@ -482,7 +482,7 @@ When FREE < TOTAL would round to the exact same string as TOTAL in TOTAL's unit
 
 (defface strata-hint-key
   '((t :inherit font-lock-constant-face :weight bold))
-  "Keycap face inside shortcut footer and F1 reference."
+  "Keycap face inside shortcut footer and shortcut reference."
   :group 'strata-dirvish)
 
 (defface strata-hint-desc
@@ -540,6 +540,11 @@ When FREE < TOTAL would round to the exact same string as TOTAL in TOTAL's unit
   "Code block/inline code face in rendered preview."
   :group 'strata-dirvish)
 
+(defface strata-entry-selected
+  '((t :inherit region :weight bold))
+  "Face used to highlight the selected file or directory name across Strata views."
+  :group 'strata-dirvish)
+
 (defface strata-folder-red '((t :foreground "#f7768e" :weight bold)) "Folder badge red." :group 'strata-dirvish)
 (defface strata-folder-amber '((t :foreground "#e0af68" :weight bold)) "Folder badge amber." :group 'strata-dirvish)
 (defface strata-folder-green '((t :foreground "#9ece6a" :weight bold)) "Folder badge green." :group 'strata-dirvish)
@@ -576,6 +581,8 @@ When FREE < TOTAL would round to the exact same string as TOTAL in TOTAL's unit
         (warn (strata-theme--face-color 'warning :foreground "#ffb454"))
         (ok (strata-theme--face-color 'success :foreground "#61e8ff"))
         (surface-hi (strata-theme--face-color 'highlight :background "#18253d"))
+        (sel-bg (strata-theme--face-color 'region :background "#263c5e"))
+        (sel-fg (strata-theme--face-color 'region :foreground nil))
         (fg (strata-theme--face-color 'default :foreground "#e9fff8")))
     (set-face-attribute 'strata-header-accent nil :foreground primary :weight 'bold)
     (set-face-attribute 'strata-crumb-segment nil :foreground primary :weight 'medium)
@@ -593,7 +600,12 @@ When FREE < TOTAL would round to the exact same string as TOTAL in TOTAL's unit
     (set-face-attribute 'strata-bar-ok nil :foreground ok)
     (set-face-attribute 'strata-bar-warn nil :foreground warn)
     (set-face-attribute 'strata-bar-danger nil :foreground err)
-    (set-face-attribute 'strata-preview-code nil :background surface-hi :extend t)))
+    (set-face-attribute 'strata-preview-code nil :background surface-hi :extend t)
+    (set-face-attribute 'strata-entry-selected nil
+                        :background (if (member sel-bg '("unspecified" "unspecified-bg" nil))
+                                        surface-hi sel-bg)
+                        :foreground (or sel-fg 'unspecified)
+                        :weight 'bold)))
 
 (with-eval-after-load 'emacs
   (strata-sync-theme-faces))

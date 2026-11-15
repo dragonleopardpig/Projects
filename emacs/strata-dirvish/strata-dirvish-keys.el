@@ -3,7 +3,7 @@
 ;;; Commentary:
 ;; Dual keymap engine (Default Desktop Mode + 10xer Modal/Chord Mode),
 ;; chord indicator UI, dynamic Transient Context Menu, interactive Settings &
-;; Diagnostics buffer (C-,), and Searchable Shortcut Reference (F1 / ~).
+;; Diagnostics buffer (C-,), and Searchable Shortcut Reference (C-c ? / ? / ~).
 
 ;;; Code:
 
@@ -293,7 +293,7 @@
     ("i" "Properties (M-RET)" strata-show-properties-for-path)
     ("a" "Run Custom Action…" strata-run-custom-action)
     ("," "Settings & Diagnostics" strata-open-settings)
-    ("?" "Shortcut Reference (F1)" strata-open-shortcut-reference)]])
+    ("?" "Shortcut Reference (C-c ? / ~)" strata-open-shortcut-reference)]])
 
 ;;;; Interactive Settings & 26-Point Diagnostics (`C-,`)
 
@@ -430,10 +430,10 @@
         (goto-char (point-min))))
     (pop-to-buffer buf)))
 
-;;;; Searchable Shortcut Reference (`F1` / `~`)
+;;;; Searchable Shortcut Reference (`C-c ?' / `?' / `~')
 
 (defun strata-open-shortcut-reference ()
-  "Open Strata Shortcut Reference (`F1' / `~') documenting active mode bindings."
+  "Open Strata Shortcut Reference (`C-c ?' / `?' / `~') documenting active mode bindings."
   (interactive)
   (let ((buf (get-buffer-create "*Strata Shortcuts*"))
         (tenx (strata-prefs-tenxer-mode (strata-prefs))))
@@ -485,7 +485,7 @@
                     ("C-z / C-S-z / C-y" "Undo / Redo File Operation")
                     ("M-RET / P / O" "Properties / Customize / Open With")
                     ("S-F10 / Menu" "Dynamic Context Actions Menu")
-                    ("C-, / C-S-m / F1" "Settings & Diagnostics / Toggle 10xer Mode / Help"))
+                    ("C-, / C-S-m / C-c ?" "Settings & Diagnostics / Toggle 10xer Mode / Help (? / ~)"))
                    ("10XER CHORDS & MEDIA"
                     ("g <key>" "Go: h Home, e Computer, t Trash, n Network, r Recent, 1-9 Pins, +/- Pin")
                     (", <key>" "Sort: a Name, m Mod, s Size, e Type, x Ext, b Created, f Folders first, g Group")
@@ -600,7 +600,8 @@
     ;; Mode / Settings / Help
     (define-key map (kbd "<escape>") #'strata-clear-filter)
     (define-key map (kbd "C-,") #'strata-open-settings)
-    (define-key map (kbd "<f1>") #'strata-open-shortcut-reference)
+    (define-key map (kbd "C-c ?") #'strata-open-shortcut-reference)
+    (define-key map (kbd "?") #'strata-open-shortcut-reference)
     (define-key map (kbd "C-S-m") #'strata-toggle-tenxer-mode)
     map)
   "Strata Default Desktop keymap for `strata-dirvish-mode'.")
@@ -608,8 +609,8 @@
 (defvar strata-10xer-keymap
   (let ((map (make-sparse-keymap)))
     ;; Navigation
-    (define-key map (kbd "j") #'next-line)
-    (define-key map (kbd "k") #'previous-line)
+    (define-key map (kbd "j") #'strata-nav-next-line)
+    (define-key map (kbd "k") #'strata-nav-prev-line)
     (define-key map (kbd "h") #'strata-tree-collapse-or-up)
     (define-key map (kbd "l") #'strata-tree-expand-or-open)
     (define-key map (kbd "o") #'strata-tree-expand-or-open)

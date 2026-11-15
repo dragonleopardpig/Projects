@@ -413,7 +413,7 @@ Closing the extra pane while focused promotes its location & view into Pane 1."
   (let* ((default-directory (if (and dir (not (strata-location-virtual-p dir)) (file-directory-p dir))
                                 (file-name-as-directory dir)
                               (file-name-as-directory (expand-file-name "~/"))))
-         (process-environment (append '("TERM=xterm-256color" "COLORTERM=truecolor")
+         (process-environment (append '("TERM=xterm-256color" "COLORTERM=truecolor" "FASTFETCH_ENABLED=0")
                                       process-environment))
          (buf
           (cond
@@ -478,9 +478,10 @@ Keeps shell process & CWD alive while hidden."
     (let ((term (cl-find-if #'executable-find '("foot" "kitty" "alacritty" "wezterm" "xterm")))
           (default-directory (file-name-as-directory (expand-file-name d))))
       (unless term (user-error "No external terminal emulator found on PATH"))
-      (make-process :name "strata-ext-term" :noquery t
-                    :command (list term)
-                    :file-handler nil)
+      (let ((process-environment (cons "FASTFETCH_ENABLED=0" process-environment)))
+        (make-process :name "strata-ext-term" :noquery t
+                      :command (list term)
+                      :file-handler nil))
       (message "Launched %s in %s" term d))))
 
 ;;;; Workspace Tabs & Session Persistence

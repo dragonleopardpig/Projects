@@ -286,6 +286,16 @@
 (ert-deftest strata-test-f4-conflict-removed-and-mouse-bound ()
   (should-not (lookup-key strata-default-keymap (kbd "<f4>")))
   (should-not (lookup-key strata-10xer-keymap (kbd "<f4>")))
+  (should-not (lookup-key strata-default-keymap (kbd "<f1>")))
+  (should-not (lookup-key strata-10xer-keymap (kbd "<f1>")))
+  (should (eq (lookup-key strata-default-keymap (kbd "C-c ?")) #'strata-open-shortcut-reference))
+  (should (eq (lookup-key strata-default-keymap (kbd "?")) #'strata-open-shortcut-reference))
+  (should (eq (lookup-key strata-10xer-keymap (kbd "~")) #'strata-open-shortcut-reference))
+  (let ((strata-prefs-current (strata-prefs--create :tenxer-mode t)))
+    (with-temp-buffer
+      (strata-dirvish-mode 1)
+      (should-not (eq (key-binding (kbd "<f1>")) #'strata-open-shortcut-reference))
+      (should (eq (key-binding (kbd "C-c ?")) #'strata-open-shortcut-reference))))
   (should (eq (lookup-key strata-default-keymap (kbd "C-`")) #'strata-toggle-pane-terminal))
   (should (eq (lookup-key strata-default-keymap (kbd "<f9>")) #'strata-toggle-pane-terminal))
   (should (eq (lookup-key strata-default-keymap (kbd "C-c t")) #'strata-toggle-pane-terminal))
@@ -772,6 +782,157 @@
               (remhash (dv-id dv) dirvish--sessions))))
       (delete-directory tmp t)
       (delete-directory strata-dirvish-state-dir t))))
+
+(ert-deftest strata-test-icons-no-wrap-grid-nav-and-wrapping ()
+  "Icons & Compact suppress `global-visual-line-mode', wrap long names, and navigate 2D cards."
+  (let* ((tmp (make-temp-file "strata-icons-" t))
+         (orig-gvl global-visual-line-mode)
+         (strata-prefs-current (strata-prefs--create :icons-thumbnail-size 64 :folders-first t)))
+    (unwind-protect
+        (progn
+          ;; Create 6 entries -> with batch window width 80 and stride 20, ncols = 4 (2 rows).
+          (make-directory (expand-file-name "01-dir" tmp))
+          (dolist (nm '("02-alpha.txt" "03-beta.txt" "04-gamma.txt"
+                        "05-delta.txt" "06-very-long-filename-archive-2026.txt"))
+            (write-region "x" nil (expand-file-name nm tmp)))
+          ;; Enable global-visual-line-mode to replicate init.el behavior.
+          (global-visual-line-mode 1)
+          (dolist (mode '(compact icons))
+            (with-temp-buffer
+              (if (eq mode 'compact) (strata-compact-mode) (strata-icons-mode))
+              (should-not visual-line-mode)
+              (should truncate-lines)
+              (should-not word-wrap)))
+          ;; Verify clean 1-or-2-line name wrapping helper.
+          (should (equal (strata-icons--wrap-name "Desktop" 16) '("Desktop")))
+          (let ((wrapped (strata-icons--wrap-name "my_very_long_project_archive.tar.gz" 16)))
+            (should (= (length wrapped) 2))
+            (should (<= (string-width (car wrapped)) 16))
+            (should (<= (string-width (cadr wrapped)) 16)))
+          ;; Render Icons grid cleanly and verify 2D navigation & label cursor placement.
+          (with-temp-buffer
+            (let ((w (selected-window)))
+              (set-window-buffer w (current-buffer))
+              (strata-icons-mode)
+              (setq strata-view-directory (file-name-as-directory tmp))
+              (strata-icons-render)
+              (should-not visual-line-mode)
+              (should truncate-lines)
+              (should (> strata-icons--ncols 1))
+              (should (= strata-icons--count 6))
+              ;; Point starts cleanly on card 0 label (NOT on the icon span).
+              (should (= (get-text-property (point) 'strata-grid-idx) 0))
+              (should (get-text-property (point) 'strata-grid-label))
+              ;; Right / `strata-tree-expand-or-open' steps right one card.
+              (strata-tree-expand-or-open)
+              (should (= (get-text-property (point) 'strata-grid-idx) 1))
+              (should (get-text-property (point) 'strata-grid-label))
+              ;; Down / `strata-nav-next-line' steps down one grid row cleanly.
+              (let ((expected-row-idx (min (1- strata-icons--count) (+ 1 strata-icons--ncols))))
+                (strata-nav-next-line)
+                (should (= (get-text-property (point) 'strata-grid-idx) expected-row-idx))
+                (should (get-text-property (point) 'strata-grid-label))
+                ;; Up / `strata-nav-prev-line' returns to card 1 when ncols < 6.
+                (when (< strata-icons--ncols 6)
+                  (strata-nav-prev-line)
+                  (should (= (get-text-property (point) 'strata-grid-idx) 1))))
+              ;; Left / `strata-tree-collapse-or-up' steps back to card 0.
+              (strata-goto-file (expand-file-name "02-alpha.txt" tmp))
+              (should (= (get-text-property (point) 'strata-grid-idx) 1))
+              (strata-tree-collapse-or-up)
+              (should (= (get-text-property (point) 'strata-grid-idx) 0))
+              ;; Footer hints must not mention removed F1 binding.
+              (should-not (string-search "F1" (dirvish-strata-footer-ml))))))
+      (global-visual-line-mode (if orig-gvl 1 -1))
+      (delete-directory tmp t))))
+
+(ert-deftest strata-test-selection-highlight-all-views ()
+  "Navigating Up/Down highlights the full file/dir name across Dired, Compact, and Icons."
+  (let* ((tmp (make-temp-file "strata-sel-" t))
+         (d1 (expand-file-name "01-folder" tmp))
+         (f1 (expand-file-name "02-document-example.txt" tmp))
+         (f2 (expand-file-name "03-another-long-file-name-wrap.txt" tmp))
+         (strata-prefs-current (strata-prefs--create :folders-first t)))
+    (unwind-protect
+        (progn
+          (make-directory d1 t)
+          (write-region "a" nil f1)
+          (write-region "b" nil f2)
+          ;; 1. Dired (Columns / List): hl-line off, full filename highlighted cleanly.
+          (let ((dbuf (dired-noselect tmp)))
+            (unwind-protect
+                (with-current-buffer dbuf
+                  (strata-dirvish--enable-in-browser)
+                  (should-not hl-line-mode)
+                  (dired-goto-file d1)
+                  (strata-view--update-selection-highlight)
+                  (should (= (length strata--selection-overlays) 1))
+                  (let ((ov (car strata--selection-overlays)))
+                    (should (eq (overlay-get ov 'face) 'strata-entry-selected))
+                    (should (string= (buffer-substring-no-properties (overlay-start ov) (overlay-end ov))
+                                     "01-folder"))
+                    (should (= (point) (overlay-start ov))))
+                  (strata-nav-next-line)
+                  (strata-view--update-selection-highlight)
+                  (let ((ov (car strata--selection-overlays)))
+                    (should (string= (buffer-substring-no-properties (overlay-start ov) (overlay-end ov))
+                                     "02-document-example.txt"))
+                    (should (= (point) (overlay-start ov)))))
+              (when (buffer-live-p dbuf) (kill-buffer dbuf))))
+          ;; 2. Compact view: full shown filename highlighted cleanly with cursor at name start.
+          (with-temp-buffer
+            (strata-compact-mode)
+            (strata-compact-render tmp)
+            (strata-goto-file d1)
+            (should (= (length strata--selection-overlays) 1))
+            (let ((ov (car strata--selection-overlays)))
+              (should (eq (overlay-get ov 'face) 'strata-entry-selected))
+              (should (string= (buffer-substring-no-properties (overlay-start ov) (overlay-end ov))
+                               "01-folder"))
+              (should (= (point) (overlay-start ov))))
+            (strata-compact-next-item)
+            (let ((ov (car strata--selection-overlays)))
+              (should (string-prefix-p "02-document"
+                                       (buffer-substring-no-properties (overlay-start ov) (overlay-end ov))))
+              (should (= (point) (overlay-start ov)))))
+          ;; 3. Icons view: 1-line and 2-line wrapped filenames highlight cleanly across spans.
+          (with-temp-buffer
+            (let ((w (selected-window)))
+              (set-window-buffer w (current-buffer))
+              (strata-icons-mode)
+              (strata-icons-render tmp)
+              (strata-goto-file f2)
+              (should (= (length strata--selection-overlays) 2))
+              (let ((spans (sort (mapcar (lambda (o)
+                                           (buffer-substring-no-properties (overlay-start o) (overlay-end o)))
+                                         strata--selection-overlays)
+                                 #'string<)))
+                (should (cl-some (lambda (s) (string-search "03-another" s)) spans))
+                (should (cl-some (lambda (s) (string-search "file-name-wrap" s)) spans))))))
+      (delete-directory tmp t))))
+
+(ert-deftest strata-test-terminal-launch-disables-fastfetch ()
+  "Terminals launched from Dirvish pass FASTFETCH_ENABLED=0."
+  (let* ((tmp (make-temp-file "strata-term-" t))
+         (seen-vterm-env nil)
+         (seen-ext-env nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'vterm)
+                   (lambda (buf-name)
+                     (setq seen-vterm-env (copy-sequence process-environment))
+                     (get-buffer-create buf-name)))
+                  ((symbol-function 'executable-find)
+                   (lambda (bin &rest _) (when (string= bin "kitty") "/usr/bin/kitty")))
+                  ((symbol-function 'make-process)
+                   (lambda (&rest _)
+                     (setq seen-ext-env (copy-sequence process-environment))
+                     nil)))
+          (let ((b (strata-pane--spawn-terminal " *strata-test-term*" tmp)))
+            (when (buffer-live-p b) (kill-buffer b)))
+          (strata-open-external-terminal tmp)
+          (should (member "FASTFETCH_ENABLED=0" seen-vterm-env))
+          (should (member "FASTFETCH_ENABLED=0" seen-ext-env)))
+      (delete-directory tmp t))))
 
 (provide 'strata-dirvish-tests)
 ;;; strata-dirvish-tests.el ends here
