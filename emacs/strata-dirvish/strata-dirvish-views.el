@@ -1155,7 +1155,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
              (if (strata-prefs-expandable-tree p) "ON" "OFF"))))
 
 (defun strata-tree-expand-or-open ()
-  "In Tree List view expand/collapse directory; in Columns descend with `dired-find-file'."
+  "In Tree List view toggle subtree; else open folder or edit file in preview."
   (interactive)
   (let ((p (strata-prefs))
         (f (strata-current-file)))
@@ -1165,9 +1165,11 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
              f
              (file-directory-p f))
         (dirvish-subtree-toggle)
-      (if (derived-mode-p 'dired-mode)
-          (dired-find-file)
-        (strata-view-activate-at-point)))))
+      (if (fboundp 'strata-open-or-edit-at-point)
+          (strata-open-or-edit-at-point)
+        (if (derived-mode-p 'dired-mode)
+            (dired-find-file)
+          (strata-view-activate-at-point))))))
 
 (defun strata-tree-collapse-or-up ()
   "In Tree List view collapse subtree or jump to parent; else navigate up."

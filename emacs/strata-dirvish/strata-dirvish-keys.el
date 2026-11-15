@@ -450,7 +450,7 @@
         (insert "\n")
         (dolist (sec
                  `(("NAVIGATION"
-                    ("h / l / ← / →" "Parent folder / Open or Expand Tree")
+                    ("h / l / ← / →" "Parent folder / Open, Expand Tree, or Edit in Preview")
                     ("j / k / ↑ / ↓" "Move down / up")
                     ("H / L / M-← / M-→" "Pane History Back / Forward")
                     ("M-↑ / M-↓" "Parent folder / Make First Column")
