@@ -288,7 +288,7 @@
     ("s" "Split Extra Pane (F3)" strata-toggle-extra-pane)
     (">" "Copy to Other Pane" strata-copy-to-other-pane)
     ("<" "Move to Other Pane" strata-move-to-other-pane)
-    ("t" "Pane Terminal (F4)" strata-toggle-pane-terminal)
+    ("t" "Pane Terminal (C-` / F9)" strata-toggle-pane-terminal)
     ("C" "Customize Folder Color/Icon" strata-customize-folder)
     ("i" "Properties (M-RET)" strata-show-properties-for-path)
     ("a" "Run Custom Action…" strata-run-custom-action)
@@ -307,39 +307,50 @@
         (erase-buffer)
         (special-mode)
         (setq-local header-line-format
-                    (propertize "  ⚙  Strata Settings & Diagnostics   [Click/RET on setting to toggle · g: Refresh · q: Close]"
-                                'face 'strata-header-accent))
+                    (concat "  "
+                            (strata-icon-glyph 'gear 'strata-header-accent)
+                            (propertize "  Strata Settings & Diagnostics   [Click/RET on setting to toggle · g: Refresh · q: Close]"
+                                        'face 'strata-header-accent)))
         (cl-labels ((toggle-row (label desc getter setter)
                       (let* ((val (funcall getter p))
                              (btn (format "   %-34s  [%s]   %s\n"
                                           label
                                           (propertize (if val "ON " "OFF")
                                                       'face (if val 'strata-bar-ok 'shadow))
-                                          (propertize desc 'face 'strata-hint-desc))))
-                        (put-text-property
-                         0 (length btn) 'keymap
-                         (let ((km (make-sparse-keymap)))
-                           (define-key km (kbd "RET") (lambda () (interactive) (funcall setter p (not val)) (strata-prefs-save) (strata-open-settings)))
-                           (define-key km [mouse-1] (lambda () (interactive) (funcall setter p (not val)) (strata-prefs-save) (strata-open-settings)))
-                           km)
-                         btn)
+                                          (propertize desc 'face 'strata-hint-desc)))
+                             (act (lambda ()
+                                    (interactive)
+                                    (funcall setter p (not val))
+                                    (strata-prefs-save)
+                                    (strata-open-settings)))
+                             (km (make-sparse-keymap)))
+                        (define-key km (kbd "RET") act)
+                        (define-key km [mouse-1] act)
+                        (add-text-properties 0 (length btn)
+                                             (list 'keymap km
+                                                   'mouse-face 'highlight
+                                                   'pointer 'hand)
+                                             btn)
                         (insert btn)))
                     (cycle-row (label val choices setter)
-                      (let ((btn (format "   %-34s  [%s]\n"
-                                         label
-                                         (propertize (format "%s" val) 'face 'strata-header-accent))))
-                        (put-text-property
-                         0 (length btn) 'keymap
-                         (let ((km (make-sparse-keymap)))
-                           (define-key km (kbd "RET")
-                             (lambda () (interactive)
-                               (let* ((pos (or (cl-position val choices) 0))
-                                      (next (nth (mod (1+ pos) (length choices)) choices)))
-                                 (funcall setter p next)
-                                 (strata-prefs-save)
-                                 (strata-open-settings))))
-                           km)
-                         btn)
+                      (let* ((btn (format "   %-34s  [%s]\n"
+                                          label
+                                          (propertize (format "%s" val) 'face 'strata-header-accent)))
+                             (act (lambda ()
+                                    (interactive)
+                                    (let* ((pos (or (cl-position val choices) 0))
+                                           (next (nth (mod (1+ pos) (length choices)) choices)))
+                                      (funcall setter p next)
+                                      (strata-prefs-save)
+                                      (strata-open-settings))))
+                             (km (make-sparse-keymap)))
+                        (define-key km (kbd "RET") act)
+                        (define-key km [mouse-1] act)
+                        (add-text-properties 0 (length btn)
+                                             (list 'keymap km
+                                                   'mouse-face 'highlight
+                                                   'pointer 'hand)
+                                             btn)
                         (insert btn))))
           (insert "\n" (propertize "  GENERAL & BROWSING\n" 'face 'strata-section-heading))
           (cycle-row "Default View Mode" (strata-prefs-browser-mode p) '(columns icons list compact)
@@ -435,9 +446,11 @@
         (erase-buffer)
         (special-mode)
         (setq-local header-line-format
-                    (propertize (format "  ⌨  Strata Shortcut Reference (%s Mode)   [C-S-m: Switch Mode · f: Filter · q: Close]"
-                                        (if tenx "10xer" "Default"))
-                                'face 'strata-header-accent))
+                    (concat "  "
+                            (strata-icon-glyph 'keyboard 'strata-header-accent)
+                            (propertize (format "  Strata Shortcut Reference (%s Mode)   [C-S-m: Switch Mode · f: Filter · q: Close]"
+                                                (if tenx "10xer" "Default"))
+                                        'face 'strata-header-accent)))
         (insert "\n")
         (dolist (sec
                  `(("NAVIGATION"
@@ -461,7 +474,7 @@
                    ("PANES, TERMINAL & TABS"
                     ("F3 / F6" "Toggle Extra Split Pane / Switch Active Pane")
                     ("C-S-c / C-S-x" "Copy / Move selection to Other Pane")
-                    ("F4 / C-M-t" "Toggle Pane Embedded Terminal / External Terminal")
+                    ("C-` / F9 / C-M-t" "Toggle Pane Embedded Terminal / External Terminal")
                     ("C-b / C-n / C-S-b" "Toggle / Focus Left Sidebar (c inside Sidebar: Rail mode)")
                     ("C-t / C-w / C-S-t" "New Tab / Close Tab / Reopen Closed Tab")
                     ("C-TAB / C-S-TAB" "Next / Previous Tab"))
@@ -527,7 +540,9 @@
 
     ;; Split Pane / Terminal / Sidebar / Tabs
     (define-key map (kbd "<f3>") #'strata-toggle-extra-pane)
-    (define-key map (kbd "<f4>") #'strata-toggle-pane-terminal)
+    (define-key map (kbd "C-`") #'strata-toggle-pane-terminal)
+    (define-key map (kbd "<f9>") #'strata-toggle-pane-terminal)
+    (define-key map (kbd "C-c t") #'strata-toggle-pane-terminal)
     (define-key map (kbd "<f5>") #'strata-refresh-active-view)
     (define-key map (kbd "<f6>") #'strata-switch-other-pane)
     (define-key map (kbd "C-S-c") #'strata-copy-to-other-pane)
@@ -548,7 +563,7 @@
     (define-key map (kbd "C-S-<prior>") (lambda () (interactive) (strata-tab-move -1)))
     (define-key map (kbd "C-S-<next>") (lambda () (interactive) (strata-tab-move 1)))
 
-    ;; File Operations & Search
+    ;; File Operations, Search & Mouse Click Navigation
     (define-key map (kbd "C-c c") #'strata-copy-selection)
     (define-key map (kbd "C-c x") #'strata-cut-selection)
     (define-key map (kbd "C-c v") #'strata-paste-keep-both)
@@ -565,6 +580,9 @@
     (define-key map (kbd "M-RET") #'strata-show-properties-for-path)
     (define-key map (kbd "<menu>") #'strata-context-menu)
     (define-key map (kbd "S-<f10>") #'strata-context-menu)
+    (define-key map (kbd "<mouse-1>") #'strata-mouse-click-entry)
+    (define-key map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
+    (define-key map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event)
     (define-key map (kbd "<mouse-3>") #'strata-context-menu)
     (define-key map (kbd "C-k") #'strata-global-search)
     (define-key map (kbd "C-S-k") #'strata-jump-visited-folder)
@@ -645,13 +663,16 @@
     (define-key map (kbd "=") (lambda () (interactive) (if (derived-mode-p 'strata-icons-mode) (strata-thumbnails-scale 16) (strata-preview-zoom-in))))
     (define-key map (kbd "-") (lambda () (interactive) (if (derived-mode-p 'strata-icons-mode) (strata-thumbnails-scale -16) (strata-preview-zoom-out))))
 
-    ;; Multi-Key Chords + Reference
+    ;; Multi-Key Chords, Mouse Navigation & Reference
     (define-key map (kbd "g") #'strata-chord-go)
     (define-key map (kbd ",") #'strata-chord-sort)
     (define-key map (kbd "c") #'strata-chord-copy-as)
     (define-key map (kbd ";") #'strata-chord-actions)
     (define-key map (kbd "t") #'strata-chord-tabs)
     (define-key map (kbd "~") #'strata-open-shortcut-reference)
+    (define-key map (kbd "<mouse-1>") #'strata-mouse-click-entry)
+    (define-key map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
+    (define-key map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event)
     map)
   "Strata 10xer overlay keymap for `strata-dirvish-tenxer-mode'.")
 

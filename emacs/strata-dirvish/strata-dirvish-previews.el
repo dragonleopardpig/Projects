@@ -180,12 +180,34 @@
            (erase-buffer)
            (if (file-directory-p file)
                (let ((items (ignore-errors (directory-files file nil "\\`[^.]" t))))
-                 (insert (propertize (format "  📁 %s (%d items)\n\n"
-                                             (file-name-nondirectory (directory-file-name file))
-                                             (length items))
-                                     'face 'strata-header-accent))
+                 (insert (concat "  "
+                                 (strata-icon-glyph 'folder 'strata-header-accent)
+                                 (propertize (format " %s (%d items)\n\n"
+                                                     (file-name-nondirectory (directory-file-name file))
+                                                     (length items))
+                                             'face 'strata-header-accent)))
                  (dolist (it (seq-take items 60))
-                   (insert "   " it "\n")))
+                   (let* ((sub (expand-file-name it file))
+                          (dirp (file-directory-p sub))
+                          (row (format "   %s  %s\n"
+                                       (strata-icon-glyph (if dirp 'folder 'file))
+                                       it)))
+                     (when dirp
+                       (let ((km (make-sparse-keymap)))
+                         (define-key km [mouse-1]
+                                     (lambda (ev)
+                                       (interactive "e")
+                                       (when (fboundp 'strata-open-location)
+                                         (when (posn-window (event-end ev))
+                                           (select-window (posn-window (event-end ev))))
+                                         (strata-open-location sub t))))
+                         (add-text-properties 0 (length row)
+                                              (list 'mouse-face 'highlight
+                                                    'pointer 'hand
+                                                    'keymap km
+                                                    'help-echo sub)
+                                              row)))
+                     (insert row))))
              (when (file-readable-p file)
                (insert-file-contents file nil 0 65536)))
            (special-mode)
@@ -266,9 +288,11 @@
             (in-code nil)
             (code-lang ""))
         (erase-buffer)
-        (insert (propertize (format "  📄 Markdown (Rendered · toggle [V] for Source) — %s\n\n"
-                                    (file-name-nondirectory file))
-                            'face 'strata-hint-desc))
+        (insert (concat "  "
+                        (strata-icon-glyph 'markdown 'strata-hint-desc)
+                        (propertize (format " Markdown (Rendered · toggle [V] for Source) — %s\n\n"
+                                            (file-name-nondirectory file))
+                                    'face 'strata-hint-desc)))
         (dolist (line (split-string text "\n"))
           (cond
            ((string-match "\\````\\(.*\\)\\'" line)
@@ -297,7 +321,8 @@
                     (insert "  ")
                     (insert-image img (format "[Image: %s]" alt))
                     (insert "\n"))
-                (insert (propertize (format "  🖼 [%s -> %s]\n" alt rel) 'face 'shadow)))))
+                (insert (concat "  " (strata-icon-glyph 'pictures 'shadow)
+                                (propertize (format " [%s -> %s]\n" alt rel) 'face 'shadow))))))
            (t
             (insert "  " line "\n"))))
         (goto-char (point-min))))))
@@ -313,8 +338,10 @@
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (erase-buffer)
-        (insert (propertize "  🌐 HTML Document (Offline Rendered · [V] Source)\n\n"
-                            'face 'strata-hint-desc))
+        (insert (concat "  "
+                        (strata-icon-glyph 'network 'strata-hint-desc)
+                        (propertize " HTML Document (Offline Rendered · [V] Source)\n\n"
+                                    'face 'strata-hint-desc)))
         (if dom (shr-insert-document dom) (insert-file-contents file nil 0 strata-preview-max-bytes))
         (goto-char (point-min))))))
 
@@ -473,9 +500,11 @@ except Exception as e:
       (with-current-buffer buf
         (let ((inhibit-read-only t)
               (img-src (if (file-exists-p tmp) tmp file)))
-          (insert (propertize (format "  🖼  %s   Zoom: %.0f%%  ([C-+/C--/C-0])\n\n"
-                                      (file-name-nondirectory file) (* 100 scale))
-                              'face 'strata-header-accent))
+          (insert (concat "  "
+                          (strata-icon-glyph 'pictures 'strata-header-accent)
+                          (propertize (format "  %s   Zoom: %.0f%%  ([C-+/C--/C-0])\n\n"
+                                              (file-name-nondirectory file) (* 100 scale))
+                                      'face 'strata-header-accent)))
           (when (and (display-graphic-p) (file-readable-p img-src))
             (when-let ((img (create-image img-src nil nil :max-width w :max-height h)))
               (insert "  ")
@@ -569,10 +598,11 @@ except Exception as e:
             (ignore-errors (process-file "timeout" nil nil nil "3" "ffmpegthumbnailer" "-i" file "-o" thumb "-s" "360" "-t" "15%")))
           (with-current-buffer buf
             (let ((inhibit-read-only t))
-              (insert (propertize (format "  %s %s   [C-M-SPC: Play/Pause · C-M-←/→: Seek · C-M-m: Mute · O: Open in Player]\n\n"
-                                          (if is-vid "🎬" "🎵")
-                                          (file-name-nondirectory file))
-                                  'face 'strata-header-accent))
+              (insert (concat "  "
+                              (strata-icon-glyph (if is-vid 'videos 'music) 'strata-header-accent)
+                              (propertize (format " %s   [C-M-SPC: Play/Pause · C-M-←/→: Seek · C-M-m: Mute · O: Open in Player]\n\n"
+                                                  (file-name-nondirectory file))
+                                          'face 'strata-header-accent)))
               (when (and is-vid (display-graphic-p) (file-exists-p thumb))
                 (when-let ((img (create-image thumb 'jpeg nil :max-width 420)))
                   (insert "  ")

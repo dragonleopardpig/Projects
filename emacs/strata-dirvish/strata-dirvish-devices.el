@@ -99,18 +99,23 @@ Returns nil when TOTAL <= 0 or TOTAL >= `strata-synthetic-capacity-threshold'."
          (matches (lambda (needles)
                     (cl-some (lambda (n) (string-search n blob)) needles))))
     (cond
-     ((strata-device-locked-p dev) "🔒")
-     ((funcall matches '("google drive" "google-drive" "gdrive")) "▲")
-     ((funcall matches '("proton drive" "proton-drive" "protondrive")) "◆")
-     ((funcall matches '("filelu")) "☁")
-     ((funcall matches '("scramble")) "☁")
-     ((funcall matches '("mega" "filen" "onedrive" "dropbox" "nextcloud" "rclone" "cloud")) "☁")
-     ((string= mp "/") (if (strata-nixos-system-p) "❄" "🐧"))
-     ((eq (strata-device-placement dev) 'network) "🌐")
-     ((string= fstype "iso9660") "💿")
-     ((or (string= tran "usb") (eq (strata-device-placement dev) 'removable)) "🔌")
-     ((string-search "nvme" (concat tran " " (or (strata-device-device dev) ""))) "⚡")
-     (t "🖴"))))
+     ((strata-device-locked-p dev) (strata-icon-glyph 'lock))
+     ((funcall matches '("google drive" "google-drive" "gdrive")) (strata-icon-glyph 'gdrive))
+     ((funcall matches '("proton drive" "proton-drive" "protondrive")) (strata-icon-glyph 'proton))
+     ((funcall matches '("filelu")) (strata-icon-glyph 'cloud))
+     ((funcall matches '("scramble")) (strata-icon-glyph 'cloud))
+     ((funcall matches '("mega" "filen" "onedrive" "dropbox" "nextcloud" "rclone" "cloud"))
+      (strata-icon-glyph 'cloud))
+     ((string= mp "/") (if (strata-nixos-system-p)
+                           (strata-icon-glyph 'nixos)
+                         (strata-icon-glyph 'linux)))
+     ((eq (strata-device-placement dev) 'network) (strata-icon-glyph 'globe))
+     ((string= fstype "iso9660") (strata-icon-glyph 'optical))
+     ((or (string= tran "usb") (eq (strata-device-placement dev) 'removable))
+      (strata-icon-glyph 'usb))
+     ((string-search "nvme" (concat tran " " (or (strata-device-device dev) "")))
+      (strata-icon-glyph 'nvme))
+     (t (strata-icon-glyph 'hdd)))))
 
 ;;;; Safe Mount Table Parsing & Async Probing
 
@@ -603,17 +608,37 @@ FUSE/cloud mounts NEVER block synchronously."
     (define-key map (kbd "e") #'strata-computer-rename-label-at-point)
     (define-key map (kbd "P") #'strata-computer-properties-at-point)
     (define-key map (kbd "M-RET") #'strata-computer-properties-at-point)
+    (define-key map (kbd "<mouse-1>") #'strata-computer-mouse-open)
+    (define-key map (kbd "<mouse-2>") #'strata-computer-mouse-open)
+    (define-key map (kbd "<double-mouse-1>") #'strata-computer-mouse-open)
     (define-key map (kbd "<f5>") #'strata-computer-refresh)
     (define-key map (kbd "g") #'strata-computer-refresh)
     map)
   "Keymap for `computer:///' buffer.")
 
+(defun strata-computer-mouse-open (event)
+  "Select device entry at EVENT and open or mount it."
+  (interactive "e")
+  (mouse-set-point event)
+  (when (get-text-property (line-beginning-position) 'strata-device)
+    (strata-computer-open-at-point)))
+
+(defvar strata-computer--row-keymap
+  (let ((km (make-sparse-keymap)))
+    (define-key km (kbd "<mouse-1>") #'strata-computer-mouse-open)
+    (define-key km (kbd "<mouse-2>") #'strata-computer-mouse-open)
+    (define-key km (kbd "<double-mouse-1>") #'strata-computer-mouse-open)
+    km)
+  "Row-level mouse keymap for clickable drive entries.")
+
 (define-derived-mode strata-computer-mode special-mode "Strata-Computer"
   "Interactive Strata `computer:///' view with drive grouping & live capacity bars."
   (setq-local truncate-lines t)
   (setq-local header-line-format
-              (propertize "  🖥  Computer (computer:///)  —  RET: Open  m: Mount/Unlock  u: Unmount  E: Eject  e: Rename Label  g: Refresh"
-                          'face 'strata-header-accent))
+              (concat "  "
+                      (strata-icon-glyph 'computer 'strata-header-accent)
+                      (propertize "  Computer (computer:///)  —  Click/RET: Open  m: Mount/Unlock  u: Unmount  E: Eject  e: Rename Label  g: Refresh"
+                                  'face 'strata-header-accent)))
   (hl-line-mode 1)
   (add-hook 'strata-devices-refresh-hook #'strata-computer-refresh-all nil t))
 
@@ -661,7 +686,13 @@ FUSE/cloud mounts NEVER block synchronously."
                                                        'dired-directory
                                                      'default))
                              sub)))
-          (add-text-properties 0 (length line) (list 'strata-device dev) line)
+          (add-text-properties 0 (length line)
+                               (list 'strata-device dev
+                                     'mouse-face 'highlight
+                                     'pointer 'hand
+                                     'keymap strata-computer--row-keymap
+                                     'help-echo (or mp (strata-device-device dev) name))
+                               line)
           (insert line))))
     (goto-char (min pt (point-max)))))
 
@@ -783,16 +814,41 @@ FUSE/cloud mounts NEVER block synchronously."
     (define-key map (kbd "D") #'strata-trash-delete-at-point)
     (define-key map (kbd "X") #'strata-trash-empty)
     (define-key map (kbd "RET") #'strata-trash-restore-at-point)
+    (define-key map (kbd "<mouse-1>") #'strata-trash-mouse-select)
+    (define-key map (kbd "<mouse-2>") #'strata-trash-mouse-restore)
+    (define-key map (kbd "<double-mouse-1>") #'strata-trash-mouse-restore)
     (define-key map (kbd "g") #'strata-trash-refresh)
     (define-key map (kbd "<f5>") #'strata-trash-refresh)
     map))
+
+(defun strata-trash-mouse-select (event)
+  "Select trashed entry at EVENT."
+  (interactive "e")
+  (mouse-set-point event))
+
+(defun strata-trash-mouse-restore (event)
+  "Restore trashed entry at EVENT."
+  (interactive "e")
+  (mouse-set-point event)
+  (when (get-text-property (line-beginning-position) 'strata-trash-item)
+    (strata-trash-restore-at-point)))
+
+(defvar strata-trash--row-keymap
+  (let ((km (make-sparse-keymap)))
+    (define-key km (kbd "<mouse-1>") #'strata-trash-mouse-select)
+    (define-key km (kbd "<mouse-2>") #'strata-trash-mouse-restore)
+    (define-key km (kbd "<double-mouse-1>") #'strata-trash-mouse-restore)
+    km)
+  "Row-level mouse keymap for `trash:///' entries.")
 
 (define-derived-mode strata-trash-mode special-mode "Strata-Trash"
   "Interactive Strata `trash:///' buffer."
   (setq-local truncate-lines t)
   (setq-local header-line-format
-              (propertize "  🗑  Trash (trash:///)  —  R/RET: Restore  D: Delete Permanently  X: Empty Trash  g: Refresh"
-                          'face 'strata-header-accent))
+              (concat "  "
+                      (strata-icon-glyph 'trash 'strata-header-accent)
+                      (propertize "  Trash (trash:///)  —  R/RET: Restore  D: Delete Permanently  X: Empty Trash  g: Refresh"
+                                  'face 'strata-header-accent)))
   (hl-line-mode 1))
 
 (defun strata-trash-refresh ()
@@ -805,13 +861,18 @@ FUSE/cloud mounts NEVER block synchronously."
       (if (null items)
           (insert "\n   Trash is empty.\n")
         (dolist (it items)
-          (let* ((line (format "   %s  %-28s  %-10s  %-19s  <- %s\n"
-                               (if (plist-get it :dir-p) "📁" "📄")
+          (let* ((dirp (plist-get it :dir-p))
+                 (line (format "   %s  %-28s  %-10s  %-19s  <- %s\n"
+                               (strata-icon-glyph (if dirp 'folder 'file))
                                (truncate-string-to-width (plist-get it :name) 28 nil nil "…")
                                (strata-format-bytes (plist-get it :size))
                                (replace-regexp-in-string "T" " " (plist-get it :deleted))
                                (abbreviate-file-name (plist-get it :orig)))))
-            (add-text-properties 0 (length line) (list 'strata-trash-item it) line)
+            (add-text-properties 0 (length line)
+                                 (list 'strata-trash-item it
+                                       'mouse-face 'highlight
+                                       'keymap strata-trash--row-keymap)
+                                 line)
             (insert line)))))))
 
 (defun strata-trash--item-at-point ()
@@ -912,16 +973,44 @@ FUSE/cloud mounts NEVER block synchronously."
     (define-key map (kbd "k") #'previous-line)
     (define-key map (kbd "RET") #'strata-recent-open-at-point)
     (define-key map (kbd "M-RET") #'strata-recent-open-folder-at-point)
+    (define-key map (kbd "<mouse-1>") #'strata-recent-mouse-click)
+    (define-key map (kbd "<mouse-2>") #'strata-recent-mouse-activate)
+    (define-key map (kbd "<double-mouse-1>") #'strata-recent-mouse-activate)
     (define-key map (kbd "g") #'strata-recent-refresh)
     (define-key map (kbd "<f5>") #'strata-recent-refresh)
     map))
+
+(defun strata-recent-mouse-click (event)
+  "Handle `<mouse-1>' in `recent:///': open clicked directory, select files."
+  (interactive "e")
+  (mouse-set-point event)
+  (when-let ((p (get-text-property (line-beginning-position) 'strata-recent-path)))
+    (when (file-directory-p p)
+      (strata-open-location p))))
+
+(defun strata-recent-mouse-activate (event)
+  "Open clicked recent entry at EVENT."
+  (interactive "e")
+  (mouse-set-point event)
+  (when (get-text-property (line-beginning-position) 'strata-recent-path)
+    (strata-recent-open-at-point)))
+
+(defvar strata-recent--row-keymap
+  (let ((km (make-sparse-keymap)))
+    (define-key km (kbd "<mouse-1>") #'strata-recent-mouse-click)
+    (define-key km (kbd "<mouse-2>") #'strata-recent-mouse-activate)
+    (define-key km (kbd "<double-mouse-1>") #'strata-recent-mouse-activate)
+    km)
+  "Row-level mouse keymap for `recent:///' entries.")
 
 (define-derived-mode strata-recent-mode special-mode "Strata-Recent"
   "Interactive Strata `recent:///' view."
   (setq-local truncate-lines t)
   (setq-local header-line-format
-              (propertize "  🕒  Recent Files (recent:///)  —  RET: Open  M-RET: Open Containing Folder  g: Refresh"
-                          'face 'strata-header-accent))
+              (concat "  "
+                      (strata-icon-glyph 'recent 'strata-header-accent)
+                      (propertize "  Recent Files (recent:///)  —  RET: Open  M-RET: Open Containing Folder  g: Refresh"
+                                  'face 'strata-header-accent)))
   (hl-line-mode 1))
 
 (defun strata-recent-refresh ()
@@ -937,12 +1026,17 @@ FUSE/cloud mounts NEVER block synchronously."
           (let* ((dirp (file-directory-p f))
                  (attrs (file-attributes f))
                  (line (format "   %s  %-34s  %-9s  %s\n"
-                               (if dirp "📁" "📄")
+                               (strata-icon-glyph (if dirp 'folder 'file))
                                (truncate-string-to-width (file-name-nondirectory f) 34 nil nil "…")
                                (if dirp "<dir>" (strata-format-bytes (or (file-attribute-size attrs) 0)))
                                (propertize (abbreviate-file-name (or (file-name-directory f) "/"))
                                            'face 'shadow))))
-            (add-text-properties 0 (length line) (list 'strata-recent-path f) line)
+            (add-text-properties 0 (length line)
+                                 (append (list 'strata-recent-path f
+                                               'mouse-face 'highlight
+                                               'keymap strata-recent--row-keymap)
+                                         (when dirp (list 'pointer 'hand 'help-echo f)))
+                                 line)
             (insert line)))))))
 
 (defun strata-recent-open-at-point ()
@@ -992,8 +1086,10 @@ FUSE/cloud mounts NEVER block synchronously."
         (erase-buffer)
         (special-mode)
         (setq-local header-line-format
-                    (propertize "  🌐  Network & Cloud (network:///)  —  RET: Open  c: Connect to Server"
-                                'face 'strata-header-accent))
+                    (concat "  "
+                            (strata-icon-glyph 'network 'strata-header-accent)
+                            (propertize "  Network & Cloud (network:///)  —  Click/RET: Open  c: Connect to Server"
+                                        'face 'strata-header-accent)))
         (local-set-key (kbd "c") #'strata-connect-server)
         (local-set-key (kbd "RET") #'strata-computer-open-at-point)
         (insert (propertize "\n  Mounted Network & Cloud Shares\n\n" 'face 'strata-section-heading))
@@ -1004,7 +1100,13 @@ FUSE/cloud mounts NEVER block synchronously."
                                 (strata-device-icon d)
                                 (strata-device-name d)
                                 (propertize (or (strata-device-mountpoint d) "") 'face 'shadow))))
-              (add-text-properties 0 (length line) (list 'strata-device d) line)
+              (add-text-properties 0 (length line)
+                                   (list 'strata-device d
+                                         'mouse-face 'highlight
+                                         'pointer 'hand
+                                         'keymap strata-computer--row-keymap
+                                         'help-echo (or (strata-device-mountpoint d) (strata-device-name d)))
+                                   line)
               (insert line))))
         (goto-char (point-min))))
     buf))

@@ -20,11 +20,10 @@
 (require 'strata-dirvish-prefs)
 (require 'strata-dirvish-devices)
 
-(declare-function all-the-icons-icon-for-file "all-the-icons" (file &rest arg-overrides))
-(declare-function all-the-icons-icon-for-dir "all-the-icons" (dir &rest arg-overrides))
-(declare-function strata-open-location "strata-dirvish-panes" (loc))
+(declare-function strata-open-location "strata-dirvish-panes" (loc &optional record-history))
 (declare-function strata-pane-active-p "strata-dirvish-panes" (&optional win))
 (declare-function strata-split-active-p "strata-dirvish-panes" ())
+(declare-function strata-dirvish--flatten-layout "strata-dirvish-panes" ())
 (declare-function strata-pane-clipboard-summary "strata-dirvish-ops" ())
 
 (defvar strata-active-chord nil
@@ -121,22 +120,109 @@
               (color (cdr (assoc key (strata-prefs-folder-colors (strata-prefs))))))
     (cdr (assoc (downcase color) strata-folder-color-alist))))
 
+(defconst strata-file--ext-icon-map
+  '(("el"       elisp      . font-lock-keyword-face)
+    ("elc"      elisp      . shadow)
+    ("org"      org        . success)
+    ("md"       markdown   . font-lock-type-face)
+    ("markdown" markdown   . font-lock-type-face)
+    ("nix"      nix        . dired-directory)
+    ("rs"       rust       . warning)
+    ("py"       python     . font-lock-function-name-face)
+    ("js"       js         . warning)
+    ("mjs"      js         . warning)
+    ("ts"       ts         . font-lock-type-face)
+    ("tsx"      ts         . font-lock-type-face)
+    ("c"        c          . font-lock-keyword-face)
+    ("h"        c          . font-lock-type-face)
+    ("cpp"      cpp        . font-lock-keyword-face)
+    ("hpp"      cpp        . font-lock-type-face)
+    ("cc"       cpp        . font-lock-keyword-face)
+    ("go"       go         . font-lock-type-face)
+    ("lua"      lua        . font-lock-keyword-face)
+    ("sh"       shell      . success)
+    ("bash"     shell      . success)
+    ("zsh"      shell      . success)
+    ("fish"     shell      . success)
+    ("json"     json       . font-lock-constant-face)
+    ("jsonc"    json       . font-lock-constant-face)
+    ("yaml"     yaml       . font-lock-constant-face)
+    ("yml"      yaml       . font-lock-constant-face)
+    ("toml"     toml       . font-lock-constant-face)
+    ("conf"     toml       . shadow)
+    ("ini"      toml       . shadow)
+    ("html"     html       . warning)
+    ("htm"      html       . warning)
+    ("css"      css        . font-lock-type-face)
+    ("scss"     css        . font-lock-type-face)
+    ("pdf"      file-pdf   . error)
+    ("zip"      file-zip   . warning)
+    ("tar"      file-zip   . warning)
+    ("gz"       file-zip   . warning)
+    ("xz"       file-zip   . warning)
+    ("zst"      file-zip   . warning)
+    ("7z"       file-zip   . warning)
+    ("rar"      file-zip   . warning)
+    ("csv"      file-table . success)
+    ("tsv"      file-table . success)
+    ("xlsx"     file-table . success)
+    ("ods"      file-table . success)
+    ("docx"     file-word  . font-lock-type-face)
+    ("odt"      file-word  . font-lock-type-face)
+    ("rtf"      file-word  . font-lock-type-face)
+    ("stl"      file-3d    . font-lock-type-face)
+    ("obj"      file-3d    . font-lock-type-face)
+    ("3mf"      file-3d    . font-lock-type-face)
+    ("gcode"    file-3d    . warning)
+    ("ttf"      font       . font-lock-constant-face)
+    ("otf"      font       . font-lock-constant-face)
+    ("woff"     font       . font-lock-constant-face)
+    ("woff2"    font       . font-lock-constant-face)
+    ("png"      file-image . font-lock-string-face)
+    ("jpg"      file-image . font-lock-string-face)
+    ("jpeg"     file-image . font-lock-string-face)
+    ("webp"     file-image . font-lock-string-face)
+    ("gif"      file-image . font-lock-string-face)
+    ("svg"      file-image . font-lock-string-face)
+    ("mp3"      file-audio . font-lock-builtin-face)
+    ("flac"     file-audio . font-lock-builtin-face)
+    ("ogg"      file-audio . font-lock-builtin-face)
+    ("wav"      file-audio . font-lock-builtin-face)
+    ("m4a"      file-audio . font-lock-builtin-face)
+    ("mp4"      file-video . error)
+    ("mkv"      file-video . error)
+    ("webm"     file-video . error)
+    ("mov"      file-video . error)
+    ("avi"      file-video . error)
+    ("db"       database   . font-lock-constant-face)
+    ("sqlite"   database   . font-lock-constant-face)
+    ("sqlite3"  database   . font-lock-constant-face)
+    ("txt"      file-text  . default)
+    ("log"      file-text  . shadow))
+  "Extension -> (ICON-KIND . FACE) lookup for verified Nerd Font file icons.")
+
 (defun strata-file--glyph (path &optional dir-p)
-  "Return icon glyph for PATH honoring custom icons and `all-the-icons'."
+  "Return crisp verified Nerd Font icon glyph for PATH honoring custom icons."
   (let* ((key (and path (directory-file-name (expand-file-name path))))
          (custom (cdr (assoc key (strata-prefs-custom-icons (strata-prefs)))))
-         (cface (strata-file--badge-face path)))
+         (cface (strata-file--badge-face path))
+         (fname (downcase (file-name-nondirectory (or path ""))))
+         (ext (downcase (or (file-name-extension fname) ""))))
     (cond
      (custom (propertize custom 'face (or cface 'dired-directory)))
-     ((and (display-graphic-p) (featurep 'all-the-icons))
-      (condition-case nil
-          (let ((ic (if dir-p
-                        (all-the-icons-icon-for-dir path)
-                      (all-the-icons-icon-for-file (file-name-nondirectory path)))))
-            (if cface (propertize ic 'face cface) ic))
-        (error (if dir-p "📁" "📄"))))
-     (dir-p (propertize "▸" 'face (or cface 'dired-directory)))
-     (t "·"))))
+     (dir-p
+      (let ((kind (cond
+                   ((file-symlink-p path) 'folder-open)
+                   ((file-exists-p (expand-file-name ".git" path)) 'folder-git)
+                   (t 'folder))))
+        (strata-icon-glyph kind (or cface 'dired-directory) "▸")))
+     ((string-prefix-p ".git" fname)
+      (strata-icon-glyph 'git 'warning "·"))
+     ((file-symlink-p path)
+      (strata-icon-glyph 'symlink 'font-lock-type-face "→"))
+     (t
+      (let ((hit (cdr (assoc ext strata-file--ext-icon-map))))
+        (strata-icon-glyph (or (car hit) 'file) (or (cdr hit) 'default) "·"))))))
 
 ;;;; Sorting, Natural Order & Type Classification Engine
 
@@ -354,16 +440,51 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 ;;;; Dirvish Custom Attributes & Formatters
 
 (dirvish-define-attribute strata-icon
-  "Render Strata custom folder icons and `all-the-icons' glyph before filenames."
+  "Render verified Strata Nerd Font folder/file glyph before filenames."
   :width 3
   (let* ((dir-p (eq (car f-type) 'dir))
-         (g (copy-sequence (strata-file--glyph f-name dir-p)))
+         (g (strata-file--glyph f-name dir-p))
          (icon-str (concat g " "))
          (ov (make-overlay (max (point-min) (1- f-beg)) f-beg)))
     (when hl-face
-      (add-face-text-property 0 (length icon-str) hl-face t icon-str))
+      (setq icon-str (strata-icon-tint icon-str hl-face t)))
+    (when dir-p
+      (add-text-properties 0 (length icon-str)
+                           (list 'mouse-face 'highlight
+                                 'pointer 'hand
+                                 'help-echo (format "Open folder %s" (abbreviate-file-name f-name)))
+                           icon-str))
     (overlay-put ov 'after-string icon-str)
     `(ov . ,ov)))
+
+(dirvish-define-attribute strata-dir-mouse
+  "Make directories highlight and show a hand cursor on mouse hover."
+  :width 0
+  (when (eq (car f-type) 'dir)
+    (let ((ov (make-overlay f-beg f-end)))
+      (overlay-put ov 'mouse-face 'highlight)
+      (overlay-put ov 'pointer 'hand)
+      (overlay-put ov 'help-echo (format "Open folder %s" (abbreviate-file-name f-name)))
+      `(ov . ,ov))))
+
+(defun strata-dired-decorate-dirs ()
+  "Ensure plain Dired buffers (e.g., split pane 2) mark directories as clickable."
+  (when (derived-mode-p 'dired-mode 'dirvish-directory-view-mode)
+    (save-excursion
+      (goto-char (point-min))
+      (while (not (eobp))
+        (when-let* ((f-beg (dired-move-to-filename))
+                    (f-end (dired-move-to-end-of-filename t))
+                    (f (ignore-errors (dired-get-filename nil t))))
+          (when (file-directory-p f)
+            (with-silent-modifications
+              (add-text-properties f-beg f-end
+                                   (list 'mouse-face 'highlight
+                                         'pointer 'hand
+                                         'help-echo (format "Open folder %s" (abbreviate-file-name f)))))))
+        (forward-line 1)))))
+
+(add-hook 'dired-after-readin-hook #'strata-dired-decorate-dirs)
 
 (dirvish-define-attribute strata-color
   "Apply Strata custom folder color faces to tagged directory names."
@@ -401,6 +522,29 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 
 ;;;; Dirvish Header Breadcrumbs & Strata Footer Mode-Line
 
+(defun strata-crumb--make-segment (label target)
+  "Return clickable breadcrumb segment LABEL pointing to directory TARGET."
+  (let ((km (make-sparse-keymap))
+        (open-fn (lambda (ev)
+                   (interactive "e")
+                   (when (posn-window (event-end ev))
+                     (select-window (posn-window (event-end ev))))
+                   (strata-open-location target t))))
+    (define-key km [header-line mouse-1] open-fn)
+    (define-key km [header-line mouse-2] open-fn)
+    (define-key km [mode-line mouse-1] open-fn)
+    (define-key km [mode-line mouse-2] open-fn)
+    (let ((out (strata-icon-tint (copy-sequence label) 'strata-crumb-segment t)))
+      (add-text-properties 0 (length out)
+                           (list 'mouse-face 'highlight
+                                 'pointer 'hand
+                                 'local-map km
+                                 'keymap km
+                                 'strata-crumb-path target
+                                 'help-echo (format "Open folder %s" target))
+                           out)
+      out)))
+
 (dirvish-define-mode-line strata-breadcrumb
   "Interactive clickable breadcrumb header with active pane badge & view pill."
   (let* ((dir (abbreviate-file-name (or (dirvish-prop :root) default-directory "~/")))
@@ -417,26 +561,31 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
           (if (string-prefix-p "~" clean)
               (let ((segs (cdr parts)))
                 (concat
-                 (propertize "🏠 ~" 'face 'strata-crumb-segment)
+                 (strata-crumb--make-segment
+                  (if (display-graphic-p)
+                      (concat (strata-icon-glyph 'home 'strata-crumb-segment) " ~")
+                    "~")
+                  (expand-file-name "~/"))
                  (mapconcat
                   (lambda (seg)
                     (setq acc (concat acc "/" seg))
                     (concat (propertize " › " 'face 'strata-crumb-separator)
-                            (propertize seg 'face 'strata-crumb-segment
-                                        'help-echo acc)))
+                            (strata-crumb--make-segment seg (expand-file-name acc))))
                   segs "")))
             (concat
-             (propertize "/" 'face 'strata-crumb-segment)
+             (strata-crumb--make-segment "/" "/")
              (mapconcat
               (lambda (seg)
                 (setq acc (concat (if (string= acc "/") "" acc) "/" seg))
                 (concat (propertize " › " 'face 'strata-crumb-separator)
-                        (propertize seg 'face 'strata-crumb-segment
-                                    'help-echo acc)))
+                        (strata-crumb--make-segment seg acc)))
               parts ""))))
          (filter-pill (when strata-local-filter
-                        (propertize (format " 🔍 %s " strata-local-filter)
-                                    'face 'strata-pill-filter))))
+                        (concat
+                         (propertize " " 'face 'strata-pill-filter)
+                         (strata-icon-glyph 'search 'strata-pill-filter "Filter:")
+                         (propertize (format " %s " strata-local-filter)
+                                     'face 'strata-pill-filter)))))
     (concat (or pane-badge "") " " crumbs (when filter-pill (concat "  " filter-pill)))))
 
 (dirvish-define-mode-line strata-view-info
@@ -472,7 +621,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
          (hints (when (and (strata-prefs-show-keybinding-hints p) (not chord))
                   (if (strata-prefs-tenxer-mode p)
                       " j/k Nav  g Go  , Sort  ; Act  t Tabs  i Peek  f Filter  F1 Keys"
-                    " ←/→ Nav  C-1..4 View  F3 Split  F4 Term  C-k Search  C-, Prefs  F1 Keys"))))
+                    " ←/→ Nav  C-1..4 View  F3 Split  C-` Term  C-k Search  C-, Prefs  F1 Keys"))))
     (concat
      (if (> count 0)
          (propertize (format " %d selected " count) 'face 'strata-header-accent)
@@ -544,6 +693,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
     (define-key map (kbd "<wheel-left>") (lambda () (interactive) (scroll-right 6)))
     (define-key map (kbd "<wheel-right>") (lambda () (interactive) (scroll-left 6)))
     (define-key map (kbd "RET") #'strata-view-activate-at-point)
+    (define-key map (kbd "<mouse-1>") #'strata-mouse-click-entry)
+    (define-key map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
+    (define-key map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event)
     (define-key map (kbd "SPC") #'strata-view-toggle-mark)
     (define-key map (kbd "<backspace>") #'strata-view-up-directory)
     (define-key map (kbd "g") #'strata-compact-refresh)
@@ -621,9 +773,11 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                           (propertize shown 'face face)))
                    (pad (max 1 (- cell-w (string-width cell)))))
               (add-text-properties 0 (length cell)
-                                   (list 'strata-entry path
-                                         'strata-entry-dir dir-p
-                                         'help-echo path)
+                                   (append (list 'strata-entry path
+                                                 'strata-entry-dir dir-p
+                                                 'help-echo path)
+                                           (when dir-p
+                                             '(mouse-face highlight pointer hand)))
                                    cell)
               (insert cell (make-string pad ?\s))))))
       (insert "\n"))
@@ -669,6 +823,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
     (define-key map (kbd "h") #'strata-icons-prev-cell)
     (define-key map (kbd "<left>") #'strata-icons-prev-cell)
     (define-key map (kbd "RET") #'strata-view-activate-at-point)
+    (define-key map (kbd "<mouse-1>") #'strata-mouse-click-entry)
+    (define-key map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
+    (define-key map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event)
     (define-key map (kbd "SPC") #'strata-view-toggle-mark)
     (define-key map (kbd "<backspace>") #'strata-view-up-directory)
     (define-key map (kbd "g") #'strata-icons-refresh)
@@ -729,12 +886,15 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                            ((strata-file--badge-face path))
                            (dir-p 'dired-directory)
                            (t 'default)))
-               (top-cell (propertize (concat (if marked "*" " ") glyph)
-                                     'strata-entry path 'strata-entry-dir dir-p))
+               (top-cell (apply #'propertize
+                                (concat (if marked "*" " ") glyph)
+                                (append (list 'strata-entry path 'strata-entry-dir dir-p 'help-echo path)
+                                        (when dir-p '(mouse-face highlight pointer hand)))))
                (lbl-text (concat " " lbl (make-string (max 0 (- (1- cell-chars) (string-width lbl))) ?\s)))
-               (lbl-cell (propertize lbl-text
-                                     'face face 'strata-entry path
-                                     'strata-entry-dir dir-p 'help-echo path)))
+               (lbl-cell (apply #'propertize lbl-text
+                                (append (list 'face face 'strata-entry path
+                                              'strata-entry-dir dir-p 'help-echo path)
+                                        (when dir-p '(mouse-face highlight pointer hand))))))
           (push (cons top-cell lbl-cell) row-chunks)
           (setq i (1+ i))
           (when (= (% i ncols) 0)
@@ -786,6 +946,71 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       (if (derived-mode-p 'strata-compact-mode)
           (strata-compact-refresh)
         (strata-icons-refresh)))))
+
+(defun strata-mouse--entry-at-point ()
+  "Resolve clicked entry path in Dired, Dirvish DIRview, Compact, or Icons."
+  (or (get-text-property (point) 'strata-entry)
+      (when (derived-mode-p 'dired-mode)
+        (or (ignore-errors (dired-get-filename nil t))
+            (save-excursion
+              (when-let* ((b (dired-move-to-filename))
+                          (e (dired-move-to-end-of-filename t)))
+                (expand-file-name
+                 (buffer-substring-no-properties b e)
+                 (or (ignore-errors (dired-current-directory)) default-directory))))))
+      (when (derived-mode-p 'dirvish-directory-view-mode)
+        (let* ((lb (line-beginning-position))
+               (le (line-end-position))
+               (fn-beg (or (and (get-text-property lb 'dired-filename) lb)
+                           (next-single-property-change lb 'dired-filename nil le)))
+               (name (if (and fn-beg (< fn-beg le) (get-text-property fn-beg 'dired-filename))
+                         (buffer-substring-no-properties
+                          fn-beg (next-single-property-change fn-beg 'dired-filename nil le))
+                       (string-trim (buffer-substring-no-properties lb le)))))
+          (and (not (string-empty-p name))
+               (not (member name '("." "..")))
+               (expand-file-name name default-directory))))))
+
+(defun strata-mouse--open-path (path dir-only-p)
+  "Open PATH in the appropriate Strata pane; when DIR-ONLY-P, only navigate dirs."
+  (when (and path (not (string-empty-p path)))
+    (let ((is-dir (file-directory-p path)))
+      (cond
+       ((derived-mode-p 'dirvish-directory-view-mode)
+        (when-let* ((dv (or (dirvish-curr)
+                            (and (boundp 'dirvish--sessions)
+                                 (gethash (dirvish-prop :dv) dirvish--sessions))))
+                    (root-win (dv-root-window dv)))
+          (when (window-live-p root-win)
+            (select-window root-win))
+          (if is-dir
+              (strata-open-location path t)
+            (when (not dir-only-p)
+              (when (fboundp 'strata-dirvish--flatten-layout)
+                (strata-dirvish--flatten-layout))
+              (find-file path)))))
+       (is-dir
+        (strata-open-location path t))
+       ((not dir-only-p)
+        (when (fboundp 'strata-dirvish--flatten-layout)
+          (strata-dirvish--flatten-layout))
+        (find-file path))))))
+
+(defun strata-mouse-click-entry (event)
+  "Handle single `<mouse-1>' click: open clicked directory, or select file to preview."
+  (interactive "e")
+  (mouse-set-point event)
+  (when-let ((p (strata-mouse--entry-at-point)))
+    (if (file-directory-p p)
+        (strata-mouse--open-path p t)
+      (strata-view--sync-preview-on-move))))
+
+(defun strata-mouse-activate-at-event (event)
+  "Handle `<mouse-2>' or `<double-mouse-1>' click: open directory or file."
+  (interactive "e")
+  (mouse-set-point event)
+  (when-let ((p (strata-mouse--entry-at-point)))
+    (strata-mouse--open-path p nil)))
 
 (defun strata-view-activate-at-point ()
   "Open directory or file at point from Compact or Icons view."

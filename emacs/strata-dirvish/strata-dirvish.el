@@ -59,56 +59,88 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
 (defun strata-dirvish-dashboard-install ()
   "Blend crisp Strata navigator buttons into Emacs Dashboard."
   (when (boundp 'dashboard-navigator-buttons)
-    (let ((ico (lambda (name fallback)
-                 (if (and (display-graphic-p) (fboundp 'all-the-icons-octicon))
-                     (ignore-errors (all-the-icons-octicon name :height 1.05 :v-adjust 0.0))
-                   fallback))))
-      (setq dashboard-navigator-buttons
-            `(((,(or (funcall ico "file-directory" "📁") "📁")
-                "Files"
-                "Open Strata-Dirvish File Browser (C-c d)"
-                (lambda (&rest _) (strata-dirvish-launch))
-                strata-header-accent "" "")
-               (,(or (funcall ico "device-desktop" "🖥") "🖥")
-                "Computer"
-                "Open Computer Drives & Cloud Mounts (computer:///)"
-                (lambda (&rest _) (strata-dirvish-launch-computer))
-                strata-crumb-segment "" "")
-               (,(or (funcall ico "search" "🔍") "🔍")
-                "Search"
-                "Global Recursive Search across Home & Drives (C-k)"
-                (lambda (&rest _) (call-interactively #'strata-global-search))
-                strata-hint-key "" "")
-               (,(or (funcall ico "trashcan" "🗑") "🗑")
-                "Trash"
-                "Open Trash (trash:///)"
-                (lambda (&rest _) (strata-dirvish-launch-trash))
-                shadow "" "")
-               (,(or (funcall ico "history" "🕒") "🕒")
-                "Recent"
-                "Open Recent Files (recent:///)"
-                (lambda (&rest _) (strata-dirvish-launch-recent))
-                shadow "" "")
-               (,(or (funcall ico "gear" "⚙") "⚙")
-                "Prefs"
-                "Open Strata Settings & Diagnostics (C-,)"
-                (lambda (&rest _) (strata-open-settings))
-                shadow "" "")))))))
+    (setq dashboard-navigator-buttons
+          `(((,(strata-icon-glyph 'folder 'strata-header-accent)
+              "Files"
+              "Open Strata-Dirvish File Browser (C-c d)"
+              (lambda (&rest _) (strata-dirvish-launch))
+              strata-header-accent "" "")
+             (,(strata-icon-glyph 'computer 'strata-crumb-segment)
+              "Computer"
+              "Open Computer Drives & Cloud Mounts (computer:///)"
+              (lambda (&rest _) (strata-dirvish-launch-computer))
+              strata-crumb-segment "" "")
+             (,(strata-icon-glyph 'search 'strata-hint-key)
+              "Search"
+              "Global Recursive Search across Home & Drives (C-k)"
+              (lambda (&rest _) (call-interactively #'strata-global-search))
+              strata-hint-key "" "")
+             (,(strata-icon-glyph 'trash 'shadow)
+              "Trash"
+              "Open Trash (trash:///)"
+              (lambda (&rest _) (strata-dirvish-launch-trash))
+              shadow "" "")
+             (,(strata-icon-glyph 'recent 'shadow)
+              "Recent"
+              "Open Recent Files (recent:///)"
+              (lambda (&rest _) (strata-dirvish-launch-recent))
+              shadow "" "")
+             (,(strata-icon-glyph 'gear 'shadow)
+              "Prefs"
+              "Open Strata Settings & Diagnostics (C-,)"
+              (lambda (&rest _) (strata-open-settings))
+              shadow "" ""))))))
+
+(defun strata-dirvish--parent-buffer-filter (buf)
+  "Ensure Dirvish Miller-column parent buffer BUF renders Strata icons & hand cursor."
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (dirvish-prop :attrs
+        (dirvish--attrs-expand '(strata-icon strata-dir-mouse strata-color)))))
+  buf)
+
+(defun strata-dirvish--dirview-setup ()
+  "Ensure `dirvish-directory-view-mode' panes expose Strata icons & clickable dirs."
+  (unless (dirvish-prop :attrs)
+    (dirvish-prop :attrs
+      (dirvish--attrs-expand '(strata-icon strata-dir-mouse strata-color)))))
+
+(defun strata-dirvish--on-frame-created (&optional frame)
+  "Refresh Strata icon font cache and dashboard buttons when GUI FRAME opens."
+  (let ((fr (or frame (selected-frame))))
+    (when (display-graphic-p fr)
+      (setq strata-icon--family-cache nil)
+      (with-selected-frame fr
+        (strata-sync-theme-faces)
+        (strata-dirvish-dashboard-install)
+        (when (fboundp 'strata-sidebar-refresh)
+          (strata-sidebar-refresh))))))
 
 (defun strata-dirvish-setup ()
   "Configure Dirvish, hooks, theme blending, and Dashboard integration."
   (let ((p (strata-prefs)))
     (strata-history-load)
     (strata-sync-theme-faces)
+    (when (fboundp 'customize-set-variable)
+      (ignore-errors (customize-set-variable 'dirvish-subtree-state-style 'arrow)))
     (setq dired-listing-switches (strata-compute-dired-switches p)
           dirvish-default-layout '(1 0.14 0.48)
           dirvish-use-header-line 'global
-          dirvish-attributes '(strata-icon strata-color strata-size strata-time vc-state subtree-state collapse)
+          dirvish-attributes
+          '(strata-icon strata-dir-mouse strata-color strata-size strata-time
+            vc-state subtree-state collapse)
           dirvish-preview-dispatchers
           '(strata-rich-image strata-rich-pdf strata-rich-document
             image gif video audio epub pdf archive)
           dirvish-header-line-format '(:left (strata-breadcrumb) :right (strata-view-info))
           dirvish-mode-line-format '(:left (strata-footer) :right (sort omit yank index)))
+    (when (boundp 'dirvish-directory-view-mode-map)
+      (define-key dirvish-directory-view-mode-map (kbd "<mouse-1>") #'strata-mouse-click-entry)
+      (define-key dirvish-directory-view-mode-map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
+      (define-key dirvish-directory-view-mode-map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event))
+    (add-hook 'dirvish-directory-view-mode-hook #'strata-dirvish--dirview-setup)
+    (when (fboundp 'dirvish--create-parent-buffer)
+      (advice-add 'dirvish--create-parent-buffer :filter-return #'strata-dirvish--parent-buffer-filter))
     (dolist (hook '(dired-mode-hook
                     strata-compact-mode-hook
                     strata-icons-mode-hook
@@ -116,6 +148,8 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
                     strata-trash-mode-hook
                     strata-recent-mode-hook))
       (add-hook hook #'strata-dirvish--enable-in-browser))
+    (add-hook 'after-make-frame-functions #'strata-dirvish--on-frame-created)
+    (add-hook 'server-after-make-frame-hook #'strata-dirvish--on-frame-created)
     (add-hook 'kill-emacs-hook #'strata-media-stop)
     (add-hook 'kill-emacs-hook #'strata-tabs-save)
     (with-eval-after-load 'dashboard

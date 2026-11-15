@@ -252,8 +252,26 @@
     (define-key map (kbd "o") #'strata-search-open-folder-at-point)
     (define-key map (kbd "/") #'strata-global-search)
     (define-key map (kbd "s") #'strata-global-search)
+    (define-key map (kbd "<mouse-1>") #'strata-search-mouse-click)
+    (define-key map (kbd "<mouse-2>") #'strata-search-mouse-activate)
+    (define-key map (kbd "<double-mouse-1>") #'strata-search-mouse-activate)
     map)
   "Keymap for `*Strata Search*' global results buffer.")
+
+(defun strata-search-mouse-click (event)
+  "Handle `<mouse-1>' in `*Strata Search*': open clicked dir, select files."
+  (interactive "e")
+  (mouse-set-point event)
+  (when-let ((p (get-text-property (line-beginning-position) 'strata-search-path)))
+    (when (file-directory-p p)
+      (strata-open-location p))))
+
+(defun strata-search-mouse-activate (event)
+  "Open clicked search result at EVENT."
+  (interactive "e")
+  (mouse-set-point event)
+  (when (get-text-property (line-beginning-position) 'strata-search-path)
+    (strata-search-activate-at-point)))
 
 (define-derived-mode strata-global-search-mode special-mode "Strata-Search"
   "Global Strata async `fd' search results buffer."
@@ -314,8 +332,10 @@
         (let ((inhibit-read-only t))
           (erase-buffer)
           (setq-local header-line-format
-                      (propertize (format "  🔍 Searching '%s'… (RET: Open · M-RET: Reveal Folder · /: New Search)" q)
-                                  'face 'strata-header-accent))
+                      (concat "  "
+                              (strata-icon-glyph 'search 'strata-header-accent)
+                              (propertize (format " Searching '%s'… (Click/RET: Open · M-RET: Reveal Folder · /: New Search)" q)
+                                          'face 'strata-header-accent)))
           (insert (propertize (format "  Searching across %s…\n\n"
                                       (string-join (strata-search--roots) ", "))
                               'face 'shadow))))
@@ -341,18 +361,22 @@
                        (insert (propertize
                                 (format "  %d results for \"%s\"%s\n\n"
                                         (length lines) q
-                                        (cond (timed-out "  ⚠ Time limit reached (partial)")
-                                              ((>= (length lines) limit) "  ⚠ Entry limit reached (partial)")
+                                        (cond (timed-out "  [Time limit reached (partial)]")
+                                              ((>= (length lines) limit) "  [Entry limit reached (partial)]")
                                               (t "")))
                                 'face 'strata-section-heading))
                        (dolist (path lines)
                          (let* ((dirp (file-directory-p path))
                                 (line (format "   %s  %-38s  %s\n"
-                                              (if dirp "📁" "📄")
+                                              (strata-icon-glyph (if dirp 'folder 'file))
                                               (truncate-string-to-width (file-name-nondirectory path) 38 nil nil "…")
                                               (propertize (abbreviate-file-name (or (file-name-directory path) "/"))
                                                           'face 'shadow))))
-                           (add-text-properties 0 (length line) (list 'strata-search-path path) line)
+                           (add-text-properties 0 (length line)
+                                                (append (list 'strata-search-path path
+                                                              'mouse-face 'highlight)
+                                                        (when dirp (list 'pointer 'hand 'help-echo path)))
+                                                line)
                            (insert line)))
                        (goto-char (point-min))))))
              (when (buffer-live-p (process-buffer proc))

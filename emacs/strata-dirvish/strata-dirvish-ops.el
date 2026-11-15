@@ -814,8 +814,10 @@ wrapping folder named after the archive so parent folders stay uncluttered."
         (erase-buffer)
         (special-mode)
         (setq-local header-line-format
-                    (propertize "  ⚙  Strata Background Jobs   [g: Refresh · q: Close]"
-                                'face 'strata-header-accent))
+                    (concat "  "
+                            (strata-icon-glyph 'gear 'strata-header-accent)
+                            (propertize "  Strata Background Jobs   [g: Refresh · q: Close]"
+                                        'face 'strata-header-accent)))
         (insert "\n")
         (if (null strata-jobs-list)
             (insert "   No background jobs recorded in this session.\n")

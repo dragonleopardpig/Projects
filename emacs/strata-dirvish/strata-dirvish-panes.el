@@ -3,7 +3,7 @@
 ;;; Commentary:
 ;; Implements the collapsible/rail Strata Sidebar (Places, GTK Bookmarks/Pins,
 ;; Devices), Nemo-style Split Extra Pane (F3/F6) with active pane tracking,
-;; persistent per-pane VTerm drawer (F4), and persistent Workspace Tabs with
+;; persistent per-pane VTerm drawer (C-` / F9), and persistent Workspace Tabs with
 ;; reopen stack and TOML/ELD session restore.
 
 ;;; Code:
@@ -361,7 +361,7 @@ Closing the extra pane while focused promotes its location & view into Pane 1."
         (force-mode-line-update t)
         (strata-sidebar-refresh)))))
 
-;;;; Per-Pane Persistent Terminal Drawer (F4) & Terminal Focus Guard
+;;;; Per-Pane Persistent Terminal Drawer (C-` / F9) & Terminal Focus Guard
 
 (defun strata-terminal-focused-p (&optional win)
   "Return non-nil if focus is currently inside an embedded terminal buffer."
@@ -374,19 +374,26 @@ Closing the extra pane while focused promotes its location & view into Pane 1."
                                 (file-name-as-directory dir)
                               (file-name-as-directory (expand-file-name "~/"))))
          (process-environment (append '("TERM=xterm-256color" "COLORTERM=truecolor")
-                                      process-environment)))
-    (cond
-     ((fboundp 'vterm)
-      (save-window-excursion
-        (let ((buf (vterm buf-name)))
-          buf)))
-     (t
-      (save-window-excursion
-        (ansi-term (or (getenv "SHELL") "/bin/bash")
-                   (string-trim buf-name "\\*" "\\*")))))))
+                                      process-environment))
+         (buf
+          (cond
+           ((fboundp 'vterm)
+            (save-window-excursion
+              (vterm buf-name)))
+           (t
+            (save-window-excursion
+              (ansi-term (or (getenv "SHELL") "/bin/bash")
+                         (string-trim buf-name "\\*" "\\*")))))))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (let ((lm (copy-keymap (or (current-local-map) (make-sparse-keymap)))))
+          (define-key lm (kbd "C-`") #'strata-toggle-pane-terminal)
+          (define-key lm (kbd "<f9>") #'strata-toggle-pane-terminal)
+          (use-local-map lm))))
+    buf))
 
 (defun strata-toggle-pane-terminal ()
-  "Toggle persistent embedded terminal drawer below active pane (`F4').
+  "Toggle persistent embedded terminal drawer below active pane (`C-`' / `F9').
 Keeps shell process & CWD alive while hidden."
   (interactive)
   (if (strata-terminal-focused-p)
@@ -575,6 +582,12 @@ Keeps shell process & CWD alive while hidden."
 
 ;;;; Strata Left Sidebar (Places + Pinned Bookmarks + Grouped Devices w/ Capacity Bars)
 
+(defun strata-sidebar-mouse-activate (event)
+  "Select clicked entry at EVENT in `*Strata Sidebar*' and open it."
+  (interactive "e")
+  (mouse-set-point event)
+  (strata-sidebar-activate-at-point))
+
 (defvar strata-sidebar-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
@@ -585,6 +598,8 @@ Keeps shell process & CWD alive while hidden."
     (define-key map (kbd "RET") #'strata-sidebar-activate-at-point)
     (define-key map (kbd "l") #'strata-sidebar-activate-at-point)
     (define-key map (kbd "<right>") #'strata-sidebar-activate-at-point)
+    (define-key map (kbd "<mouse-1>") #'strata-sidebar-mouse-activate)
+    (define-key map (kbd "<mouse-2>") #'strata-sidebar-mouse-activate)
     (define-key map (kbd "t") #'strata-sidebar-open-in-tab-at-point)
     (define-key map (kbd "m") #'strata-sidebar-mount-at-point)
     (define-key map (kbd "u") #'strata-sidebar-unmount-at-point)
@@ -605,17 +620,17 @@ Keeps shell process & CWD alive while hidden."
 (defun strata-sidebar--place-specs ()
   "Return ordered list of standard place plists matching preferences."
   (let ((p (strata-prefs))
-        (specs `(("home" "🏠" "Home" ,(expand-file-name "~/") nil ,(strata-prefs-sidebar-show-home (strata-prefs)))
-                 ("computer" "🖥" "Computer" "computer:///" nil ,(strata-prefs-sidebar-show-computer (strata-prefs)))
-                 ("trash" "🗑" ,(format "Trash (%d)" (length (strata-trash-items))) "trash:///" nil ,(strata-prefs-sidebar-show-trash (strata-prefs)))
-                 ("network" "🌐" "Network" "network:///" nil ,(strata-prefs-sidebar-show-network (strata-prefs)))
-                 ("recent" "🕒" "Recent" "recent:///" nil ,(strata-prefs-sidebar-show-recent (strata-prefs)))
-                 ("desktop" "🖵" "Desktop" ,(expand-file-name "~/Desktop") nil ,(strata-prefs-sidebar-show-desktop (strata-prefs)))
-                 ("documents" "📄" "Documents" ,(expand-file-name "~/Documents") nil ,(strata-prefs-sidebar-show-documents (strata-prefs)))
-                 ("downloads" "⬇" "Downloads" ,(expand-file-name "~/Downloads") nil ,(strata-prefs-sidebar-show-downloads (strata-prefs)))
-                 ("music" "🎵" "Music" ,(expand-file-name "~/Music") nil ,(strata-prefs-sidebar-show-music (strata-prefs)))
-                 ("pictures" "🖼" "Pictures" ,(expand-file-name "~/Pictures") nil ,(strata-prefs-sidebar-show-pictures (strata-prefs)))
-                 ("videos" "🎬" "Videos" ,(expand-file-name "~/Videos") nil ,(strata-prefs-sidebar-show-videos (strata-prefs))))))
+        (specs `(("home" ,(strata-icon-glyph 'home) "Home" ,(expand-file-name "~/") nil ,(strata-prefs-sidebar-show-home (strata-prefs)))
+                 ("computer" ,(strata-icon-glyph 'computer) "Computer" "computer:///" nil ,(strata-prefs-sidebar-show-computer (strata-prefs)))
+                 ("trash" ,(strata-icon-glyph 'trash) ,(format "Trash (%d)" (length (strata-trash-items))) "trash:///" nil ,(strata-prefs-sidebar-show-trash (strata-prefs)))
+                 ("network" ,(strata-icon-glyph 'network) "Network" "network:///" nil ,(strata-prefs-sidebar-show-network (strata-prefs)))
+                 ("recent" ,(strata-icon-glyph 'recent) "Recent" "recent:///" nil ,(strata-prefs-sidebar-show-recent (strata-prefs)))
+                 ("desktop" ,(strata-icon-glyph 'desktop) "Desktop" ,(expand-file-name "~/Desktop") nil ,(strata-prefs-sidebar-show-desktop (strata-prefs)))
+                 ("documents" ,(strata-icon-glyph 'documents) "Documents" ,(expand-file-name "~/Documents") nil ,(strata-prefs-sidebar-show-documents (strata-prefs)))
+                 ("downloads" ,(strata-icon-glyph 'downloads) "Downloads" ,(expand-file-name "~/Downloads") nil ,(strata-prefs-sidebar-show-downloads (strata-prefs)))
+                 ("music" ,(strata-icon-glyph 'music) "Music" ,(expand-file-name "~/Music") nil ,(strata-prefs-sidebar-show-music (strata-prefs)))
+                 ("pictures" ,(strata-icon-glyph 'pictures) "Pictures" ,(expand-file-name "~/Pictures") nil ,(strata-prefs-sidebar-show-pictures (strata-prefs)))
+                 ("videos" ,(strata-icon-glyph 'videos) "Videos" ,(expand-file-name "~/Videos") nil ,(strata-prefs-sidebar-show-videos (strata-prefs))))))
     (cl-loop for id in (strata-prefs-sidebar-order p)
              for sp = (assoc id specs)
              when (and sp (nth 5 sp)
@@ -641,11 +656,17 @@ Keeps shell process & CWD alive while hidden."
                  (active (and cur-dir (equal (directory-file-name cur-dir) (directory-file-name loc))))
                  (txt (if rail (format "  %s\n" icon)
                         (format "  %s  %s\n" icon (propertize label 'face (if active 'strata-header-accent 'default))))))
-            (add-text-properties 0 (length txt) (list 'strata-sidebar-loc loc 'help-echo loc) txt)
+            (add-text-properties 0 (length txt)
+                                 (list 'strata-sidebar-loc loc
+                                       'mouse-face 'highlight
+                                       'pointer 'hand
+                                       'help-echo loc)
+                                 txt)
             (insert txt)))
         (unless (strata-prefs-sidebar-pinned-collapsed p)
           (let ((pins (strata-bookmarks-read))
-                (idx 0))
+                (idx 0)
+                (pin-ico (strata-icon-glyph 'bookmark 'strata-header-accent)))
             (when pins
               (insert "\n" (propertize (if rail " Pins\n" "  PINNED\n") 'face 'strata-section-heading))
               (dolist (pin pins)
@@ -653,9 +674,14 @@ Keeps shell process & CWD alive while hidden."
                 (let* ((loc (car pin))
                        (lbl (cdr pin))
                        (keycap (if (<= idx 9) (propertize (format "[%d]" idx) 'face 'strata-hint-key) "   "))
-                       (txt (if rail (format "  📌%s\n" (if (<= idx 9) (number-to-string idx) ""))
-                              (format "  📌 %s %s\n" keycap lbl))))
-                  (add-text-properties 0 (length txt) (list 'strata-sidebar-loc loc 'help-echo loc) txt)
+                       (txt (if rail (format "  %s%s\n" pin-ico (if (<= idx 9) (number-to-string idx) ""))
+                              (format "  %s %s %s\n" pin-ico keycap lbl))))
+                  (add-text-properties 0 (length txt)
+                                       (list 'strata-sidebar-loc loc
+                                             'mouse-face 'highlight
+                                             'pointer 'hand
+                                             'help-echo loc)
+                                       txt)
                   (insert txt))))))
         (unless (strata-prefs-sidebar-devices-collapsed p)
           (insert "\n" (propertize (if rail " Devs\n" "  DEVICES\n") 'face 'strata-section-heading))
@@ -670,6 +696,8 @@ Keeps shell process & CWD alive while hidden."
                           (format "  %s  %s%s\n" icon name (or bar "")))))
               (add-text-properties 0 (length txt)
                                    (list 'strata-device dev 'strata-sidebar-loc mp
+                                         'mouse-face 'highlight
+                                         'pointer 'hand
                                          'help-echo (or mp (strata-device-device dev)))
                                    txt)
               (insert txt))))
