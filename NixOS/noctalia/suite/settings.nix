@@ -124,7 +124,7 @@
     workspaces = { labels_only_when_occupied = true; hide_when_empty = true; };
     taskbar = { only_active_workspace = true; taskbar_max_width = 280; };
     active_window = { display = "text_only"; max_length = 800; title_scroll = "none"; show_empty_label = false; };
-    # Main controls use each supplied accent once, in their bar order.
+    # Main controls use distinct accents, with white for the power button.
     # Native warning/mute/attention colors still communicate exceptional states.
     media = { color = barAccents.audio; hide_when_no_media = true; hide_artist = true; max_length = 100; };
     clock = { color = barAccents.neonYellowGreen; format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
@@ -146,7 +146,7 @@
     };
     tray = { color = barAccents.desktop; drawer = true; };
     control-center = { color = barAccents.deepPink; glyph = "adjustments"; };
-    session.color = barAccents.shockingPink;
+    session.color = "#FFFFFF";
     # Plugin bar widgets (see plugins.enabled above).
     umbriel-companion.type = "noctalia/umbriel-companion:bar";
     umbriel-displays.type = "prponkshe/umbriel-displays:bar";
