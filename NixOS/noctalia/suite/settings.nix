@@ -124,18 +124,18 @@
     workspaces = { labels_only_when_occupied = true; hide_when_empty = true; };
     taskbar = { only_active_workspace = true; taskbar_max_width = 280; };
     active_window = { display = "text_only"; max_length = 800; title_scroll = "none"; show_empty_label = false; };
-    # Right-side controls use the Fastfetch hues and neon accents.
+    # Main controls use each supplied accent once, in their bar order.
     # Native warning/mute/attention colors still communicate exceptional states.
     media = { color = barAccents.audio; hide_when_no_media = true; hide_artist = true; max_length = 100; };
     clock = { color = barAccents.neonYellowGreen; format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
     weather = { color = barAccents.distro; show_condition = false; actions.left = "panel-toggle control-center weather"; };
-    privacy = { color = barAccents.system; hide_inactive = true; };
-    caffeine.color = barAccents.neonPurple;
-    volume = { color = barAccents.audio; show_label = false; };
-    network = { color = barAccents.desktop; show_label = false; };
-    bluetooth.color = barAccents.desktop;
-    battery.color = barAccents.system;
-    notifications.color = barAccents.distro;
+    privacy = { color = barAccents.fuchsia; hide_inactive = true; };
+    caffeine.color = barAccents.schoolBusYellow;
+    volume = { color = barAccents.dodgerBlue; show_label = false; };
+    network = { color = barAccents.darkOrange; show_label = false; };
+    bluetooth.color = barAccents.lemonLime;
+    battery.color = barAccents.springBud;
+    notifications.color = barAccents.electricBlue;
     keyboard_layout = {
       color = barAccents.desktop;
       display = "short";
@@ -145,8 +145,8 @@
       actions.left = "exec fcitx5-remote -t";
     };
     tray = { color = barAccents.desktop; drawer = true; };
-    control-center = { color = "#FF7E70"; glyph = "adjustments"; };
-    session.color = "#FFFFFF";
+    control-center = { color = barAccents.deepPink; glyph = "adjustments"; };
+    session.color = barAccents.shockingPink;
     # Plugin bar widgets (see plugins.enabled above).
     umbriel-companion.type = "noctalia/umbriel-companion:bar";
     umbriel-displays.type = "prponkshe/umbriel-displays:bar";
@@ -159,7 +159,7 @@
     # when off, an infinity when on (the watcher sets it).
     always-on = {
       type = "custom_button";
-      color = barAccents.neonPurple;
+      color = barAccents.lawnGreen;
       glyph = "coffee";
       actions = { left = "exec /run/current-system/sw/bin/always-on-toggle";
                   right = "exec /run/current-system/sw/bin/always-on-toggle"; };
