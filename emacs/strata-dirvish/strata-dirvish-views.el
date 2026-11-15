@@ -223,9 +223,10 @@
     (let ((target (directory-file-name (expand-file-name path))))
       (cond
        ((derived-mode-p 'dired-mode)
-        (or (ignore-errors (dired-goto-file target))
-            (ignore-errors (dired-goto-file (concat target "/"))))
-        (strata-view--update-selection-highlight))
+        (let ((moved (or (ignore-errors (dired-goto-file target))
+                         (ignore-errors (dired-goto-file (concat target "/"))))))
+          (strata-view--update-selection-highlight)
+          moved))
        ((or (derived-mode-p 'strata-compact-mode)
             (derived-mode-p 'strata-icons-mode))
         (let ((pos (point-min))
@@ -248,10 +249,11 @@
                                  cand)))))
                   (when lbl (setq label-match lbl))))
               (setq pos next)))
+          (ignore icons-p)
           (when-let ((dest (or label-match first-match)))
             (goto-char dest)
             (strata-view--update-selection-highlight)
-            (ignore icons-p))))))))
+            dest)))))))
 
 ;;;; Folder Colors & Custom Icons
 
@@ -1003,7 +1005,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
     (cond
      ((and cur (strata-goto-file cur)))
      (entries (strata-goto-file (plist-get (car entries) :path)))
-     (t (strata-view--update-selection-highlight)))))
+     (t (strata-view--update-selection-highlight)))
+    (when (fboundp 'strata-watch-sync)
+      (strata-watch-sync (current-buffer)))))
 
 (defun strata-compact-refresh ()
   "Refresh Compact view buffer."
@@ -1304,7 +1308,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
     (cond
      ((and cur (strata-goto-file cur)))
      ((> strata-icons--count 0) (strata-icons--goto-index 0))
-     (t (strata-icons--update-selection-highlight)))))
+     (t (strata-icons--update-selection-highlight)))
+    (when (fboundp 'strata-watch-sync)
+      (strata-watch-sync (current-buffer)))))
 
 (defun strata-icons-refresh ()
   "Refresh Icons grid view."

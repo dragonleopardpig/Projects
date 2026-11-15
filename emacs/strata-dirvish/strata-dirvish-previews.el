@@ -423,44 +423,47 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
          (goto-char (point-min))))
       (_
        (if (file-directory-p file)
-           (with-current-buffer out-buf
-             (special-mode)
-             (font-lock-mode -1)
-             (let ((inhibit-read-only t))
-               (erase-buffer)
-               (if (strata-path-unsafe-probe-p file)
-                   (insert (propertize (format "  Remote / Cloud / External mount: %s\n\n  Auto-preview skipped (press RET to open).\n"
-                                               (file-name-nondirectory (directory-file-name file)))
-                                       'face 'shadow))
-                 (let ((items (ignore-errors (directory-files file nil "\\`[^.]" t))))
-                   (insert (concat "  "
-                                   (strata-icon-glyph 'folder 'strata-header-accent)
-                                   (propertize (format " %s (%d items)\n\n"
-                                                       (file-name-nondirectory (directory-file-name file))
-                                                       (length items))
-                                               'face 'strata-header-accent)))
-                   (dolist (it (seq-take items 60))
-                     (let* ((sub (expand-file-name it file))
-                            (dirp (file-directory-p sub))
-                            (row (format "   %s  %s\n"
-                                         (strata-icon-glyph (if dirp 'folder 'file))
-                                         it)))
-                       (when dirp
-                         (let ((km (make-sparse-keymap)))
-                           (define-key km [mouse-1]
-                                       (lambda (ev)
-                                         (interactive "e")
-                                         (when (fboundp 'strata-open-location)
-                                           (when (posn-window (event-end ev))
-                                             (select-window (posn-window (event-end ev))))
-                                           (strata-open-location sub t))))
-                           (strata-add-row-properties
-                            row (list 'mouse-face 'highlight
-                                      'pointer 'hand
-                                      'keymap km
-                                      'help-echo sub))))
-                       (insert row))))))
-             (goto-char (point-min)))
+           (progn
+             (setq strata-active-preview-file file
+                   strata-active-preview-kind 'dir)
+             (with-current-buffer out-buf
+               (special-mode)
+               (font-lock-mode -1)
+               (let ((inhibit-read-only t))
+                 (erase-buffer)
+                 (if (strata-path-unsafe-probe-p file)
+                     (insert (propertize (format "  Remote / Cloud / External mount: %s\n\n  Auto-preview skipped (press RET to open).\n"
+                                                 (file-name-nondirectory (directory-file-name file)))
+                                         'face 'shadow))
+                   (let ((items (ignore-errors (directory-files file nil "\\`[^.]" t))))
+                     (insert (concat "  "
+                                     (strata-icon-glyph 'folder 'strata-header-accent)
+                                     (propertize (format " %s (%d items)\n\n"
+                                                         (file-name-nondirectory (directory-file-name file))
+                                                         (length items))
+                                                 'face 'strata-header-accent)))
+                     (dolist (it (seq-take items 60))
+                       (let* ((sub (expand-file-name it file))
+                              (dirp (file-directory-p sub))
+                              (row (format "   %s  %s\n"
+                                           (strata-icon-glyph (if dirp 'folder 'file))
+                                           it)))
+                         (when dirp
+                           (let ((km (make-sparse-keymap)))
+                             (define-key km [mouse-1]
+                                         (lambda (ev)
+                                           (interactive "e")
+                                           (when (fboundp 'strata-open-location)
+                                             (when (posn-window (event-end ev))
+                                               (select-window (posn-window (event-end ev))))
+                                             (strata-open-location sub t))))
+                             (strata-add-row-properties
+                              row (list 'mouse-face 'highlight
+                                        'pointer 'hand
+                                        'keymap km
+                                        'help-echo sub))))
+                         (insert row))))))
+               (goto-char (point-min))))
          (strata-preview--render-source-file file out-buf))))
     (when (window-live-p win)
       (set-window-buffer win out-buf)

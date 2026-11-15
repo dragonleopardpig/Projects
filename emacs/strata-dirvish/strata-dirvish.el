@@ -19,6 +19,7 @@
 (require 'strata-dirvish-search)
 (require 'strata-dirvish-ops)
 (require 'strata-dirvish-keys)
+(require 'strata-dirvish-watch)
 
 (defun strata-dirvish--sync-auto-revert ()
   "Disable Dired auto-revert and notify watches on FUSE/cloud/remote mounts."
@@ -147,7 +148,9 @@ Always falls back to `~/' when the target or saved directory does not exist."
         (when (file-directory-p pdir)
           (setq-local default-directory (file-name-as-directory pdir))))
       (dirvish-prop :attrs
-        (dirvish--attrs-expand '(strata-icon strata-dir-mouse strata-color)))))
+        (dirvish--attrs-expand '(strata-icon strata-dir-mouse strata-color))))
+    (when (fboundp 'strata-watch-sync)
+      (strata-watch-sync buf)))
   buf)
 
 (defun strata-dirvish--after-build-layout (&rest _)
@@ -257,6 +260,8 @@ Always falls back to `~/' when the target or saved directory does not exist."
                     strata-recent-mode-hook))
       (add-hook hook #'strata-dirvish--enable-in-browser))
     (add-hook 'dired-after-readin-hook #'strata-dirvish--sync-auto-revert)
+    (when (fboundp 'strata-watch-install)
+      (strata-watch-install))
     (add-hook 'after-make-frame-functions #'strata-dirvish--on-frame-created)
     (add-hook 'server-after-make-frame-hook #'strata-dirvish--on-frame-created)
     (add-hook 'kill-emacs-hook #'strata-media-stop)

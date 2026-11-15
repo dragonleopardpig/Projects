@@ -1560,5 +1560,243 @@
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
 
+(defun strata-test--wait-until (pred &optional timeout-secs)
+  "Pump Emacs events and timers until PRED returns non-nil or TIMEOUT-SECS elapses."
+  (let ((deadline (+ (float-time) (or timeout-secs 2.5))))
+    (while (and (not (funcall pred))
+                (< (float-time) deadline))
+      (read-event nil nil 0.05)
+      (accept-process-output nil 0.01))
+    (funcall pred)))
+
+(ert-deftest strata-test-live-watch-compact-icons-and-split-panes ()
+  "External filesystem changes live-update Compact, Icons, and Split panes via filenotify."
+  (let* ((tmp (make-temp-file "strata-watch-views-" t))
+         (dirA (file-name-as-directory (expand-file-name "dirA" tmp)))
+         (dirB (file-name-as-directory (expand-file-name "dirB" tmp)))
+         (strata-dirvish-state-dir (make-temp-file "strata-watch-st-" t))
+         (strata-dirvish-state-file (expand-file-name "prefs.eld" strata-dirvish-state-dir))
+         (strata-tabs-state-file (expand-file-name "tabs.eld" strata-dirvish-state-dir))
+         (strata-history-file (expand-file-name "history.eld" strata-dirvish-state-dir))
+         (strata-thumbnail-dir (expand-file-name "thumbnails" strata-dirvish-state-dir))
+         (strata-workspace-tabs nil)
+         (strata-preview-standalone-window nil)
+         (strata-sidebar-window nil)
+         bufA bufB)
+    (make-directory dirA t)
+    (make-directory dirB t)
+    (write-region "alpha" nil (expand-file-name "alpha.txt" dirA) nil 'silent)
+    (write-region "beta" nil (expand-file-name "beta.txt" dirB) nil 'silent)
+    (unwind-protect
+        (save-window-excursion
+          (strata-dirvish-setup)
+          (delete-other-windows)
+          ;; 1. Compact view watches dirA and reacts to external file creation & deletion.
+          (setq bufA (get-buffer-create "*Strata Test Compact*"))
+          (switch-to-buffer bufA)
+          (strata-compact-mode)
+          (strata-compact-render dirA)
+          (should (assoc (cons 'primary dirA) strata-watch--entries))
+          (call-process "sh" nil nil nil "-c"
+                        (format "printf 'gamma\\n' > %s"
+                                (shell-quote-argument (expand-file-name "gamma.txt" dirA))))
+          (should (strata-test--wait-until
+                   (lambda ()
+                     (with-current-buffer bufA
+                       (string-match-p "gamma\\.txt" (buffer-string))))))
+          ;; 2. Split pane with Icons view in dirB updates simultaneously in second window.
+          (let ((w2 (split-window-right)))
+            (setq bufB (get-buffer-create "*Strata Test Icons*"))
+            (set-window-buffer w2 bufB)
+            (with-selected-window w2
+              (strata-icons-mode)
+              (strata-icons-render dirB)
+              (should (assoc (cons 'primary dirB) strata-watch--entries)))
+            (call-process "sh" nil nil nil "-c"
+                          (format "printf 'delta\\n' > %s && rm -f %s"
+                                  (shell-quote-argument (expand-file-name "delta.txt" dirB))
+                                  (shell-quote-argument (expand-file-name "beta.txt" dirB))))
+            (should (strata-test--wait-until
+                     (lambda ()
+                       (with-current-buffer bufB
+                         (let ((s (buffer-string)))
+                           (and (string-match-p "delta\\.txt" s)
+                                (not (string-match-p "beta\\.txt" s)))))))))
+          ;; 3. Killing watched buffers removes descriptors cleanly.
+          (let ((watched-descrs
+                 (append (with-current-buffer bufA (mapcar #'cdr strata-watch--entries))
+                         (with-current-buffer bufB (mapcar #'cdr strata-watch--entries)))))
+            (kill-buffer bufA)
+            (kill-buffer bufB)
+            (dolist (d watched-descrs)
+              (should-not (gethash d strata-watch--table)))))
+      (dolist (b (list bufA bufB))
+        (when (buffer-live-p b) (kill-buffer b)))
+      (delete-other-windows)
+      (ignore-errors (delete-directory tmp t))
+      (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
+
+(ert-deftest strata-test-live-watch-parent-subdir-and-preview-cache ()
+  "External changes live-update Miller parents, hovered subfolders, and text/thumb caches."
+  (let* ((tmp (make-temp-file "strata-watch-deep-" t))
+         (parent (file-name-as-directory (expand-file-name "parent" tmp)))
+         (child (file-name-as-directory (expand-file-name "child" parent)))
+         (sub (file-name-as-directory (expand-file-name "sub" child)))
+         (note (expand-file-name "note.txt" child))
+         (strata-dirvish-state-dir (make-temp-file "strata-deep-st-" t))
+         (strata-dirvish-state-file (expand-file-name "prefs.eld" strata-dirvish-state-dir))
+         (strata-tabs-state-file (expand-file-name "tabs.eld" strata-dirvish-state-dir))
+         (strata-history-file (expand-file-name "history.eld" strata-dirvish-state-dir))
+         (strata-thumbnail-dir (expand-file-name "thumbnails" strata-dirvish-state-dir))
+         (strata-workspace-tabs nil)
+         (strata-preview-standalone-window nil)
+         (strata-sidebar-window nil)
+         cbuf pbuf pwin prev-buf)
+    (make-directory sub t)
+    (write-region "initial-text" nil note nil 'silent)
+    (write-region "inside" nil (expand-file-name "inside.txt" sub) nil 'silent)
+    (unwind-protect
+        (save-window-excursion
+          (strata-dirvish-setup)
+          (delete-other-windows)
+          ;; 1. Miller parent column (`dirvish-directory-view-mode') live-updates & clears dv-parent-hash.
+          (let* ((dv (dirvish--new :curr-layout '(1 0.14 0.48)))
+                 (str (with-temp-buffer (dired-insert-directory parent "-alh") (buffer-string))))
+            (puthash (directory-file-name parent) str (dv-parent-hash dv))
+            (setq pbuf (dirvish--special-buffer "parent-1" dv t))
+            (with-current-buffer pbuf
+              (dirvish-directory-view-mode)
+              (dirvish-prop :dv (dv-id dv))
+              (let ((inhibit-read-only t)) (erase-buffer) (insert str))
+              (setq-local dired-subdir-alist (list (cons (directory-file-name parent) (point-min-marker))))
+              (strata-dirvish--parent-buffer-filter pbuf)
+              (strata-watch-setup))
+            (should (with-current-buffer pbuf
+                      (assoc (cons 'parent parent) strata-watch--entries)))
+            (call-process "sh" nil nil nil "-c"
+                          (format "touch %s"
+                                  (shell-quote-argument (expand-file-name "sibling.txt" parent))))
+            (should (strata-test--wait-until
+                     (lambda ()
+                       (with-current-buffer pbuf
+                         (string-match-p "sibling\\.txt" (buffer-string)))))))
+          ;; 2. Hovered subfolder in browser live-updates standalone `*Strata Preview*` via subdir watch.
+          (setq cbuf (get-buffer-create "*Strata Test Hover*"))
+          (switch-to-buffer cbuf)
+          (strata-compact-mode)
+          (strata-compact-render child)
+          (setq pwin (split-window-right))
+          (setq strata-preview-standalone-window pwin)
+          (strata-goto-file (directory-file-name sub))
+          (strata-preview-update-standalone (directory-file-name sub) pwin)
+          (strata-watch-sync cbuf)
+          (should (assoc (cons 'preview-subdir sub) strata-watch--entries))
+          (call-process "sh" nil nil nil "-c"
+                        (format "touch %s"
+                                (shell-quote-argument (expand-file-name "nested_new.txt" sub))))
+          (should (strata-test--wait-until
+                   (lambda ()
+                     (when-let ((sb (get-buffer "*Strata Preview*")))
+                       (with-current-buffer sb
+                         (string-match-p "nested_new\\.txt" (buffer-string)))))))
+          ;; 3. Overwritten file invalidates stale thumbnail files & `dv-preview-hash',
+          ;;    and reloads an active `strata-preview-read-mode' buffer safely.
+          (make-directory strata-thumbnail-dir t)
+          (let* ((stale-thumb (expand-file-name (format "img-%s-100.png" (md5 note))
+                                                strata-thumbnail-dir))
+                 (dv2 (dirvish--new :curr-layout '(1 0.14 0.48))))
+            (write-region "stale" nil stale-thumb nil 'silent)
+            (puthash note "stale-cached-text" (dv-preview-hash dv2))
+            (setq prev-buf (generate-new-buffer (format "PREVIEW :: %s :: note.txt" (dv-timestamp dv2))))
+            (with-current-buffer prev-buf
+              (insert "initial-text")
+              (set-buffer-modified-p nil)
+              (setq buffer-file-name note
+                    strata-preview--file note)
+              (strata-preview-read-mode 1))
+            (set-window-buffer pwin prev-buf)
+            (setf (dv-preview-window dv2) pwin
+                  (dv-index dv2) (cons child cbuf))
+            (cl-letf (((symbol-function 'dirvish-curr) (lambda () dv2))
+                      ((symbol-function 'dirvish--preview-update)
+                       (lambda (d f)
+                         (let ((nb (get-buffer-create
+                                    (format "PREVIEW :: %s :: %s"
+                                            (dv-timestamp d) (file-name-nondirectory f)))))
+                           (with-current-buffer nb
+                             (let ((inhibit-read-only t))
+                               (erase-buffer)
+                               (insert-file-contents f)
+                               (setq buffer-file-name f)))
+                           (set-window-buffer (dv-preview-window d) nb)))))
+              (strata-goto-file note)
+              (strata-watch-sync cbuf)
+              (call-process "sh" nil nil nil "-c"
+                            (format "printf 'updated-externally\\n' > %s"
+                                    (shell-quote-argument note)))
+              (should (strata-test--wait-until
+                       (lambda ()
+                         (let ((wb (and (window-live-p pwin) (window-buffer pwin))))
+                           (and (buffer-live-p wb)
+                                (with-current-buffer wb
+                                  (string-match-p "updated-externally" (buffer-string))))))))
+              (should-not (file-exists-p stale-thumb))
+              (should-not (gethash note (dv-preview-hash dv2)))
+              (should (with-current-buffer (window-buffer pwin)
+                        strata-preview-read-mode))))
+          ;; 4. Unsafe cloud FUSE directory must still be skipped by watcher setup.
+          (cl-letf (((symbol-function 'strata-path-mount-kind) (lambda (_p) 'cloud)))
+            (should-not (strata-watch--safe-dir-p child))
+            (with-temp-buffer
+              (setq default-directory child)
+              (strata-watch-setup)
+              (should-not strata-watch--entries))))
+      (dolist (b (list cbuf pbuf prev-buf (get-buffer "*Strata Preview*")))
+        (when (buffer-live-p b)
+          (with-current-buffer b (set-buffer-modified-p nil))
+          (kill-buffer b)))
+      (delete-other-windows)
+      (ignore-errors (delete-directory tmp t))
+      (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
+
+(ert-deftest strata-test-live-watch-trash-and-sidebar ()
+  "External XDG Trash changes live-update `*Strata Trash*' and Sidebar Trash counter."
+  (let* ((tmp (make-temp-file "strata-watch-trash-" t))
+         (xdg (expand-file-name "xdg" tmp))
+         (tfiles (expand-file-name "Trash/files" xdg))
+         (tinfo (expand-file-name "Trash/info" xdg))
+         (strata-dirvish-state-dir (make-temp-file "strata-trash-st-" t))
+         (strata-dirvish-state-file (expand-file-name "prefs.eld" strata-dirvish-state-dir))
+         (strata-tabs-state-file (expand-file-name "tabs.eld" strata-dirvish-state-dir))
+         (strata-history-file (expand-file-name "history.eld" strata-dirvish-state-dir))
+         (process-environment (cons (concat "XDG_DATA_HOME=" xdg) process-environment))
+         tbuf sbuf)
+    (make-directory tfiles t)
+    (make-directory tinfo t)
+    (unwind-protect
+        (progn
+          (strata-watch-install)
+          (setq tbuf (strata-open-trash-buffer))
+          (setq sbuf (get-buffer-create "*Strata Sidebar*"))
+          (with-current-buffer sbuf
+            (strata-sidebar-mode)
+            (strata-sidebar-render))
+          (should (with-current-buffer tbuf (string-match-p "Trash is empty" (buffer-string))))
+          (should (with-current-buffer sbuf (string-match-p "Trash (0)" (buffer-string))))
+          (call-process "sh" nil nil nil "-c"
+                        (format "printf '[Trash Info]\\nPath=/tmp/gone.txt\\nDeletionDate=2026-11-15T19:00:00\\n' > %s && printf 'bye' > %s"
+                                (shell-quote-argument (expand-file-name "gone.txt.trashinfo" tinfo))
+                                (shell-quote-argument (expand-file-name "gone.txt" tfiles))))
+          (should (strata-test--wait-until
+                   (lambda ()
+                     (and (with-current-buffer tbuf
+                            (string-match-p "gone\\.txt" (buffer-string)))
+                          (with-current-buffer sbuf
+                            (string-match-p "Trash (1)" (buffer-string))))))))
+      (dolist (b (list tbuf sbuf))
+        (when (buffer-live-p b) (kill-buffer b)))
+      (ignore-errors (delete-directory tmp t))
+      (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
+
 (provide 'strata-dirvish-tests)
 ;;; strata-dirvish-tests.el ends here

@@ -851,7 +851,9 @@ Keeps shell process & CWD alive while hidden."
                                    'mouse-face 'highlight
                                    'pointer 'hand
                                    'help-echo (or mp (strata-device-device dev)))))))))
-        (goto-char (min pt (point-max)))))))
+        (goto-char (min pt (point-max)))
+        (when (fboundp 'strata-watch-sync)
+          (strata-watch-sync buf))))))
 
 (defun strata-sidebar-refresh ()
   "Refresh `*Strata Sidebar*' when visible without triggering a device rescan."

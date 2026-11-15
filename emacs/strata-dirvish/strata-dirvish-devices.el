@@ -1069,7 +1069,9 @@ PROBE-FUSE is non-nil."
             (insert (strata-add-row-properties
                      line (list 'strata-trash-item it
                                 'mouse-face 'highlight
-                                'keymap strata-trash--row-keymap)))))))))
+                                'keymap strata-trash--row-keymap)))))))
+    (when (fboundp 'strata-watch-sync)
+      (strata-watch-sync (current-buffer)))))
 
 (defun strata-trash--item-at-point ()
   "Return trash plist on current line."
@@ -1231,7 +1233,9 @@ PROBE-FUSE is non-nil."
                      line (append (list 'strata-recent-path f
                                         'mouse-face 'highlight
                                         'keymap strata-recent--row-keymap)
-                                  (when dirp (list 'pointer 'hand 'help-echo f)))))))))))
+                                  (when dirp (list 'pointer 'hand 'help-echo f)))))))))
+    (when (fboundp 'strata-watch-sync)
+      (strata-watch-sync (current-buffer)))))
 
 (defun strata-recent-open-at-point ()
   "Open recent file or folder at point."
