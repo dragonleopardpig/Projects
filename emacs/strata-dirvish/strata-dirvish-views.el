@@ -26,6 +26,7 @@
 (declare-function strata-dirvish--flatten-layout "strata-dirvish-panes" ())
 (declare-function strata-pane-clipboard-summary "strata-dirvish-ops" ())
 (declare-function strata-preview-at-point "strata-dirvish-previews" ())
+(declare-function strata-preview-edit-file "strata-dirvish-previews" (file))
 (declare-function strata-open-or-edit-at-point "strata-dirvish-previews" ())
 (defvar strata-preview-standalone-window)
 
@@ -993,12 +994,19 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                (not (member name '("." "..")))
                (expand-file-name name base-dir))))))
 
+(defun strata-mouse--edit-or-open-file (path)
+  "Direct-edit regular file PATH in preview pane, or fall back to `find-file'."
+  (if (fboundp 'strata-preview-edit-file)
+      (strata-preview-edit-file path)
+    (when (fboundp 'strata-dirvish--flatten-layout)
+      (strata-dirvish--flatten-layout))
+    (find-file path)))
+
 (defun strata-mouse--open-path (path dir-only-p)
   "Open PATH in the appropriate Strata pane; when DIR-ONLY-P, only navigate dirs."
   (when (and path (not (string-empty-p path)))
     (let ((is-dir (file-directory-p path)))
-      (cond
-       ((derived-mode-p 'dirvish-directory-view-mode)
+      (when (derived-mode-p 'dirvish-directory-view-mode)
         (when-let* ((dv (or (dirvish-curr)
                             (and (boundp 'dirvish--sessions)
                                  (gethash (dirvish-prop :dv) dirvish--sessions))))
@@ -1007,19 +1015,12 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                                   (and (fboundp 'strata-panes--main-window)
                                        (strata-panes--main-window)))))
           (when (window-live-p root-win)
-            (select-window root-win))
-          (if is-dir
-              (strata-open-location path t)
-            (when (not dir-only-p)
-              (when (fboundp 'strata-dirvish--flatten-layout)
-                (strata-dirvish--flatten-layout))
-              (find-file path)))))
+            (select-window root-win))))
+      (cond
        (is-dir
         (strata-open-location path t))
        ((not dir-only-p)
-        (when (fboundp 'strata-dirvish--flatten-layout)
-          (strata-dirvish--flatten-layout))
-        (find-file path))))))
+        (strata-mouse--edit-or-open-file path))))))
 
 (defun strata-mouse-click-entry (event)
   "Handle single `<mouse-1>' click: open clicked directory, or select file to preview."
@@ -1155,21 +1156,31 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
              (if (strata-prefs-expandable-tree p) "ON" "OFF"))))
 
 (defun strata-tree-expand-or-open ()
-  "In Tree List view toggle subtree; else open folder or edit file in preview."
+  "In Tree List view toggle subtree; open folders or preview files (`<right>')."
   (interactive)
   (let ((p (strata-prefs))
         (f (strata-current-file)))
-    (if (and (derived-mode-p 'dired-mode)
-             (eq (strata-prefs-browser-mode p) 'list)
-             (strata-prefs-expandable-tree p)
-             f
-             (file-directory-p f))
-        (dirvish-subtree-toggle)
+    (cond
+     ((derived-mode-p 'strata-computer-mode)
+      (call-interactively #'strata-computer-open-at-point))
+     ((and (derived-mode-p 'dired-mode)
+           (eq (strata-prefs-browser-mode p) 'list)
+           (strata-prefs-expandable-tree p)
+           f
+           (file-directory-p f))
+      (dirvish-subtree-toggle))
+     ((and f (file-directory-p f))
       (if (fboundp 'strata-open-or-edit-at-point)
           (strata-open-or-edit-at-point)
         (if (derived-mode-p 'dired-mode)
             (dired-find-file)
-          (strata-view-activate-at-point))))))
+          (strata-open-location f t))))
+     (f
+      (if (fboundp 'strata-preview-at-point)
+          (strata-preview-at-point)
+        (user-error "Preview unavailable for %s" f)))
+     (t
+      (user-error "No entry at point")))))
 
 (defun strata-tree-collapse-or-up ()
   "In Tree List view collapse subtree or jump to parent; else navigate up."

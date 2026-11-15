@@ -323,6 +323,7 @@
 
 (defvar strata-preview-edit-mode-map
   (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-<left>") #'strata-preview-edit-leave)
     (define-key map (kbd "C-c q") #'strata-preview-edit-exit)
     (define-key map (kbd "C-<escape>") #'strata-preview-edit-exit)
     (define-key map (kbd "C-c k") #'strata-preview-edit-abort)
@@ -331,14 +332,43 @@
 
 (define-minor-mode strata-preview-edit-mode
   "Minor mode active while direct-editing inside Strata's preview pane.
-Provides `C-c q' / `C-<escape>' to return left, or `C-c k' to abort edits."
+Provides `C-<left>' (leave with save prompt), `C-c q' / `C-<escape>'
+to return left, or `C-c k' to abort and discard edits."
   :lighter " Preview-Edit"
   :keymap strata-preview-edit-mode-map)
 
-(defun strata-preview--return-to-browser (&optional discard-p)
+(defun strata-preview--invalidate-cache (dv file &optional kill-visiting)
+  "Drop cached preview text and throwaway preview buffers for FILE in DV.
+When KILL-VISITING is non-nil, also kill an unmodified preview buffer."
+  (when (and dv file)
+    (when (hash-table-p (dv-preview-hash dv))
+      (remhash file (dv-preview-hash dv))
+      (remhash (file-truename file) (dv-preview-hash dv)))
+    (when-let ((pbuf (get-buffer (format "PREVIEW :: %s :: %s"
+                                         (dv-timestamp dv)
+                                         (file-name-nondirectory file)))))
+      (unless (buffer-modified-p pbuf)
+        (setf (dv-preview-buffers dv) (delq pbuf (dv-preview-buffers dv)))
+        (let (kill-buffer-query-functions)
+          (kill-buffer pbuf)))))
+  (when (and kill-visiting file)
+    (when-let ((existing (find-buffer-visiting file)))
+      (when (and (not (buffer-modified-p existing))
+                 (or (and dv (memq existing (dv-preview-buffers dv)))
+                     (string-prefix-p "PREVIEW :: " (buffer-name existing))))
+        (when dv
+          (setf (dv-preview-buffers dv) (delq existing (dv-preview-buffers dv))))
+        (let (kill-buffer-query-functions)
+          (kill-buffer existing))))))
+
+(defun strata-preview--return-to-browser (&optional mode)
   "Exit preview-pane edit mode and return to the neighbor left browser window.
-When DISCARD-P is non-nil and buffer is modified, confirm and revert edits."
+MODE may be:
+- nil: leave immediately without prompting;
+- `save': run Emacs's normal save prompt (`save-some-buffers') when modified;
+- `discard': prompt to confirm discarding unsaved edits and revert."
   (let* ((buf (current-buffer))
+         (buf-file buffer-file-name)
          (bwin strata-preview-edit--browser-window)
          (pwin (or strata-preview-edit--preview-window (selected-window)))
          (target-win
@@ -350,13 +380,21 @@ When DISCARD-P is non-nil and buffer is modified, confirm and revert edits."
                      (not (eq left (bound-and-true-p strata-sidebar-window)))
                      left))
               (strata-panes--main-window))))
-    (when (and discard-p (buffer-modified-p buf))
-      (unless (y-or-n-p (format "Discard unsaved edits in %s and abort? "
-                                (buffer-name buf)))
-        (user-error "Aborted"))
-      (if (and buffer-file-name (file-exists-p buffer-file-name))
-          (revert-buffer t t t)
-        (set-buffer-modified-p nil)))
+    (pcase mode
+      ('discard
+       (when (buffer-modified-p buf)
+         (unless (y-or-n-p (format "Discard unsaved edits in %s and abort? "
+                                   (buffer-name buf)))
+           (user-error "Aborted"))
+         (if (and buffer-file-name (file-exists-p buffer-file-name))
+             (revert-buffer t t t)
+           (set-buffer-modified-p nil))))
+      ('save
+       (when (buffer-modified-p buf)
+         (if buf-file
+             (save-some-buffers nil (lambda () (eq (current-buffer) buf)))
+           (when (y-or-n-p (format "Save buffer %s? " (buffer-name buf)))
+             (save-buffer))))))
     (strata-preview-edit-mode -1)
     (setq strata-preview-edit--browser-window nil
           strata-preview-edit--preview-window nil)
@@ -364,8 +402,12 @@ When DISCARD-P is non-nil and buffer is modified, confirm and revert edits."
       (select-window target-win)
       (when (boundp 'dirvish--selected-window)
         (setq dirvish--selected-window target-win))
-      (when-let ((cur-file (and (fboundp 'strata-current-file) (strata-current-file))))
-        (let ((dv (ignore-errors (dirvish-curr))))
+      (let ((dv (ignore-errors (dirvish-curr))))
+        (when (and buf-file (not (buffer-modified-p buf)))
+          (strata-preview--invalidate-cache dv buf-file))
+        (when-let ((cur-file (and (fboundp 'strata-current-file) (strata-current-file))))
+          (when (and (equal cur-file buf-file) (not (buffer-modified-p buf)))
+            (strata-preview--invalidate-cache dv cur-file))
           (cond
            ((and dv (window-live-p (dv-preview-window dv)))
             (dirvish-prop :index cur-file)
@@ -373,6 +415,11 @@ When DISCARD-P is non-nil and buffer is modified, confirm and revert edits."
               (strata-preview-update-standalone cur-file (dv-preview-window dv))))
            ((window-live-p pwin)
             (strata-preview-update-standalone cur-file pwin))))))))
+
+(defun strata-preview-edit-leave ()
+  "Prompt to save changes and return to the left browser window (`C-<left>')."
+  (interactive)
+  (strata-preview--return-to-browser 'save))
 
 (defun strata-preview-edit-exit ()
   "Leave preview-pane edit mode and return to the neighbor left browser window."
@@ -382,7 +429,7 @@ When DISCARD-P is non-nil and buffer is modified, confirm and revert edits."
 (defun strata-preview-edit-abort ()
   "Discard edits (if modified) and return to the neighbor left browser window."
   (interactive)
-  (strata-preview--return-to-browser t))
+  (strata-preview--return-to-browser 'discard))
 
 (defun strata-preview-edit-file (file)
   "Edit FILE directly inside the preview pane without altering window layout."
@@ -390,14 +437,7 @@ When DISCARD-P is non-nil and buffer is modified, confirm and revert edits."
          (bwin (selected-window))
          (pwin (strata-preview--ensure-window t)))
     ;; Never reuse a truncated/read-only Dirvish throwaway `PREVIEW :: ...' buffer.
-    (when-let ((existing (find-buffer-visiting file)))
-      (when (and (not (buffer-modified-p existing))
-                 (or (and dv (memq existing (dv-preview-buffers dv)))
-                     (string-prefix-p "PREVIEW :: " (buffer-name existing))))
-        (when dv
-          (setf (dv-preview-buffers dv) (delq existing (dv-preview-buffers dv))))
-        (let (kill-buffer-query-functions)
-          (kill-buffer existing))))
+    (strata-preview--invalidate-cache dv file t)
     (let* ((existing (find-buffer-visiting file))
            (was-preview (and dv existing (memq existing (dv-preview-buffers dv))))
            (buf (find-file-noselect file)))
@@ -420,7 +460,7 @@ When DISCARD-P is non-nil and buffer is modified, confirm and revert edits."
             (when (boundp 'dirvish--selected-window)
               (setq dirvish--selected-window pwin))
             (select-window pwin)
-            (message "Preview Edit: C-x C-s save · C-c q / C-<escape> back left · C-c k abort edits")
+            (message "Preview Edit: C-x C-s save · C-<left> leave (prompt save) · C-c q back · C-c k abort")
             buf)
         (pop-to-buffer-same-window buf)))))
 
