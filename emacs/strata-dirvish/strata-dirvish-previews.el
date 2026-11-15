@@ -25,6 +25,10 @@
 (declare-function strata-computer--device-at-point "strata-dirvish-devices" ())
 (declare-function strata-computer-open-at-point "strata-dirvish-devices" ())
 (declare-function strata-trash-restore-at-point "strata-dirvish-devices" ())
+(declare-function pdf-view-scroll-up-or-next-page "pdf-view" (&optional arg))
+(declare-function pdf-view-scroll-down-or-previous-page "pdf-view" (&optional arg))
+(declare-function doc-view-scroll-up-or-next-page "doc-view" (&optional arg))
+(declare-function doc-view-scroll-down-or-previous-page "doc-view" (&optional arg))
 (defvar strata-sidebar-window)
 (defvar dirvish--selected-window)
 (defvar dirvish--timers)
@@ -176,13 +180,23 @@ Returns fontified `buffer-string' with realized `face' text properties."
       (font-lock-ensure (point-min) (min (point-max) strata-preview-max-bytes)))))
 
 (defun strata-preview--guard-dirvish-update (orig-fn dv index)
-  "Prevent background Dirvish preview updates from clobbering an active edit pane."
-  (let* ((pwin (and dv (dv-preview-window dv)))
+  "Prevent background Dirvish preview updates from clobbering focused panes.
+Also attaches `strata-preview-read-mode' metadata to newly updated previews."
+  (let* ((ctx (when (strata-preview--browser-window-p (selected-window))
+                (strata-preview--capture-browser-context (selected-window))))
+         (pwin (and dv (dv-preview-window dv)))
          (pbuf (and (window-live-p pwin) (window-buffer pwin)))
          (pbuf-file (and (buffer-live-p pbuf)
                          (buffer-local-value 'buffer-file-name pbuf)))
          (pbuf-edit (and (buffer-live-p pbuf)
                          (buffer-local-value 'strata-preview-edit-mode pbuf)))
+         (pbuf-read (and (buffer-live-p pbuf)
+                         (buffer-local-value 'strata-preview-read-mode pbuf)))
+         (preview-focused
+          (and (window-live-p pwin)
+               (eq (selected-window) pwin)
+               (buffer-live-p pbuf)
+               (or pbuf-edit pbuf-read)))
          (browser-browsing-other
           (and (window-live-p pwin)
                (not (eq (selected-window) pwin))
@@ -192,13 +206,16 @@ Returns fontified `buffer-string' with realized `face' text properties."
                (not (equal (and pbuf-file (ignore-errors (file-truename pbuf-file)))
                            (ignore-errors (file-truename index)))))))
     (when (or strata-preview--force-update
-              (not (buffer-live-p pbuf))
-              (strata-preview--preview-buffer-p pbuf dv)
-              browser-browsing-other)
+              (and (not preview-focused)
+                   (or (not (buffer-live-p pbuf))
+                       (strata-preview--preview-buffer-p pbuf dv)
+                       browser-browsing-other)))
       (when (and browser-browsing-other (buffer-live-p pbuf))
         (with-current-buffer pbuf
           (strata-preview-edit-mode -1)))
-      (funcall orig-fn dv index))))
+      (funcall orig-fn dv index)
+      (when-let ((nbuf (and (window-live-p pwin) (window-buffer pwin))))
+        (strata-preview--sync-read-buffer pwin nbuf ctx)))))
 
 (strata-preview--ensure-common-auto-modes)
 (add-hook 'dirvish-preview-setup-hook #'strata-preview--setup-dirvish-fontlock-h)
@@ -374,7 +391,9 @@ Returns fontified `buffer-string' with realized `face' text properties."
 
 (defun strata-preview-update-standalone (file &optional window)
   "Render rich preview for FILE into `*Strata Preview*' inside WINDOW."
-  (let* ((ext (downcase (or (file-name-extension file) "")))
+  (let* ((ctx (when (strata-preview--browser-window-p (selected-window))
+                (strata-preview--capture-browser-context (selected-window))))
+         (ext (downcase (or (file-name-extension file) "")))
          (win (or window (get-buffer-window "*Strata Preview*") (selected-window)))
          (res (or (dirvish-strata-rich-image-dp file ext win nil)
                   (dirvish-strata-rich-pdf-dp file ext win nil)
@@ -444,7 +463,8 @@ Returns fontified `buffer-string' with realized `face' text properties."
              (goto-char (point-min)))
          (strata-preview--render-source-file file out-buf))))
     (when (window-live-p win)
-      (set-window-buffer win out-buf))))
+      (set-window-buffer win out-buf)
+      (strata-preview--sync-read-buffer win out-buf ctx))))
 
 (defun strata-scroll-preview-down ()
   "Scroll preview window down (`J')."
@@ -536,40 +556,253 @@ Never mistakes `dirvish--preview-update' (which returns nil from
               (strata-preview-update-standalone file pwin))))
       (strata-preview-update-standalone file pwin))))
 
-(defun strata-preview-at-point ()
-  "Preview item at point inside the preview pane without closing it (`SPC')."
-  (interactive)
+(defun strata-preview--show-at-point (&optional focus-read-only)
+  "Render item at point into the preview pane.
+When FOCUS-READ-ONLY is non-nil, enter the preview pane in
+`strata-preview-read-mode' (`<right>').  Otherwise stay in the browser (`SPC')."
   (let* ((f (or (strata-current-file)
                 (and (derived-mode-p 'strata-computer-mode)
                      (let ((dev (ignore-errors (strata-computer--device-at-point))))
                        (and dev (strata-device-mounted-p dev)
                             (strata-device-mountpoint dev))))))
-         (dv (ignore-errors (dirvish-curr))))
+         (dv (ignore-errors (dirvish-curr)))
+         (cur (selected-window))
+         (ctx (strata-preview--capture-browser-context cur)))
     (unless f
       (user-error "No entry to preview at point"))
     (when-let ((pwin (strata-preview--ensure-window t)))
-      (let ((cur (selected-window)))
-        (strata-preview--dispatch-dirvish-or-standalone dv f pwin)
-        (when (window-live-p cur)
-          (select-window cur t))))))
+      (let* ((pbuf (and (window-live-p pwin) (window-buffer pwin)))
+             (already-editing
+              (and focus-read-only
+                   (buffer-live-p pbuf)
+                   (buffer-local-value 'strata-preview-edit-mode pbuf)
+                   (buffer-modified-p pbuf)))
+             (cur-file-p
+              (and strata-active-preview-file
+                   (stringp f)
+                   (equal (ignore-errors (file-truename strata-active-preview-file))
+                          (ignore-errors (file-truename f))))))
+        (unless (and focus-read-only
+                     (or already-editing
+                         (and cur-file-p
+                              (buffer-live-p pbuf)
+                              (strata-preview--preview-buffer-p pbuf dv)
+                              (not (string-prefix-p "*dirvish-preview@" (buffer-name pbuf)))
+                              (not (string-prefix-p " *dirvish-preview@" (buffer-name pbuf))))))
+          (strata-preview--dispatch-dirvish-or-standalone dv f pwin))
+        (let ((target-buf (and (window-live-p pwin) (window-buffer pwin))))
+          (when (and focus-read-only (buffer-live-p target-buf))
+            (unless already-editing
+              (with-current-buffer target-buf
+                (when (bound-and-true-p strata-preview-edit-mode)
+                  (strata-preview-edit-mode -1))
+                (setq strata-preview--file f))
+              (strata-preview--sync-read-buffer pwin target-buf ctx)))
+          (if focus-read-only
+              (when (window-live-p pwin)
+                (select-window pwin)
+                (message "Preview Read-Only: ↑↓/PgUp/PgDn scroll · C-<left> back to browser"))
+            (when (window-live-p cur)
+              (select-window cur t))))))))
+
+(defun strata-preview-at-point ()
+  "Preview item at point inside the preview pane without closing it (`SPC')."
+  (interactive)
+  (strata-preview--show-at-point nil))
+
+(defvar strata-preview--last-browser-context nil
+  "Last captured Strata browser window context (:win :buf :dir :view).")
+
+(defvar-local strata-preview--file nil
+  "Source path associated with a preview buffer for browser restoration.")
 
 (defvar-local strata-preview-edit--browser-window nil
-  "Browser window to return to when leaving preview-pane direct edit.")
+  "Browser window to return to when leaving preview-pane read/edit mode.")
 
 (defvar-local strata-preview-edit--browser-buffer nil
-  "Browser buffer to restore when closing a maximized preview edit buffer.")
+  "Browser buffer to restore when closing a maximized preview buffer.")
 
 (defvar-local strata-preview-edit--browser-dir nil
-  "Browser directory to reopen when closing a maximized preview edit buffer.")
+  "Browser directory to reopen when closing a maximized preview buffer.")
 
 (defvar-local strata-preview-edit--browser-view nil
-  "Strata browser view mode active before entering preview-pane direct edit.")
+  "Strata browser view mode active before entering the preview pane.")
 
 (defvar-local strata-preview-edit--preview-window nil
-  "Preview window hosting direct edit buffer.")
+  "Preview window hosting read-only preview or direct edit buffer.")
 
 (defvar strata-preview-edit--returning nil
-  "Non-nil while programmatically leaving preview-pane edit mode.")
+  "Non-nil while programmatically leaving preview-pane read/edit mode.")
+
+(defun strata-preview--browser-window-p (&optional win)
+  "Return non-nil when WIN is a Strata/Dired browser pane (not preview/aux)."
+  (let ((w (or win (selected-window))))
+    (when (window-live-p w)
+      (let ((buf (window-buffer w)))
+        (and (buffer-live-p buf)
+             (not (strata-preview--preview-buffer-p buf))
+             (not (eq w (bound-and-true-p strata-sidebar-window)))
+             (with-current-buffer buf
+               (derived-mode-p 'dired-mode
+                               'strata-compact-mode
+                               'strata-icons-mode
+                               'strata-computer-mode
+                               'strata-trash-mode
+                               'strata-search-mode)))))))
+
+(defun strata-preview--preview-window-p (&optional win)
+  "Return non-nil when WIN is hosting a Strata or Dirvish preview pane."
+  (let ((w (or win (selected-window))))
+    (when (window-live-p w)
+      (let ((buf (window-buffer w)))
+        (or (eq w (bound-and-true-p strata-preview-standalone-window))
+            (when-let ((dv (ignore-errors (dirvish-curr))))
+              (eq w (dv-preview-window dv)))
+            (and (boundp 'dirvish--sessions)
+                 (hash-table-p dirvish--sessions)
+                 (cl-loop for dv being the hash-values of dirvish--sessions
+                          thereis (eq w (dv-preview-window dv))))
+            (and (buffer-live-p buf)
+                 (strata-preview--preview-buffer-p buf)))))))
+
+(defun strata-preview--capture-browser-context (&optional win)
+  "Capture browser window/buffer/directory/view context from WIN."
+  (let ((w (or win (selected-window))))
+    (when (strata-preview--browser-window-p w)
+      (let* ((bbuf (window-buffer w))
+             (bdir (with-current-buffer bbuf
+                     (or (bound-and-true-p strata-view-directory)
+                         (ignore-errors (dirvish-prop :root))
+                         default-directory)))
+             (bview (when (fboundp 'strata-prefs)
+                      (strata-prefs-browser-mode (strata-prefs))))
+             (ctx (list :win w :buf bbuf :dir bdir :view bview)))
+        (setq strata-preview--last-browser-context ctx)
+        ctx))))
+
+(defun strata-preview--apply-browser-context (buf ctx pwin)
+  "Store browser context CTX and PWIN on preview buffer BUF."
+  (let* ((resolved (or (and (window-live-p (plist-get ctx :win))
+                            (not (eq (plist-get ctx :win) pwin))
+                            ctx)
+                       (and (window-live-p (plist-get strata-preview--last-browser-context :win))
+                            (not (eq (plist-get strata-preview--last-browser-context :win) pwin))
+                            strata-preview--last-browser-context)
+                       ctx))
+         (bwin (plist-get resolved :win))
+         (bbuf (plist-get resolved :buf))
+         (bdir (plist-get resolved :dir))
+         (bview (plist-get resolved :view)))
+    (with-current-buffer buf
+      (when (and (window-live-p bwin) (not (eq bwin pwin)))
+        (setq strata-preview-edit--browser-window bwin))
+      (when (buffer-live-p bbuf)
+        (setq strata-preview-edit--browser-buffer bbuf))
+      (when bdir
+        (setq strata-preview-edit--browser-dir bdir))
+      (when bview
+        (setq strata-preview-edit--browser-view bview))
+      (when (window-live-p pwin)
+        (setq strata-preview-edit--preview-window pwin)))))
+
+(defun strata-preview--read-buffer-eligible-p (buf &optional dv)
+  "Return non-nil if BUF in a preview pane should carry `strata-preview-read-mode'."
+  (and (buffer-live-p buf)
+       (not (buffer-local-value 'strata-preview-edit-mode buf))
+       (or (buffer-local-value 'buffer-read-only buf)
+           (strata-preview--preview-buffer-p buf dv)
+           (and dv (memq buf (dv-preview-buffers dv))))))
+
+(defun strata-preview--sync-read-buffer (pwin buf &optional ctx)
+  "Attach `strata-preview-read-mode' and browser context onto BUF in PWIN."
+  (when (and (window-live-p pwin) (buffer-live-p buf))
+    (let ((dv (or (ignore-errors (dirvish-curr))
+                  (and (boundp 'dirvish--sessions)
+                       (hash-table-p dirvish--sessions)
+                       (cl-loop for s being the hash-values of dirvish--sessions
+                                when (eq pwin (dv-preview-window s))
+                                return s)))))
+      (when (strata-preview--read-buffer-eligible-p buf dv)
+        (with-current-buffer buf
+          (when (and strata-active-preview-file (not strata-preview--file))
+            (setq strata-preview--file strata-active-preview-file))
+          (unless strata-preview-read-mode
+            (strata-preview-read-mode 1))
+          (setq buffer-read-only t)
+          (unless cursor-type
+            (setq-local cursor-type t)))
+        (strata-preview--apply-browser-context buf ctx pwin)))))
+
+(defun strata-preview--on-window-selection-change (&optional frame)
+  "Track browser context or enter read-only navigation when preview is selected."
+  (let ((win (frame-selected-window frame)))
+    (when (window-live-p win)
+      (cond
+       ((strata-preview--browser-window-p win)
+        (strata-preview--capture-browser-context win))
+       ((strata-preview--preview-window-p win)
+        (let ((buf (window-buffer win)))
+          (when (and (buffer-live-p buf)
+                     (not (buffer-local-value 'strata-preview-edit-mode buf)))
+            (strata-preview--sync-read-buffer
+             win buf strata-preview--last-browser-context))))))))
+
+(add-hook 'window-selection-change-functions #'strata-preview--on-window-selection-change)
+
+(defun strata-preview-read-scroll-down ()
+  "Scroll read-only preview buffer forward (`SPC')."
+  (interactive)
+  (cond
+   ((derived-mode-p 'pdf-view-mode) (call-interactively #'pdf-view-scroll-up-or-next-page))
+   ((derived-mode-p 'doc-view-mode) (call-interactively #'doc-view-scroll-up-or-next-page))
+   ((derived-mode-p 'image-mode) (call-interactively #'image-scroll-up))
+   (t (call-interactively #'scroll-up-command))))
+
+(defun strata-preview-read-scroll-up ()
+  "Scroll read-only preview buffer backward (`DEL' / `S-SPC')."
+  (interactive)
+  (cond
+   ((derived-mode-p 'pdf-view-mode) (call-interactively #'pdf-view-scroll-down-or-previous-page))
+   ((derived-mode-p 'doc-view-mode) (call-interactively #'doc-view-scroll-down-or-previous-page))
+   ((derived-mode-p 'image-mode) (call-interactively #'image-scroll-down))
+   (t (call-interactively #'scroll-down-command))))
+
+(defun strata-preview-read-leave ()
+  "Leave read-only preview pane and return to the left browser window (`C-<left>')."
+  (interactive)
+  (strata-preview--return-to-browser nil))
+
+(defvar strata-preview-read-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-<left>") #'strata-preview-read-leave)
+    (define-key map (kbd "C-c q") #'strata-preview-read-leave)
+    (define-key map (kbd "C-<escape>") #'strata-preview-read-leave)
+    (define-key map (kbd "q") #'strata-preview-read-leave)
+    (define-key map (kbd "SPC") #'strata-preview-read-scroll-down)
+    (define-key map (kbd "S-SPC") #'strata-preview-read-scroll-up)
+    (define-key map (kbd "DEL") #'strata-preview-read-scroll-up)
+    (define-key map (kbd "<backspace>") #'strata-preview-read-scroll-up)
+    map)
+  "Keymap active while navigating Strata's preview pane in read-only mode.")
+
+(define-minor-mode strata-preview-read-mode
+  "Minor mode active while reading/scrolling inside Strata's preview pane.
+Keeps the buffer strictly read-only, enables keyboard scrolling, and binds
+`C-<left>' (`C-c q', `q') to return to the previous browser pane."
+  :lighter " Preview-RO"
+  :keymap strata-preview-read-mode-map
+  (if strata-preview-read-mode
+      (progn
+        (setq-local buffer-read-only t)
+        (unless cursor-type
+          (setq-local cursor-type t))
+        (add-hook 'kill-buffer-hook #'strata-preview-edit--on-kill nil t))
+    (remove-hook 'kill-buffer-hook #'strata-preview-edit--on-kill t)))
+
+(defun strata-preview-enter-at-point ()
+  "Preview item at point and enter it read-only (`<right>')."
+  (interactive)
+  (strata-preview--show-at-point t))
 
 (defvar strata-preview-edit-mode-map
   (let ((map (make-sparse-keymap)))
@@ -622,8 +855,9 @@ buffer kill finishes."
                 (funcall refresh target-buf file)))))))))
 
 (defun strata-preview-edit--on-kill ()
-  "Restore previous Dirvish view when killing a maximized (`C-x 1') edit buffer."
-  (when (and (bound-and-true-p strata-preview-edit-mode)
+  "Restore previous Dirvish view when killing a maximized (`C-x 1') preview buffer."
+  (when (and (or (bound-and-true-p strata-preview-edit-mode)
+                 (bound-and-true-p strata-preview-read-mode))
              (not strata-preview-edit--returning)
              (not (window-live-p strata-preview-edit--browser-window))
              (one-window-p t))
@@ -632,7 +866,7 @@ buffer kill finishes."
           (bbuf strata-preview-edit--browser-buffer)
           (bdir strata-preview-edit--browser-dir)
           (view strata-preview-edit--browser-view)
-          (file buffer-file-name))
+          (file (or buffer-file-name strata-preview--file)))
       (when (and (eq (window-buffer win) buf)
                  (or (buffer-live-p bbuf)
                      (and bdir (file-directory-p bdir))))
@@ -690,13 +924,14 @@ visiting FILE (including via symlinks or across Dirvish sessions)."
                 (kill-buffer b)))))))))
 
 (defun strata-preview--return-to-browser (&optional mode)
-  "Exit preview-pane edit mode and return to the neighbor left browser window.
+  "Exit preview-pane read/edit mode and return to the neighbor left browser window.
 MODE may be:
 - nil: leave immediately without prompting;
 - `save': run Emacs's normal save prompt (`save-some-buffers') when modified;
 - `discard': prompt to confirm discarding unsaved edits and revert."
   (let* ((buf (current-buffer))
-         (buf-file buffer-file-name)
+         (was-edit (bound-and-true-p strata-preview-edit-mode))
+         (buf-file (or buffer-file-name strata-preview--file))
          (bwin strata-preview-edit--browser-window)
          (bbuf strata-preview-edit--browser-buffer)
          (bdir strata-preview-edit--browser-dir)
@@ -711,22 +946,26 @@ MODE may be:
                      (not (eq left (bound-and-true-p strata-sidebar-window)))
                      left))
               (strata-panes--main-window))))
-    (pcase mode
-      ('discard
-       (when (buffer-modified-p buf)
-         (unless (y-or-n-p (format "Discard unsaved edits in %s and abort? "
-                                   (buffer-name buf)))
-           (user-error "Aborted"))
-         (if (and buffer-file-name (file-exists-p buffer-file-name))
-             (revert-buffer t t t)
-           (set-buffer-modified-p nil))))
-      ('save
-       (when (buffer-modified-p buf)
-         (if buf-file
-             (save-some-buffers nil (lambda () (eq (current-buffer) buf)))
-           (when (y-or-n-p (format "Save buffer %s? " (buffer-name buf)))
-             (save-buffer))))))
-    (strata-preview-edit-mode -1)
+    (when was-edit
+      (pcase mode
+        ('discard
+         (when (buffer-modified-p buf)
+           (unless (y-or-n-p (format "Discard unsaved edits in %s and abort? "
+                                     (buffer-name buf)))
+             (user-error "Aborted"))
+           (if (and buffer-file-name (file-exists-p buffer-file-name))
+               (revert-buffer t t t)
+             (set-buffer-modified-p nil))))
+        ('save
+         (when (buffer-modified-p buf)
+           (if buf-file
+               (save-some-buffers nil (lambda () (eq (current-buffer) buf)))
+             (when (y-or-n-p (format "Save buffer %s? " (buffer-name buf)))
+               (save-buffer)))))))
+    (when was-edit
+      (strata-preview-edit-mode -1))
+    (when (bound-and-true-p strata-preview-read-mode)
+      (strata-preview-read-mode -1))
     (setq strata-preview-edit--browser-window nil
           strata-preview-edit--browser-buffer nil
           strata-preview-edit--browser-dir nil
@@ -738,7 +977,7 @@ MODE may be:
            (or (buffer-live-p bbuf)
                (and bdir (file-directory-p bdir))))
       (let ((strata-preview-edit--returning t))
-        (when (and buf-file (not (buffer-modified-p buf)))
+        (when (and was-edit buf-file (not (buffer-modified-p buf)))
           (let ((dv (and (buffer-live-p bbuf)
                          (with-current-buffer bbuf (ignore-errors (dirvish-curr))))))
             (strata-preview--invalidate-cache dv buf-file)))
@@ -748,17 +987,18 @@ MODE may be:
       (select-window target-win)
       (when (boundp 'dirvish--selected-window)
         (setq dirvish--selected-window target-win))
-      (let ((dv (ignore-errors (dirvish-curr))))
-        (when (and buf-file (not (buffer-modified-p buf)))
-          (strata-preview--invalidate-cache dv buf-file))
-        (when-let ((cur-file (and (fboundp 'strata-current-file) (strata-current-file))))
-          (when (and (equal cur-file buf-file) (not (buffer-modified-p buf)))
-            (strata-preview--invalidate-cache dv cur-file))
-          (cond
-           ((and dv (window-live-p (dv-preview-window dv)))
-            (strata-preview--dispatch-dirvish-or-standalone dv cur-file (dv-preview-window dv)))
-           ((window-live-p pwin)
-            (strata-preview-update-standalone cur-file pwin)))))))))
+      (when was-edit
+        (let ((dv (ignore-errors (dirvish-curr))))
+          (when (and buf-file (not (buffer-modified-p buf)))
+            (strata-preview--invalidate-cache dv buf-file))
+          (when-let ((cur-file (and (fboundp 'strata-current-file) (strata-current-file))))
+            (when (and (equal cur-file buf-file) (not (buffer-modified-p buf)))
+              (strata-preview--invalidate-cache dv cur-file))
+            (cond
+             ((and dv (window-live-p (dv-preview-window dv)))
+              (strata-preview--dispatch-dirvish-or-standalone dv cur-file (dv-preview-window dv)))
+             ((window-live-p pwin)
+              (strata-preview-update-standalone cur-file pwin))))))))))
 
 (defun strata-preview-edit-leave ()
   "Prompt to save changes and return to the left browser window (`C-<left>')."
@@ -780,13 +1020,7 @@ MODE may be:
   (strata-preview--ensure-common-auto-modes)
   (let* ((dv (ignore-errors (dirvish-curr)))
          (bwin (selected-window))
-         (bbuf (window-buffer bwin))
-         (bdir (with-current-buffer bbuf
-                 (or (bound-and-true-p strata-view-directory)
-                     (ignore-errors (dirvish-prop :root))
-                     default-directory)))
-         (bview (when (fboundp 'strata-prefs)
-                  (strata-prefs-browser-mode (strata-prefs))))
+         (ctx (strata-preview--capture-browser-context bwin))
          (pwin (strata-preview--ensure-window t)))
     ;; Never reuse a truncated/read-only Dirvish throwaway `PREVIEW :: ...' buffer.
     (strata-preview--invalidate-cache dv file t)
@@ -795,13 +1029,17 @@ MODE may be:
            (was-preview (and existing
                              (or (and dv (memq existing (dv-preview-buffers dv)))
                                  (string-prefix-p "PREVIEW :: " (buffer-name existing)))))
+           (was-read-preview (and existing
+                                  (buffer-local-value 'strata-preview-read-mode existing)))
            (buf (find-file-noselect file)))
       (strata-preview--cancel-delay)
       (when dv
         (setf (dv-preview-buffers dv) (delq buf (dv-preview-buffers dv))))
       (with-current-buffer buf
         (setq-local delay-mode-hooks nil)
-        (when (and was-preview
+        (when (bound-and-true-p strata-preview-read-mode)
+          (strata-preview-read-mode -1))
+        (when (and (or was-preview was-read-preview)
                    (file-writable-p file)
                    buffer-read-only
                    (not (derived-mode-p 'image-mode 'pdf-view-mode 'doc-view-mode)))
@@ -810,12 +1048,8 @@ MODE may be:
                        (and (fboundp 'treesit-parser-list) (treesit-parser-list)))
                    (bound-and-true-p global-font-lock-mode))
           (font-lock-mode 1))
-        (strata-preview-edit-mode 1)
-        (setq strata-preview-edit--browser-window bwin
-              strata-preview-edit--browser-buffer bbuf
-              strata-preview-edit--browser-dir bdir
-              strata-preview-edit--browser-view bview
-              strata-preview-edit--preview-window pwin))
+        (strata-preview-edit-mode 1))
+      (strata-preview--apply-browser-context buf ctx pwin)
       (if (window-live-p pwin)
           (progn
             (set-window-dedicated-p pwin nil)

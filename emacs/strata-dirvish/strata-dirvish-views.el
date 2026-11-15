@@ -26,6 +26,7 @@
 (declare-function strata-dirvish--flatten-layout "strata-dirvish-panes" ())
 (declare-function strata-pane-clipboard-summary "strata-dirvish-ops" ())
 (declare-function strata-preview-at-point "strata-dirvish-previews" ())
+(declare-function strata-preview-enter-at-point "strata-dirvish-previews" ())
 (declare-function strata-preview-edit-file "strata-dirvish-previews" (file))
 (declare-function strata-open-or-edit-at-point "strata-dirvish-previews" ())
 (defvar strata-preview-standalone-window)
@@ -854,12 +855,12 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
         (dirvish--preview-update dv f))
        ((when-let ((pwin (or (and (boundp 'strata-preview-standalone-window)
                                   (window-live-p strata-preview-standalone-window)
-                                  (not (eq strata-preview-standalone-window (selected-window)))
                                   (eq (window-buffer strata-preview-standalone-window)
                                       (get-buffer "*Strata Preview*"))
                                   strata-preview-standalone-window)
                              (get-buffer-window "*Strata Preview*"))))
-          (when (fboundp 'strata-preview-update-standalone)
+          (when (and (not (eq pwin (selected-window)))
+                     (fboundp 'strata-preview-update-standalone))
             (strata-preview-update-standalone f pwin))))))))
 
 (defun strata-compact--fit-name (name maxw full-p)
@@ -1513,7 +1514,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
              (if (strata-prefs-expandable-tree p) "ON" "OFF"))))
 
 (defun strata-tree-expand-or-open ()
-  "In Tree List view toggle subtree; move right in Icons grid; else preview file (`<right>')."
+  "Toggle Tree List subtree, move in Icons grid, or read preview (`<right>')."
   (interactive)
   (let ((p (strata-prefs))
         (f (strata-current-file)))
@@ -1535,9 +1536,11 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
             (dired-find-file)
           (strata-open-location f t))))
      (f
-      (if (fboundp 'strata-preview-at-point)
-          (strata-preview-at-point)
-        (user-error "Preview unavailable for %s" f)))
+      (if (fboundp 'strata-preview-enter-at-point)
+          (strata-preview-enter-at-point)
+        (if (fboundp 'strata-preview-at-point)
+            (strata-preview-at-point)
+          (user-error "Preview unavailable for %s" f))))
      (t
       (user-error "No entry at point")))))
 

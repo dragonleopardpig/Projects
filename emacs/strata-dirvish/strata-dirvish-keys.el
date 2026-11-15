@@ -450,13 +450,13 @@
         (insert "\n")
         (dolist (sec
                  `(("NAVIGATION"
-                    ("h / l / ← / →" "Parent folder / Open Folder, Expand Tree, or Preview File")
+                    ("h / l / ← / →" "Parent folder / Open Folder, Expand Tree, or Enter Read-Only Preview")
                     ("j / k / ↑ / ↓" "Move down / up")
                     ("H / L / M-← / M-→" "Pane History Back / Forward")
                     ("M-↑ / M-↓" "Parent folder / Make First Column")
                     ("RET / Double-Click" "Open Folder / Direct-Edit File in Preview Pane")
-                    ("C-← / C-c q / C-c k" "Leave Edit (Save Prompt) / Exit Left / Abort Edits")
-                    ("SPC / M-i / i" "Preview File / Toggle Peek Drawer")
+                    ("C-← / C-c q / C-c k" "Leave Preview or Edit (Save Prompt) / Exit Left / Abort Edits")
+                    ("SPC / M-i / i" "Preview File (Keep Focus) / Toggle Peek Drawer")
                     ("C-RET / S-RET" "Open in New Tab / New Frame")
                     ("C-l / g SPC" "Edit Location (~/, computer:///, trash:///, recent:///, sftp://, admin:///)")
                     ("z / Z / C-S-k" "Jump to Visited Folder / Recent File")
