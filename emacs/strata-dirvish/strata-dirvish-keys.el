@@ -455,6 +455,7 @@
                     ("H / L / M-← / M-→" "Pane History Back / Forward")
                     ("M-↑ / M-↓" "Parent folder / Make First Column")
                     ("RET" "Open Folder / Edit File in Preview Pane")
+                    ("C-c q / C-<escape> / C-c k" "Exit Preview Edit Left / Abort & Discard Edits")
                     ("SPC / M-i / i" "Preview File / Toggle Peek Drawer")
                     ("C-RET / S-RET" "Open in New Tab / New Frame")
                     ("C-l / g SPC" "Edit Location (~/, computer:///, trash:///, recent:///, sftp://, admin:///)")
