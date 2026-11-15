@@ -33,7 +33,7 @@
   "Reusable preview window for non-Columns or standalone Strata browser modes.")
 
 (defvar strata-active-preview-kind 'other
-  "Kind of item currently in preview: `text', `image', `pdf', `media', `archive', `dir', or `other'.")
+  "Kind of item in preview: `text', `image', `pdf', `media', `archive', `dir'.")
 
 (defvar strata-active-preview-file nil
   "Path of file currently previewed in Dirvish.")
@@ -50,6 +50,161 @@
 (defconst strata-preview-max-bytes (* 512 1024)
   "Maximum bytes read directly for text/document previews.")
 
+(defvar strata-preview--force-update nil
+  "Dynamically non-nil when preview update is explicitly requested by Strata.")
+
+(defconst strata-preview--common-mode-specs
+  '(("\\.ts\\'"                              "probe.ts"        typescript-ts-mode typescript)
+    ("\\.[cm]ts\\'"                          "probe.mts"       typescript-ts-mode typescript)
+    ("\\.tsx\\'"                             "probe.tsx"       tsx-ts-mode        tsx)
+    ("\\.go\\'"                              "probe.go"        go-ts-mode         go)
+    ("\\.[cm]js\\'"                          "probe.mjs"       js-ts-mode         javascript js-mode)
+    ("\\.jsonc\\'"                           "probe.jsonc"     json-ts-mode       json       js-json-mode)
+    ("\\(?:CMakeLists\\.txt\\|\\.cmake\\)\\'" "CMakeLists.txt" cmake-ts-mode      cmake)
+    ("\\.php\\'"                             "probe.php"       php-ts-mode        php)
+    ("\\.lua\\'"                             "probe.lua"       lua-ts-mode        lua        lua-mode)
+    ("\\.exs?\\'"                            "probe.ex"        elixir-ts-mode     elixir)
+    ("\\.rs\\'"                              "probe.rs"        rust-ts-mode       rust       rust-mode))
+  "Common extension/filename mode specs: (RE PROBE-FILE TS-MODE LANG [FALLBACK]).")
+
+(defconst strata-preview--lang-filename-alist
+  '(("elisp" . "snippet.el") ("emacs-lisp" . "snippet.el")
+    ("py" . "snippet.py") ("python" . "snippet.py")
+    ("nix" . "snippet.nix")
+    ("sh" . "snippet.sh") ("bash" . "snippet.sh") ("zsh" . "snippet.sh")
+    ("shell" . "snippet.sh") ("fish" . "snippet.sh")
+    ("js" . "snippet.js") ("javascript" . "snippet.js")
+    ("mjs" . "snippet.mjs") ("cjs" . "snippet.cjs")
+    ("ts" . "snippet.ts") ("typescript" . "snippet.ts") ("tsx" . "snippet.tsx")
+    ("jsx" . "snippet.jsx")
+    ("rs" . "snippet.rs") ("rust" . "snippet.rs")
+    ("go" . "snippet.go") ("golang" . "snippet.go")
+    ("c" . "snippet.c") ("h" . "snippet.h")
+    ("cpp" . "snippet.cpp") ("c++" . "snippet.cpp") ("hpp" . "snippet.hpp")
+    ("css" . "snippet.css") ("scss" . "snippet.scss")
+    ("html" . "snippet.html") ("xml" . "snippet.xml")
+    ("json" . "snippet.json") ("jsonc" . "snippet.jsonc")
+    ("yaml" . "snippet.yaml") ("yml" . "snippet.yml") ("toml" . "snippet.toml")
+    ("sql" . "snippet.sql") ("lua" . "snippet.lua")
+    ("rb" . "snippet.rb") ("ruby" . "snippet.rb") ("java" . "snippet.java")
+    ("php" . "snippet.php") ("cmake" . "snippet.cmake")
+    ("dockerfile" . "Dockerfile") ("make" . "Makefile") ("makefile" . "Makefile")
+    ("ini" . "snippet.ini") ("conf" . "snippet.conf") ("org" . "snippet.org"))
+  "Map fenced-code language identifiers to representative filenames.")
+
+(defun strata-preview--ensure-common-auto-modes ()
+  "Register available built-in `*-ts-mode' / fallback modes in `auto-mode-alist'.
+Only binds extensions that are not already handled by a specific non-generic
+major mode so user preferences in `init.el' remain untouched."
+  (dolist (spec strata-preview--common-mode-specs)
+    (let* ((re (nth 0 spec))
+           (probe-name (nth 1 spec))
+           (ts-mode (nth 2 spec))
+           (ts-lang (nth 3 spec))
+           (fb-mode (nth 4 spec))
+           (existing (assoc-default probe-name auto-mode-alist #'string-match-p))
+           (ts-ok (and (or (fboundp ts-mode) (locate-library (symbol-name ts-mode)))
+                       (fboundp 'treesit-language-available-p)
+                       (treesit-language-available-p ts-lang)))
+           (chosen (cond
+                    (ts-ok
+                     (ignore-errors (require ts-mode nil t))
+                     (and (fboundp ts-mode) ts-mode))
+                    ((and fb-mode (or (fboundp fb-mode) (locate-library (symbol-name fb-mode))))
+                     fb-mode))))
+      (when (and chosen
+                 (or (null existing)
+                     (memq existing '(fundamental-mode text-mode prog-mode))))
+        (add-to-list 'auto-mode-alist (cons re chosen))))))
+
+(defun strata-preview--fontify-current-buffer (virtual-file)
+  "Apply syntax highlighting in current buffer for VIRTUAL-FILE.
+Returns fontified `buffer-string' with realized `face' text properties."
+  (strata-preview--ensure-common-auto-modes)
+  (unwind-protect
+      (let ((buffer-file-name virtual-file)
+            (enable-dir-local-variables nil)
+            (enable-local-variables :safe)
+            (inhibit-message t)
+            (delay-mode-hooks t)
+            (vc-handled-backends nil))
+        (setq-local delay-mode-hooks t)
+        (ignore-errors (set-auto-mode t))
+        (when (derived-mode-p 'fundamental-mode)
+          ;; Retry with downcased extension in case filename had uppercase suffix.
+          (let ((ext (file-name-extension virtual-file)))
+            (when (and ext (not (string= ext (downcase ext))))
+              (let ((buffer-file-name (concat (file-name-sans-extension virtual-file)
+                                              "." (downcase ext))))
+                (ignore-errors (set-auto-mode t))))))
+        (when (or font-lock-defaults
+                  (and (fboundp 'treesit-parser-list) (treesit-parser-list)))
+          (font-lock-mode 1)
+          (ignore-errors
+            (font-lock-ensure (point-min) (min (point-max) strata-preview-max-bytes))))
+        (buffer-string))
+    ;; Never allow ephemeral preview buffer to match `find-buffer-visiting'.
+    (setq buffer-file-name nil)))
+
+(defun strata-preview--fontify-string (text virtual-file)
+  "Return TEXT syntax-highlighted according to VIRTUAL-FILE's major mode."
+  (with-temp-buffer
+    (insert text)
+    (goto-char (point-min))
+    (strata-preview--fontify-current-buffer virtual-file)))
+
+(defun strata-preview--preview-buffer-p (buf &optional dv)
+  "Return non-nil when BUF is a Strata/Dirvish preview or placeholder buffer."
+  (when (buffer-live-p buf)
+    (let ((nm (buffer-name buf)))
+      (or (and dv (or (memq buf (dv-preview-buffers dv))
+                      (memq buf (dv-special-buffers dv))))
+          (string-prefix-p "PREVIEW :: " nm)
+          (string-prefix-p " *Dirvish-preview-" nm)
+          (string-prefix-p "*dirvish-preview@" nm)
+          (string-prefix-p " *dirvish-preview@" nm)
+          (string-prefix-p " *Strata-Preview" nm)
+          (string-prefix-p " *preview-temp*" nm)
+          (string= nm "*Strata Preview*")))))
+
+(defun strata-preview--setup-dirvish-fontlock-h ()
+  "Materialize font-lock faces immediately in Dirvish `PREVIEW ::' buffers."
+  (when (or font-lock-defaults
+            (and (fboundp 'treesit-parser-list) (treesit-parser-list)))
+    (font-lock-mode 1)
+    (ignore-errors
+      (font-lock-ensure (point-min) (min (point-max) strata-preview-max-bytes)))))
+
+(defun strata-preview--guard-dirvish-update (orig-fn dv index)
+  "Prevent background Dirvish preview updates from clobbering an active edit pane."
+  (let* ((pwin (and dv (dv-preview-window dv)))
+         (pbuf (and (window-live-p pwin) (window-buffer pwin)))
+         (pbuf-file (and (buffer-live-p pbuf)
+                         (buffer-local-value 'buffer-file-name pbuf)))
+         (pbuf-edit (and (buffer-live-p pbuf)
+                         (buffer-local-value 'strata-preview-edit-mode pbuf)))
+         (browser-browsing-other
+          (and (window-live-p pwin)
+               (not (eq (selected-window) pwin))
+               (eq (selected-window) (dv-root-window dv))
+               pbuf-edit
+               (stringp index)
+               (not (equal (and pbuf-file (ignore-errors (file-truename pbuf-file)))
+                           (ignore-errors (file-truename index)))))))
+    (when (or strata-preview--force-update
+              (not (buffer-live-p pbuf))
+              (strata-preview--preview-buffer-p pbuf dv)
+              browser-browsing-other)
+      (when (and browser-browsing-other (buffer-live-p pbuf))
+        (with-current-buffer pbuf
+          (strata-preview-edit-mode -1)))
+      (funcall orig-fn dv index))))
+
+(strata-preview--ensure-common-auto-modes)
+(add-hook 'dirvish-preview-setup-hook #'strata-preview--setup-dirvish-fontlock-h)
+(when (fboundp 'dirvish--preview-update)
+  (advice-add 'dirvish--preview-update :around #'strata-preview--guard-dirvish-update))
+
 ;;;; Independent Per-Type Zoom Controls (Text / Image / PDF)
 
 (defun strata-preview--refresh-now ()
@@ -61,7 +216,8 @@
         (dolist (b (buffer-list))
           (when (string-prefix-p " *Dirvish-preview-" (buffer-name b))
             (kill-buffer b))))
-      (dirvish--preview-update dv strata-active-preview-file))))
+      (let ((strata-preview--force-update t))
+        (dirvish--preview-update dv strata-active-preview-file)))))
 
 (defun strata-preview-zoom-in ()
   "Zoom in ONLY the currently active preview type (`text', `image', or `pdf')."
@@ -162,9 +318,63 @@
     (strata-preview--apply-text-zoom)
     (message "Preview wrap: %s" (if (strata-prefs-preview-text-wrap p) "ON" "OFF"))))
 
+(defun strata-preview--render-source-file (file out-buf)
+  "Render syntax-highlighted source/text FILE preview into OUT-BUF cleanly."
+  (let* ((ext (downcase (or (file-name-extension file) "")))
+         (disabled (and (boundp 'dirvish-preview-disabled-exts)
+                        (member ext dirvish-preview-disabled-exts)))
+         (binary-ext (and (boundp 'dirvish-binary-exts)
+                          (member ext dirvish-binary-exts)))
+         (attrs (ignore-errors (file-attributes file)))
+         (size (and attrs (file-attribute-size attrs))))
+    (setq strata-active-preview-file file
+          strata-active-preview-kind 'text)
+    (with-current-buffer out-buf
+      (special-mode)
+      (font-lock-mode -1)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (cond
+         ((strata-path-unsafe-probe-p file)
+          (insert (propertize
+                   (format "  Remote / Cloud / External mount: %s\n\n  Auto-preview skipped (press RET to open).\n"
+                           (file-name-nondirectory file))
+                   'face 'shadow)))
+         ((or disabled binary-ext)
+          (insert (propertize
+                   (format "  Preview skipped for binary/disabled filetype [.%s]: %s\n"
+                           ext (file-name-nondirectory file))
+                   'face 'shadow)))
+         ((and size (> size (or large-file-warning-threshold 10000000)))
+          (insert (propertize
+                   (format "  File too large for preview (%s): press RET to open.\n"
+                           (file-size-human-readable size))
+                   'face 'shadow)))
+         ((file-readable-p file)
+          (let* ((raw (with-temp-buffer
+                        (insert-file-contents file nil 0 strata-preview-max-bytes)
+                        (buffer-string)))
+                 (head (substring raw 0 (min 4096 (length raw)))))
+            (if (string-match-p "\0" head)
+                (insert (propertize
+                         (format "  Binary file preview skipped: %s\n"
+                                 (file-name-nondirectory file))
+                         'face 'shadow))
+              (insert (strata-preview--fontify-string raw file))
+              (when (and size (> size strata-preview-max-bytes))
+                (insert (propertize "\n\n  File truncated. End of partial preview.\n"
+                                    'face 'shadow))))))
+         (t
+          (insert (propertize (format "  Unreadable file: %s\n" (file-name-nondirectory file))
+                              'face 'shadow)))))
+      (setq-local truncate-lines (not (strata-prefs-preview-text-wrap (strata-prefs))))
+      (when (fboundp 'text-scale-set)
+        (text-scale-set (strata-prefs-preview-text-scale (strata-prefs))))
+      (goto-char (point-min)))))
+
 (defun strata-preview-update-standalone (file &optional window)
   "Render rich preview for FILE into `*Strata Preview*' inside WINDOW."
-  (let* ((ext (or (file-name-extension file) ""))
+  (let* ((ext (downcase (or (file-name-extension file) "")))
          (win (or window (get-buffer-window "*Strata Preview*") (selected-window)))
          (res (or (dirvish-strata-rich-image-dp file ext win nil)
                   (dirvish-strata-rich-pdf-dp file ext win nil)
@@ -172,24 +382,33 @@
          (out-buf (get-buffer-create "*Strata Preview*")))
     (pcase res
       (`(buffer . ,b)
+       (setq strata-active-preview-file file)
        (with-current-buffer out-buf
+         (special-mode)
+         (font-lock-mode -1)
          (let ((inhibit-read-only t))
            (erase-buffer)
-           (insert-buffer-substring b)
-           (special-mode)
-           (goto-char (point-min)))))
+           (insert-buffer-substring b))
+         (setq-local truncate-lines (not (strata-prefs-preview-text-wrap (strata-prefs))))
+         (when (fboundp 'text-scale-set)
+           (text-scale-set (strata-prefs-preview-text-scale (strata-prefs))))
+         (goto-char (point-min))))
       (`(shell . ,cmd)
+       (setq strata-active-preview-file file)
        (with-current-buffer out-buf
+         (special-mode)
+         (font-lock-mode -1)
          (let ((inhibit-read-only t))
            (erase-buffer)
-           (apply #'process-file (car cmd) nil t nil (cdr cmd))
-           (special-mode)
-           (goto-char (point-min)))))
+           (apply #'process-file (car cmd) nil t nil (cdr cmd)))
+         (goto-char (point-min))))
       (_
-       (with-current-buffer out-buf
-         (let ((inhibit-read-only t))
-           (erase-buffer)
-           (if (file-directory-p file)
+       (if (file-directory-p file)
+           (with-current-buffer out-buf
+             (special-mode)
+             (font-lock-mode -1)
+             (let ((inhibit-read-only t))
+               (erase-buffer)
                (if (strata-path-unsafe-probe-p file)
                    (insert (propertize (format "  Remote / Cloud / External mount: %s\n\n  Auto-preview skipped (press RET to open).\n"
                                                (file-name-nondirectory (directory-file-name file)))
@@ -221,11 +440,9 @@
                                       'pointer 'hand
                                       'keymap km
                                       'help-echo sub))))
-                       (insert row)))))
-             (when (file-readable-p file)
-               (insert-file-contents file nil 0 65536)))
-           (special-mode)
-           (goto-char (point-min))))))
+                       (insert row))))))
+             (goto-char (point-min)))
+         (strata-preview--render-source-file file out-buf))))
     (when (window-live-p win)
       (set-window-buffer win out-buf))))
 
@@ -244,6 +461,14 @@
                  (get-buffer-window "*Strata Preview*"))))
     (when (window-live-p win)
       (with-selected-window win (scroll-down-command 5)))))
+
+(defun strata-preview--split-standalone-window (main)
+  "Create a normal (non-side) right preview window split from MAIN."
+  (let* ((left-w (max 24 (round (* (window-total-width main) 0.58))))
+         (pwin (split-window main left-w 'right)))
+    (set-window-buffer pwin (get-buffer-create "*Strata Preview*"))
+    (setq strata-preview-standalone-window pwin)
+    pwin))
 
 (defun strata-preview--ensure-window (&optional allow-split)
   "Return active preview window without altering layout unless ALLOW-SPLIT."
@@ -276,11 +501,7 @@
                    (not (eq w sidebar)))
           (setq strata-preview-standalone-window w))))
      (allow-split
-      (let ((pwin (display-buffer-in-side-window
-                   (get-buffer-create "*Strata Preview*")
-                   '((side . right) (slot . 0) (window-width . 0.42)))))
-        (setq strata-preview-standalone-window pwin)
-        pwin)))))
+      (strata-preview--split-standalone-window cur)))))
 
 (defun strata-preview--cancel-delay ()
   "Cancel any pending Dirvish preview delay timer."
@@ -290,6 +511,30 @@
     (when-let ((rec (plist-get dirvish--timers :default)))
       (when (timerp (car rec))
         (cancel-timer (car rec))))))
+
+(defun strata-preview--dispatch-dirvish-or-standalone (dv file pwin)
+  "Update preview of FILE in PWIN via DV when live, else standalone previewer.
+Never mistakes `dirvish--preview-update' (which returns nil from
+`set-window-buffer') for failure."
+  (let* ((root (and dv (cdr (dv-index dv))))
+         (has-dps (and dv (eq pwin (dv-preview-window dv))
+                       (buffer-live-p root)
+                       (with-current-buffer root (dirvish-prop :preview-dps)))))
+    (if has-dps
+        (progn
+          (with-current-buffer root
+            (dirvish-prop :index file))
+          (strata-preview--cancel-delay)
+          (let ((strata-preview--force-update t))
+            (dirvish--preview-update dv file))
+          ;; Fall back only if Dirvish left PWIN empty or on an initial placeholder.
+          (let ((cur-pbuf (and (window-live-p pwin) (window-buffer pwin))))
+            (when (or (not (buffer-live-p cur-pbuf))
+                      (let ((nm (buffer-name cur-pbuf)))
+                        (or (string-prefix-p "*dirvish-preview@" nm)
+                            (string-prefix-p " *dirvish-preview@" nm))))
+              (strata-preview-update-standalone file pwin))))
+      (strata-preview-update-standalone file pwin))))
 
 (defun strata-preview-at-point ()
   "Preview item at point inside the preview pane without closing it (`SPC')."
@@ -304,22 +549,27 @@
       (user-error "No entry to preview at point"))
     (when-let ((pwin (strata-preview--ensure-window t)))
       (let ((cur (selected-window)))
-        (if (and dv (eq pwin (dv-preview-window dv)))
-            (progn
-              (dirvish-prop :index f)
-              (when (fboundp 'dirvish--run-with-delay)
-                (dirvish--run-with-delay 'reset))
-              (unless (dirvish--preview-update dv f)
-                (strata-preview-update-standalone f pwin)))
-          (strata-preview-update-standalone f pwin))
+        (strata-preview--dispatch-dirvish-or-standalone dv f pwin)
         (when (window-live-p cur)
           (select-window cur t))))))
 
 (defvar-local strata-preview-edit--browser-window nil
   "Browser window to return to when leaving preview-pane direct edit.")
 
+(defvar-local strata-preview-edit--browser-buffer nil
+  "Browser buffer to restore when closing a maximized preview edit buffer.")
+
+(defvar-local strata-preview-edit--browser-dir nil
+  "Browser directory to reopen when closing a maximized preview edit buffer.")
+
+(defvar-local strata-preview-edit--browser-view nil
+  "Strata browser view mode active before entering preview-pane direct edit.")
+
 (defvar-local strata-preview-edit--preview-window nil
   "Preview window hosting direct edit buffer.")
+
+(defvar strata-preview-edit--returning nil
+  "Non-nil while programmatically leaving preview-pane edit mode.")
 
 (defvar strata-preview-edit-mode-map
   (let ((map (make-sparse-keymap)))
@@ -330,16 +580,84 @@
     map)
   "Keymap active while direct-editing a file in Strata's preview pane.")
 
+(defun strata-preview-edit--restore-browser (win bbuf bdir view &optional file defer-preview)
+  "Restore previous Strata browser view in WIN for BBUF/BDIR in VIEW.
+When FILE is non-nil, move point back to FILE and refresh Columns preview.
+When DEFER-PREVIEW is non-nil, refresh Columns preview on next tick after
+buffer kill finishes."
+  (when (window-live-p win)
+    (select-window win)
+    (let ((restored nil))
+      (cond
+       ((buffer-live-p bbuf)
+        (switch-to-buffer bbuf)
+        (when (and (memq view '(icons compact))
+                   (fboundp 'strata-sidebar-ensure))
+          (strata-sidebar-ensure))
+        (setq restored t))
+       ((and bdir (file-directory-p bdir)
+             (fboundp 'strata-open-location))
+        (strata-open-location bdir nil)
+        (when (and view (fboundp 'strata-switch-view-mode))
+          (ignore-errors (strata-switch-view-mode view)))
+        (setq restored t)))
+      (when restored
+        (let ((target-buf (window-buffer (selected-window))))
+          (with-current-buffer target-buf
+            (when (and file (fboundp 'strata-goto-file))
+              (ignore-errors (strata-goto-file file))))
+          (when (and (eq view 'columns)
+                     (fboundp 'strata-preview-at-point))
+            (let ((refresh
+                   (lambda (b f)
+                     (when (buffer-live-p b)
+                       (when-let ((w (get-buffer-window b)))
+                         (with-selected-window w
+                           (when (and f (fboundp 'strata-goto-file))
+                             (ignore-errors (strata-goto-file f)))
+                           (when (ignore-errors (strata-current-file))
+                             (ignore-errors (strata-preview-at-point)))))))))
+              (if (and defer-preview (not noninteractive))
+                  (run-at-time 0 nil refresh target-buf file)
+                (funcall refresh target-buf file)))))))))
+
+(defun strata-preview-edit--on-kill ()
+  "Restore previous Dirvish view when killing a maximized (`C-x 1') edit buffer."
+  (when (and (bound-and-true-p strata-preview-edit-mode)
+             (not strata-preview-edit--returning)
+             (not (window-live-p strata-preview-edit--browser-window))
+             (one-window-p t))
+    (let ((buf (current-buffer))
+          (win (selected-window))
+          (bbuf strata-preview-edit--browser-buffer)
+          (bdir strata-preview-edit--browser-dir)
+          (view strata-preview-edit--browser-view)
+          (file buffer-file-name))
+      (when (and (eq (window-buffer win) buf)
+                 (or (buffer-live-p bbuf)
+                     (and bdir (file-directory-p bdir))))
+        (remove-hook 'kill-buffer-hook #'strata-preview-edit--on-kill t)
+        (let ((dv (and (buffer-live-p bbuf)
+                       (with-current-buffer bbuf
+                         (ignore-errors (dirvish-curr))))))
+          (when file
+            (strata-preview--invalidate-cache dv file)))
+        (strata-preview-edit--restore-browser win bbuf bdir view file t)))))
+
 (define-minor-mode strata-preview-edit-mode
   "Minor mode active while direct-editing inside Strata's preview pane.
 Provides `C-<left>' (leave with save prompt), `C-c q' / `C-<escape>'
 to return left, or `C-c k' to abort and discard edits."
   :lighter " Preview-Edit"
-  :keymap strata-preview-edit-mode-map)
+  :keymap strata-preview-edit-mode-map
+  (if strata-preview-edit-mode
+      (add-hook 'kill-buffer-hook #'strata-preview-edit--on-kill nil t)
+    (remove-hook 'kill-buffer-hook #'strata-preview-edit--on-kill t)))
 
 (defun strata-preview--invalidate-cache (dv file &optional kill-visiting)
   "Drop cached preview text and throwaway preview buffers for FILE in DV.
-When KILL-VISITING is non-nil, also kill an unmodified preview buffer."
+When KILL-VISITING is non-nil, also kill any unmodified preview buffers
+visiting FILE (including via symlinks or across Dirvish sessions)."
   (when (and dv file)
     (when (hash-table-p (dv-preview-hash dv))
       (remhash file (dv-preview-hash dv))
@@ -352,14 +670,24 @@ When KILL-VISITING is non-nil, also kill an unmodified preview buffer."
         (let (kill-buffer-query-functions)
           (kill-buffer pbuf)))))
   (when (and kill-visiting file)
-    (when-let ((existing (find-buffer-visiting file)))
-      (when (and (not (buffer-modified-p existing))
-                 (or (and dv (memq existing (dv-preview-buffers dv)))
-                     (string-prefix-p "PREVIEW :: " (buffer-name existing))))
-        (when dv
-          (setf (dv-preview-buffers dv) (delq existing (dv-preview-buffers dv))))
-        (let (kill-buffer-query-functions)
-          (kill-buffer existing))))))
+    (let ((target-true (ignore-errors (file-truename (expand-file-name file))))
+          (target-abs (expand-file-name file)))
+      (dolist (b (buffer-list))
+        (when (buffer-live-p b)
+          (let ((bfile (buffer-local-value 'buffer-file-name b)))
+            (when (and bfile
+                       (not (buffer-modified-p b))
+                       (or (and dv (memq b (dv-preview-buffers dv)))
+                           (string-prefix-p "PREVIEW :: " (buffer-name b))
+                           (string-prefix-p " *preview-temp*" (buffer-name b)))
+                       (or (equal (expand-file-name bfile) target-abs)
+                           (and target-true
+                                (equal (ignore-errors (file-truename (expand-file-name bfile)))
+                                       target-true))))
+              (when dv
+                (setf (dv-preview-buffers dv) (delq b (dv-preview-buffers dv))))
+              (let (kill-buffer-query-functions)
+                (kill-buffer b)))))))))
 
 (defun strata-preview--return-to-browser (&optional mode)
   "Exit preview-pane edit mode and return to the neighbor left browser window.
@@ -370,6 +698,9 @@ MODE may be:
   (let* ((buf (current-buffer))
          (buf-file buffer-file-name)
          (bwin strata-preview-edit--browser-window)
+         (bbuf strata-preview-edit--browser-buffer)
+         (bdir strata-preview-edit--browser-dir)
+         (bview strata-preview-edit--browser-view)
          (pwin (or strata-preview-edit--preview-window (selected-window)))
          (target-win
           (or (and (window-live-p bwin)
@@ -397,8 +728,23 @@ MODE may be:
              (save-buffer))))))
     (strata-preview-edit-mode -1)
     (setq strata-preview-edit--browser-window nil
+          strata-preview-edit--browser-buffer nil
+          strata-preview-edit--browser-dir nil
+          strata-preview-edit--browser-view nil
           strata-preview-edit--preview-window nil)
-    (when (window-live-p target-win)
+    (cond
+     ((and (not (window-live-p bwin))
+           (one-window-p t)
+           (or (buffer-live-p bbuf)
+               (and bdir (file-directory-p bdir))))
+      (let ((strata-preview-edit--returning t))
+        (when (and buf-file (not (buffer-modified-p buf)))
+          (let ((dv (and (buffer-live-p bbuf)
+                         (with-current-buffer bbuf (ignore-errors (dirvish-curr))))))
+            (strata-preview--invalidate-cache dv buf-file)))
+        (strata-preview-edit--restore-browser
+         (selected-window) bbuf bdir bview buf-file)))
+     ((window-live-p target-win)
       (select-window target-win)
       (when (boundp 'dirvish--selected-window)
         (setq dirvish--selected-window target-win))
@@ -410,11 +756,9 @@ MODE may be:
             (strata-preview--invalidate-cache dv cur-file))
           (cond
            ((and dv (window-live-p (dv-preview-window dv)))
-            (dirvish-prop :index cur-file)
-            (unless (dirvish--preview-update dv cur-file)
-              (strata-preview-update-standalone cur-file (dv-preview-window dv))))
+            (strata-preview--dispatch-dirvish-or-standalone dv cur-file (dv-preview-window dv)))
            ((window-live-p pwin)
-            (strata-preview-update-standalone cur-file pwin))))))))
+            (strata-preview-update-standalone cur-file pwin)))))))))
 
 (defun strata-preview-edit-leave ()
   "Prompt to save changes and return to the left browser window (`C-<left>')."
@@ -433,32 +777,49 @@ MODE may be:
 
 (defun strata-preview-edit-file (file)
   "Edit FILE directly inside the preview pane without altering window layout."
+  (strata-preview--ensure-common-auto-modes)
   (let* ((dv (ignore-errors (dirvish-curr)))
          (bwin (selected-window))
+         (bbuf (window-buffer bwin))
+         (bdir (with-current-buffer bbuf
+                 (or (bound-and-true-p strata-view-directory)
+                     (ignore-errors (dirvish-prop :root))
+                     default-directory)))
+         (bview (when (fboundp 'strata-prefs)
+                  (strata-prefs-browser-mode (strata-prefs))))
          (pwin (strata-preview--ensure-window t)))
     ;; Never reuse a truncated/read-only Dirvish throwaway `PREVIEW :: ...' buffer.
     (strata-preview--invalidate-cache dv file t)
-    (let* ((existing (find-buffer-visiting file))
-           (was-preview (and dv existing (memq existing (dv-preview-buffers dv))))
+    (let* ((delay-mode-hooks nil)
+           (existing (find-buffer-visiting file))
+           (was-preview (and existing
+                             (or (and dv (memq existing (dv-preview-buffers dv)))
+                                 (string-prefix-p "PREVIEW :: " (buffer-name existing)))))
            (buf (find-file-noselect file)))
       (strata-preview--cancel-delay)
       (when dv
         (setf (dv-preview-buffers dv) (delq buf (dv-preview-buffers dv))))
       (with-current-buffer buf
+        (setq-local delay-mode-hooks nil)
         (when (and was-preview
                    (file-writable-p file)
                    buffer-read-only
                    (not (derived-mode-p 'image-mode 'pdf-view-mode 'doc-view-mode)))
           (read-only-mode -1))
+        (when (and (or font-lock-defaults
+                       (and (fboundp 'treesit-parser-list) (treesit-parser-list)))
+                   (bound-and-true-p global-font-lock-mode))
+          (font-lock-mode 1))
         (strata-preview-edit-mode 1)
         (setq strata-preview-edit--browser-window bwin
+              strata-preview-edit--browser-buffer bbuf
+              strata-preview-edit--browser-dir bdir
+              strata-preview-edit--browser-view bview
               strata-preview-edit--preview-window pwin))
       (if (window-live-p pwin)
           (progn
             (set-window-dedicated-p pwin nil)
             (set-window-buffer pwin buf)
-            (when (boundp 'dirvish--selected-window)
-              (setq dirvish--selected-window pwin))
             (select-window pwin)
             (message "Preview Edit: C-x C-s save · C-<left> leave (prompt save) · C-c q back · C-c k abort")
             buf)
@@ -499,10 +860,7 @@ MODE may be:
           (when (eq win strata-preview-standalone-window)
             (setq strata-preview-standalone-window nil)))
       (when-let ((f (strata-current-file)))
-        (let ((pwin (display-buffer-in-side-window
-                     (get-buffer-create "*Strata Preview*")
-                     '((side . right) (slot . 0) (window-width . 0.42)))))
-          (setq strata-preview-standalone-window pwin)
+        (let ((pwin (strata-preview--split-standalone-window (selected-window))))
           (strata-preview-update-standalone f pwin)))))
    (t (dirvish-layout-toggle))))
 
@@ -545,7 +903,23 @@ MODE may be:
     (with-current-buffer buf
       (let ((inhibit-read-only t)
             (in-code nil)
-            (code-lang ""))
+            (code-lang "")
+            (code-lines nil)
+            (flush-code
+             (lambda (buf-target lang lines-rev)
+               (when lines-rev
+                 (let* ((raw (concat (mapconcat #'identity (nreverse lines-rev) "\n") "\n"))
+                        (virt (alist-get (downcase lang) strata-preview--lang-filename-alist
+                                         nil nil #'string=))
+                        (styled (if virt
+                                    (strata-preview--fontify-string raw virt)
+                                  raw))
+                        (out-lines (split-string (string-remove-suffix "\n" styled) "\n")))
+                   (with-current-buffer buf-target
+                     (dolist (cl out-lines)
+                       (let ((s (concat "  │ " cl "\n")))
+                         (add-face-text-property 0 (length s) 'strata-preview-code t s)
+                         (insert s)))))))))
         (erase-buffer)
         (insert (concat "  "
                         (strata-icon-glyph 'markdown 'strata-hint-desc)
@@ -555,15 +929,18 @@ MODE may be:
         (dolist (line (split-string text "\n"))
           (cond
            ((string-match "\\````\\(.*\\)\\'" line)
-            (setq in-code (not in-code)
-                  code-lang (string-trim (match-string 1 line)))
-            (when in-code
+            (if in-code
+                (progn
+                  (funcall flush-code buf code-lang code-lines)
+                  (setq in-code nil code-lines nil)
+                  (insert (propertize "  └─\n" 'face 'strata-hint-desc)))
+              (setq in-code t
+                    code-lines nil
+                    code-lang (string-trim (match-string 1 line)))
               (insert (propertize (format "  ┌─ %s\n" (if (string-empty-p code-lang) "code" code-lang))
-                                  'face 'strata-hint-desc)))
-            (unless in-code
-              (insert (propertize "  └─\n" 'face 'strata-hint-desc))))
+                                  'face 'strata-hint-desc))))
            (in-code
-            (insert (propertize (concat "  │ " line "\n") 'face 'strata-preview-code)))
+            (push line code-lines))
            ((string-match "\\`# \\(.+\\)\\'" line)
             (insert "\n" (propertize (match-string 1 line) 'face 'strata-preview-heading-1) "\n"))
            ((string-match "\\`## \\(.+\\)\\'" line)
@@ -584,6 +961,8 @@ MODE may be:
                                 (propertize (format " [%s -> %s]\n" alt rel) 'face 'shadow))))))
            (t
             (insert "  " line "\n"))))
+        (when in-code
+          (funcall flush-code buf code-lang code-lines))
         (goto-char (point-min))))))
 
 (defun strata-preview--safe-insert-html (file buf)

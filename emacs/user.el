@@ -105,9 +105,14 @@
         ;; the file path, so pass the current filename (was a 1-arg call that
         ;; silently errored out under ignore-errors after the upgrade).
         (when (and (fboundp 'dirvish--preview-update) (fboundp 'dirvish-curr))
-          (let ((dv (dirvish-curr))
-                (idx (dired-get-filename nil t)))
-            (when (and dv idx)
+          (let* ((dv (dirvish-curr))
+                 (idx (dired-get-filename nil t))
+                 (pwin (and dv (dv-preview-window dv)))
+                 (pbuf (and (window-live-p pwin) (window-buffer pwin))))
+            (when (and dv idx
+                       (or (not (buffer-live-p pbuf))
+                           (not (with-current-buffer pbuf
+                                  (bound-and-true-p strata-preview-edit-mode)))))
               (ignore-errors (dirvish--preview-update dv idx)))))
         (force-mode-line-update t)))))
 

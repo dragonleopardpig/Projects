@@ -934,5 +934,188 @@
           (should (member "FASTFETCH_ENABLED=0" seen-ext-env)))
       (delete-directory tmp t))))
 
+(defun strata-test--buffer-has-face-p (buf)
+  "Return non-nil if BUF contains at least one realized `face' text property."
+  (with-current-buffer buf
+    (let ((pos (point-min))
+          (found nil))
+      (while (and (not found) (< pos (point-max)))
+        (when (get-text-property pos 'face)
+          (setq found t))
+        (setq pos (next-single-property-change pos 'face nil (point-max))))
+      found)))
+
+(ert-deftest strata-test-syntax-highlight-common-extensions ()
+  "Common file extensions and Dirvish Columns preview render with syntax faces."
+  (let* ((tmp (make-temp-file "strata-hl-" t))
+         (pbuf (get-buffer-create "*Strata Preview*"))
+         (samples
+          '(("init.el"        . "(defun hello (x) \"doc\" (if x (+ 1 x) :ok))\n")
+            ("app.py"         . "def hello(x: int) -> str:\n    \"\"\"doc\"\"\"\n    return f\"{x}\"\n")
+            ("flake.nix"      . "{ pkgs, ... }: let a = \"hi\"; in { inherit a; }\n")
+            ("index.ts"       . "export const greet = (name: string): string => `hi ${name}`;\n")
+            ("App.tsx"        . "export const App = (): JSX.Element => <div>Hi</div>;\n")
+            ("main.go"        . "package main\nfunc main() { return }\n")
+            ("main.rs"        . "pub fn main() -> i32 { let s = \"ok\"; 1 }\n")
+            ("data.json"      . "{\"k\": \"v\", \"n\": 42, \"ok\": true}\n")
+            ("run.sh"         . "#!/usr/bin/env bash\nif [ -f /etc/hosts ]; then echo \"hi\"; fi\n")
+            ("style.css"      . "body { color: #ff0000; font-size: 14px; }\n")
+            ("cfg.yaml"       . "name: demo\nitems:\n  - one\n")
+            ("Cargo.toml"     . "[package]\nname = \"demo\"\n")
+            ("main.c"         . "#include <stdio.h>\nint main(void) { return 0; }\n")
+            ("CMakeLists.txt" . "cmake_minimum_required(VERSION 3.20)\nproject(Demo)\n")
+            ("README.md"      . "# Title\n\n```python\ndef bar():\n    return \"hi\"\n```\n"))))
+    (unwind-protect
+        (progn
+          (dolist (pair samples)
+            (let ((fpath (expand-file-name (car pair) tmp)))
+              (with-temp-file fpath
+                (insert (cdr pair)))
+              (strata-preview-update-standalone fpath)
+              (should (strata-test--buffer-has-face-p pbuf))))
+          ;; Rendered Markdown fenced code preserves Python faces beyond plain `strata-preview-code'.
+          (with-current-buffer pbuf
+            (goto-char (point-min))
+            (should (search-forward "def" nil t))
+            (let ((f (get-text-property (match-beginning 0) 'face)))
+              (should (and f (not (eq f 'strata-preview-code))))))
+          ;; Columns dispatch must NOT clobber Dirvish's preview window when `dirvish--preview-update' returns nil.
+          (let* ((left-win (selected-window))
+                 (right-win (split-window left-win nil 'right))
+                 (root-buf (generate-new-buffer " *strata-hl-root*"))
+                 (dv-buf (generate-new-buffer "PREVIEW :: hl :: app.py"))
+                 (dv (dirvish--new :curr-layout '(1 0.14 0.48)))
+                 (py (expand-file-name "app.py" tmp))
+                 (standalone-called nil))
+            (unwind-protect
+                (progn
+                  (with-current-buffer dv-buf
+                    (insert (propertize "def" 'face 'font-lock-keyword-face) " f(): pass"))
+                  (with-current-buffer root-buf
+                    (dirvish-prop :preview-dps '(dirvish-tramp-dp)))
+                  (setf (dv-index dv) (cons root-buf root-buf))
+                  (setf (dv-preview-window dv) right-win)
+                  (cl-letf (((symbol-function 'dirvish--preview-update)
+                             (lambda (_dv _file)
+                               (set-window-buffer right-win dv-buf)
+                               nil))
+                            ((symbol-function 'strata-preview-update-standalone)
+                             (lambda (&rest _)
+                               (setq standalone-called t))))
+                    (strata-preview--dispatch-dirvish-or-standalone dv py right-win))
+                  (should-not standalone-called)
+                  (should (eq (window-buffer right-win) dv-buf)))
+              (delete-window right-win)
+              (when (buffer-live-p dv-buf) (kill-buffer dv-buf))
+              (when (buffer-live-p root-buf) (kill-buffer root-buf))
+              (delete-other-windows))))
+      (when (buffer-live-p pbuf) (kill-buffer pbuf))
+      (delete-directory tmp t))))
+
+(ert-deftest strata-test-preview-edit-behaves-like-full-emacs-buffer ()
+  "Preview edit opens writable full Emacs mode on a splittable window and survives folder reverts."
+  (let* ((tmp (make-temp-file "strata-full-edit-" t))
+         (py (expand-file-name "mod.py" tmp))
+         (win-left nil)
+         (win-right nil)
+         (dir-buf nil)
+         (edit-buf nil)
+         (dv nil))
+    (unwind-protect
+        (progn
+          (with-temp-file py
+            (insert "def compute(n: int) -> int:\n    return n + 1\n"))
+          (delete-other-windows)
+          (setq win-left (selected-window))
+          (setq dir-buf (dired-noselect tmp))
+          (switch-to-buffer dir-buf)
+          (let ((strata-preview-standalone-window nil)
+                (global-font-lock-mode t))
+            (cl-letf (((symbol-function 'dirvish-curr) (lambda () nil)))
+              ;; Ensure standalone preview pane creates a non-side window supporting splits.
+              (strata-goto-file py)
+              (strata-preview-at-point)
+              (setq win-right (window-in-direction 'right win-left))
+              (should (window-live-p win-right))
+              (should-not (window-parameter win-right 'window-side))
+              (select-window win-left)
+              (setq edit-buf (strata-preview-edit-file py))
+              (should (buffer-live-p edit-buf))
+              (should (eq (selected-window) win-right))
+              (should (eq (window-buffer win-right) edit-buf))
+              (should-not (window-parameter win-right 'window-side))
+              (let ((split-w (split-window-below)))
+                (should (window-live-p split-w))
+                (delete-window split-w))
+              (with-current-buffer edit-buf
+                (should-not buffer-read-only)
+                (should-not delay-mode-hooks)
+                (should (derived-mode-p 'python-ts-mode 'python-mode))
+                (should (or font-lock-defaults
+                            (and (fboundp 'treesit-parser-list) (treesit-parser-list))))
+                (should (or font-lock-mode noninteractive))
+                (font-lock-ensure)
+                (should strata-preview-edit-mode)
+                (should (strata-test--buffer-has-face-p edit-buf)))
+              ;; Dirvish auto-revert (`my/dired-fn--do-revert') must not replace active edit buffer.
+              (setq dv (dirvish--new :curr-layout '(1 0.14 0.48)))
+              (setf (dv-preview-window dv) win-right)
+              (let ((revert-preview-called nil))
+                (cl-letf (((symbol-function 'dirvish-curr) (lambda () dv))
+                          ((symbol-function 'dirvish--preview-update)
+                           (lambda (&rest _) (setq revert-preview-called t))))
+                  (with-current-buffer dir-buf
+                    (my/dired-fn--do-revert dir-buf)))
+                (should-not revert-preview-called)
+                (should (eq (window-buffer win-right) edit-buf))))))
+      (when (buffer-live-p edit-buf)
+        (with-current-buffer edit-buf
+          (set-buffer-modified-p nil)
+          (strata-preview-edit-mode -1))
+        (kill-buffer edit-buf))
+      (when (buffer-live-p dir-buf) (kill-buffer dir-buf))
+      (delete-other-windows)
+      (delete-directory tmp t))))
+
+(ert-deftest strata-test-maximized-edit-c-x-1-and-c-x-k-restore ()
+  "Maximizing preview edit (`C-x 1') keeps Dirvish switchable (`C-x b`) and restores view on `C-x k'."
+  (let* ((tmp (make-temp-file "strata-max-edit-" t))
+         (py (expand-file-name "solo.py" tmp))
+         (dir-buf nil)
+         (edit-buf nil))
+    (unwind-protect
+        (progn
+          (with-temp-file py (insert "def solo():\n    return 42\n"))
+          (delete-other-windows)
+          (setq dir-buf (dired-noselect tmp))
+          (switch-to-buffer dir-buf)
+          (strata-goto-file py)
+          (let ((strata-preview-standalone-window nil))
+            (cl-letf (((symbol-function 'dirvish-curr) (lambda () nil)))
+              (setq edit-buf (strata-preview-edit-file py))
+              (delete-other-windows) ;; C-x 1
+              (should (one-window-p t))
+              (should (eq (window-buffer (selected-window)) edit-buf))
+              ;; Previous browser buffer remains live and switchable via C-x b.
+              (should (buffer-live-p dir-buf))
+              (should (eq (buffer-local-value 'strata-preview-edit--browser-buffer edit-buf) dir-buf))
+              ;; Killing maximized edit buffer (`C-x k') returns cleanly to previous browser buffer.
+              (let ((strata-preview-edit--returning nil))
+                (cl-letf (((symbol-function 'strata-sidebar-ensure) (lambda () nil)))
+                  (kill-buffer edit-buf)))
+              (should-not (buffer-live-p edit-buf))
+              (should (eq (window-buffer (selected-window)) dir-buf))
+              (should (string= (ignore-errors
+                                 (file-truename
+                                  (with-current-buffer (window-buffer (selected-window))
+                                    (strata-current-file))))
+                               (file-truename py))))))
+      (when (buffer-live-p edit-buf)
+        (with-current-buffer edit-buf (strata-preview-edit-mode -1))
+        (kill-buffer edit-buf))
+      (when (buffer-live-p dir-buf) (kill-buffer dir-buf))
+      (delete-other-windows)
+      (delete-directory tmp t))))
+
 (provide 'strata-dirvish-tests)
 ;;; strata-dirvish-tests.el ends here
