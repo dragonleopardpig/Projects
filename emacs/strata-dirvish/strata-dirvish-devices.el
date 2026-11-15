@@ -886,14 +886,12 @@ PROBE-FUSE is non-nil."
                                                        'dired-directory
                                                      'default))
                              sub)))
-          (add-text-properties 0 (length line)
-                               (list 'strata-device dev
-                                     'mouse-face 'highlight
-                                     'pointer 'hand
-                                     'keymap strata-computer--row-keymap
-                                     'help-echo (or mp (strata-device-device dev) name))
-                               line)
-          (insert line))))
+          (insert (strata-add-row-properties
+                   line (list 'strata-device dev
+                              'mouse-face 'highlight
+                              'pointer 'hand
+                              'keymap strata-computer--row-keymap
+                              'help-echo (or mp (strata-device-device dev) name)))))))
     (goto-char (min pt (point-max)))))
 
 (defun strata-computer-refresh ()
@@ -1068,12 +1066,10 @@ PROBE-FUSE is non-nil."
                                (strata-format-bytes (plist-get it :size))
                                (replace-regexp-in-string "T" " " (plist-get it :deleted))
                                (abbreviate-file-name (plist-get it :orig)))))
-            (add-text-properties 0 (length line)
-                                 (list 'strata-trash-item it
-                                       'mouse-face 'highlight
-                                       'keymap strata-trash--row-keymap)
-                                 line)
-            (insert line)))))))
+            (insert (strata-add-row-properties
+                     line (list 'strata-trash-item it
+                                'mouse-face 'highlight
+                                'keymap strata-trash--row-keymap)))))))))
 
 (defun strata-trash--item-at-point ()
   "Return trash plist on current line."
@@ -1231,13 +1227,11 @@ PROBE-FUSE is non-nil."
                                (if dirp "<dir>" (strata-format-bytes (or (file-attribute-size attrs) 0)))
                                (propertize (abbreviate-file-name (or (file-name-directory f) "/"))
                                            'face 'shadow))))
-            (add-text-properties 0 (length line)
-                                 (append (list 'strata-recent-path f
-                                               'mouse-face 'highlight
-                                               'keymap strata-recent--row-keymap)
-                                         (when dirp (list 'pointer 'hand 'help-echo f)))
-                                 line)
-            (insert line)))))))
+            (insert (strata-add-row-properties
+                     line (append (list 'strata-recent-path f
+                                        'mouse-face 'highlight
+                                        'keymap strata-recent--row-keymap)
+                                  (when dirp (list 'pointer 'hand 'help-echo f)))))))))))
 
 (defun strata-recent-open-at-point ()
   "Open recent file or folder at point."
@@ -1300,14 +1294,12 @@ PROBE-FUSE is non-nil."
                                 (strata-device-icon d)
                                 (strata-device-name d)
                                 (propertize (or (strata-device-mountpoint d) "") 'face 'shadow))))
-              (add-text-properties 0 (length line)
-                                   (list 'strata-device d
-                                         'mouse-face 'highlight
-                                         'pointer 'hand
-                                         'keymap strata-computer--row-keymap
-                                         'help-echo (or (strata-device-mountpoint d) (strata-device-name d)))
-                                   line)
-              (insert line))))
+              (insert (strata-add-row-properties
+                       line (list 'strata-device d
+                                  'mouse-face 'highlight
+                                  'pointer 'hand
+                                  'keymap strata-computer--row-keymap
+                                  'help-echo (or (strata-device-mountpoint d) (strata-device-name d))))))))
         (goto-char (point-min))))
     buf))
 

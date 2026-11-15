@@ -187,12 +187,52 @@
       (dirvish-layout-toggle)
       (set-buffer (window-buffer (selected-window))))))
 
+(defun strata-panes--valid-main-window-p (win)
+  "Return non-nil if WIN is a usable main browser window (not sidebar, preview, or aux)."
+  (and (window-live-p win)
+       (not (window-parameter win 'window-side))
+       (not (window-minibuffer-p win))
+       (not (eq win (bound-and-true-p strata-preview-standalone-window)))
+       (not (and (boundp 'dirvish--sessions)
+                 (hash-table-p dirvish--sessions)
+                 (cl-loop for dv being the hash-values of dirvish--sessions
+                          thereis (eq win (dv-preview-window dv)))))
+       (with-current-buffer (window-buffer win)
+         (not (derived-mode-p 'dirvish-misc-mode
+                              'dirvish-directory-view-mode
+                              'dirvish-special-preview-mode
+                              'strata-sidebar-mode)))))
+
+(defun strata-panes--main-window (&optional pane)
+  "Return the best main browser window for PANE, avoiding sidebars and aux panes."
+  (let* ((p (or pane (strata-active-pane)))
+         (pw (and p (strata-pane-state-window p))))
+    (or (and (strata-panes--valid-main-window-p pw) pw)
+        (when-let ((dv (dirvish-curr)))
+          (let ((rw (dv-root-window dv)))
+            (and (strata-panes--valid-main-window-p rw) rw)))
+        (cl-find-if (lambda (w)
+                      (and (strata-panes--valid-main-window-p w)
+                           (with-current-buffer (window-buffer w)
+                             (or (dirvish-curr)
+                                 (derived-mode-p 'dired-mode
+                                                 'strata-compact-mode
+                                                 'strata-icons-mode
+                                                 'strata-computer-mode
+                                                 'strata-trash-mode
+                                                 'strata-recent-mode)))))
+                    (window-list))
+        (cl-find-if #'strata-panes--valid-main-window-p (window-list))
+        (selected-window))))
+
 (defun strata-sidebar-ensure ()
   "Display `*Strata Sidebar*' if `sidebar-expanded' pref is enabled.
 Return non-nil if the sidebar was newly opened and rendered."
   (let ((p (strata-prefs)))
     (when (and (strata-prefs-sidebar-expanded p)
-               (not (window-live-p strata-sidebar-window)))
+               (not (and (window-live-p strata-sidebar-window)
+                         (eq (window-buffer strata-sidebar-window)
+                             (get-buffer "*Strata Sidebar*")))))
       (let* ((buf (get-buffer-create "*Strata Sidebar*"))
              (w (if (strata-prefs-sidebar-compact p) 9 28)))
         (with-current-buffer buf
@@ -230,14 +270,12 @@ in the currently active pane cleanly."
               ("network:///" "Network")
               (_ (let ((nm (file-name-nondirectory (directory-file-name resolved))))
                    (if (string-empty-p nm) "/" nm))))))
-    ;; Focus pane window if alive (never overwrite sidebars or drawers!)
-    (cond
-     ((window-live-p (strata-pane-state-window pane))
-      (select-window (strata-pane-state-window pane)))
-     ((window-parameter (selected-window) 'window-side)
-      (when-let ((main-win (cl-find-if-not (lambda (w) (window-parameter w 'window-side))
-                                           (window-list))))
-        (select-window main-win))))
+    ;; Focus pane window if alive (never overwrite sidebars or Dirvish aux panes!)
+    (when (or (not (strata-panes--valid-main-window-p (selected-window)))
+              (and (strata-panes--valid-main-window-p (strata-pane-state-window pane))
+                   (not (eq (selected-window) (strata-pane-state-window pane)))))
+      (when-let ((main-win (strata-panes--main-window pane)))
+        (select-window main-win)))
     (cond
      ((string= resolved "computer:///")
       (strata-dirvish--flatten-layout)
@@ -587,8 +625,21 @@ Keeps shell process & CWD alive while hidden."
 (defun strata-sidebar-mouse-activate (event)
   "Select clicked entry at EVENT in `*Strata Sidebar*' and open it."
   (interactive "e")
-  (mouse-set-point event)
-  (strata-sidebar-activate-at-point))
+  (let* ((start (event-start event))
+         (end (event-end event))
+         (win (posn-window end))
+         (drag-p (eq (car-safe event) 'drag-mouse-1))
+         (same-row (or (not drag-p)
+                       (and (window-live-p win)
+                            (integerp (posn-point start))
+                            (integerp (posn-point end))
+                            (with-current-buffer (window-buffer win)
+                              (= (line-number-at-pos (posn-point start))
+                                 (line-number-at-pos (posn-point end))))))))
+    (when same-row
+      (mouse-set-point event)
+      (deactivate-mark)
+      (strata-sidebar-activate-at-point))))
 
 (defvar strata-sidebar-mode-map
   (let ((map (make-sparse-keymap)))
@@ -601,6 +652,8 @@ Keeps shell process & CWD alive while hidden."
     (define-key map (kbd "l") #'strata-sidebar-activate-at-point)
     (define-key map (kbd "<right>") #'strata-sidebar-activate-at-point)
     (define-key map (kbd "<mouse-1>") #'strata-sidebar-mouse-activate)
+    (define-key map (kbd "<double-mouse-1>") #'strata-sidebar-mouse-activate)
+    (define-key map (kbd "<drag-mouse-1>") #'strata-sidebar-mouse-activate)
     (define-key map (kbd "<mouse-2>") #'strata-sidebar-mouse-activate)
     (define-key map (kbd "t") #'strata-sidebar-open-in-tab-at-point)
     (define-key map (kbd "m") #'strata-sidebar-mount-at-point)
@@ -658,13 +711,11 @@ Keeps shell process & CWD alive while hidden."
                  (active (and cur-dir (equal (directory-file-name cur-dir) (directory-file-name loc))))
                  (txt (if rail (format "  %s\n" icon)
                         (format "  %s  %s\n" icon (propertize label 'face (if active 'strata-header-accent 'default))))))
-            (add-text-properties 0 (length txt)
-                                 (list 'strata-sidebar-loc loc
-                                       'mouse-face 'highlight
-                                       'pointer 'hand
-                                       'help-echo loc)
-                                 txt)
-            (insert txt)))
+            (insert (strata-add-row-properties
+                     txt (list 'strata-sidebar-loc loc
+                               'mouse-face 'highlight
+                               'pointer 'hand
+                               'help-echo loc)))))
         (unless (strata-prefs-sidebar-pinned-collapsed p)
           (let ((pins (strata-bookmarks-read))
                 (idx 0)
@@ -678,24 +729,20 @@ Keeps shell process & CWD alive while hidden."
                        (keycap (if (<= idx 9) (propertize (format "[%d]" idx) 'face 'strata-hint-key) "   "))
                        (txt (if rail (format "  %s%s\n" pin-ico (if (<= idx 9) (number-to-string idx) ""))
                               (format "  %s %s %s\n" pin-ico keycap lbl))))
-                  (add-text-properties 0 (length txt)
-                                       (list 'strata-sidebar-loc loc
-                                             'mouse-face 'highlight
-                                             'pointer 'hand
-                                             'help-echo loc)
-                                       txt)
-                  (insert txt))))))
+                  (insert (strata-add-row-properties
+                           txt (list 'strata-sidebar-loc loc
+                                     'mouse-face 'highlight
+                                     'pointer 'hand
+                                     'help-echo loc))))))))
         (unless (strata-prefs-sidebar-devices-collapsed p)
           (insert "\n" (propertize (if rail " Devs\n" "  DEVICES\n") 'face 'strata-section-heading))
           (if (null strata-devices-cache)
               (let ((txt (if rail "  [Scan]\n" "  [Scan drives (g)]\n")))
-                (add-text-properties 0 (length txt)
-                                     '(strata-sidebar-action scan-devices
-                                       mouse-face highlight
-                                       pointer hand
-                                       help-echo "Scan block and mounted devices (g)")
-                                     txt)
-                (insert txt))
+                (insert (strata-add-row-properties
+                         txt '(strata-sidebar-action scan-devices
+                               mouse-face highlight
+                               pointer hand
+                               help-echo "Scan block and mounted devices (g)"))))
             (dolist (dev strata-devices-cache)
               (let* ((icon (strata-device-icon dev))
                      (name (strata-device-name dev))
@@ -705,13 +752,11 @@ Keeps shell process & CWD alive while hidden."
                      (txt (if rail
                               (format "  %s\n" icon)
                             (format "  %s  %s%s\n" icon name (or bar "")))))
-                (add-text-properties 0 (length txt)
-                                     (list 'strata-device dev 'strata-sidebar-loc mp
-                                           'mouse-face 'highlight
-                                           'pointer 'hand
-                                           'help-echo (or mp (strata-device-device dev)))
-                                     txt)
-                (insert txt)))))
+                (insert (strata-add-row-properties
+                         txt (list 'strata-device dev 'strata-sidebar-loc mp
+                                   'mouse-face 'highlight
+                                   'pointer 'hand
+                                   'help-echo (or mp (strata-device-device dev)))))))))
         (goto-char (min pt (point-max)))))))
 
 (defun strata-sidebar-refresh ()
@@ -765,12 +810,17 @@ Keeps shell process & CWD alive while hidden."
   (when (window-live-p strata-sidebar-window)
     (select-window strata-sidebar-window)))
 
+(defun strata-sidebar--row-prop (prop)
+  "Read text property PROP from point, or from the beginning of the current row."
+  (or (get-text-property (point) prop)
+      (get-text-property (line-beginning-position) prop)))
+
 (defun strata-sidebar-activate-at-point ()
   "Activate place, pin, or device on current Sidebar row."
   (interactive)
-  (let ((action (get-text-property (point) 'strata-sidebar-action))
-        (dev (get-text-property (point) 'strata-device))
-        (loc (get-text-property (point) 'strata-sidebar-loc)))
+  (let ((action (strata-sidebar--row-prop 'strata-sidebar-action))
+        (dev (strata-sidebar--row-prop 'strata-device))
+        (loc (strata-sidebar--row-prop 'strata-sidebar-loc)))
     (cond
      ((eq action 'scan-devices)
       (strata-sidebar-force-refresh))
@@ -782,27 +832,27 @@ Keeps shell process & CWD alive while hidden."
 (defun strata-sidebar-open-in-tab-at-point ()
   "Open Sidebar place/device at point in a new tab."
   (interactive)
-  (when-let ((loc (get-text-property (point) 'strata-sidebar-loc)))
+  (when-let ((loc (strata-sidebar--row-prop 'strata-sidebar-loc)))
     (strata-tab-new loc)))
 
 (defun strata-sidebar-mount-at-point ()
   "Mount/unlock device on Sidebar row."
   (interactive)
-  (if-let ((dev (get-text-property (point) 'strata-device)))
+  (if-let ((dev (strata-sidebar--row-prop 'strata-device)))
       (strata-device-mount dev)
     (user-error "No device on this row")))
 
 (defun strata-sidebar-unmount-at-point ()
   "Unmount device on Sidebar row."
   (interactive)
-  (if-let ((dev (get-text-property (point) 'strata-device)))
+  (if-let ((dev (strata-sidebar--row-prop 'strata-device)))
       (strata-device-unmount dev)
     (user-error "No device on this row")))
 
 (defun strata-sidebar-eject-at-point ()
   "Safely eject device on Sidebar row."
   (interactive)
-  (if-let ((dev (get-text-property (point) 'strata-device)))
+  (if-let ((dev (strata-sidebar--row-prop 'strata-device)))
       (strata-device-eject dev)
     (user-error "No device on this row")))
 

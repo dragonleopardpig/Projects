@@ -20,6 +20,16 @@
 (require 'strata-dirvish-devices)
 
 (declare-function strata-current-file "strata-dirvish-views" ())
+(declare-function strata-open-location "strata-dirvish-panes" (loc &optional record-history))
+(declare-function strata-computer--device-at-point "strata-dirvish-devices" ())
+(declare-function strata-computer-open-at-point "strata-dirvish-devices" ())
+(declare-function strata-trash-restore-at-point "strata-dirvish-devices" ())
+(defvar strata-sidebar-window)
+(defvar dirvish--selected-window)
+(defvar dirvish--timers)
+
+(defvar strata-preview-standalone-window nil
+  "Reusable preview window for non-Columns or standalone Strata browser modes.")
 
 (defvar strata-active-preview-kind 'other
   "Kind of item currently in preview: `text', `image', `pdf', `media', `archive', `dir', or `other'.")
@@ -205,12 +215,11 @@
                                            (when (posn-window (event-end ev))
                                              (select-window (posn-window (event-end ev))))
                                            (strata-open-location sub t))))
-                           (add-text-properties 0 (length row)
-                                                (list 'mouse-face 'highlight
-                                                      'pointer 'hand
-                                                      'keymap km
-                                                      'help-echo sub)
-                                                row)))
+                           (strata-add-row-properties
+                            row (list 'mouse-face 'highlight
+                                      'pointer 'hand
+                                      'keymap km
+                                      'help-echo sub))))
                        (insert row)))))
              (when (file-readable-p file)
                (insert-file-contents file nil 0 65536)))
@@ -235,19 +244,142 @@
     (when (window-live-p win)
       (with-selected-window win (scroll-down-command 5)))))
 
+(defun strata-preview--ensure-window (&optional allow-split)
+  "Return active preview window without altering layout unless ALLOW-SPLIT."
+  (let* ((dv (ignore-errors (dirvish-curr)))
+         (sidebar (bound-and-true-p strata-sidebar-window))
+         (cur (selected-window))
+         (dv-pwin (and dv (dv-preview-window dv))))
+    (cond
+     ((and (window-live-p dv-pwin)
+           (not (eq dv-pwin cur))
+           (not (eq dv-pwin sidebar)))
+      dv-pwin)
+     ((and allow-split
+           dv
+           (derived-mode-p 'dired-mode)
+           (eq (strata-prefs-browser-mode (strata-prefs)) 'columns)
+           (null (dv-curr-layout dv)))
+      (dirvish-layout-toggle)
+      (when (window-live-p cur)
+        (select-window cur t))
+      (let ((w (dv-preview-window dv)))
+        (and (window-live-p w) w)))
+     ((and (window-live-p strata-preview-standalone-window)
+           (not (eq strata-preview-standalone-window cur))
+           (not (eq strata-preview-standalone-window sidebar)))
+      strata-preview-standalone-window)
+     ((when-let ((w (get-buffer-window "*Strata Preview*")))
+        (when (and (window-live-p w)
+                   (not (eq w cur))
+                   (not (eq w sidebar)))
+          (setq strata-preview-standalone-window w))))
+     (allow-split
+      (let ((pwin (display-buffer-in-side-window
+                   (get-buffer-create "*Strata Preview*")
+                   '((side . right) (slot . 0) (window-width . 0.42)))))
+        (setq strata-preview-standalone-window pwin)
+        pwin)))))
+
+(defun strata-preview--cancel-delay ()
+  "Cancel any pending Dirvish preview delay timer."
+  (when (fboundp 'dirvish--run-with-delay)
+    (dirvish--run-with-delay 'reset))
+  (when (boundp 'dirvish--timers)
+    (when-let ((rec (plist-get dirvish--timers :default)))
+      (when (timerp (car rec))
+        (cancel-timer (car rec))))))
+
+(defun strata-preview-at-point ()
+  "Preview item at point inside the preview pane without closing it (`SPC')."
+  (interactive)
+  (let* ((f (or (strata-current-file)
+                (and (derived-mode-p 'strata-computer-mode)
+                     (let ((dev (ignore-errors (strata-computer--device-at-point))))
+                       (and dev (strata-device-mounted-p dev)
+                            (strata-device-mountpoint dev))))))
+         (dv (ignore-errors (dirvish-curr))))
+    (unless f
+      (user-error "No entry to preview at point"))
+    (when-let ((pwin (strata-preview--ensure-window t)))
+      (let ((cur (selected-window)))
+        (if (and dv (eq pwin (dv-preview-window dv)))
+            (progn
+              (dirvish-prop :index f)
+              (when (fboundp 'dirvish--run-with-delay)
+                (dirvish--run-with-delay 'reset))
+              (unless (dirvish--preview-update dv f)
+                (strata-preview-update-standalone f pwin)))
+          (strata-preview-update-standalone f pwin))
+        (when (window-live-p cur)
+          (select-window cur t))))))
+
+(defun strata-preview-edit-file (file)
+  "Edit FILE directly inside the preview pane without altering window layout."
+  (let* ((dv (ignore-errors (dirvish-curr)))
+         (pwin (strata-preview--ensure-window t))
+         (existing (find-buffer-visiting file))
+         (was-preview (and dv existing (memq existing (dv-preview-buffers dv))))
+         (buf (find-file-noselect file)))
+    (strata-preview--cancel-delay)
+    (when dv
+      (setf (dv-preview-buffers dv) (delq buf (dv-preview-buffers dv))))
+    (when (and was-preview
+               (file-writable-p file)
+               (with-current-buffer buf
+                 (and buffer-read-only
+                      (not (derived-mode-p 'image-mode 'pdf-view-mode 'doc-view-mode)))))
+      (with-current-buffer buf
+        (read-only-mode -1)))
+    (if (window-live-p pwin)
+        (progn
+          (set-window-dedicated-p pwin nil)
+          (set-window-buffer pwin buf)
+          (when (boundp 'dirvish--selected-window)
+            (setq dirvish--selected-window pwin))
+          (select-window pwin)
+          buf)
+      (pop-to-buffer-same-window buf))))
+
+(defun strata-open-or-edit-at-point ()
+  "Open folder in browser pane, or direct-edit file in preview pane (`RET')."
+  (interactive)
+  (cond
+   ((derived-mode-p 'strata-computer-mode)
+    (call-interactively #'strata-computer-open-at-point))
+   ((derived-mode-p 'strata-trash-mode)
+    (call-interactively #'strata-trash-restore-at-point))
+   (t
+    (let ((f (strata-current-file)))
+      (cond
+       ((and f (file-directory-p f))
+        (strata-open-location f t))
+       ((and f (file-exists-p f))
+        (strata-preview-edit-file f))
+       ((derived-mode-p 'dired-mode)
+        (dired-find-file))
+       (t
+        (user-error "No file or folder at point")))))))
+
 (defun strata-toggle-peek ()
-  "Toggle preview drawer / peek panel (`i' / `SPC') across all 4 browser modes."
+  "Toggle preview drawer / peek panel (`i' / `M-i') across all 4 browser modes."
   (interactive)
   (cond
    ((or (derived-mode-p 'strata-compact-mode)
         (derived-mode-p 'strata-icons-mode)
         (not (dirvish-curr)))
-    (if-let ((win (get-buffer-window "*Strata Preview*")))
-        (delete-window win)
+    (if-let ((win (or (and (window-live-p strata-preview-standalone-window)
+                           strata-preview-standalone-window)
+                      (get-buffer-window "*Strata Preview*"))))
+        (progn
+          (delete-window win)
+          (when (eq win strata-preview-standalone-window)
+            (setq strata-preview-standalone-window nil)))
       (when-let ((f (strata-current-file)))
         (let ((pwin (display-buffer-in-side-window
                      (get-buffer-create "*Strata Preview*")
                      '((side . right) (slot . 0) (window-width . 0.42)))))
+          (setq strata-preview-standalone-window pwin)
           (strata-preview-update-standalone f pwin)))))
    (t (dirvish-layout-toggle))))
 

@@ -734,5 +734,22 @@ Falls back cleanly to TTY-OVERRIDE or safe table string when non-graphic."
         (setq pos next)))
     s))
 
+(defun strata-add-row-properties (str props)
+  "Apply row text PROPS to STR, keeping `mouse-face' off trailing newline.
+Excluding the trailing newline prevents Emacs redisplay from merging
+adjacent rows into one whole-group hover highlight."
+  (let* ((len (length str))
+         (hi-end (if (string-suffix-p "\n" str) (max 0 (1- len)) len))
+         (mf (plist-get props 'mouse-face))
+         (rest (if mf
+                   (cl-loop for (k v) on props by #'cddr
+                            unless (eq k 'mouse-face) append (list k v))
+                 props)))
+    (when (and rest (> len 0))
+      (add-text-properties 0 len rest str))
+    (when (and mf (> hi-end 0))
+      (add-text-properties 0 hi-end (list 'mouse-face mf) str))
+    str))
+
 (provide 'strata-dirvish-prefs)
 ;;; strata-dirvish-prefs.el ends here

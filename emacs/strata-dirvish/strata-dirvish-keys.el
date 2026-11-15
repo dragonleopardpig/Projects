@@ -326,12 +326,10 @@
                              (km (make-sparse-keymap)))
                         (define-key km (kbd "RET") act)
                         (define-key km [mouse-1] act)
-                        (add-text-properties 0 (length btn)
-                                             (list 'keymap km
-                                                   'mouse-face 'highlight
-                                                   'pointer 'hand)
-                                             btn)
-                        (insert btn)))
+                        (insert (strata-add-row-properties
+                                 btn (list 'keymap km
+                                           'mouse-face 'highlight
+                                           'pointer 'hand)))))
                     (cycle-row (label val choices setter)
                       (let* ((btn (format "   %-34s  [%s]\n"
                                           label
@@ -346,12 +344,10 @@
                              (km (make-sparse-keymap)))
                         (define-key km (kbd "RET") act)
                         (define-key km [mouse-1] act)
-                        (add-text-properties 0 (length btn)
-                                             (list 'keymap km
-                                                   'mouse-face 'highlight
-                                                   'pointer 'hand)
-                                             btn)
-                        (insert btn))))
+                        (insert (strata-add-row-properties
+                                 btn (list 'keymap km
+                                           'mouse-face 'highlight
+                                           'pointer 'hand))))))
           (insert "\n" (propertize "  GENERAL & BROWSING\n" 'face 'strata-section-heading))
           (cycle-row "Default View Mode" (strata-prefs-browser-mode p) '(columns icons list compact)
                      (lambda (pr v) (setf (strata-prefs-browser-mode pr) v)))
@@ -458,7 +454,8 @@
                     ("j / k / ↑ / ↓" "Move down / up")
                     ("H / L / M-← / M-→" "Pane History Back / Forward")
                     ("M-↑ / M-↓" "Parent folder / Make First Column")
-                    ("SPC / i" "Toggle Preview / Peek Drawer")
+                    ("RET" "Open Folder / Edit File in Preview Pane")
+                    ("SPC / M-i / i" "Preview File / Toggle Peek Drawer")
                     ("C-RET / S-RET" "Open in New Tab / New Frame")
                     ("C-l / g SPC" "Edit Location (~/, computer:///, trash:///, recent:///, sftp://, admin:///)")
                     ("z / Z / C-S-k" "Jump to Visited Folder / Recent File")
@@ -518,7 +515,9 @@
     (define-key map (kbd "M-<up>") #'dired-up-directory)
     (define-key map (kbd "M-<down>") #'strata-make-first-column)
     (define-key map (kbd "M-<home>") (lambda () (interactive) (strata-open-location "~/" t)))
-    (define-key map (kbd "SPC") #'strata-toggle-peek)
+    (define-key map (kbd "SPC") #'strata-preview-at-point)
+    (define-key map (kbd "RET") #'strata-open-or-edit-at-point)
+    (define-key map (kbd "M-i") #'strata-toggle-peek)
     (define-key map (kbd "C-<return>") #'strata-open-in-new-tab)
     (define-key map (kbd "S-<return>") #'strata-open-in-new-frame)
 

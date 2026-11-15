@@ -105,13 +105,71 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
       '(nil . nil)
     (funcall orig-fn f-name)))
 
+(defvar strata-dirvish--in-sidebar-ensure nil
+  "Non-nil while restoring `*Strata Sidebar*' to avoid advice recursion.")
+
+(defvar strata-dirvish--quitting nil
+  "Non-nil while `dirvish-quit' is tearing down a Dirvish session.")
+
 (defun strata-dirvish--parent-buffer-filter (buf)
-  "Ensure Dirvish Miller-column parent buffer BUF renders Strata icons & hand cursor."
+  "Ensure Dirvish Miller-column parent BUF keeps Strata attrs and directory."
   (when (buffer-live-p buf)
     (with-current-buffer buf
+      (when-let ((pdir (car-safe (car-safe dired-subdir-alist))))
+        (when (file-directory-p pdir)
+          (setq-local default-directory (file-name-as-directory pdir))))
       (dirvish-prop :attrs
         (dirvish--attrs-expand '(strata-icon strata-dir-mouse strata-color)))))
   buf)
+
+(defun strata-dirvish--after-build-layout (&rest _)
+  "Ensure `*Strata Sidebar*' stays visible after Dirvish builds or reuses layout."
+  (when (and (not strata-dirvish--in-sidebar-ensure)
+             (not strata-dirvish--quitting)
+             (fboundp 'strata-sidebar-ensure)
+             (strata-prefs-sidebar-expanded (strata-prefs))
+             (or (ignore-errors (dirvish-curr)) (derived-mode-p 'dired-mode)))
+    (let ((strata-dirvish--in-sidebar-ensure t)
+          (orig-win (selected-window)))
+      (unless (strata-sidebar-ensure)
+        (when (fboundp 'strata-sidebar-refresh)
+          (strata-sidebar-refresh)))
+      (when (window-live-p orig-win)
+        (select-window orig-win t)))))
+
+(defun strata-dirvish--around-quit (orig-fn &rest args)
+  "Run ORIG-FN with ARGS and close `*Strata Sidebar*' if no browser stays open."
+  (let ((strata-dirvish--quitting t))
+    (unwind-protect
+        (apply orig-fn args)
+      (when (and (boundp 'strata-sidebar-window)
+                 (window-live-p strata-sidebar-window)
+                 (not (cl-some (lambda (w)
+                                 (with-current-buffer (window-buffer w)
+                                   (or (ignore-errors (dirvish-curr))
+                                       (derived-mode-p 'dired-mode
+                                                       'strata-compact-mode
+                                                       'strata-icons-mode
+                                                       'strata-computer-mode
+                                                       'strata-trash-mode
+                                                       'strata-recent-mode))))
+                               (window-list))))
+        (delete-window strata-sidebar-window)
+        (setq strata-sidebar-window nil))
+      (when (and (boundp 'strata-preview-standalone-window)
+                 (window-live-p strata-preview-standalone-window)
+                 (not (cl-some (lambda (w)
+                                 (with-current-buffer (window-buffer w)
+                                   (or (ignore-errors (dirvish-curr))
+                                       (derived-mode-p 'dired-mode
+                                                       'strata-compact-mode
+                                                       'strata-icons-mode
+                                                       'strata-computer-mode
+                                                       'strata-trash-mode
+                                                       'strata-recent-mode))))
+                               (window-list))))
+        (delete-window strata-preview-standalone-window)
+        (setq strata-preview-standalone-window nil)))))
 
 (defun strata-dirvish--dirview-setup ()
   "Ensure `dirvish-directory-view-mode' panes expose Strata icons & clickable dirs."
@@ -155,6 +213,12 @@ saved tab) along with the collapsible Strata Sidebar if enabled."
     (add-hook 'dirvish-directory-view-mode-hook #'strata-dirvish--dirview-setup)
     (when (fboundp 'dirvish--create-parent-buffer)
       (advice-add 'dirvish--create-parent-buffer :filter-return #'strata-dirvish--parent-buffer-filter))
+    (when (fboundp 'dirvish--build-layout)
+      (advice-add 'dirvish--build-layout :after #'strata-dirvish--after-build-layout))
+    (when (fboundp 'dirvish--try-reuse)
+      (advice-add 'dirvish--try-reuse :after #'strata-dirvish--after-build-layout))
+    (when (fboundp 'dirvish-quit)
+      (advice-add 'dirvish-quit :around #'strata-dirvish--around-quit))
     (with-eval-after-load 'dirvish-collapse
       (advice-add 'dirvish-collapse--cache :around #'strata-dirvish--collapse-guard))
     (dolist (hook '(dired-mode-hook

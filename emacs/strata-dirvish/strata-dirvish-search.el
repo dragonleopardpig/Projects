@@ -372,12 +372,10 @@
                                               (truncate-string-to-width (file-name-nondirectory path) 38 nil nil "…")
                                               (propertize (abbreviate-file-name (or (file-name-directory path) "/"))
                                                           'face 'shadow))))
-                           (add-text-properties 0 (length line)
-                                                (append (list 'strata-search-path path
-                                                              'mouse-face 'highlight)
-                                                        (when dirp (list 'pointer 'hand 'help-echo path)))
-                                                line)
-                           (insert line)))
+                           (insert (strata-add-row-properties
+                                    line (append (list 'strata-search-path path
+                                                       'mouse-face 'highlight)
+                                                 (when dirp (list 'pointer 'hand 'help-echo path)))))))
                        (goto-char (point-min))))))
              (when (buffer-live-p (process-buffer proc))
                (kill-buffer (process-buffer proc))))))))))
