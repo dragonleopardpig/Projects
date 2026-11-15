@@ -147,14 +147,14 @@ Returns nil when TOTAL <= 0 or TOTAL >= `strata-synthetic-capacity-threshold'."
                        "pstore" "bpf" "tracefs" "debugfs" "securityfs" "efivarfs"
                        "configfs" "fusectl" "mqueue" "hugetlbfs" "ramfs" "autofs"
                        "squashfs" "overlay" "rpc_pipefs" "binfmt_misc" "nsfs"
-                       "fuse.portal"))
+                       "fuse.portal" "fuse.gvfsd-fuse"))
       (string-prefix-p "/proc" mp)
       (string-prefix-p "/sys" mp)
       (string-prefix-p "/dev" mp)
       (string-prefix-p "/nix/" mp)
       (and (string-prefix-p "/run/" mp)
            (not (string-prefix-p "/run/media/" mp))
-           (not (string-prefix-p (format "/run/user/%d/gvfs" (user-uid)) mp)))
+           (not (string-prefix-p (format "/run/user/%d/gvfs/" (user-uid)) mp)))
       (string= mp "/boot")
       (string= mp "/boot/efi")))
 
@@ -313,7 +313,7 @@ async background probe only when ALLOW-ASYNC-PROBE is non-nil."
 ;;;; Device Discovery & Drive Grouping
 
 (defconst strata-devices--lsblk-cols
-  "NAME,KNAME,PKNAME,TYPE,FSTYPE,LABEL,MOUNTPOINT,SIZE,RM,HOTPLUG,TRAN,MODEL,UUID,FSSIZE,FSAVAIL"
+  "NAME,KNAME,PKNAME,TYPE,FSTYPE,LABEL,PARTLABEL,PARTTYPE,MOUNTPOINT,SIZE,RM,HOTPLUG,TRAN,MODEL,UUID,FSSIZE,FSAVAIL"
   "Columns queried from `lsblk -J -b'.")
 
 (defun strata-devices--lsblk ()
@@ -347,6 +347,56 @@ async background probe only when ALLOW-ASYNC-PROBE is non-nil."
     (setq strata-devices-cache nil)
     (run-hooks 'strata-devices-refresh-hook)))
 
+(defconst strata-devices--hidden-parttypes
+  '("c12a7328-f81f-11d2-ba4b-00a0c93ec93b"  ; EFI System Partition
+    "e3c9e316-0b5c-4db8-817d-f92df00215ae"  ; Microsoft Reserved Partition
+    "de94bba4-06d1-4d40-a16a-bfd50179d6ac") ; Windows Recovery Environment
+  "GPT PARTTYPE UUIDs for OS partitions omitted from drive lists.")
+
+(defconst strata-devices--generic-partlabels
+  '("basic data partition" "linux filesystem" "efi system partition"
+    "microsoft reserved partition" "primary" "data")
+  "Generic GPT PARTLABEL strings not used as volume names.")
+
+(defun strata-devices--hash-name-p (s &optional uuid)
+  "Return non-nil when S looks like a raw UUID, FAT/NTFS serial, or mapper hash."
+  (let ((trim (and (stringp s) (string-trim s))))
+    (when (and trim (not (string-empty-p trim)))
+      (let ((case-fold-search t))
+        (or (and uuid (not (string-empty-p uuid))
+                 (string-equal-ignore-case trim (string-trim uuid)))
+            (string-match-p "\\`[0-9a-f]\\{8\\}\\(-[0-9a-f]\\{4\\}\\)\\{3\\}-[0-9a-f]\\{12\\}\\'" trim)
+            (string-match-p "\\`[0-9a-f]\\{4\\}-[0-9a-f]\\{4\\}\\'" trim)
+            (string-match-p "\\`luks-[0-9a-f-]+\\'" trim)
+            (string-match-p "\\`dm-[0-9]+\\'" trim)
+            (and (>= (length trim) 16)
+                 (string-match-p "\\`[0-9a-f-]+\\'" trim)))))))
+
+(defun strata-devices--readable-name (mp label partlabel size uuid model dev-name)
+  "Compute a short, human-readable volume name instead of UUID or hash paths."
+  (let* ((lbl (and (stringp label) (string-trim label)))
+         (plbl (and (stringp partlabel) (string-trim partlabel)))
+         (mp-base (and (stringp mp) (not (string-empty-p mp))
+                       (file-name-nondirectory (directory-file-name mp))))
+         (mdl (and (stringp model) (string-trim model))))
+    (cond
+     ((string= mp "/") "File System")
+     ((and lbl (not (string-empty-p lbl))
+           (not (strata-devices--hash-name-p lbl uuid)))
+      lbl)
+     ((and plbl (not (string-empty-p plbl))
+           (not (member (downcase plbl) strata-devices--generic-partlabels))
+           (not (strata-devices--hash-name-p plbl uuid)))
+      plbl)
+     ((and mp-base (not (string-empty-p mp-base))
+           (not (strata-devices--hash-name-p mp-base uuid)))
+      mp-base)
+     ((and (numberp size) (> size 0))
+      (format "%s Volume" (strata-format-bytes size 'metric)))
+     ((and mdl (not (string-empty-p mdl))) mdl)
+     ((and (stringp dev-name) (not (string-empty-p dev-name))) dev-name)
+     (t "Volume"))))
+
 (defun strata-devices--flatten-lsblk (nodes &optional parent-tran parent-rm parent-model parent-pk)
   "Flatten nested `lsblk' tree NODES into usable `strata-device' structs."
   (let (out)
@@ -357,6 +407,8 @@ async background probe only when ALLOW-ASYNC-PROBE is non-nil."
              (dtype (alist-get 'type node))
              (fstype (or (alist-get 'fstype node) ""))
              (label (alist-get 'label node))
+             (partlabel (alist-get 'partlabel node))
+             (parttype (alist-get 'parttype node))
              (mp (alist-get 'mountpoint node))
              (size (alist-get 'size node))
              (fssize (alist-get 'fssize node))
@@ -370,9 +422,16 @@ async background probe only when ALLOW-ASYNC-PROBE is non-nil."
              (devpath (when kname (concat "/dev/" kname)))
              (removable (or (eq rm t) (equal rm 1) (eq hotplug t) (equal hotplug 1)
                             (string= tran "usb")))
-             (locked (and (string= fstype "crypto_LUKS") (null children)))
+             (encrypted (member fstype '("crypto_LUKS" "BitLocker")))
+             (locked (and encrypted (null children)))
+             (unlocked-container (and encrypted (not (null children))))
+             (hidden-part (and (not mp)
+                               (member (downcase (or parttype ""))
+                                       strata-devices--hidden-parttypes)))
              (interesting (and (not (member dtype '("loop" "zram" "ram" "rom")))
                                (not (string= fstype "swap"))
+                               (not unlocked-container)
+                               (not hidden-part)
                                (or (and mp (not (strata-mount--hidden-system-p (or devpath "") mp fstype)))
                                    locked
                                    (and (member dtype '("part" "crypt"))
@@ -380,19 +439,18 @@ async background probe only when ALLOW-ASYNC-PROBE is non-nil."
                                         (not (member mp '("/boot" "/boot/efi" "[SWAP]"))))))))
         (when interesting
           (let* ((id (or uuid kname mp))
-                 (raw-name (cond
-                            ((string= mp "/") "File System")
-                            ((and label (not (string-empty-p label))) label)
-                            ((and mp (not (string-empty-p mp))) (file-name-nondirectory (directory-file-name mp)))
-                            ((and model (not (string-empty-p model))) (string-trim model))
-                            (t name)))
-                 (placement (if removable 'removable 'fixed))
                  (usage (cond
                          ((and (numberp fssize) (numberp fsavail))
                           (strata-sanitize-capacity fssize fsavail))
                          ((and mp (string= mp "/"))
                           (strata-local-statvfs mp))
-                         (t nil))))
+                         (t nil)))
+                 (cap-bytes (or (and (numberp size) (> size 0) size)
+                                (and (numberp fssize) (> fssize 0) fssize)
+                                (car usage)))
+                 (raw-name (strata-devices--readable-name
+                            mp label partlabel cap-bytes uuid model name))
+                 (placement (if removable 'removable 'fixed)))
             (push (make-strata-device
                    :id id
                    :name (strata-devices--custom-label id raw-name)
@@ -451,11 +509,14 @@ async background probe only when ALLOW-ASYNC-PROBE is non-nil."
                              (string-prefix-p (format "/run/user/%d/gvfs/sftp" (user-uid)) mp)
                              (string-prefix-p (format "/run/user/%d/gvfs/smb" (user-uid)) mp)))
                    (placement (cond (netp 'network) (fusep 'cloud) (t 'removable)))
+                   (usage (strata-filesystem-usage mp fusep probe-fuse))
                    (base-name (file-name-nondirectory (directory-file-name mp)))
+                   (readable (strata-devices--readable-name
+                              mp nil nil (car usage) nil nil base-name))
                    (id (concat "mp:" mp)))
               (push (make-strata-device
                      :id id
-                     :name (strata-devices--custom-label id base-name)
+                     :name (strata-devices--custom-label id readable)
                      :device dev
                      :pkname id
                      :fstype fs
@@ -463,7 +524,7 @@ async background probe only when ALLOW-ASYNC-PROBE is non-nil."
                      :placement placement
                      :mounted-p t
                      :fusermount-p fusep
-                     :usage (strata-filesystem-usage mp fusep probe-fuse))
+                     :usage usage)
                     extra-devs))))))
     (let* ((all (append block-devs (nreverse extra-devs)))
            (rank (lambda (pl)
@@ -575,7 +636,12 @@ PROBE-FUSE is non-nil."
          (list "udisksctl" "unlock" "-b" (strata-device-device dev) "--no-user-interaction")
          (lambda (ok out)
            (if (not ok)
-               (message "Unlock failed: %s" out)
+               (progn
+                 (clear-string pw)
+                 (message "Unlock failed: %s%s" out
+                          (if (string= (strata-device-fstype dev) "BitLocker")
+                              " (BitLocker requires cryptsetup bitlkOpen)"
+                            "")))
              (message "Unlocked %s" (strata-device-name dev))
              (clear-string pw)
              ;; Auto-mount the newly unlocked mapper device after short delay
@@ -793,8 +859,14 @@ PROBE-FUSE is non-nil."
                (mp (strata-device-mountpoint dev))
                (sub (cond
                      ((strata-device-locked-p dev)
-                      (propertize (format "Encrypted (%s) — press [m] to unlock"
-                                          (or (strata-device-device dev) ""))
+                      (propertize (format "%s (%s%s) — press [m] to unlock"
+                                          (if (string= (strata-device-fstype dev) "BitLocker")
+                                              "BitLocker Encrypted"
+                                            "Encrypted")
+                                          (or (strata-device-device dev) "")
+                                          (if (strata-device-size dev)
+                                              (format " · %s" (strata-format-bytes (strata-device-size dev) 'metric))
+                                            ""))
                                   'face 'warning))
                      ((not (strata-device-mounted-p dev))
                       (propertize (format "Unmounted · %s%s — press [m] to mount"

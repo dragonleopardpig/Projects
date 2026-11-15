@@ -146,6 +146,19 @@ in
     PY
   '';
 
+  home.activation.disableLegacyScrambleStartup = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    user_systemd="$HOME/.config/systemd/user"
+    if [ -d "$user_systemd" ]; then
+      ${pkgs.coreutils}/bin/rm -f \
+        "$user_systemd/scramble-drive.service" \
+        "$user_systemd/scramble-private-mount.service" \
+        "$user_systemd/scramble-desktop.service.bak" \
+        "$user_systemd/scramble-private-sync.service.bak" \
+        "$user_systemd/scramble-private-sync.timer.bak"
+      ${pkgs.findutils}/bin/find "$user_systemd" -maxdepth 2 -path "$user_systemd/*.wants/scramble-*" -type l -delete || true
+    fi
+  '';
+
   systemd.user.services.scramble-private-sync = {
     Unit = {
       Description = "Two-way sync of one encrypted Scramble folder";

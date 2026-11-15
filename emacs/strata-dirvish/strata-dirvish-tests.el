@@ -429,5 +429,86 @@
       (ignore-errors (kill-buffer "*Strata Sidebar*"))
       (ignore-errors (delete-directory tmp t)))))
 
+(ert-deftest strata-test-readable-volume-names-and-partition-filtering ()
+  "UUID/hash mount names become readable volumes and noise partitions are hidden."
+  (let* ((fake-lsblk
+          '(((name . "nvme2n1") (kname . "nvme2n1") (type . "disk")
+             (tran . "nvme") (model . "SAMSUNG MZVL8256HFJD-00BLL") (size . 256060514304)
+             (children
+              . (((name . "nvme2n1p1") (kname . "nvme2n1p1") (pkname . "nvme2n1")
+                  (type . "part") (fstype . "vfat") (mountpoint . "/boot")
+                  (parttype . "c12a7328-f81f-11d2-ba4b-00a0c93ec93b") (size . 1073741824))
+                 ((name . "nvme2n1p2") (kname . "nvme2n1p2") (pkname . "nvme2n1")
+                  (type . "part") (fstype . "crypto_LUKS") (partlabel . "root")
+                  (uuid . "e4268bbb-c627-4904-b67f-8a76fe0cbf52") (size . 254977093632)
+                  (children
+                   . (((name . "luks-e4268bbb-c627-4904-b67f-8a76fe0cbf52")
+                       (kname . "dm-0") (pkname . "nvme2n1p2") (type . "crypt")
+                       (fstype . "ext4") (mountpoint . "/")
+                       (uuid . "a6606f8d-be76-44e3-9121-bb8c82acb6c9")
+                       (fssize . 249821601792) (fsavail . 112630063104))))))))
+            ((name . "nvme1n1") (kname . "nvme1n1") (type . "disk")
+             (tran . "nvme") (model . "SAMSUNG MZVL8256HFJD-00BLL") (size . 256060514304)
+             (children
+              . (((name . "nvme1n1p1") (kname . "nvme1n1p1") (pkname . "nvme1n1")
+                  (type . "part") (fstype . "vfat") (label . "SYSTEM")
+                  (parttype . "c12a7328-f81f-11d2-ba4b-00a0c93ec93b") (size . 272629760))
+                 ((name . "nvme1n1p3") (kname . "nvme1n1p3") (pkname . "nvme1n1")
+                  (type . "part") (fstype . "BitLocker")
+                  (label . "M90APROGEN6 Windows 18/9/2025")
+                  (partlabel . "Basic data partition")
+                  (parttype . "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7")
+                  (uuid . "51f5ab80-3c35-46a6-8b5b-c0a44d5a73ad") (size . 253672554496))
+                 ((name . "nvme1n1p4") (kname . "nvme1n1p4") (pkname . "nvme1n1")
+                  (type . "part") (fstype . "ntfs") (label . "WinRE_DRV")
+                  (parttype . "de94bba4-06d1-4d40-a16a-bfd50179d6ac") (size . 2097152000)))))
+            ((name . "sda") (kname . "sda") (type . "disk")
+             (tran . "usb") (hotplug . t) (model . "ST4000DM006-2G5107") (size . 4000787030016)
+             (children
+              . (((name . "sda1") (kname . "sda1") (pkname . "sda") (type . "part")
+                  (fstype . "vfat") (mountpoint . "/run/media/thinky/E79B-1256")
+                  (uuid . "E79B-1256") (size . 2199023255552)
+                  (fssize . 2198486384640) (fsavail . 2198480420864))
+                 ((name . "sda2") (kname . "sda2") (pkname . "sda") (type . "part")
+                  (fstype . "ext4")
+                  (mountpoint . "/run/media/thinky/63f1d802-9a75-48b0-9dbe-89a0352456c9")
+                  (uuid . "63f1d802-9a75-48b0-9dbe-89a0352456c9") (size . 1801761849344)
+                  (fssize . 1772344094720) (fsavail . 1569177272320))
+                 ((name . "sda3") (kname . "sda3") (pkname . "sda") (type . "part")
+                  (fstype . "ext4") (mountpoint . "/run/media/thinky/MediaDrive")
+                  (uuid . "11111111-2222-3333-4444-555555555555") (size . 500000000000))))))))
+    (cl-letf (((symbol-function 'strata-devices--custom-label)
+               (lambda (_id default-name) default-name))
+              ((symbol-function 'strata-parse-proc-mounts)
+               (lambda ()
+                 (list (list :device "gvfsd-fuse"
+                             :mount (format "/run/user/%d/gvfs" (user-uid))
+                             :fstype "fuse.gvfsd-fuse")
+                       (list :device "ext4"
+                             :mount "/run/media/thinky/99999999-aaaa-bbbb-cccc-dddddddddddd"
+                             :fstype "ext4"))))
+              ((symbol-function 'strata-filesystem-usage)
+               (lambda (_mp &optional _fuse _probe) '(1000000000000 . 400000000000))))
+      (let* ((devs (strata-devices--assemble fake-lsblk nil))
+             (names (mapcar #'strata-device-name devs)))
+        ;; Noise partitions & raw unlocked LUKS container & gvfsd-fuse container are hidden.
+        (should-not (member "SYSTEM" names))
+        (should-not (member "WinRE_DRV" names))
+        (should-not (member "SAMSUNG MZVL8256HFJD-00BLL" names))
+        (should-not (member "gvfs" names))
+        ;; Hash/UUID mounts render as concise readable volumes; custom names remain untouched.
+        (should (member "File System" names))
+        (should (member "1.8 TB Volume" names))
+        (should (member "2.2 TB Volume" names))
+        (should (member "1 TB Volume" names))
+        (should (member "MediaDrive" names))
+        (should (member "M90APROGEN6 Windows 18/9/2025" names))
+        (should-not (member "63f1d802-9a75-48b0-9dbe-89a0352456c9" names))
+        ;; BitLocker partition is marked locked.
+        (let ((win (cl-find "M90APROGEN6 Windows 18/9/2025" devs
+                            :key #'strata-device-name :test #'string=)))
+          (should win)
+          (should (strata-device-locked-p win)))))))
+
 (provide 'strata-dirvish-tests)
 ;;; strata-dirvish-tests.el ends here
