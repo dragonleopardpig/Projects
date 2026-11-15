@@ -872,6 +872,15 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 (defvar strata-mouse--inhibit-preview nil
   "Non-nil while tracking a live mouse drag selection to avoid preview churn.")
 
+(defvar strata-mouse--drag-state nil
+  "Active drag-selection state plist while holding button-1.")
+
+(defvar strata-mouse--finished-drag-state nil
+  "Completed drag-selection state awaiting button-1 release command.")
+
+(defvar strata-mouse--suppress-mouse-3-once nil
+  "Non-nil after cancelling a drag with right button to drop trailing release.")
+
 (defun strata-mouse-install-keymap-bindings (map)
   "Install shared Strata mouse click, drag-select, and drop bindings on MAP."
   (define-key map (kbd "<down-mouse-1>") #'strata-mouse-down-entry)
@@ -883,6 +892,8 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
   (define-key map (kbd "<S-down-mouse-1>") #'strata-mouse-down-entry)
   (define-key map (kbd "<S-mouse-1>") #'strata-mouse-range-select)
   (define-key map (kbd "<S-drag-mouse-1>") #'strata-mouse-drag-move)
+  (define-key map (kbd "<C-S-drag-mouse-1>") #'strata-mouse-drag-drop)
+  (define-key map (kbd "<double-drag-mouse-1>") #'strata-mouse-drag-drop)
   (define-key map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
   (define-key map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event)
   (define-key map (kbd "<mouse-3>") #'strata-mouse-context-menu)
@@ -947,7 +958,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 (defun strata-view--sync-preview-on-move ()
   "Keep selection highlight and preview pane synced across Columns/List/Compact/Icons."
   (strata-view--update-selection-highlight)
-  (unless strata-mouse--inhibit-preview
+  (unless (or strata-mouse--inhibit-preview strata-mouse--drag-state)
     (when-let ((f (strata-current-file)))
       (let ((dv (ignore-errors (dirvish-curr))))
         (cond
@@ -1598,31 +1609,6 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       (and (symbolp (car-safe ev))
            (string-suffix-p "mouse-movement" (symbol-name (car ev))))))
 
-(defun strata-mouse--release1-event-p (ev)
-  "Return non-nil when EV is a button-1 release (`mouse-1' or `drag-mouse-1')."
-  (and (consp ev)
-       (symbolp (car ev))
-       (string-suffix-p "mouse-1" (symbol-name (car ev)))
-       (not (memq 'down (event-modifiers ev)))))
-
-(defun strata-mouse--cancel-event-p (ev)
-  "Return non-nil when EV cancels an active mouse drag (Esc or right button)."
-  (or (eq ev ?\e)
-      (eq ev 'escape)
-      (and (consp ev)
-           (symbolp (car ev))
-           (string-suffix-p "mouse-3" (symbol-name (car ev))))))
-
-(defun strata-mouse--drag-to-click-event (ev)
-  "Convert micro-jitter drag EV back into its corresponding click event."
-  (if (and (consp ev) (memq 'drag (event-modifiers ev)))
-      (let* ((mods (remq 'drag (remq 'click (event-modifiers ev))))
-             (sym (if mods
-                      (event-convert-list (append mods '(mouse-1)))
-                    'mouse-1)))
-        (cons sym (cdr ev)))
-    ev))
-
 (defun strata-mouse--dired-entry-at-pt (pt)
   "Resolve nearest Dired entry path around buffer position PT."
   (save-excursion
@@ -1726,24 +1712,52 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                             best (car sp)))))
                 best)))))))
 
+(defun strata-mouse--posn-fallback-pt (win posn)
+  "Estimate buffer point inside WIN when POSN lacks an integer point."
+  (let* ((area (and (consp posn) (posn-area posn)))
+         (xy (and (consp posn) (posn-x-y posn)))
+         (cr (and (consp posn) (posn-col-row posn)))
+         (row (and (not (memq area '(header-line tab-bar tool-bar mode-line
+                                     bottom-divider horizontal-scroll-bar)))
+                   (or (and (integerp (cdr-safe cr)) (cdr cr))
+                       (when (and (consp xy) (integerp (cdr xy)))
+                         (/ (max 0 (cdr xy))
+                            (max 1 (frame-char-height (window-frame win)))))))))
+    (cond
+     ((memq area '(header-line tab-bar tool-bar))
+      (window-start win))
+     ((memq area '(mode-line bottom-divider horizontal-scroll-bar))
+      (max (point-min) (1- (window-end win t))))
+     ((integerp row)
+      (save-excursion
+        (goto-char (window-start win))
+        (forward-line (max 0 row))
+        (point)))
+     (t (point)))))
+
 (defun strata-mouse--entry-at-posn (posn &optional nearest-p)
   "Resolve entry path at mouse POSN; with NEAREST-P snap across padding/gaps."
   (let* ((win (and (consp posn) (posn-window posn)))
-         (pt (and (consp posn) (posn-point posn)))
+         (area (and (consp posn) (posn-area posn)))
+         (raw-pt (and (consp posn) (posn-point posn)))
          (xy (and (consp posn) (posn-x-y posn))))
     (when (and (window-live-p win)
                (buffer-live-p (window-buffer win)))
       (with-current-buffer (window-buffer win)
-        (save-excursion
-          (or (when (integerp pt)
-                (goto-char (min (max (point-min) pt) (point-max)))
-                (strata-mouse--entry-at-point))
-              (when nearest-p
-                (let ((p (if (integerp pt) pt (point))))
-                  (cond
-                   ((derived-mode-p 'dired-mode) (strata-mouse--dired-entry-at-pt p))
-                   ((derived-mode-p 'strata-compact-mode) (strata-mouse--compact-entry-at-pt p))
-                   ((derived-mode-p 'strata-icons-mode) (strata-mouse--icons-entry-at-posn win p xy)))))))))))
+        (let ((pt (and (not area)
+                       (integerp raw-pt)
+                       (>= raw-pt (point-min))
+                       raw-pt)))
+          (save-excursion
+            (or (when pt
+                  (goto-char (min pt (point-max)))
+                  (strata-mouse--entry-at-point))
+                (when nearest-p
+                  (let ((p (or pt (strata-mouse--posn-fallback-pt win posn))))
+                    (cond
+                     ((derived-mode-p 'dired-mode) (strata-mouse--dired-entry-at-pt p))
+                     ((derived-mode-p 'strata-compact-mode) (strata-mouse--compact-entry-at-pt p))
+                     ((derived-mode-p 'strata-icons-mode) (strata-mouse--icons-entry-at-posn win p xy))))))))))))
 
 (defun strata-mouse--range-entries (order anchor target &optional rect-p)
   "Return ordered entry paths between ANCHOR and TARGET in ORDER.
@@ -1876,19 +1890,258 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
                  (edge-posn (list win probe-pt '(0 . 0) 0))
                  (hover (strata-mouse--entry-at-posn edge-posn t)))
             (strata-mouse--sync-drag-range
-             order base-keys anchor hover rect-p last-keys-cell last-hover-cell nil))))
+             order base-keys anchor hover rect-p last-keys-cell last-hover-cell nil)
+            (when hover
+              (strata-goto-file hover)))))
       (or dir 0))))
 
-(defun strata-mouse-down-entry (event)
-  "Track hold-and-drag mouse multi-selection live, or pass through normal clicks."
+(defun strata-mouse--stop-timer-field (st field)
+  "Cancel timer stored in ST under FIELD and clear it."
+  (let ((tm (plist-get st field)))
+    (when (timerp tm)
+      (cancel-timer tm))
+    (plist-put st field nil)))
+
+(defun strata-mouse--restore-drag-vars (st)
+  "Restore global mouse tracking and scrolling variables captured in ST."
+  (when (and st (not (plist-get st :restored-p)))
+    (plist-put st :restored-p t)
+    (setq track-mouse (plist-get st :saved-track)
+          auto-hscroll-mode (plist-get st :saved-hscroll)
+          scroll-margin (plist-get st :saved-margin))))
+
+(defun strata-mouse--scroll-tick (st)
+  "Advance auto-scroll selection by one tick for active drag state ST."
+  (if (not (eq st strata-mouse--drag-state))
+      (strata-mouse--stop-timer-field st :scroll-timer)
+    (let ((src-win (plist-get st :src-win))
+          (src-buf (plist-get st :src-buf)))
+      (if (or (not (window-live-p src-win))
+              (not (buffer-live-p src-buf))
+              (not (eq (window-buffer src-win) src-buf))
+              (plist-get st :carry-marked-p))
+          (strata-mouse--stop-timer-field st :scroll-timer)
+        (let* ((strata-mouse--inhibit-preview t)
+               (mp (cdr (mouse-position)))
+               (dir (strata-mouse--edge-scroll-step
+                     src-win (car-safe mp) (cdr-safe mp)
+                     (plist-get st :order) (plist-get st :base-keys)
+                     (plist-get st :anchor) (plist-get st :rect-p)
+                     (plist-get st :last-keys-cell) (plist-get st :last-hover-cell))))
+          (when (or (null dir) (zerop dir))
+            (strata-mouse--stop-timer-field st :scroll-timer)))))))
+
+(defun strata-mouse--update-scroll-timer (st)
+  "Start or stop viewport edge auto-scroll timer for active drag state ST."
+  (let* ((src-win (plist-get st :src-win))
+         (mp (and (window-live-p src-win)
+                  (not (plist-get st :carry-marked-p))
+                  (cdr (mouse-position))))
+         (mcol (car-safe mp))
+         (mrow (cdr-safe mp))
+         (edges (and (integerp mcol) (integerp mrow) (window-inside-edges src-win)))
+         (need-p (and edges
+                      (<= (nth 0 edges) mcol) (< mcol (nth 2 edges))
+                      (or (< mrow (nth 1 edges)) (>= mrow (nth 3 edges))))))
+    (if need-p
+        (unless (timerp (plist-get st :scroll-timer))
+          (plist-put st :scroll-timer (run-at-time 0.06 0.06 #'strata-mouse--scroll-tick st)))
+      (strata-mouse--stop-timer-field st :scroll-timer))))
+
+(defun strata-mouse--cleanup-abandoned-drag (st)
+  "Finalize drag ST on idle if no button-1 release command consumed it."
+  (when (eq strata-mouse--finished-drag-state st)
+    (setq strata-mouse--finished-drag-state nil)
+    (strata-mouse--stop-timer-field st :cleanup-timer)
+    (let ((src-win (plist-get st :src-win))
+          (src-buf (plist-get st :src-buf)))
+      (when (and (not (plist-get st :cancelled-p))
+                 (plist-get st :dragged-p)
+                 (window-live-p src-win)
+                 (buffer-live-p src-buf)
+                 (eq (window-buffer src-win) src-buf))
+        (with-selected-window src-win
+          (let ((strata-mouse--inhibit-preview t)
+                (anchor (plist-get st :anchor))
+                (hover (car (plist-get st :last-hover-cell))))
+            (when (and anchor hover (not (plist-get st :carry-marked-p)))
+              (setq-local strata--selection-anchor-entry anchor)
+              (strata-mouse--sync-drag-range
+               (plist-get st :order) (plist-get st :base-keys) anchor hover
+               (plist-get st :rect-p) (plist-get st :last-keys-cell)
+               (plist-get st :last-hover-cell) t)))
+          (strata-view--sync-preview-on-move))))))
+
+(defun strata-mouse--on-drag-exit ()
+  "Tear down active transient drag state and hand off to button-1 release."
+  (let ((st strata-mouse--drag-state))
+    (when st
+      (strata-mouse--stop-timer-field st :scroll-timer)
+      (strata-mouse--restore-drag-vars st)
+      (setq strata-mouse--drag-state nil
+            strata-mouse--finished-drag-state st)
+      (unless (plist-get st :cancelled-p)
+        (strata-mouse--stop-timer-field st :cleanup-timer)
+        (plist-put st :cleanup-timer
+                   (run-at-time 0 nil #'strata-mouse--cleanup-abandoned-drag st))))))
+
+(defun strata-mouse--take-finished-drag (&optional start-posn)
+  "Consume and return completed drag state matching START-POSN, if any."
+  (let ((st strata-mouse--finished-drag-state)
+        (win (and (consp start-posn) (posn-window start-posn))))
+    (when (and st (or (null win) (eq win (plist-get st :src-win))))
+      (strata-mouse--stop-timer-field st :cleanup-timer)
+      (setq strata-mouse--finished-drag-state nil)
+      st)))
+
+(defun strata-mouse--drag-keep-p ()
+  "Keep transient drag keymap active only for movement and cancel commands."
+  (memq this-command '(strata-mouse--drag-move strata-mouse--drag-cancel ignore)))
+
+(defun strata-mouse--drag-keymap ()
+  "Build transient keymap handling live mouse motion, cancel, and area releases."
+  (let ((bindings '(([mouse-movement] . strata-mouse--drag-move)
+                    ([C-mouse-movement] . strata-mouse--drag-move)
+                    ([S-mouse-movement] . strata-mouse--drag-move)
+                    ([C-S-mouse-movement] . strata-mouse--drag-move)
+                    ([M-mouse-movement] . strata-mouse--drag-move)
+                    ([escape] . strata-mouse--drag-cancel)
+                    ([down-mouse-3] . strata-mouse--drag-cancel)
+                    ([mouse-3] . strata-mouse--drag-cancel)
+                    ([drag-mouse-3] . strata-mouse--drag-cancel)
+                    ([switch-frame] . ignore)
+                    ([select-window] . ignore)
+                    ([scroll-bar-movement] . ignore)))
+        (area-releases '(([drag-mouse-1] . strata-mouse-drag-drop)
+                         ([C-drag-mouse-1] . strata-mouse-drag-copy)
+                         ([S-drag-mouse-1] . strata-mouse-drag-move)
+                         ([C-S-drag-mouse-1] . strata-mouse-drag-drop)
+                         ([double-drag-mouse-1] . strata-mouse-drag-drop)
+                         ([mouse-1] . strata-mouse-click-entry)
+                         ([C-mouse-1] . strata-mouse-toggle-select)
+                         ([S-mouse-1] . strata-mouse-range-select)))
+        (map (make-sparse-keymap)))
+    (dolist (pair bindings)
+      (define-key map (car pair) (cdr pair)))
+    (define-key map (kbd "ESC") #'strata-mouse--drag-cancel)
+    (dolist (area '(mode-line header-line vertical-line right-divider bottom-divider
+                    left-margin right-margin left-fringe right-fringe
+                    tab-bar tool-bar vertical-scroll-bar horizontal-scroll-bar))
+      (let ((sub (make-sparse-keymap)))
+        (dolist (pair bindings)
+          (define-key sub (car pair) (cdr pair)))
+        (dolist (pair area-releases)
+          (define-key sub (car pair) (cdr pair)))
+        (define-key map (vector area) sub)))
+    map))
+
+(defun strata-mouse--drag-cancel (&optional ev)
+  "Cancel active drag selection and restore original marks cleanly."
   (interactive "e")
+  (let ((st (or strata-mouse--drag-state strata-mouse--finished-drag-state)))
+    (when st
+      (strata-mouse--stop-timer-field st :scroll-timer)
+      (strata-mouse--stop-timer-field st :cleanup-timer)
+      (plist-put st :cancelled-p t)
+      (when (and ev (memq (event-basic-type ev) '(mouse-3 down-mouse-3 drag-mouse-3)))
+        (setq strata-mouse--suppress-mouse-3-once t))
+      (let ((src-win (plist-get st :src-win))
+            (src-buf (plist-get st :src-buf))
+            (pre-keys (plist-get st :pre-keys))
+            (last-keys-cell (plist-get st :last-keys-cell)))
+        (when (and (window-live-p src-win)
+                   (buffer-live-p src-buf)
+                   (eq (window-buffer src-win) src-buf)
+                   (not (equal (car last-keys-cell) pre-keys)))
+          (with-selected-window src-win
+            (let ((strata-mouse--inhibit-preview t))
+              (strata-mouse--apply-selection-keys (plist-get st :order) pre-keys t)))))
+      (if-let ((exit-fn (plist-get st :exit-fn)))
+          (funcall exit-fn)
+        (strata-mouse--restore-drag-vars st)
+        (setq strata-mouse--drag-state nil
+              strata-mouse--finished-drag-state st))
+      (message "Drag selection cancelled"))))
+
+(defun strata-mouse--drag-move (ev)
+  "Update live drag highlight or cross-pane drop cue for motion event EV."
+  (interactive "e")
+  (when (and (null unread-command-events)
+             (null executing-kbd-macro)
+             (input-pending-p))
+    (while (and (null unread-command-events) (input-pending-p))
+      (let ((peek (read-event nil nil 0)))
+        (cond
+         ((null peek))
+         ((strata-mouse--movement-event-p peek) (setq ev peek))
+         (t (push peek unread-command-events))))))
+  (let* ((st strata-mouse--drag-state)
+         (src-win (plist-get st :src-win))
+         (src-buf (plist-get st :src-buf)))
+    (when st
+      (if (not (and (window-live-p src-win)
+                    (buffer-live-p src-buf)
+                    (eq (window-buffer src-win) src-buf)))
+          (strata-mouse--drag-cancel nil)
+        (with-selected-window src-win
+          (let* ((strata-mouse--inhibit-preview t)
+                 (end (event-end ev))
+                 (dst-win (posn-window end))
+                 (cur (when (eq dst-win src-win)
+                        (strata-mouse--entry-at-posn end t)))
+                 (exact-start (plist-get st :exact-start))
+                 (order (plist-get st :order))
+                 (pre-marked (plist-get st :pre-marked))
+                 (pre-keys (plist-get st :pre-keys))
+                 (last-keys-cell (plist-get st :last-keys-cell))
+                 (last-hover-cell (plist-get st :last-hover-cell))
+                 (carry-marked-p (plist-get st :carry-marked-p)))
+            (unless (plist-get st :dragged-p)
+              (when (strata-mouse--drag-exceeded-p
+                     (plist-get st :start-xy) (posn-x-y end)
+                     src-win dst-win exact-start cur)
+                (plist-put st :dragged-p t)))
+            (when (plist-get st :dragged-p)
+              (let ((drop-dir (and dst-win (not (eq dst-win src-win))
+                                   (strata-mouse--drag-target-dir dst-win end))))
+                (cond
+                 (drop-dir
+                  (strata-mouse--stop-timer-field st :scroll-timer)
+                  (when (and carry-marked-p (not (equal (car last-keys-cell) pre-keys)))
+                    (setcar last-keys-cell pre-keys)
+                    (strata-mouse--apply-selection-keys order pre-keys nil))
+                  (let* ((cur-marked (or (strata-marked-files-only)
+                                         (when-let ((ns (plist-get st :near-start)))
+                                           (list ns))))
+                         (n (max 1 (length (if carry-marked-p pre-marked cur-marked)))))
+                    (message "Drop %d item(s) into %s to copy/move"
+                             n (abbreviate-file-name drop-dir))))
+                 ((or (eq dst-win src-win) (null dst-win))
+                  (when (and cur (eq dst-win src-win) (not carry-marked-p))
+                    (strata-mouse--sync-drag-range
+                     order (plist-get st :base-keys) (plist-get st :anchor) cur
+                     (plist-get st :rect-p) last-keys-cell last-hover-cell nil))
+                  (strata-mouse--update-scroll-timer st))
+                 (t
+                  (strata-mouse--stop-timer-field st :scroll-timer)))))))))))
+
+(defun strata-mouse-down-entry (event)
+  "Start native live drag-selection tracking on button-1 press in a pane."
+  (interactive "e")
+  (setq strata-mouse--suppress-mouse-3-once nil)
+  (when strata-mouse--drag-state
+    (if-let ((exit-fn (plist-get strata-mouse--drag-state :exit-fn)))
+        (funcall exit-fn)
+      (strata-mouse--on-drag-exit)))
+  (when strata-mouse--finished-drag-state
+    (strata-mouse--stop-timer-field strata-mouse--finished-drag-state :cleanup-timer)
+    (setq strata-mouse--finished-drag-state nil))
   (let* ((start (event-start event))
          (src-win (posn-window start)))
-    (if (or (posn-area start)
-            (not (window-live-p src-win))
-            (not (with-current-buffer (window-buffer src-win)
-                   (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode))))
-        nil
+    (unless (or (posn-area start)
+                (not (window-live-p src-win))
+                (not (with-current-buffer (window-buffer src-win)
+                       (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode))))
       (select-window src-win)
       (when (fboundp 'strata-panes--sync-active-pane-from-window)
         (strata-panes--sync-active-pane-from-window src-win))
@@ -1913,145 +2166,62 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
              (anchor (if shift-p
                          (or strata--selection-anchor-entry near-start)
                        near-start))
-             (base-keys (when (or ctrl-p shift-p) pre-keys))
-             (last-keys-cell (list pre-keys))
-             (last-hover-cell (list near-start))
-             (dragged-p nil)
-             (cancelled-p nil)
-             (pending-drop nil)
-             (saved-hscroll auto-hscroll-mode)
-             (saved-margin scroll-margin)
-             (saved-track track-mouse)
-             (active t)
-             (auto-scroll-dir 0))
-        (if (null order)
-            nil
-          (unwind-protect
-              (let ((strata-mouse--inhibit-preview t))
-                (setq auto-hscroll-mode nil
-                      scroll-margin 0
-                      track-mouse 'drag-tracking)
-                (track-mouse
-                  (while active
-                    (let ((ev (read-event nil nil (if (zerop auto-scroll-dir) nil 0.06))))
-                      ;; Coalesce high-rate OS pointer events only when unread-command-events is empty.
-                      (when (and ev (strata-mouse--movement-event-p ev) (null unread-command-events))
-                        (while (and (input-pending-p) (null unread-command-events))
-                          (let ((peek (read-event nil nil 0)))
-                            (cond
-                             ((null peek))
-                             ((strata-mouse--movement-event-p peek) (setq ev peek))
-                             (t (push peek unread-command-events))))))
-                      (cond
-                       ((null ev)
-                        (let* ((mp (cdr (mouse-position)))
-                               (mcol (car-safe mp))
-                               (mrow (cdr-safe mp)))
-                          (setq auto-scroll-dir
-                                (or (strata-mouse--edge-scroll-step
-                                     src-win mcol mrow order base-keys anchor rect-p
-                                     last-keys-cell last-hover-cell)
-                                    0))))
-                       ((memq (event-basic-type ev) '(switch-frame select-window scroll-bar-movement))
-                        nil)
-                       ((strata-mouse--movement-event-p ev)
-                        (let* ((end (event-end ev))
-                               (dst-win (posn-window end))
-                               (cur (when (eq dst-win src-win)
-                                      (strata-mouse--entry-at-posn end t))))
-                          (unless dragged-p
-                            (setq dragged-p
-                                  (strata-mouse--drag-exceeded-p
-                                   start-xy (posn-x-y end) src-win dst-win exact-start cur)))
-                          (when dragged-p
-                            (let ((drop-dir (and dst-win (not (eq dst-win src-win))
-                                                 (strata-mouse--drag-target-dir dst-win end))))
-                              (cond
-                               (drop-dir
-                                (setq auto-scroll-dir 0)
-                                (when (and carry-marked-p (not (equal (car last-keys-cell) pre-keys)))
-                                  (setcar last-keys-cell pre-keys)
-                                  (strata-mouse--apply-selection-keys order pre-keys nil)
-                                  (redisplay))
-                                (let ((n (max 1 (length (if carry-marked-p
-                                                            pre-marked
-                                                          (or (strata-marked-files-only)
-                                                              (and near-start (list near-start))))))))
-                                  (message "Drop %d item(s) into %s to copy/move"
-                                           n (abbreviate-file-name drop-dir))))
-                               ((eq dst-win src-win)
-                                (unless carry-marked-p
-                                  (strata-mouse--sync-drag-range
-                                   order base-keys anchor cur rect-p last-keys-cell last-hover-cell nil))
-                                (let* ((mp (cdr (mouse-position)))
-                                       (mcol (car-safe mp))
-                                       (mrow (cdr-safe mp)))
-                                  (setq auto-scroll-dir
-                                        (or (strata-mouse--edge-scroll-step
-                                             src-win mcol mrow order base-keys anchor rect-p
-                                             last-keys-cell last-hover-cell)
-                                            0))))
-                               (t
-                                (setq auto-scroll-dir 0)))))))
-                       ((strata-mouse--cancel-event-p ev)
-                        (setq cancelled-p t
-                              active nil)
-                        (unless (equal (car last-keys-cell) pre-keys)
-                          (strata-mouse--apply-selection-keys order pre-keys t))
-                        (message "Drag selection cancelled"))
-                       ((strata-mouse--release1-event-p ev)
-                        (setq active nil)
-                        (if (not dragged-p)
-                            (push (strata-mouse--drag-to-click-event ev) unread-command-events)
-                          (let* ((end (event-end ev))
-                                 (dst-win (or (posn-window end) src-win))
-                                 (drop-dir (and (not (eq dst-win src-win))
-                                                (strata-mouse--drag-target-dir dst-win end)))
-                                 (end-mods (event-modifiers ev))
-                                 (forced-mode (cond ((memq 'control end-mods) 'copy)
-                                                    ((memq 'shift end-mods) 'cut)
-                                                    (ctrl-p 'copy)
-                                                    (shift-p 'cut)
-                                                    (t nil))))
-                            (if drop-dir
-                                (progn
-                                  (when (and carry-marked-p (not (equal (car last-keys-cell) pre-keys)))
-                                    (strata-mouse--apply-selection-keys order pre-keys nil))
-                                  (setq pending-drop
-                                        (list src-win dst-win start end exact-start
-                                              (or (strata-marked-files-only) pre-marked)
-                                              forced-mode)))
-                              (let ((hover (or (when (eq dst-win src-win)
-                                                 (strata-mouse--entry-at-posn end t))
-                                               (car last-hover-cell))))
-                                (when (and anchor hover
-                                           (or (not carry-marked-p)
-                                               (and (eq dst-win src-win)
-                                                    exact-start
-                                                    (not (equal (strata--path-key hover)
-                                                                (strata--path-key exact-start))))))
-                                  (setq-local strata--selection-anchor-entry anchor)
-                                  (strata-mouse--sync-drag-range
-                                   order base-keys anchor hover rect-p last-keys-cell last-hover-cell t)
-                                  (strata-goto-file hover)
-                                  (message "Selected %d item(s)"
-                                           (length (strata-marked-files-only)))))))))
-                       (t
-                        (setq active nil)
-                        (push ev unread-command-events)))))))
-            (setq track-mouse saved-track
-                  auto-hscroll-mode saved-hscroll
-                  scroll-margin saved-margin))
-          (when (and pending-drop (not cancelled-p))
-            (apply #'strata-mouse--drag-drop-now pending-drop))
-          (when (and dragged-p (not cancelled-p) (not pending-drop)
-                     (window-live-p src-win))
-            (with-selected-window src-win
-              (strata-view--sync-preview-on-move))))))))
+             (base-keys (when (or ctrl-p shift-p) pre-keys)))
+        (when order
+          (let ((st (list :src-win src-win
+                          :src-buf (window-buffer src-win)
+                          :start start
+                          :start-xy start-xy
+                          :ctrl-p ctrl-p
+                          :shift-p shift-p
+                          :order order
+                          :exact-start exact-start
+                          :near-start near-start
+                          :pre-marked pre-marked
+                          :pre-keys pre-keys
+                          :carry-marked-p carry-marked-p
+                          :rect-p rect-p
+                          :anchor anchor
+                          :base-keys base-keys
+                          :last-keys-cell (list pre-keys)
+                          :last-hover-cell (list near-start)
+                          :dragged-p nil
+                          :cancelled-p nil
+                          :saved-hscroll auto-hscroll-mode
+                          :saved-margin scroll-margin
+                          :saved-track track-mouse
+                          :scroll-timer nil
+                          :cleanup-timer nil
+                          :restored-p nil
+                          :exit-fn nil)))
+            ;; Set `track-mouse' directly instead of using `(track-mouse ...)' so
+            ;; emacs bug#51794 does not cancel motion over `header-line-format'.
+            (setq strata-mouse--drag-state st
+                  auto-hscroll-mode nil
+                  scroll-margin 0
+                  track-mouse 'drag-tracking)
+            (plist-put st :exit-fn
+                       (set-transient-map
+                        (strata-mouse--drag-keymap)
+                        #'strata-mouse--drag-keep-p
+                        #'strata-mouse--on-drag-exit))))))))
 
-(defun strata-mouse-toggle-select (event)
-  "Toggle multi-selection mark on clicked entry (`C-<mouse-1>')."
-  (interactive "e")
+(defun strata-mouse--run-click-action (event)
+  "Execute single click for EVENT: open clicked dir, preview file, or clear."
+  (strata-mouse--sync-event event)
+  (if-let ((p (strata-mouse--entry-at-point)))
+      (progn
+        (setq-local strata--selection-anchor-entry p)
+        (if (file-directory-p p)
+            (strata-mouse--open-path p t)
+          (when (derived-mode-p 'strata-icons-mode)
+            (strata-goto-file p))
+          (strata-view--sync-preview-on-move)))
+    (when (and (strata-marked-files-only) (fboundp 'strata-clear-all-marks))
+      (strata-clear-all-marks))))
+
+(defun strata-mouse--run-toggle-action (event)
+  "Execute control-click for EVENT: toggle mark on clicked entry."
   (strata-mouse--sync-event event)
   (when-let ((p (strata-mouse--entry-at-point)))
     (let* ((key (strata--path-key p))
@@ -2060,9 +2230,8 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
       (setq-local strata--selection-anchor-entry p)
       (strata-view--set-entry-mark p (not marked) nil))))
 
-(defun strata-mouse-range-select (event)
-  "Select contiguous range of entries from anchor to EVENT (`S-<mouse-1>')."
-  (interactive "e")
+(defun strata-mouse--run-range-action (event)
+  "Execute shift-click for EVENT: select contiguous range from anchor."
   (let* ((ev-win (or (posn-window (event-start event)) (selected-window)))
          (prev-anchor (when (window-live-p ev-win)
                         (with-current-buffer (window-buffer ev-win)
@@ -2073,6 +2242,94 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
       (let ((anchor (or prev-anchor target)))
         (setq-local strata--selection-anchor-entry anchor)
         (strata-view--mark-range anchor target)))))
+
+(defun strata-mouse--run-activate-action (event)
+  "Execute activation click for EVENT: open directory or edit file."
+  (strata-mouse--sync-event event)
+  (when-let ((p (strata-mouse--entry-at-point)))
+    (strata-mouse--open-path p nil)))
+
+(defun strata-mouse--finish-drag (st event &optional forced-mode)
+  "Finalize drag ST on release EVENT, performing selection, drop, or click."
+  (unless (plist-get st :cancelled-p)
+    (let* ((src-win (plist-get st :src-win))
+           (src-buf (plist-get st :src-buf))
+           (end (event-end event))
+           (dst-win (or (posn-window end) src-win))
+           (end-mods (event-modifiers event))
+           (cur (when (and (window-live-p src-win) (eq dst-win src-win))
+                  (strata-mouse--entry-at-posn end t))))
+      (when (and (window-live-p src-win)
+                 (buffer-live-p src-buf)
+                 (eq (window-buffer src-win) src-buf))
+        (unless (plist-get st :dragged-p)
+          (when (strata-mouse--drag-exceeded-p
+                 (plist-get st :start-xy) (posn-x-y end)
+                 src-win dst-win (plist-get st :exact-start) cur)
+            (plist-put st :dragged-p t)))
+        (if (not (plist-get st :dragged-p))
+            (cond
+             ((memq 'double end-mods) (strata-mouse--run-activate-action event))
+             ((or (memq 'control end-mods) (plist-get st :ctrl-p))
+              (strata-mouse--run-toggle-action event))
+             ((or (memq 'shift end-mods) (plist-get st :shift-p))
+              (strata-mouse--run-range-action event))
+             (t (strata-mouse--run-click-action event)))
+          (select-window src-win)
+          (when (fboundp 'strata-panes--sync-active-pane-from-window)
+            (strata-panes--sync-active-pane-from-window src-win))
+          (let* ((drop-dir (and (not (eq dst-win src-win))
+                                (strata-mouse--drag-target-dir dst-win end)))
+                 (effective-mode
+                  (or forced-mode
+                      (cond ((memq 'control end-mods) 'copy)
+                            ((memq 'shift end-mods) 'cut)
+                            ((plist-get st :ctrl-p) 'copy)
+                            ((plist-get st :shift-p) 'cut)
+                            (t nil))))
+                 (pre-keys (plist-get st :pre-keys))
+                 (carry-marked-p (plist-get st :carry-marked-p)))
+            (if drop-dir
+                (progn
+                  (when (and carry-marked-p
+                             (not (equal (car (plist-get st :last-keys-cell)) pre-keys)))
+                    (strata-mouse--apply-selection-keys (plist-get st :order) pre-keys nil))
+                  (strata-mouse--drag-drop-now
+                   src-win dst-win (plist-get st :start) end
+                   (plist-get st :exact-start)
+                   (or (strata-marked-files-only) (plist-get st :pre-marked))
+                   effective-mode))
+              (let ((anchor (plist-get st :anchor))
+                    (exact-start (plist-get st :exact-start))
+                    (hover (or cur (car (plist-get st :last-hover-cell)))))
+                (when (and anchor hover
+                           (or (not carry-marked-p)
+                               (and (eq dst-win src-win)
+                                    exact-start
+                                    (not (equal (strata--path-key hover)
+                                                (strata--path-key exact-start))))))
+                  (setq-local strata--selection-anchor-entry anchor)
+                  (strata-mouse--sync-drag-range
+                   (plist-get st :order) (plist-get st :base-keys) anchor hover
+                   (plist-get st :rect-p) (plist-get st :last-keys-cell)
+                   (plist-get st :last-hover-cell) t)
+                  (strata-goto-file hover)
+                  (message "Selected %d item(s)" (length (strata-marked-files-only))))
+                (strata-view--sync-preview-on-move)))))))))
+
+(defun strata-mouse-toggle-select (event)
+  "Toggle multi-selection mark on clicked entry (`C-<mouse-1>')."
+  (interactive "e")
+  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
+      (strata-mouse--finish-drag st event)
+    (strata-mouse--run-toggle-action event)))
+
+(defun strata-mouse-range-select (event)
+  "Select contiguous range of entries from anchor to EVENT (`S-<mouse-1>')."
+  (interactive "e")
+  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
+      (strata-mouse--finish-drag st event)
+    (strata-mouse--run-range-action event)))
 
 (defun strata-mouse--drag-target-dir (dst-win end-posn)
   "Resolve writable drop folder for drag-and-drop into DST-WIN at END-POSN."
@@ -2132,43 +2389,45 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
 (defun strata-mouse-drag-drop (event &optional forced-mode)
   "Drag highlighted files inside a pane to select, or across panes to copy/move."
   (interactive "e")
-  (let* ((start (event-start event))
-         (end (event-end event))
-         (src-win (posn-window start))
-         (dst-win (or (posn-window end) src-win)))
-    (when (window-live-p src-win)
-      (select-window src-win)
-      (when (fboundp 'strata-panes--sync-active-pane-from-window)
-        (strata-panes--sync-active-pane-from-window src-win))
-      (let* ((src-entry (strata-mouse--entry-at-posn start t))
-             (marked (strata-marked-files-only)))
-        (cond
-         ((eq src-win dst-win)
-          (let ((end-entry (strata-mouse--entry-at-posn end t)))
-            (cond
-             ((and src-entry end-entry
-                   (not (equal (strata--path-key src-entry)
-                               (strata--path-key end-entry))))
-              (let* ((order (strata-view--entry-order))
-                     (rect-p (derived-mode-p 'strata-compact-mode 'strata-icons-mode))
-                     (mods (event-modifiers event))
-                     (base-keys (when (or (memq 'control mods) (memq 'shift mods))
-                                  (mapcar #'strata--path-key marked)))
-                     (range (strata-mouse--range-entries order src-entry end-entry rect-p))
-                     (keys (delete-dups (append (copy-sequence base-keys)
-                                                (mapcar #'strata--path-key range)))))
+  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
+      (strata-mouse--finish-drag st event forced-mode)
+    (let* ((start (event-start event))
+           (end (event-end event))
+           (src-win (posn-window start))
+           (dst-win (or (posn-window end) src-win)))
+      (when (window-live-p src-win)
+        (select-window src-win)
+        (when (fboundp 'strata-panes--sync-active-pane-from-window)
+          (strata-panes--sync-active-pane-from-window src-win))
+        (let* ((src-entry (strata-mouse--entry-at-posn start t))
+               (marked (strata-marked-files-only)))
+          (cond
+           ((eq src-win dst-win)
+            (let ((end-entry (strata-mouse--entry-at-posn end t)))
+              (cond
+               ((and src-entry end-entry
+                     (not (equal (strata--path-key src-entry)
+                                 (strata--path-key end-entry))))
+                (let* ((order (strata-view--entry-order))
+                       (rect-p (derived-mode-p 'strata-compact-mode 'strata-icons-mode))
+                       (mods (event-modifiers event))
+                       (base-keys (when (or (memq 'control mods) (memq 'shift mods))
+                                    (mapcar #'strata--path-key marked)))
+                       (range (strata-mouse--range-entries order src-entry end-entry rect-p))
+                       (keys (delete-dups (append (copy-sequence base-keys)
+                                                  (mapcar #'strata--path-key range)))))
+                  (setq-local strata--selection-anchor-entry src-entry)
+                  (strata-mouse--apply-selection-keys order keys t)
+                  (strata-goto-file end-entry)))
+               (src-entry
                 (setq-local strata--selection-anchor-entry src-entry)
-                (strata-mouse--apply-selection-keys order keys t)
-                (strata-goto-file end-entry)))
-             (src-entry
-              (setq-local strata--selection-anchor-entry src-entry)
-              (if (file-directory-p src-entry)
-                  (strata-mouse--open-path src-entry t)
-                (when (derived-mode-p 'strata-icons-mode)
-                  (strata-goto-file src-entry))
-                (strata-view--sync-preview-on-move))))))
-         (t
-          (strata-mouse--drag-drop-now src-win dst-win start end src-entry marked forced-mode)))))))
+                (if (file-directory-p src-entry)
+                    (strata-mouse--open-path src-entry t)
+                  (when (derived-mode-p 'strata-icons-mode)
+                    (strata-goto-file src-entry))
+                  (strata-view--sync-preview-on-move))))))
+           (t
+            (strata-mouse--drag-drop-now src-win dst-win start end src-entry marked forced-mode))))))))
 
 (defun strata-mouse-drag-copy (event)
   "Drag highlighted files into another split pane and copy (`C-<drag-mouse-1>')."
@@ -2183,24 +2442,17 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
 (defun strata-mouse-click-entry (event)
   "Handle single `<mouse-1>' click: open clicked directory or preview file."
   (interactive "e")
-  (strata-mouse--sync-event event)
-  (if-let ((p (strata-mouse--entry-at-point)))
-      (progn
-        (setq-local strata--selection-anchor-entry p)
-        (if (file-directory-p p)
-            (strata-mouse--open-path p t)
-          (when (derived-mode-p 'strata-icons-mode)
-            (strata-goto-file p))
-          (strata-view--sync-preview-on-move)))
-    (when (and (strata-marked-files-only) (fboundp 'strata-clear-all-marks))
-      (strata-clear-all-marks))))
+  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
+      (strata-mouse--finish-drag st event)
+    (strata-mouse--run-click-action event)))
 
 (defun strata-mouse-activate-at-event (event)
   "Handle `<mouse-2>' or `<double-mouse-1>' click: open directory or file."
   (interactive "e")
-  (strata-mouse--sync-event event)
-  (when-let ((p (strata-mouse--entry-at-point)))
-    (strata-mouse--open-path p nil)))
+  (if-let ((st (and (not (eq (event-basic-type event) 'mouse-2))
+                    (strata-mouse--take-finished-drag (event-start event)))))
+      (strata-mouse--finish-drag st event)
+    (strata-mouse--run-activate-action event)))
 
 (defun strata-view-activate-at-point ()
   "Open directory in browser pane or edit file in preview pane."

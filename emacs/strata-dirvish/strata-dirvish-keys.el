@@ -259,9 +259,11 @@
 (defun strata-mouse-context-menu (event)
   "Select EVENT target and open `strata-context-menu' (`<mouse-3>')."
   (interactive "e")
-  (strata-mouse--sync-event event)
-  (strata-view--update-selection-highlight)
-  (call-interactively #'strata-context-menu))
+  (if (bound-and-true-p strata-mouse--suppress-mouse-3-once)
+      (setq strata-mouse--suppress-mouse-3-once nil)
+    (strata-mouse--sync-event event)
+    (strata-view--update-selection-highlight)
+    (call-interactively #'strata-context-menu)))
 
 (transient-define-prefix strata-context-menu ()
   "Strata Context Menu adapting dynamically to selection & location."

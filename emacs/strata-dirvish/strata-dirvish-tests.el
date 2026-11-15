@@ -1798,8 +1798,12 @@
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
 
+(defun strata-test--play-events (&rest events)
+  "Replay synthetic mouse/keyboard EVENTS through Emacs's live command loop."
+  (execute-kbd-macro (apply #'vector events)))
+
 (ert-deftest strata-test-hold-and-drag-live-select-and-reverse-dired ()
-  "Hold-and-drag tracks live selection across entries, shrinks on reverse, and handles cancel/clicks."
+  "Live transient-map drag highlights in real time across List/Columns & handles cancel/clicks."
   (let* ((tmp (make-temp-file "strata-drag-live-" t))
          (dir-a (expand-file-name "subA" tmp))
          (fa (expand-file-name "a.txt" tmp))
@@ -1823,65 +1827,93 @@
             (write-region "x" nil f))
           (strata-open-location tmp)
           (let* ((w (selected-window))
-                 (p-sub (save-excursion (strata-goto-file dir-a) (point)))
                  (pa (save-excursion (strata-goto-file fa) (point)))
                  (pb (save-excursion (strata-goto-file fb) (point)))
                  (pc (save-excursion (strata-goto-file fc) (point)))
                  (pd (save-excursion (strata-goto-file fd) (point)))
                  (snapshots nil))
-            (ignore p-sub)
-            ;; 1. Pre-existing stale mark (`subA/`) is replaced once plain drag sweeps `a.txt` -> `d.txt` -> `b.txt`.
+            ;; 1. Live drag via native `set-transient-map' highlights `a..d` then shrinks to `a..b`.
             (strata-goto-file dir-a)
             (strata-view--set-entry-mark dir-a t nil)
             (cl-letf (((symbol-function 'strata-mouse--apply-selection-keys)
                        (let ((orig (symbol-function 'strata-mouse--apply-selection-keys)))
                          (lambda (order target-keys &optional final-p)
                            (funcall orig order target-keys final-p)
-                           (push (list final-p (mapcar #'file-name-nondirectory (strata-marked-files-only)))
+                           (push (list final-p
+                                       (length strata--selection-overlays)
+                                       (eq track-mouse 'drag-tracking)
+                                       (mapcar #'file-name-nondirectory (strata-marked-files-only)))
                                  snapshots)))))
-              (let ((unread-command-events
-                     (list `(mouse-movement (,w ,pc (10 . 30) 0))
-                           `(mouse-movement (,w ,pd (10 . 50) 0))
-                           `(mouse-movement (,w ,pb (10 . 20) 0))
-                           `(drag-mouse-1 (,w ,pa (10 . 10) 0) (,w ,pb (10 . 20) 0)))))
-                (strata-mouse-down-entry `(down-mouse-1 (,w ,pa (10 . 10) 0) 1))))
+              (strata-test--play-events
+               `(down-mouse-1 (,w ,pa (10 . 10) 0) 1)
+               `(mouse-movement (,w ,pc (10 . 30) 0))
+               `(mouse-movement (,w ,pd (10 . 50) 0))
+               `(mouse-movement (,w ,pb (10 . 20) 0))
+               `(drag-mouse-1 (,w ,pa (10 . 10) 0) (,w ,pb (10 . 20) 0))))
             (setq snapshots (nreverse snapshots))
-            ;; Verify live mid-drag snapshots expanded to `a..d` then shrunk back to `a..b` before release!
-            (should (cl-some (lambda (s) (and (not (car s)) (equal (cadr s) '("a.txt" "b.txt" "c.txt" "d.txt")))) snapshots))
+            (should (cl-some (lambda (s)
+                               (and (not (car s))
+                                    (>= (nth 1 s) 4)
+                                    (nth 2 s)
+                                    (equal (nth 3 s) '("a.txt" "b.txt" "c.txt" "d.txt"))))
+                             snapshots))
             (should (equal (mapcar #'file-name-nondirectory (strata-marked-files-only))
                            '("a.txt" "b.txt")))
-            ;; 2. Drag starting in blank empty bottom space (`point-max`) sweeps upward to `b.txt` -> `b..d`.
+            (should-not track-mouse)
+            (should-not strata-mouse--drag-state)
+            (should-not strata-mouse--finished-drag-state)
+            ;; 2. Drag starting in empty space (`point-max`) sweeps upward to `b.txt` -> `b..d`.
             (strata-clear-all-marks)
             (let ((pmax (point-max)))
-              (let ((unread-command-events
-                     (list `(mouse-movement (,w ,pd (10 . 60) 0))
-                           `(mouse-movement (,w ,pb (10 . 20) 0))
-                           `(drag-mouse-1 (,w ,pmax (10 . 80) 0) (,w ,pb (10 . 20) 0)))))
-                (strata-mouse-down-entry `(down-mouse-1 (,w ,pmax (10 . 80) 0) 1))))
+              (strata-test--play-events
+               `(down-mouse-1 (,w ,pmax (10 . 80) 0) 1)
+               `(mouse-movement (,w ,pd (10 . 60) 0))
+               `(mouse-movement (,w ,pb (10 . 20) 0))
+               `(drag-mouse-1 (,w ,pmax (10 . 80) 0) (,w ,pb (10 . 20) 0))))
             (should (equal (mapcar #'file-name-nondirectory (strata-marked-files-only))
                            '("b.txt" "c.txt" "d.txt")))
-            ;; 3. `C-<down-mouse-1>` drag adds `subA`..`a.txt` onto existing marks or new subset cleanly.
+            ;; 3. `C-<down-mouse-1>' drag adds `c..d` onto existing `a.txt` mark cleanly.
             (strata-clear-all-marks)
             (strata-view--set-entry-mark fa t nil)
-            (let ((unread-command-events
-                   (list `(C-mouse-movement (,w ,pd (10 . 50) 0))
-                         `(C-drag-mouse-1 (,w ,pc (10 . 30) 0) (,w ,pd (10 . 50) 0)))))
-              (strata-mouse-down-entry `(C-down-mouse-1 (,w ,pc (10 . 30) 0) 1)))
+            (strata-test--play-events
+             `(C-down-mouse-1 (,w ,pc (10 . 30) 0) 1)
+             `(C-mouse-movement (,w ,pd (10 . 50) 0))
+             `(C-drag-mouse-1 (,w ,pc (10 . 30) 0) (,w ,pd (10 . 50) 0)))
             (should (equal (mapcar #'file-name-nondirectory (strata-marked-files-only))
                            '("a.txt" "c.txt" "d.txt")))
-            ;; 4. Right-click (`down-mouse-3`) during drag cancels and restores pre-drag marks.
-            (let ((unread-command-events
-                   (list `(mouse-movement (,w ,pb (10 . 20) 0))
-                         `(down-mouse-3 (,w ,pb (10 . 20) 0) 1))))
-              (strata-mouse-down-entry `(down-mouse-1 (,w ,pa (10 . 10) 0) 1)))
+            ;; 4. Right-click (`down-mouse-3` + `mouse-3`) cancels drag, suppresses menu, and ignores button-1 release.
+            (let ((menu-opened nil))
+              (cl-letf (((symbol-function 'strata-context-menu) (lambda () (setq menu-opened t))))
+                (strata-test--play-events
+                 `(down-mouse-1 (,w ,pa (10 . 10) 0) 1)
+                 `(mouse-movement (,w ,pb (10 . 20) 0))
+                 `(down-mouse-3 (,w ,pb (10 . 20) 0) 1)
+                 `(mouse-3 (,w ,pb (10 . 20) 0) 1)
+                 `(drag-mouse-1 (,w ,pa (10 . 10) 0) (,w ,pb (10 . 20) 0))))
+              (should-not menu-opened)
+              (should-not strata-mouse--suppress-mouse-3-once)
+              (should (equal (mapcar #'file-name-nondirectory (strata-marked-files-only))
+                             '("a.txt" "c.txt" "d.txt"))))
+            ;; 5. Micro-jitter release (<= 6px on same entry) falls back to single-click navigation/preview.
+            (strata-clear-all-marks)
+            (strata-goto-file fa)
+            (strata-test--play-events
+             `(down-mouse-1 (,w ,pb (10 . 20) 0) 1)
+             `(drag-mouse-1 (,w ,pb (10 . 20) 0) (,w ,pb (11 . 21) 0)))
+            (should-not (strata-marked-files-only))
+            (should (equal (strata--path-key (strata-current-file)) (strata--path-key fb)))
+            ;; 6. Columns view live drag also handles fringe/margin motion with `nil' buffer point.
+            (strata-switch-view-mode 'columns)
+            (strata-clear-all-marks)
+            (let* ((pa-col (save-excursion (strata-goto-file fa) (point)))
+                   (fringe-posn (list w 'left-fringe (cons 2 80) 0 nil nil nil nil nil)))
+              (strata-test--play-events
+               `(down-mouse-1 (,w ,pa-col (10 . 10) 0) 1)
+               `(left-fringe mouse-movement ,fringe-posn)
+               `(drag-mouse-1 (,w ,pa-col (10 . 10) 0) ,fringe-posn)))
             (should (equal (mapcar #'file-name-nondirectory (strata-marked-files-only))
-                           '("a.txt" "c.txt" "d.txt")))
-            ;; 5. Micro-jitter release (<= 6px on same entry) converts cleanly to click in `unread-command-events`.
-            (let ((unread-command-events
-                   (list `(drag-mouse-1 (,w ,pb (10 . 20) 0) (,w ,pb (11 . 21) 0)))))
-              (strata-mouse-down-entry `(down-mouse-1 (,w ,pb (10 . 20) 0) 1))
-              (should (= (length unread-command-events) 1))
-              (should (eq (caar unread-command-events) 'mouse-1)))))
+                           '("a.txt" "b.txt" "c.txt" "d.txt")))
+            (should (>= (length strata--selection-overlays) 4))))
       (dolist (b (buffer-list))
         (when (buffer-live-p b)
           (with-current-buffer b
@@ -1928,39 +1960,37 @@
             (strata-switch-view-mode 'icons)
             ;; Force 3-column grid geometry: row 0 = (f1 f2 f3), row 1 = (f4 f5 f6).
             (setq strata-icons--ncols 3)
-            (let* ((p1 (save-excursion (strata-goto-file (nth 0 files)) (point)))
-                   (p5 (save-excursion (strata-goto-file (nth 4 files)) (point)))
-                   ;; Blank spacer position immediately left of tile 1 (`strata-entry` is nil there).
+            (let* ((p5 (save-excursion (strata-goto-file (nth 4 files)) (point)))
+                   ;; Blank spacer position immediately left of tile 1 (`strata-entry' is nil there).
                    (p1-blank (max (point-min) (line-beginning-position))))
-              (ignore p1)
-              ;; 1. Drag from blank gap before `f1` to `f5` selects 2x2 grid rectangle `{f1 f2 f4 f5}` (excludes `f3`).
-              (let ((unread-command-events
-                     (list `(mouse-movement (,w1 ,p5 (80 . 60) 0))
-                           `(drag-mouse-1 (,w1 ,p1-blank (2 . 10) 0) (,w1 ,p5 (80 . 60) 0)))))
-                (strata-mouse-down-entry `(down-mouse-1 (,w1 ,p1-blank (2 . 10) 0) 1)))
+              ;; 1. Drag from blank gap before `f1' to `f5' selects 2x2 grid rectangle `{f1 f2 f4 f5}' (excludes `f3').
+              (strata-test--play-events
+               `(down-mouse-1 (,w1 ,p1-blank (2 . 10) 0) 1)
+               `(mouse-movement (,w1 ,p5 (80 . 60) 0))
+               `(drag-mouse-1 (,w1 ,p1-blank (2 . 10) 0) (,w1 ,p5 (80 . 60) 0)))
               (should (equal (mapcar #'file-name-nondirectory (strata-marked-files-only))
                              '("f1.txt" "f2.txt" "f4.txt" "f5.txt")))
               (should (>= (length strata--selection-overlays) 4))
-              ;; 2. Holding down on already-marked `f1` and dragging across to Pane 2 copies all 4 items.
+              ;; 2. Holding down on already-marked `f1' and dragging across to Pane 2 copies all 4 items.
               (let ((p1-lbl (save-excursion (strata-goto-file (nth 0 files)) (point))))
                 (cl-letf (((symbol-function 'read-char-choice) (lambda (&rest _) ?c)))
-                  (let ((unread-command-events
-                         (list `(mouse-movement (,w2 1 (200 . 20) 0))
-                               `(drag-mouse-1 (,w1 ,p1-lbl (10 . 10) 0) (,w2 1 (200 . 20) 0)))))
-                    (strata-mouse-down-entry `(down-mouse-1 (,w1 ,p1-lbl (10 . 10) 0) 1)))))
+                  (strata-test--play-events
+                   `(down-mouse-1 (,w1 ,p1-lbl (10 . 10) 0) 1)
+                   `(mouse-movement (,w2 1 (200 . 20) 0))
+                   `(drag-mouse-1 (,w1 ,p1-lbl (10 . 10) 0) (,w2 1 (200 . 20) 0)))))
               (dolist (name '("f1.txt" "f2.txt" "f4.txt" "f5.txt"))
                 (should (file-exists-p (expand-file-name name dst))))
               (should-not (file-exists-p (expand-file-name "f3.txt" dst))))
-            ;; 3. Compact mode drag starting on trailing cell padding of `f2` to `f4` selects `{f2 f3 f4}`.
+            ;; 3. Compact mode drag starting on trailing cell padding of `f2' to `f4' selects `{f2 f3 f4}'.
             (strata-switch-view-mode 'compact)
             (strata-clear-all-marks)
             (let* ((p2 (save-excursion (strata-goto-file (nth 1 files)) (point)))
                    (p2-pad (save-excursion (goto-char p2) (line-end-position)))
                    (p4 (save-excursion (strata-goto-file (nth 3 files)) (point))))
-              (let ((unread-command-events
-                     (list `(mouse-movement (,w1 ,p4 (10 . 40) 0))
-                           `(drag-mouse-1 (,w1 ,p2-pad (180 . 20) 0) (,w1 ,p4 (10 . 40) 0)))))
-                (strata-mouse-down-entry `(down-mouse-1 (,w1 ,p2-pad (180 . 20) 0) 1)))
+              (strata-test--play-events
+               `(down-mouse-1 (,w1 ,p2-pad (180 . 20) 0) 1)
+               `(mouse-movement (,w1 ,p4 (10 . 40) 0))
+               `(drag-mouse-1 (,w1 ,p2-pad (180 . 20) 0) (,w1 ,p4 (10 . 40) 0)))
               (should (equal (mapcar #'file-name-nondirectory (strata-marked-files-only))
                              '("f2.txt" "f3.txt" "f4.txt")))
               (should (>= (length strata--selection-overlays) 3)))))
