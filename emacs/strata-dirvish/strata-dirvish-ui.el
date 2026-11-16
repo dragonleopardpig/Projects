@@ -20,8 +20,7 @@ Dynamically bound for an entire mouse action, including follow-up dialogs.")
        (pcase strata-ui-input-method
          ('mouse t)
          ('keyboard nil)
-         (_ (or (mouse-event-p last-input-event)
-                (mouse-event-p last-nonmenu-event))))))
+         (_ (let ((use-dialog-box t)) (use-dialog-box-p))))))
 
 (defun strata-ui--mouse-command (original &rest args)
   "Run mouse command ORIGINAL with ARGS, preserving its interaction method."

@@ -47,7 +47,7 @@
 ;; * GUI Interface
 (delete-selection-mode 1)
 ;; (desktop-save-mode 1)
-(menu-bar-mode -1)
+(menu-bar-mode 1)
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
 ;; (set-frame-parameter nil 'alpha-background 85)

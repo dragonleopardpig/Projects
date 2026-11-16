@@ -20,6 +20,7 @@
 (require 'strata-dirvish-ops)
 (require 'strata-dirvish-keys)
 (require 'strata-dirvish-watch)
+(require 'strata-dirvish-menu)
 
 (defun strata-dirvish--sync-auto-revert ()
   "Disable Dired auto-revert and notify watches on FUSE/cloud/remote mounts."
@@ -245,6 +246,7 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
 (defun strata-dirvish-setup ()
   "Configure Dirvish, hooks, theme blending, and Dashboard integration."
   (strata-ui-install-mouse-routing)
+  (strata-menu-install)
   (let ((p (strata-prefs)))
     (strata-history-load)
     (strata-sync-theme-faces)

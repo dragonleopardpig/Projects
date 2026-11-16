@@ -572,6 +572,7 @@ Text terminals use `strata-context-menu', also available with Shift-F10."
                     ("Keyboard file actions" "Keep text prompts, completion and the keyboard actions menu")
                     ("Double-Click / Middle" "Open folder or edit file"))
                    ("VIEWS, SORT & ZOOM"
+                    ("Menu bar → Strata" "All file-manager commands; irrelevant actions are greyed out")
                     ("C-1 / C-2 / C-3 / C-4" "Columns / Icons Grid / List (Tree) / Compact View")
                     ("Click View…" "Choose a layout from the header menu; the current view is checked")
                     ("C-c s / Click Sort By…" "Sort menu in every directory layout; also S-F10 then S")
