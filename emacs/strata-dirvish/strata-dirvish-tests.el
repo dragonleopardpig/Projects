@@ -1118,6 +1118,91 @@
           (should (member "FASTFETCH_ENABLED=0" seen-ext-env)))
       (delete-directory tmp t))))
 
+(ert-deftest strata-test-open-with-survives-emacs-exit ()
+  "A real external app survives its launching Emacs and retains literal arguments."
+  (skip-unless (and (executable-find "setsid") (executable-find "python3")))
+  (let* ((tmp (make-temp-file "strata-detached-" t))
+         (probe (expand-file-name "probe.py" tmp))
+         (ready (expand-file-name "ready.json" tmp))
+         (proceed (expand-file-name "continue" tmp))
+         (done (expand-file-name "done.json" tmp))
+         (fixture (expand-file-name "launch.el" tmp))
+         (files (list probe
+                      (expand-file-name "a file with spaces.txt" tmp)
+                      (expand-file-name "quoted 'name';$(touch NOT-RUN).txt" tmp)))
+         (python (executable-find "python3"))
+         (source-dir (file-name-directory (symbol-file #'strata-open-with)))
+         (output (generate-new-buffer " *strata-detached-test*"))
+         (json-array-type 'list)
+         app-pid)
+    (unwind-protect
+        (progn
+          (with-temp-file probe
+            (insert
+             "import json, os, sys, time\n"
+             "root = os.path.dirname(__file__)\n"
+             "def record(name, data):\n"
+             "    path = os.path.join(root, name)\n"
+             "    with open(path + '.tmp', 'w') as f: json.dump(data, f)\n"
+             "    os.replace(path + '.tmp', path)\n"
+             "info = dict(pid=os.getpid(), sid=os.getsid(0), pgid=os.getpgrp(),\n"
+             "            argv=sys.argv[1:], fds=[os.readlink('/proc/self/fd/' + str(i)) for i in range(3)])\n"
+             "record('ready.json', info)\n"
+             "deadline = time.monotonic() + 10\n"
+             "while not os.path.exists(os.path.join(root, 'continue')):\n"
+             "    if time.monotonic() > deadline: sys.exit(1)\n"
+             "    time.sleep(0.01)\n"
+             ;; These writes happen only after the launching Emacs exited.
+             "os.write(1, b'stdout after Emacs exit\\n')\n"
+             "os.write(2, b'stderr after Emacs exit\\n')\n"
+             "record('done.json', info)\n"))
+          (with-temp-file fixture
+            (insert ";;; -*- lexical-binding: t; -*-\n")
+            (prin1
+             `(progn
+                (require 'strata-dirvish)
+                (cl-letf (((symbol-function 'strata-selected-files) (lambda () ',files))
+                          ((symbol-function 'strata-desktop-apps)
+                           (lambda () (list (cons "Detached probe" ,python))))
+                          ((symbol-function 'completing-read) (lambda (&rest _) "Detached probe")))
+                  (strata-open-with))
+                (let ((deadline (+ (float-time) 5)))
+                  (while (and (not (file-exists-p ,ready)) (< (float-time) deadline))
+                    (accept-process-output nil 0.02)))
+                (unless (file-exists-p ,ready) (error "External app did not start"))
+                (kill-emacs 0))
+             (current-buffer)))
+          (let ((status (call-process
+                         (expand-file-name invocation-name invocation-directory)
+                         nil output nil "-Q" "--batch"
+                         "--eval" "(progn (require 'package) (package-initialize))"
+                         "-L" source-dir "-l" fixture)))
+            (unless (equal status 0)
+              (ert-fail (with-current-buffer output (buffer-string)))))
+          (should (file-exists-p ready))
+          (setq app-pid (alist-get 'pid (json-read-file ready)))
+          (write-region "continue" nil proceed nil 'silent)
+          (let ((deadline (+ (float-time) 3)))
+            (while (and (not (file-exists-p done)) (< (float-time) deadline))
+              (accept-process-output nil 0.02)))
+          (should (file-exists-p done))
+          (let ((data (json-read-file done)))
+            (should (equal (alist-get 'argv data) (cdr files)))
+            (should (= app-pid (alist-get 'sid data)))
+            (should (= app-pid (alist-get 'pgid data)))
+            (should (equal (alist-get 'fds data) '("/dev/null" "/dev/null" "/dev/null")))))
+      (when app-pid (ignore-errors (signal-process app-pid 'SIGTERM)))
+      (when (buffer-live-p output) (kill-buffer output))
+      (delete-directory tmp t))))
+
+(ert-deftest strata-test-open-with-reports-missing-executable ()
+  "A missing application still fails immediately instead of reporting a false launch."
+  (cl-letf (((symbol-function 'strata-selected-files) (lambda () '("/tmp/file.txt")))
+            ((symbol-function 'strata-desktop-apps)
+             (lambda () '(("Missing app" . "/strata-test/nonexistent/application"))))
+            ((symbol-function 'completing-read) (lambda (&rest _) "Missing app")))
+    (should-error (strata-open-with) :type 'user-error)))
+
 (defun strata-test--buffer-has-face-p (buf)
   "Return non-nil if BUF contains at least one realized `face' text property."
   (with-current-buffer buf

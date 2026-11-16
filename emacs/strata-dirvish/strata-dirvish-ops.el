@@ -736,14 +736,24 @@ wrapping folder named after the archive so parent folders stay uncluttered."
     (cl-delete-duplicates (nreverse apps) :key #'car :test #'equal)))
 
 (defun strata-open-with ()
-  "Open selected item(s) with any installed application (`O`)."
+  "Open selected item(s) with an independent installed application (`O`).
+The application keeps running after Emacs exits."
   (interactive)
   (let* ((files (strata-selected-files))
          (apps (strata-desktop-apps))
          (choice (completing-read "Open With application: " (mapcar #'car apps) nil t))
          (cmd (or (cdr (assoc choice apps)) choice)))
     (unless files (user-error "No file selected"))
-    (apply #'start-process "strata-open-with" nil cmd files)
+    (let* ((program (or (executable-find cmd)
+                        (user-error "Application executable not found: %s" cmd)))
+           (launcher (or (executable-find "setsid")
+                         (user-error "Cannot launch independently: setsid is unavailable")))
+           ;; Wait only for the launcher to fork, not for the application.
+           ;; Unlike an Emacs-managed process, its new session and null
+           ;; standard streams survive Emacs exit without SIGHUP/SIGPIPE.
+           (status (apply #'call-process launcher nil nil nil "--fork" "--" program files)))
+      (unless (equal status 0)
+        (user-error "Could not launch %s: %s" choice status)))
     (message "Launched %s for %d item(s)" choice (length files))))
 
 ;;;; Custom Actions (~/.config/strata/actions/*/action.toml) + Recipes + Jobs Dashboard
