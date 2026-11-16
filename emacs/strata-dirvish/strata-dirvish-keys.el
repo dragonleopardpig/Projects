@@ -239,19 +239,90 @@
 
 ;;;; Dynamic Transient Context Menu & Quick Hub (`Menu` / `S-F10` / `<mouse-3>`)
 
+(defun strata-context--popup-menu ()
+  "Build a mouse context menu for the current item or marked group."
+  (let* ((items (strata-selected-files))
+         (has-items (and items t))
+         (writable (not (strata-location-virtual-p (or (dirvish-prop :root) default-directory))))
+         (browser (and (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode) t))
+         (title (if (strata-marked-files-only)
+                    (format "Strata — %d selected" (length (strata-marked-files-only)))
+                  "Strata"))
+         (menu
+          (easy-menu-create-menu
+           title
+           `(["Open" strata-tree-expand-or-open :enable ,has-items]
+             ["Open With…" strata-open-with :enable ,has-items]
+             ["Open in New Tab" strata-open-in-new-tab :enable ,has-items]
+             ["Open in New Frame" strata-open-in-new-frame :enable ,has-items]
+             "--"
+             ["Copy" strata-copy-selection :enable ,has-items]
+             ["Cut" strata-cut-selection :enable ,(and has-items writable)]
+             ["Paste (Keep Both)" strata-paste-keep-both
+              :enable ,(and writable (plist-get strata-clipboard :files) t)]
+             ["Rename…" strata-rename :enable ,(and has-items writable)]
+             ["Duplicate" strata-duplicate :enable ,(and has-items writable)]
+             ["Move to Trash" strata-move-to-trash :enable ,(and has-items writable)]
+             "--"
+             ["New Folder…" strata-new-folder :enable ,writable]
+             ["New File…" strata-new-file :enable ,writable]
+             ("Selection"
+              ["Select All" strata-select-all :enable ,browser]
+              ["Invert Selection" strata-invert-selection :enable ,browser]
+              ["Clear Selection" strata-clear-all-marks :enable ,browser])
+             ("More File Actions"
+              ["Paste (Replace)" strata-paste-replace
+               :enable ,(and writable (plist-get strata-clipboard :files) t)]
+              ["New Folder with Selection…" strata-new-folder-with-selection
+               :enable ,(and has-items writable)]
+              ["Copy Path" strata-copy-path :enable ,has-items]
+              ["Copy Name" strata-copy-name :enable ,has-items]
+              ["Compress Archive…" strata-archive-compress :enable ,has-items]
+              ["Extract Here" strata-archive-extract :enable ,(and has-items writable)]
+              ["Save Clipboard Image/Text" strata-paste-content-drop :enable ,writable]
+              ["Delete Permanently…" strata-delete-permanently :enable ,(and has-items writable)])
+             ["Properties…" strata-show-properties-for-path]
+             "--"
+             ("Panes & Tools"
+              ["Split Extra Pane" strata-toggle-extra-pane]
+              ["Copy to Other Pane" strata-copy-to-other-pane
+               :enable ,(and has-items (strata-split-active-p))]
+              ["Move to Other Pane" strata-move-to-other-pane
+               :enable ,(and has-items writable (strata-split-active-p))]
+              ["Pane Terminal" strata-toggle-pane-terminal]
+              ["Customize Folder Color/Icon…" strata-customize-folder]
+              ["Run Custom Action…" strata-run-custom-action]
+              ["Undo" strata-undo :enable ,(and strata-undo-stack t)]
+              ["Redo" strata-redo :enable ,(and strata-redo-stack t)]
+              ["Settings & Diagnostics" strata-open-settings])
+             ["Keyboard Actions… (Shift-F10)" strata-context-menu]
+             ["Shortcut Reference (?)" strata-open-shortcut-reference]))))
+    ;; Reuse the same submenus as the two header buttons.
+    (define-key-after menu [view]
+      (list 'menu-item "View" (strata-view--menu) :enable browser))
+    (define-key-after menu [sort]
+      (list 'menu-item "Sort By" (strata-sort--menu) :enable browser))
+    menu))
+
 (defun strata-mouse-context-menu (event)
-  "Select EVENT target and open `strata-context-menu' (`<mouse-3>')."
+  "Select EVENT target and show the GUI context menu (`<mouse-3>').
+Text terminals use `strata-context-menu', also available with Shift-F10."
   (interactive "e")
   (if (bound-and-true-p strata-mouse--suppress-mouse-3-once)
       (setq strata-mouse--suppress-mouse-3-once nil)
-    (strata-mouse--sync-event event)
-    ;; A menu on an unmarked item must operate on that item, not an old batch.
-    (when-let ((file (strata-current-file)))
-      (unless (member (strata--path-key file)
-                      (mapcar #'strata--path-key (strata-marked-files-only)))
-        (strata-clear-all-marks)))
+    (let ((file (strata-mouse--entry-at-posn (event-end event))))
+      (strata-mouse--sync-event event)
+      ;; A menu on an unmarked item must operate on that item, not an old batch.
+      (unless (and file (member (strata--path-key file)
+                               (mapcar #'strata--path-key (strata-marked-files-only))))
+        (strata-clear-all-marks))
+      (unless file
+        (goto-char (point-max))
+        (setq strata--empty-click-p t)))
     (strata-view--update-selection-highlight)
-    (call-interactively #'strata-context-menu)))
+    (if (display-popup-menus-p)
+        (popup-menu (strata-context--popup-menu) event)
+      (call-interactively #'strata-context-menu))))
 
 (transient-define-prefix strata-context-menu ()
   "Strata Context Menu adapting dynamically to selection & location."
@@ -474,6 +545,7 @@
                     (,(if tenx "z / Z / C-S-k" "C-S-k") "Jump to Visited Folder (10xer Z: Recent File)"))
                    ("SELECTION (DIRECTORY VIEWS)"
                     ("Click file" "Select one file and preview; replaces old marks (folder click opens)")
+                    ("Click empty space" "Clear selection without selecting the last file")
                     ("C-SPC / C-Click" "Toggle current / clicked item; repeat to deselect")
                     (,(if tenx "u / U / V" "m / u / U")
                      ,(if tenx "Unmark current / Clear all marks (U or V)" "Toggle current / Unmark current / Clear all marks"))
@@ -492,9 +564,11 @@
                     ("Icons / Compact drag" "Select a rectangle across rows and columns")
                     ("C-Drag / S-Drag" "Add a range to existing marks within the same pane")
                     ("Drag to other pane" "Transfer the marked group; choose Copy / Move / Cancel")
+                    ("Dragging marked files" "A badge follows the pointer with filenames, count and destination")
                     ("C-Drag / S-Drag across" "Copy / Move into another pane (Ctrl wins with both modifiers)")
                     ("ESC / C-g / Right-Click" "During drag: cancel and restore the previous selection")
                     ("Right-Click item" "Keep a marked batch; an unmarked item becomes the menu target")
+                    ("Right-Click menu" "GUI actions beside the pointer; Shift-F10 / Menu opens keyboard actions")
                     ("Double-Click / Middle" "Open folder or edit file"))
                    ("VIEWS, SORT & ZOOM"
                     ("C-1 / C-2 / C-3 / C-4" "Columns / Icons Grid / List (Tree) / Compact View")

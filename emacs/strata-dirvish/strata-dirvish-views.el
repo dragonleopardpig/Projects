@@ -11,6 +11,7 @@
 (require 'cl-lib)
 (require 'dired)
 (require 'easymenu)
+(require 'tooltip)
 (require 'dirvish)
 (require 'dirvish-widgets nil t)
 (require 'dirvish-vc nil t)
@@ -79,6 +80,9 @@
 (defvar-local strata--selection-anchor-entry nil
   "Anchor path for Shift-click and Shift-arrow range multi-selection.")
 
+(defvar-local strata--empty-click-p nil
+  "Non-nil while an empty-space click leaves the browser without a current item.")
+
 (defvar-local strata--selection-range-active nil
   "Non-nil while extending the current keyboard or click range.")
 
@@ -97,6 +101,7 @@
 
 (defun strata-view--selection-post-command ()
   "Start the next range at point after ordinary navigation or file commands."
+  (unless (eobp) (setq strata--empty-click-p nil))
   (unless (or (null this-command)
               (bound-and-true-p strata-mouse--drag-state)
               (memq this-command
@@ -106,6 +111,11 @@
                       strata-mouse-range-select strata-mouse-add-range-select
                       strata-visual-toggle)))
     (strata-view--reset-selection-range (strata-current-file))))
+
+(defun strata-view--dirvish-post-command (original)
+  "Run ORIGINAL without moving an empty-space selection onto the last file."
+  (unless (and strata--empty-click-p (eobp))
+    (funcall original)))
 
 (defun strata--path-key (path)
   "Normalize PATH into a canonical comparison key."
@@ -878,6 +888,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                  'mouse-face 'highlight 'pointer 'hand
                  'help-echo "Sort files by name, date, size or extension (C-c s)"
                  'local-map strata-sort-header-map 'keymap strata-sort-header-map)
+     ;; Adjacent equal mouse-face properties form one hover region even
+     ;; when the buttons have different keymaps.  Keep a plain gap between.
+     " "
      (propertize (format " [View… %s] " view-lbl)
                  'face 'strata-header-accent
                  'mouse-face 'highlight 'pointer 'hand
@@ -1854,6 +1867,7 @@ With ADDITIVE, retain marks that preceded this range."
         (let ((pt (and (not area)
                        (integerp raw-pt)
                        (>= raw-pt (point-min))
+                       (< raw-pt (point-max))
                        raw-pt)))
           (save-excursion
             (or (when pt
@@ -2011,10 +2025,97 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
       (cancel-timer tm))
     (plist-put st field nil)))
 
+(defun strata-mouse--hide-drag-feedback (st)
+  "Remove ST's floating file badge and restore ordinary help tooltips."
+  (when (plist-get st :feedback-visible-p)
+    (plist-put st :feedback-visible-p nil)
+    (let ((use-system-tooltips nil))
+      (ignore-errors (x-hide-tip))))
+  (when (plist-get st :feedback-suspended-p)
+    (plist-put st :feedback-suspended-p nil)
+    (when (plist-get st :feedback-tooltip-mode) (tooltip-mode 1))
+    (setq show-help-function (plist-get st :feedback-show-help)))
+  (plist-put st :feedback-last-time nil))
+
+(defun strata-mouse--drag-feedback-text (files action destination)
+  "Describe FILES, ACTION and DESTINATION for the floating drag badge.
+Use only the cached filenames; do not probe files while handling motion."
+  (let ((count (length files)))
+    (concat
+     (propertize (format "%d item%s — %s" count (if (= count 1) "" "s") action)
+                 'face 'bold)
+     "\n"
+     (mapconcat
+      (lambda (path)
+        (concat (strata-icon-glyph 'file nil "▤") "  "
+                (truncate-string-to-width
+                 (replace-regexp-in-string "[\n\r\t]" " "
+                                           (file-name-nondirectory (directory-file-name path)))
+                 42 nil nil "…")))
+      (cl-subseq files 0 (min 3 count)) "\n")
+     (when (> count 3) (format "\n… and %d more" (- count 3)))
+     "\n" (truncate-string-to-width destination 52 nil nil "…"))))
+
+(defun strata-mouse--show-drag-feedback (st event files drop-dir)
+  "Show a file badge beside the pointer for ST, throttled to 25 updates/sec."
+  (when (and files (display-graphic-p (window-frame (plist-get st :src-win)))
+             (fboundp 'x-show-tip) (not (plist-get st :feedback-disabled-p)))
+    (let* ((mods (event-modifiers event))
+           (action (cond ((or (memq 'control mods) (plist-get st :ctrl-p)) "Copy")
+                         ((or (memq 'shift mods) (plist-get st :shift-p)) "Move")
+                         (t "Copy / Move")))
+           (destination (if drop-dir
+                            (concat "To: " (abbreviate-file-name drop-dir))
+                          (if (eq (posn-window (event-end event)) (plist-get st :src-win))
+                              "Drag to another pane or Places folder"
+                            "No drop here")))
+           (key (list files action destination))
+           (now (float-time)))
+      (when (or (not (equal key (plist-get st :feedback-key)))
+                (>= (- now (or (plist-get st :feedback-last-time) 0)) 0.04))
+        (condition-case nil
+            (progn
+              (unless (plist-get st :feedback-suspended-p)
+                (plist-put st :feedback-tooltip-mode tooltip-mode)
+                (plist-put st :feedback-show-help show-help-function)
+                (plist-put st :feedback-suspended-p t)
+                ;; As in Emacs's own text drag, ordinary hover tooltips
+                ;; must not hide the file badge before each motion command.
+                (when tooltip-mode (tooltip-mode -1)))
+              (unless (equal key (plist-get st :feedback-key))
+                (plist-put st :feedback-key key)
+                (plist-put st :feedback-text
+                           (strata-mouse--drag-feedback-text files action destination)))
+              (plist-put st :feedback-last-time now)
+              (plist-put st :feedback-visible-p t)
+              (setq mouse-fine-grained-tracking t)
+              (let* ((use-system-tooltips nil)
+                     (params (cl-remove-if
+                              (lambda (pair) (memq (car pair) '(left right top bottom)))
+                              tooltip-frame-parameters))
+                     (foreground (face-attribute 'tooltip :foreground))
+                     (background (face-attribute 'tooltip :background)))
+                (when (stringp foreground)
+                  (setf (alist-get 'foreground-color params) foreground
+                        (alist-get 'border-color params) foreground))
+                (when (stringp background)
+                  (setf (alist-get 'background-color params) background))
+                (x-show-tip (plist-get st :feedback-text)
+                            (window-frame (plist-get st :src-win))
+                            params 60 18 24)))
+          (error
+           ;; Feedback is optional; a display failure must never break a
+           ;; transfer or leave mouse tracking and tooltip settings altered.
+           (strata-mouse--hide-drag-feedback st)
+           (plist-put st :feedback-disabled-p t)))))))
+
 (defun strata-mouse--restore-drag-vars (st)
   "Restore global mouse tracking and scrolling variables captured in ST."
   (when (and st (not (plist-get st :restored-p)))
+    (strata-mouse--hide-drag-feedback st)
     (plist-put st :restored-p t)
+    (when (plist-member st :saved-fine-tracking)
+      (setq mouse-fine-grained-tracking (plist-get st :saved-fine-tracking)))
     (setq track-mouse (plist-get st :saved-track)
           auto-hscroll-mode (plist-get st :saved-hscroll)
           scroll-margin (plist-get st :saved-margin))))
@@ -2266,7 +2367,14 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
                      (plist-get st :rect-p) last-keys-cell last-hover-cell nil))
                   (strata-mouse--update-scroll-timer st))
                  (t
-                  (strata-mouse--stop-timer-field st :scroll-timer)))))))))))
+                  (strata-mouse--stop-timer-field st :scroll-timer)))
+                (if (or carry-marked-p drop-dir)
+                    (strata-mouse--show-drag-feedback
+                     st ev (if carry-marked-p pre-marked
+                             (or (strata-marked-files-only)
+                                 (when exact-start (list exact-start))))
+                     drop-dir)
+                  (strata-mouse--hide-drag-feedback st))))))))))
 
 (defun strata-mouse-down-entry (event)
   "Start native live drag-selection tracking on button-1 press in a pane."
@@ -2303,8 +2411,7 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
               (and started-on-marked-p
                    (not ctrl-p)
                    (or shift-p
-                       (and (> (length pre-keys) 1)
-                            (strata-mouse--has-drop-target-p src-win)))))
+                       (strata-mouse--has-drop-target-p src-win))))
              (rect-p (derived-mode-p 'strata-compact-mode 'strata-icons-mode))
              (anchor (if shift-p
                          (or strata--selection-anchor-entry near-start)
@@ -2333,10 +2440,17 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
                           :saved-hscroll auto-hscroll-mode
                           :saved-margin scroll-margin
                           :saved-track track-mouse
+                          :saved-fine-tracking mouse-fine-grained-tracking
                           :scroll-timer nil
                           :watchdog-timer nil
                           :cleanup-timer nil
                           :restored-p nil
+                          :feedback-visible-p nil
+                          :feedback-suspended-p nil
+                          :feedback-disabled-p nil
+                          :feedback-key nil
+                          :feedback-text nil
+                          :feedback-last-time nil
                           :exit-fn nil)))
             ;; Set `track-mouse' directly instead of using `(track-mouse ...)' so
             ;; emacs bug#51794 does not cancel motion over `header-line-format'.
@@ -2354,8 +2468,12 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
 
 (defun strata-mouse--run-click-action (event)
   "Execute single click for EVENT: open clicked dir, preview file, or clear."
-  (strata-mouse--sync-event event)
-  (if-let ((p (strata-mouse--entry-at-point)))
+  ;; Resolve the actual hit before mouse-set-point can clamp empty space
+  ;; below the listing onto its final row.  Nearest-entry lookup is for
+  ;; sweeping a drag range, never for an ordinary click.
+  (let ((p (strata-mouse--entry-at-posn (event-end event))))
+    (strata-mouse--sync-event event)
+    (if p
       (progn
         (strata-clear-all-marks)
         (strata-view--reset-selection-range p)
@@ -2364,8 +2482,11 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
           (when (derived-mode-p 'strata-icons-mode)
             (strata-goto-file p))
           (strata-view--sync-preview-on-move)))
-    (when (and (strata-marked-files-only) (fboundp 'strata-clear-all-marks))
-      (strata-clear-all-marks))))
+      (strata-clear-all-marks)
+      (goto-char (point-max))
+      (setq strata--empty-click-p t)
+      (strata-view--reset-selection-range)
+      (strata-view--update-selection-highlight))))
 
 (defun strata-mouse--run-toggle-action (event)
   "Execute control-click for EVENT: toggle mark on clicked entry."
