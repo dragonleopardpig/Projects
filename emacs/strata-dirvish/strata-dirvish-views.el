@@ -1866,8 +1866,10 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
         (force-mode-line-update t)))
      ((derived-mode-p 'strata-compact-mode 'strata-icons-mode)
       ;; Store reversed so `strata-marked-files-only' yields directory order.
+      ;; Filtering can share ORDER's tail; leave the active drag's cached
+      ;; directory order intact when a selection includes the final files.
       (setq strata-marked-entries
-            (nreverse (cl-remove-if-not (lambda (f) (gethash (strata--path-key f) want)) order)))
+            (reverse (cl-remove-if-not (lambda (f) (gethash (strata--path-key f) want)) order)))
       (if final-p
           (strata-view--refresh-after-mark)
         (strata-view--update-selection-highlight)

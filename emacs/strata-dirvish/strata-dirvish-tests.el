@@ -2266,6 +2266,39 @@
       (should-not strata-mouse--drag-state)
       (should-not (strata-marked-files-only)))))
 
+(ert-deftest strata-test-selection-grid-marks-preserve-cached-order ()
+  "Mark updates must not mutate the directory order cached by an active drag."
+  (dolist (view '(compact icons))
+    (strata-test--with-selection-view view
+      (let* ((order (strata-view--entry-order))
+             (original (copy-sequence order)))
+        ;; Filtering may share its unchanged tail with ORDER.  Reversing
+        ;; that result destructively used to truncate or reorder ORDER.
+        (dolist (selected (list (nthcdr 3 original) original))
+          (strata-mouse--apply-selection-keys order selected nil)
+          (should (equal order original))
+          (should (equal (strata-test--selection-names)
+                         (mapcar #'file-name-nondirectory selected))))))))
+
+(ert-deftest strata-test-selection-compact-drag-through-last-file ()
+  "A live Compact file drag keeps its tail range after button release."
+  (strata-test--with-selection-view 'compact
+    (let* ((win (selected-window))
+           (start (save-excursion (strata-goto-file (nth 3 strata-test--files)) (point)))
+           (middle (save-excursion (strata-goto-file (nth 4 strata-test--files)) (point)))
+           (end (save-excursion (strata-goto-file (nth 5 strata-test--files)) (point))))
+      (dolist (positions (list (list start middle end) (list end middle start)))
+        (strata-clear-all-marks)
+        (let ((first (nth 0 positions)) (mid (nth 1 positions)) (last (nth 2 positions)))
+          (strata-test--play-events
+           `(down-mouse-1 (,win ,first (10 . 10) 0) 1)
+           `(mouse-movement (,win ,mid (10 . 30) 0))
+           `(mouse-movement (,win ,last (10 . 50) 0))
+           `(drag-mouse-1 (,win ,first (10 . 10) 0) (,win ,last (10 . 50) 0))))
+        (should (equal (strata-test--selection-names) '("d.txt" "e.txt" "f.txt")))
+        (should-not strata-mouse--drag-state)
+        (should-not track-mouse)))))
+
 (ert-deftest strata-test-selection-drag-error-and-watchdog-release-tracking ()
   "Errors and abandoned button releases cancel timers and global tracking."
   (strata-test--with-selection-view 'list
