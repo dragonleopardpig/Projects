@@ -777,6 +777,50 @@ in
   networking.networkmanager.enable = true;
   networking.enableIPv6 = false;
 
+  # Recover Intel CNVi/PCI Wi-Fi (0000:80:14.3 [8086:7f70]) if iwl_pci_probe
+  # fails its early MAC handshake across a warm reboot or BIOS setup exit.
+  systemd.services.iwlwifi-pci-recover = {
+    description = "Recover unbound Intel CNVi/PCI Wi-Fi controller via PCI FLR";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "systemd-udev-trigger.service" "systemd-modules-load.service" ];
+    before = [ "NetworkManager.service" "network-pre.target" ];
+    wants = [ "network-pre.target" ];
+    restartIfChanged = false;
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "iwlwifi-pci-recover" ''
+        for dev in /sys/bus/pci/devices/*; do
+          [ -e "$dev/class" ] && [ -e "$dev/vendor" ] || continue
+          if [ "$(cat "$dev/class" 2>/dev/null)" = "0x028000" ] && \
+             [ "$(cat "$dev/vendor" 2>/dev/null)" = "0x8086" ]; then
+            [ -e "$dev/driver" ] && continue
+            bdf=$(basename "$dev")
+            for _ in 1 2 3 4 5 6; do
+              [ -e "$dev/driver" ] && break
+              sleep 0.5
+            done
+            [ -e "$dev/driver" ] && continue
+            echo "iwlwifi-pci-recover: $bdf has no driver bound; resetting PCI function and re-probing iwlwifi"
+            ${pkgs.kmod}/bin/modprobe iwlwifi || true
+            if [ -w "$dev/reset" ]; then
+              echo 1 > "$dev/reset" || true
+              sleep 1
+            fi
+            echo "$bdf" > /sys/bus/pci/drivers_probe 2>/dev/null || \
+              echo "$bdf" > /sys/bus/pci/drivers/iwlwifi/bind 2>/dev/null || true
+            if [ ! -e "$dev/driver" ] && [ -w "$dev/remove" ] && [ -w /sys/bus/pci/rescan ]; then
+              echo "iwlwifi-pci-recover: $bdf still unbound after FLR; rescanning PCI bus"
+              echo 1 > "$dev/remove" || true
+              sleep 1
+              echo 1 > /sys/bus/pci/rescan || true
+            fi
+          fi
+        done
+      '';
+    };
+  };
+
   # Set your time zone.
   time.timeZone = "Asia/Singapore";
 
