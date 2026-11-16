@@ -740,9 +740,10 @@ in
   xdg.configFile."distrobox/distrobox.conf".text = ''
     container_additional_volumes="/nix/store:/nix/store:ro /etc/profiles/per-user:/etc/profiles/per-user:ro /etc/static/profiles/per-user:/etc/static/profiles/per-user:ro"
   '';
+  xdg.configFile."Kvantum/KvOloNeon".source = ./assets/Kvantum/KvOloNeon;
   xdg.configFile."Kvantum/kvantum.kvconfig".text = ''
     [General]
-    theme=KvArcDark
+    theme=KvOloNeon
   '';
   
   # Pyprland configuration
