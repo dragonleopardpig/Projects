@@ -14,6 +14,10 @@
         "English (US)" = "US";
         "Rime" = "中文";
         "rime" = "中文";
+        "Rime (雾凇拼音)" = "中文";
+        "Rime - 雾凇拼音" = "中文";
+        "雾凇拼音" = "中文";
+        "Rime (Latin Mode)" = "EN";
         "ㄓ" = "中文";
         "Pinyin" = "中文";
         "pinyin" = "中文";
@@ -141,6 +145,7 @@
     notifications.color = barAccents.electricBlue;
     keyboard_layout = {
       color = barAccents.desktop;
+      glyph = "keyboard";
       display = "short";
       show_glyph = true;
       show_label = true;

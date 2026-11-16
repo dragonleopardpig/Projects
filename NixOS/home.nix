@@ -984,10 +984,6 @@ in
     Name=rime
     Layout=
 
-    [Groups/0/Items/2]
-    Name=pinyin
-    Layout=
-
     [GroupOrder]
     0=Default
     EOF
