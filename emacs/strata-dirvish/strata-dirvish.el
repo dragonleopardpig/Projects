@@ -96,9 +96,21 @@ Always falls back to `~/' when the target or saved directory does not exist."
 (defun strata-dirvish-dashboard-install ()
   "Blend crisp Strata navigator buttons into Emacs Dashboard."
   (when (boundp 'dashboard-navigator-buttons)
+    ;; Recent Dashboard versions require the navigator in the render list;
+    ;; setting its buttons alone leaves every shortcut invisible.
+    (if (boundp 'dashboard-startupify-list)
+        (unless (memq #'dashboard-insert-navigator dashboard-startupify-list)
+          (let ((index (or (cl-position #'dashboard-insert-items dashboard-startupify-list)
+                           (length dashboard-startupify-list))))
+            (setq dashboard-startupify-list
+                  (append (cl-subseq dashboard-startupify-list 0 index)
+                          (list #'dashboard-insert-navigator)
+                          (nthcdr index dashboard-startupify-list)))))
+      (when (boundp 'dashboard-set-navigator)
+        (setq dashboard-set-navigator t)))
     (setq dashboard-navigator-buttons
           `(((,(strata-icon-glyph 'folder 'strata-header-accent)
-              "Files"
+              "Dirvish"
               "Open Strata-Dirvish File Browser (C-c d)"
               (lambda (&rest _) (strata-dirvish-launch))
               strata-header-accent "" "")

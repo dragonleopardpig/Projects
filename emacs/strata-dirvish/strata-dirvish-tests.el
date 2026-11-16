@@ -1095,6 +1095,47 @@
                 (should (cl-some (lambda (s) (string-search "file-name-wrap" s)) spans))))))
       (delete-directory tmp t))))
 
+(ert-deftest strata-test-selection-highlight-unrecognized-dired-rows ()
+  "An unrecognized marked listing row cannot restart the highlighting scan."
+  (with-temp-buffer
+    (setq major-mode 'dired-mode)
+    (insert "*---------- malformed listing row\n*---------- another malformed row\n")
+    (let ((dired-re-mark "^\\*")
+          (directory-listing-before-filename-regexp "\\`UNRECOGNIZED\\'")
+          (original (symbol-function 'dired-move-to-filename))
+          (calls 0))
+      ;; Bound the old failure without hanging the test runner.  The real
+      ;; filename parser returns to BOL when it cannot recognize metadata.
+      (should-not
+       (catch 'strata-repeated-row
+         (cl-letf (((symbol-function 'dired-move-to-filename)
+                    (lambda (&rest args)
+                      (when (> (cl-incf calls) 2) (throw 'strata-repeated-row t))
+                      (apply original args))))
+           (strata--highlight-marked-dired nil nil))))
+      (should (= calls 2)))))
+
+(ert-deftest strata-test-dashboard-visible-dirvish-shortcut ()
+  "Dashboard renders one navigator and its Dirvish button launches the browser."
+  (require 'dashboard)
+  (let ((dashboard-navigator-buttons nil)
+        (dashboard-startupify-list '(dashboard-insert-banner-title dashboard-insert-items))
+        (launched nil))
+    (strata-dirvish-dashboard-install)
+    (strata-dirvish-dashboard-install)
+    (should (= (cl-count #'dashboard-insert-navigator dashboard-startupify-list) 1))
+    (should (< (cl-position #'dashboard-insert-navigator dashboard-startupify-list)
+               (cl-position #'dashboard-insert-items dashboard-startupify-list)))
+    (with-temp-buffer
+      (dashboard-insert-navigator)
+      (widget-setup)
+      (goto-char (point-min))
+      (should (search-forward "Dirvish" nil t))
+      (cl-letf (((symbol-function 'strata-dirvish-launch)
+                 (lambda (&rest _) (setq launched t))))
+        (widget-button-press (1- (point))))
+      (should launched))))
+
 (ert-deftest strata-test-terminal-launch-disables-fastfetch ()
   "Terminals launched from Dirvish pass FASTFETCH_ENABLED=0."
   (let* ((tmp (make-temp-file "strata-term-" t))

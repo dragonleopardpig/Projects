@@ -167,11 +167,14 @@
     (save-excursion
       (goto-char (point-min))
       (while (re-search-forward dired-re-mark nil t)
-        (ignore-errors
-          (when-let* ((beg (dired-move-to-filename))
-                      (end (dired-move-to-end-of-filename t)))
-            (unless (and cur-beg cur-end (= beg cur-beg) (= end cur-end))
-              (strata--add-selection-overlay beg end))))))))
+        ;; Filename parsing can return to the beginning of an unrecognized
+        ;; row.  Keep the scan after its mark so that row cannot repeat.
+        (save-excursion
+          (ignore-errors
+            (when-let* ((beg (dired-move-to-filename))
+                        (end (dired-move-to-end-of-filename t)))
+              (unless (and cur-beg cur-end (= beg cur-beg) (= end cur-end))
+                (strata--add-selection-overlay beg end)))))))))
 
 (defun strata--highlight-marked-spans (prop marked-keys &optional cur-span)
   "Overlay spans carrying PROP whose `strata-entry' is in MARKED-KEYS."
