@@ -99,9 +99,14 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
   (concat (strata-icon-glyph kind face)
           (propertize " " 'display '(space :width 1.5))))
 
+(defun strata-dirvish-dashboard--start-line (&rest _)
+  "Keep navigator shortcuts on their own line after Dashboard's init info."
+  (unless (bolp) (insert "\n")))
+
 (defun strata-dirvish-dashboard-install ()
   "Blend crisp Strata navigator buttons into Emacs Dashboard."
   (when (boundp 'dashboard-navigator-buttons)
+    (advice-add 'dashboard-insert-navigator :before #'strata-dirvish-dashboard--start-line)
     ;; Recent Dashboard versions require the navigator in the render list;
     ;; setting its buttons alone leaves every shortcut invisible.
     (if (boundp 'dashboard-startupify-list)

@@ -1167,6 +1167,9 @@
     (should (< (cl-position #'dashboard-insert-navigator dashboard-startupify-list)
                (cl-position #'dashboard-insert-items dashboard-startupify-list)))
     (with-temp-buffer
+      (let ((dashboard-init-info "250 packages loaded in 1.2 seconds"))
+        (dashboard-insert-init-info))
+      (should-not (bolp))
       (dashboard-insert-navigator)
       (widget-setup)
       ;; Fixed display widths survive Dashboard's face rewriting and keep
@@ -1179,6 +1182,7 @@
         (should (= padding 6)))
       (goto-char (point-min))
       (should (search-forward "Dirvish" nil t))
+      (should (= (line-number-at-pos) 2))
       (cl-letf (((symbol-function 'strata-dirvish-launch)
                  (lambda (&rest _) (setq launched t))))
         (widget-button-press (1- (point))))
