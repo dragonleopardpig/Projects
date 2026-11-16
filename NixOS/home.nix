@@ -2269,6 +2269,14 @@ in
       #!/usr/bin/env bash
       set -eu
 
+      if [ "''${XDG_CURRENT_DESKTOP:-}" = "umbriel" ] || pgrep -x umbriel >/dev/null; then
+        if command -v noctalia-display-cycle >/dev/null 2>&1; then
+          exec noctalia-display-cycle "$@"
+        elif [ -f /home/thinky/Projects/NixOS/noctalia/suite/display-cycle.py ]; then
+          exec python3 /home/thinky/Projects/NixOS/noctalia/suite/display-cycle.py "$@"
+        fi
+      fi
+
       # F7 is easy to press faster than a monitor change settles, and
       # overlapping runs raced each other into a half-applied layout.
       exec 9>"''${XDG_RUNTIME_DIR:-/tmp}/display-cycle.lock"

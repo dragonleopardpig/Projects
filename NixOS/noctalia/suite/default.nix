@@ -55,10 +55,18 @@ let
     bash ${./gpu-selection-test.sh} ${./gpu-selection.sh}
     touch $out
   '';
+  displayCycleCheck = pkgs.runCommand "noctalia-display-cycle-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    python3 ${./test-display-cycle.py} ${./display-cycle.py}
+    touch $out
+  '';
   displayCycle = pkgs.writeShellApplication {
     name = "noctalia-display-cycle";
-    runtimeInputs = [ umbriel shell pkgs.jq pkgs.libnotify pkgs.ddcutil pkgs.gawk ];
-    text = builtins.readFile ./display-cycle.sh;
+    runtimeInputs = [ umbriel pkgs.python3 pkgs.libnotify pkgs.ddcutil pkgs.coreutils ];
+    text = ''
+      exec python3 ${./display-cycle.py} "$@"
+    '';
   };
   stopRecording = pkgs.writeShellApplication {
     name = "noctalia-stop-recording";
@@ -110,7 +118,7 @@ let
   '';
   suiteTools = pkgs.symlinkJoin {
     name = "noctalia-suite-tools";
-    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify ];
+    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle ];
   };
   shellConfig = toml.generate "noctalia-suite.toml" (import ./settings.nix {
     themeName = theme.name;
@@ -161,6 +169,7 @@ let
   greeterSettings = toml.generate "greeter-suite.toml" (import ./greeter-settings.nix { inherit theme; });
   validatedSuite = pkgs.runCommand "noctalia-suite-validated" { } ''
     test -f ${gpuSelectionCheck}
+    test -f ${displayCycleCheck}
     export NOCTALIA_STATE_HOME="$TMPDIR/noctalia-suite-validation"
     export NOCTALIA_CONFIG_HOME=${configHome}
     ${lib.getExe shell} config validate ${shellConfig}
@@ -226,7 +235,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck;
+  inherit agentStatus agentHooks agentStatusCheck displayCycle displayCycleCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;
