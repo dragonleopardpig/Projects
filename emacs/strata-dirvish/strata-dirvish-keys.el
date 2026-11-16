@@ -186,66 +186,40 @@
 (defun strata-select-all ()
   "Select/mark all entries in active browser buffer (`C-a')."
   (interactive)
-  (cond
-   ((derived-mode-p 'dired-mode)
-    (save-excursion
-      (goto-char (point-min))
-      (while (not (eobp))
-        (when (dired-get-filename nil t)
-          (ignore-errors (dired-mark 1)))
-        (forward-line 1)))
-    (strata-view--refresh-after-mark))
-   ((or (derived-mode-p 'strata-compact-mode)
-        (derived-mode-p 'strata-icons-mode))
-    (setq strata-marked-entries
-          (mapcar (lambda (e) (plist-get e :path))
-                  (strata-list-directory-entries default-directory (strata-prefs))))
-    (strata-view--refresh-after-mark))))
+  (strata-view--reset-selection-range (strata-current-file))
+  (let ((order (strata-view--entry-order)))
+    (strata-mouse--apply-selection-keys order (mapcar #'strata--path-key order) t)))
 
 (defun strata-invert-selection ()
   "Invert marked selection (`C-r' in 10xer mode)."
   (interactive)
-  (cond
-   ((derived-mode-p 'dired-mode)
-    (dired-toggle-marks)
-    (strata-view--refresh-after-mark))
-   ((or (derived-mode-p 'strata-compact-mode)
-        (derived-mode-p 'strata-icons-mode))
-    (let* ((all (mapcar (lambda (e) (plist-get e :path))
-                        (strata-list-directory-entries default-directory (strata-prefs))))
-           (next (cl-remove-if (lambda (f) (member f strata-marked-entries)) all)))
-      (setq strata-marked-entries next)
-      (strata-view--refresh-after-mark)))))
+  (strata-view--reset-selection-range (strata-current-file))
+  (let* ((order (strata-view--entry-order))
+         (marked (mapcar #'strata--path-key (strata-marked-files-only)))
+         (keys (cl-remove-if (lambda (key) (member key marked))
+                             (mapcar #'strata--path-key order))))
+    (strata-mouse--apply-selection-keys order keys t)))
 
 (defun strata-visual-toggle ()
   "Toggle visual selection range in 10xer mode (`v')."
   (interactive)
-  (if (derived-mode-p 'dired-mode)
-      (let ((cur (line-number-at-pos)))
-        (if strata-visual-anchor
-            (let ((beg (min strata-visual-anchor cur))
-                  (end (max strata-visual-anchor cur)))
-              (save-excursion
-                (goto-char (point-min))
-                (forward-line (1- beg))
-                (dotimes (_ (1+ (- end beg)))
-                  (ignore-errors (dired-mark 1))
-                  (forward-line 1)))
-              (setq strata-visual-anchor nil)
-              (strata-view--refresh-after-mark)
-              (message "Marked visual range (%d..%d)" beg end))
-          (setq strata-visual-anchor cur)
-          (ignore-errors (dired-mark 1))
-          (strata-view--refresh-after-mark)
-          (message "Visual anchor set at line %d — move & press v again to mark range" cur)))
-    (strata-view-toggle-mark)))
+  (when-let ((cur (strata-current-file)))
+    (if strata-visual-anchor
+        (progn
+          (strata-view--reset-selection-range strata-visual-anchor)
+          (strata-view--mark-range strata-visual-anchor cur t)
+          (setq strata-visual-anchor nil)
+          (message "Visual range selected"))
+      (setq strata-visual-anchor cur)
+      (strata-view--reset-selection-range cur)
+      (strata-view--set-entry-mark cur t)
+      (message "Visual anchor set — move and press v to select the range"))))
 
 (defun strata-clear-all-marks ()
   "Unmark all files (`V')."
   (interactive)
   (setq strata-visual-anchor nil)
-  (when (boundp 'strata--selection-anchor-entry)
-    (setq-local strata--selection-anchor-entry nil))
+  (strata-view--reset-selection-range)
   (cond
    ((derived-mode-p 'dired-mode)
     (dired-unmark-all-marks)
@@ -253,6 +227,15 @@
    ((or (derived-mode-p 'strata-compact-mode) (derived-mode-p 'strata-icons-mode))
     (setq strata-marked-entries nil)
     (strata-view--refresh-after-mark))))
+
+(defun strata-escape ()
+  "Clear explicit selection and any active folder filter."
+  (interactive)
+  (strata-clear-all-marks)
+  ;; Dirvish narrowing stores its filter in Dirvish properties instead of
+  ;; `strata-local-filter'; retain Escape's directory refresh there.
+  (when (or strata-local-filter (derived-mode-p 'dired-mode))
+    (strata-clear-filter)))
 
 ;;;; Dynamic Transient Context Menu & Quick Hub (`Menu` / `S-F10` / `<mouse-3>`)
 
@@ -262,6 +245,11 @@
   (if (bound-and-true-p strata-mouse--suppress-mouse-3-once)
       (setq strata-mouse--suppress-mouse-3-once nil)
     (strata-mouse--sync-event event)
+    ;; A menu on an unmarked item must operate on that item, not an old batch.
+    (when-let ((file (strata-current-file)))
+      (unless (member (strata--path-key file)
+                      (mapcar #'strata--path-key (strata-marked-files-only)))
+        (strata-clear-all-marks)))
     (strata-view--update-selection-highlight)
     (call-interactively #'strata-context-menu)))
 
@@ -473,44 +461,69 @@
         (insert "\n")
         (dolist (sec
                  `(("NAVIGATION"
-                    ("h / l / ← / →" "Parent folder / Open Folder, Expand Tree, or Enter Read-Only Preview")
-                    ("j / k / ↑ / ↓" "Move down / up")
-                    ("H / L / M-← / M-→" "Pane History Back / Forward")
+                    (,(if tenx "h / l / ← / →" "← / →") "Parent folder / Open Folder, Expand Tree, or Enter Read-Only Preview")
+                    (,(if tenx "j / k / ↑ / ↓" "↑ / ↓") "Move down / up; keep explicit marks")
+                    (,(if tenx "H / L / M-← / M-→" "M-← / M-→") "Pane History Back / Forward")
                     ("M-↑ / M-↓" "Parent folder / Make First Column")
                     ("RET / Double-Click" "Open Folder / Direct-Edit File in Preview Pane")
                     ("C-← / C-c q / C-c k" "Leave Preview or Edit (Save Prompt) / Exit Left / Abort Edits")
-                    ("SPC / M-i / i" "Preview File (Keep Focus) / Toggle Peek Drawer")
+                    (,(if tenx "SPC / i / M-i" "SPC / M-i") "Preview File (Keep Focus) / Toggle Peek Drawer")
                     ("C-RET / S-RET" "Open in New Tab / New Frame")
                     ("C-l / g SPC" "Edit Location (~/, computer:///, trash:///, recent:///, sftp://, admin:///)")
-                    ("z / Z / C-S-k" "Jump to Visited Folder / Recent File")
-                    ("m <a-z> / ' <a-z>" "Set / Jump Persistent Letter Bookmark"))
+                    (,(if tenx "z / Z / C-S-k" "C-S-k") "Jump to Visited Folder (10xer Z: Recent File)"))
+                   ("SELECTION (DIRECTORY VIEWS)"
+                    ("Click file" "Select one file and preview; replaces old marks (folder click opens)")
+                    ("C-SPC / C-Click" "Toggle current / clicked item; repeat to deselect")
+                    (,(if tenx "u / U / V" "m / u / U")
+                     ,(if tenx "Unmark current / Clear all marks (U or V)" "Toggle current / Unmark current / Clear all marks"))
+                    ("C-a / C-S-a" "Select all visible entries / Clear all marks")
+                    ("ESC" "Clear all marks and the active folder filter")
+                    ("S-Arrows / S-Click" "Select an inclusive range; reverse direction to shrink")
+                    ("First S-Arrow" "Usually selects two items: the starting item and the destination")
+                    ("C-S-Arrows / C-S-Click" "Add a range while preserving other marked items")
+                    ("S-Home / S-End" "Range to first / last entry; add Ctrl to preserve other marks")
+                    (,(if tenx "C-S-i / C-r" "C-S-i") "Invert selection")
+                    ("S-F10 then V" "Clear Selection from the context menu")
+                    ("Current file" "Used by copy/cut and file actions when no items are marked")
+                    ("10xer: v ... v" "Set anchor, move, press v again to mark the inclusive range"))
+                   ("MOUSE & DRAG SELECTION"
+                    ("Drag within pane" "Replace marks with a live range; reverse drag to shrink")
+                    ("Icons / Compact drag" "Select a rectangle across rows and columns")
+                    ("C-Drag / S-Drag" "Add a range to existing marks within the same pane")
+                    ("Drag to other pane" "Transfer the marked group; choose Copy / Move / Cancel")
+                    ("C-Drag / S-Drag across" "Copy / Move into another pane (Ctrl wins with both modifiers)")
+                    ("ESC / C-g / Right-Click" "During drag: cancel and restore the previous selection")
+                    ("Right-Click item" "Keep a marked batch; an unmarked item becomes the menu target")
+                    ("Double-Click / Middle" "Open folder or edit file"))
                    ("VIEWS, SORT & ZOOM"
                     ("C-1 / C-2 / C-3 / C-4" "Columns / Icons Grid / List (Tree) / Compact View")
                     ("TAB" "Expand / Collapse folder subtree (List/Tree view)")
-                    ("C-h / C-. / ." "Toggle Hidden Dot-files")
-                    ("V / W" "Toggle Rendered Document Mode / Preview Line Wrap")
+                    (,(if tenx "C-. / ." "C-.") "Toggle Hidden Dot-files")
+                    (,(if tenx "M-v / W / M-w" "M-v / M-w") "Toggle Rendered Document Mode / Preview Line Wrap")
                     ("C-+ / C-- / C-0" "Independent Preview Zoom (Text / Image / PDF)")
                     ("C-M-+ / C-M-- / C-M-0" "Icons Grid Thumbnail Size")
-                    ("J / K" "Scroll Preview Window Down / Up"))
+                    ("10xer: J / K" "Scroll Preview Window Down / Up"))
                    ("PANES, TERMINAL & TABS"
                     ("F3 / F6" "Toggle Extra Split Pane / Switch Active Pane")
                     ("C-S-c / C-S-x" "Copy / Move selection to Other Pane (or Drag across panes)")
-                    ("C-Click / S-Click / S-↑↓" "Multi-Select Toggle / Range / Drag-Select Multiple Files")
                     ("C-` / F9 / C-M-t" "Toggle Pane Embedded Terminal / External Terminal")
-                    ("C-b / C-n / C-S-b" "Toggle / Focus Left Sidebar (c inside Sidebar: Rail mode)")
+                    (,(if tenx "C-n / C-S-b" "C-b / C-S-b") "Toggle / Focus Left Sidebar (c inside Sidebar: Rail mode)")
                     ("C-t / C-w / C-S-t" "New Tab / Close Tab / Reopen Closed Tab")
                     ("C-TAB / C-S-TAB" "Next / Previous Tab"))
                    ("FILES, SEARCH & ACTIONS"
-                    ("C-k / f / C-f / s" "Global Recursive Search / Filter Folder / Include Subfolders")
-                    ("/ / ? / n / N" "Incremental Find / Backward / Repeat")
+                    (,(if tenx "C-k / f / s" "C-k / C-f") "Global Recursive Search / Filter Folder (10xer s: Include Subfolders)")
+                    ("10xer: / / M-? / n / N" "Incremental Find / Backward Find / Repeat Forward / Backward")
                     ("y / x / p / P" "Copy / Cut / Paste Keep Both / Paste Replace (10xer; Default: C-c c/x/v)")
                     ("a / C-S-n / C-M-n" "Create Entry / New Folder / New Folder with Selection")
                     ("F2 / r / DEL / S-DEL" "Rename (supports sub/path) / Trash / Permanent Delete")
-                    ("C-z / C-S-z / C-y" "Undo / Redo File Operation")
-                    ("M-RET / P / O" "Properties / Customize / Open With")
+                    ("C-z / C-S-z" "Undo / Redo File Operation")
+                    ("M-RET / 10xer O" "Properties / Open With")
                     ("S-F10 / Menu" "Dynamic Context Actions Menu")
-                    ("C-, / C-S-m / C-c ?" "Settings & Diagnostics / Toggle 10xer Mode / Help (? / ~)"))
+                    ("C-, / C-S-m" "Settings & Diagnostics / Toggle 10xer Mode")
+                    ("? / C-c ? / 10xer ~" "Open this Shortcut Reference in either mode"))
                    ("10XER CHORDS & MEDIA"
+                    ("m <a-z> / ' <a-z>" "10xer: Set / Jump Persistent Letter Bookmark")
+                    ("C-u / C-d / C-b / C-f" "10xer: Half Page Up / Down / Page Up / Down")
                     ("g <key>" "Go: h Home, e Computer, t Trash, n Network, r Recent, 1-9 Pins, +/- Pin")
                     (", <key>" "Sort: a Name, m Mod, s Size, e Type, x Ext, b Created, f Folders first, g Group")
                     ("; <key>" "Actions: t Term, c Compress, e/E Extract, 1-9 Action, . Folder Action")
@@ -523,7 +536,10 @@
                             (cadr row))))
           (insert "\n"))
         (local-set-key (kbd "f") (lambda () (interactive) (call-interactively #'occur)))
-        (local-set-key (kbd "C-S-m") #'strata-toggle-tenxer-mode)
+        (local-set-key (kbd "C-S-m")
+                       (lambda () (interactive)
+                         (strata-toggle-tenxer-mode)
+                         (strata-open-shortcut-reference)))
         (goto-char (point-min))))
     (pop-to-buffer buf)))
 
@@ -578,6 +594,12 @@
     (define-key map (kbd "C-w") #'strata-tab-close)
     (define-key map (kbd "C-S-t") #'strata-tab-reopen-closed)
     (define-key map (kbd "C-a") #'strata-select-all)
+    (define-key map (kbd "C-S-a") #'strata-clear-all-marks)
+    (define-key map (kbd "C-S-i") #'strata-invert-selection)
+    (define-key map (kbd "C-SPC") #'strata-view-toggle-mark)
+    (define-key map (kbd "m") #'strata-view-toggle-mark)
+    (define-key map (kbd "u") #'strata-view-unmark)
+    (define-key map (kbd "U") #'strata-clear-all-marks)
     (define-key map (kbd "M-v") #'strata-toggle-rendered-document)
     (define-key map (kbd "M-w") #'strata-toggle-preview-wrap)
     (define-key map (kbd "C-<tab>") #'strata-tab-next)
@@ -608,6 +630,14 @@
     (define-key map (kbd "S-<up>") #'strata-shift-select-prev)
     (define-key map (kbd "S-<right>") #'strata-shift-select-right)
     (define-key map (kbd "S-<left>") #'strata-shift-select-left)
+    (define-key map (kbd "C-S-<down>") #'strata-shift-select-next)
+    (define-key map (kbd "C-S-<up>") #'strata-shift-select-prev)
+    (define-key map (kbd "C-S-<right>") #'strata-shift-select-right)
+    (define-key map (kbd "C-S-<left>") #'strata-shift-select-left)
+    (define-key map (kbd "S-<home>") #'strata-shift-select-first)
+    (define-key map (kbd "S-<end>") #'strata-shift-select-last)
+    (define-key map (kbd "C-S-<home>") #'strata-shift-select-first)
+    (define-key map (kbd "C-S-<end>") #'strata-shift-select-last)
     (strata-mouse-install-keymap-bindings map)
     (define-key map (kbd "C-k") #'strata-global-search)
     (define-key map (kbd "C-S-k") #'strata-jump-visited-folder)
@@ -623,7 +653,7 @@
     (define-key map (kbd "C-M-m") #'strata-media-mute-toggle)
 
     ;; Mode / Settings / Help
-    (define-key map (kbd "<escape>") #'strata-clear-filter)
+    (define-key map (kbd "<escape>") #'strata-escape)
     (define-key map (kbd "C-,") #'strata-open-settings)
     (define-key map (kbd "C-c ?") #'strata-open-shortcut-reference)
     (define-key map (kbd "?") #'strata-open-shortcut-reference)
@@ -674,7 +704,8 @@
 
     ;; Search / Jump / Bookmarks
     (define-key map (kbd "/") #'strata-find-in-folder)
-    (define-key map (kbd "?") (lambda () (interactive) (strata-find-in-folder t)))
+    (define-key map (kbd "?") #'strata-open-shortcut-reference)
+    (define-key map (kbd "M-?") (lambda () (interactive) (strata-find-in-folder t)))
     (define-key map (kbd "n") #'strata-find-repeat)
     (define-key map (kbd "N") (lambda () (interactive) (strata-find-repeat t)))
     (define-key map (kbd "f") #'strata-filter-pane)
@@ -703,14 +734,28 @@
 (define-minor-mode strata-dirvish-tenxer-mode
   "10xer modal overlay active above `strata-dirvish-mode' when `tenxer-mode' is t."
   :lighter " 10X"
-  :keymap strata-10xer-keymap)
+  :keymap strata-10xer-keymap
+  ;; The base minor mode can appear before this mode in Emacs's map order.
+  ;; Compose its buffer-local map explicitly so every 10xer override wins,
+  ;; including C-r/C-d/C-f, on first load and on live reload alike.
+  (setq-local minor-mode-overriding-map-alist
+              (assq-delete-all 'strata-dirvish-mode
+                               minor-mode-overriding-map-alist))
+  (when strata-dirvish-tenxer-mode
+    (push (cons 'strata-dirvish-mode
+                (make-composed-keymap strata-10xer-keymap strata-default-keymap))
+          minor-mode-overriding-map-alist)))
 
 (define-minor-mode strata-dirvish-mode
   "Buffer-local minor mode exposing all Strata features inside Dirvish & view buffers."
   :lighter " Strata"
   :keymap strata-default-keymap
-  (when strata-dirvish-mode
-    (strata-dirvish--apply-active-keymap)))
+  (if strata-dirvish-mode
+      (progn
+        (add-hook 'post-command-hook #'strata-view--selection-post-command nil t)
+        (strata-dirvish--apply-active-keymap))
+    (remove-hook 'post-command-hook #'strata-view--selection-post-command t)
+    (strata-dirvish-tenxer-mode -1)))
 
 (defun strata-dirvish--apply-active-keymap ()
   "Enable or disable `strata-dirvish-tenxer-mode' honoring terminal focus guard."
