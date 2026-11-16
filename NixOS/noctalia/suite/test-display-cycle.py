@@ -2,8 +2,10 @@
 """Unit tests for Noctalia display cycle logic."""
 
 import importlib.util
+import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 script = Path(sys.argv.pop(1)) if len(sys.argv) > 1 else Path(__file__).with_name("display-cycle.py")
@@ -118,6 +120,73 @@ class DisplayCycleTests(unittest.TestCase):
         self.assertIn("scale = 1.25", rendered)
         self.assertIn('[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]', rendered)
         self.assertIn("enabled = false", rendered)
+
+    def test_lid_closed_while_internal_enabled_forces_external_only(self):
+        self.asus_external["enabled"] = True
+        self.tianma_internal["enabled"] = True
+        action, sections, msg = cycle.calculate_next_state(
+            [self.asus_external, self.tianma_internal],
+            lid_closed=True,
+            existing_sections={},
+        )
+        self.assertEqual(action, "apply")
+        self.assertIn("Laptop lid is closed", msg)
+        self.assertTrue(sections["Tianma Microelectronics Ltd. TL160ADMP26 Unknown"].get("enabled") is False)
+        self.assertNotIn("enabled", sections["ASUSTek COMPUTER INC VP327Q W2LMMU003887 "])
+        self.assertEqual(sections["ASUSTek COMPUTER INC VP327Q W2LMMU003887 "]["position"], [0, 0])
+
+    def test_internal_on_secondary_gpu_guards_against_panel_switch(self):
+        # Already external-only -> warning without config rewrite
+        action, _, msg = cycle.calculate_next_state(
+            [self.asus_external, self.tianma_internal],
+            lid_closed=False,
+            existing_sections={},
+            internal_on_secondary_gpu=True,
+        )
+        self.assertEqual(action, "gpu_locked_warning")
+        self.assertIn("Re-login with lid open", msg)
+
+        # Internal enabled in config -> force external-only
+        self.tianma_internal["enabled"] = True
+        action, sections, msg = cycle.calculate_next_state(
+            [self.asus_external, self.tianma_internal],
+            lid_closed=False,
+            existing_sections={},
+            internal_on_secondary_gpu=True,
+        )
+        self.assertEqual(action, "apply")
+        self.assertIn("Re-login with lid open", msg)
+        self.assertTrue(sections["Tianma Microelectronics Ltd. TL160ADMP26 Unknown"].get("enabled") is False)
+
+    def test_is_internal_on_secondary_gpu_detection(self):
+        with tempfile.TemporaryDirectory() as drm_dir:
+            card1_edp = os.path.join(drm_dir, "card1-eDP-1")
+            card2_edp = os.path.join(drm_dir, "card2-eDP-1")
+            os.makedirs(card1_edp)
+            os.makedirs(card2_edp)
+
+            # BIOS dGPU mode: eDP-1 connected on card1 (primary)
+            with open(os.path.join(card1_edp, "status"), "w") as f:
+                f.write("connected\n")
+            with open(os.path.join(card2_edp, "status"), "w") as f:
+                f.write("disconnected\n")
+            self.assertFalse(
+                cycle.is_internal_on_secondary_gpu("eDP-1", drm_sysfs=drm_dir, wlr_drm_devices="/dev/dri/card1:/dev/dri/card2")
+            )
+
+            # BIOS Auto mode: eDP-1 connected on card2 (Intel)
+            with open(os.path.join(card1_edp, "status"), "w") as f:
+                f.write("disconnected\n")
+            with open(os.path.join(card2_edp, "status"), "w") as f:
+                f.write("connected\n")
+            # Lid open -> Intel is primary (card2:card1) -> False
+            self.assertFalse(
+                cycle.is_internal_on_secondary_gpu("eDP-1", drm_sysfs=drm_dir, wlr_drm_devices="/dev/dri/card2:/dev/dri/card1")
+            )
+            # Clamshell -> NVIDIA is primary (card1:card2) -> True
+            self.assertTrue(
+                cycle.is_internal_on_secondary_gpu("eDP-1", drm_sysfs=drm_dir, wlr_drm_devices="/dev/dri/card1:/dev/dri/card2")
+            )
 
 
 if __name__ == "__main__":

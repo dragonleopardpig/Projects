@@ -4,7 +4,10 @@
 configure_drm_devices() {
   local drm_sysfs="${1:-/sys/class/drm}"
   local drm_devices="${2:-/dev/dri}"
-  local card name render card_node render_node status connected boot_vga score
+  local lid_glob="${3:-/proc/acpi/button/lid/*/state}"
+  local card name render card_node render_node status conn_name
+  local any_connected usable_connected boot_vga score
+  local lid_closed=0 lid_file lid_state=''
   local best_score=-1 primary_card='' primary_render=''
   local -a cards=()
 
@@ -12,6 +15,15 @@ configure_drm_devices() {
   if [[ -n ${WLR_DRM_DEVICES:-} || -n ${WLR_RENDER_DRM_DEVICE:-} ]]; then
     return 0
   fi
+
+  for lid_file in $lid_glob; do
+    [[ -r $lid_file ]] || continue
+    lid_state=$(< "$lid_file")
+    if [[ ${lid_state,,} == *closed* ]]; then
+      lid_closed=1
+      break
+    fi
+  done
 
   for card in "$drm_sysfs"/card[0-9]*; do
     name=${card##*/}
@@ -26,18 +38,32 @@ configure_drm_devices() {
     done
     [[ -n $render_node ]] || continue
 
-    # Prefer a GPU attached to a connected display, then the firmware's boot
-    # GPU. Keep every other render-capable card available for its outputs.
-    connected=0
+    # Prefer a GPU driving a currently usable output: external ports stay
+    # usable in clamshell mode, whereas built-in panels require an open lid.
+    # Fall back to any connected output, then the firmware's boot GPU.
+    # Keep every other render-capable card available for its outputs.
+    any_connected=0
+    usable_connected=0
     for status in "$card"-*/status; do
       [[ -r $status ]] || continue
-      if [[ $(< "$status") == connected ]]; then connected=1; break; fi
+      if [[ $(< "$status") == connected ]]; then
+        any_connected=1
+        conn_name=${status%/status}
+        conn_name=${conn_name##*/}
+        if [[ $conn_name =~ -(eDP|LVDS|DSI)- ]]; then
+          if (( ! lid_closed )); then
+            usable_connected=1
+          fi
+        else
+          usable_connected=1
+        fi
+      fi
     done
     boot_vga=0
     if [[ -r $card/device/boot_vga && $(< "$card/device/boot_vga") == 1 ]]; then
       boot_vga=1
     fi
-    score=$((connected * 2 + boot_vga))
+    score=$((usable_connected * 4 + any_connected * 2 + boot_vga))
     cards+=("$card_node")
     if ((score > best_score)); then
       best_score=$score
