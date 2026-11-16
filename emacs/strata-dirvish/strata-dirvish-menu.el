@@ -14,14 +14,12 @@
 
 (defun strata-menu--writable-p (dir)
   "Check local DIR permissions, without statting remote or cloud mounts."
-  (and dir (not (strata-location-virtual-p dir))
-       (or (not (eq (strata-path-mount-kind dir) 'local))
-           (ignore-errors (file-writable-p dir)))))
+  (strata-path-writable-p dir))
 
 (defun strata-menu--refresh-context ()
   "Capture the selected window's file-manager state without changing it."
   (let* ((window (selected-window))
-         (dv (with-current-buffer (window-buffer window) (dirvish-curr))))
+         (dv (with-current-buffer (window-buffer window) (ignore-errors (dirvish-curr)))))
     (when (and dv (with-current-buffer (window-buffer window)
                     (derived-mode-p 'dirvish-misc-mode)))
       (when (window-live-p (dv-root-window dv)) (setq window (dv-root-window dv))))
@@ -58,6 +56,12 @@
                                (or (get-text-property (point) 'strata-entry-dir)
                                    (and (derived-mode-p 'dired-mode)
                                         (save-excursion (beginning-of-line) (looking-at-p dired-re-dir))))))
+             (item-dir-p (and single
+                              (if (and current (equal (directory-file-name (car items))
+                                                      (directory-file-name current)))
+                                  directory-p
+                                (and (not (strata-path-unsafe-probe-p (car items)))
+                                     (file-directory-p (car items))))))
              (preview-window (or (and dv (dv-preview-window dv)) strata-preview-standalone-window))
              (preview (and workspace (or read-preview edit-preview (window-live-p preview-window))))
              (device (and (or sidebar computer)
@@ -68,13 +72,13 @@
              (other-dir (and other (strata-pane-state-dir other)))
              (transfer (and items other-dir (strata-menu--writable-p other-dir)
                             (not (equal (directory-file-name dir) (directory-file-name other-dir)))))
-             (archive (and single (not directory-p)
-                           (string-match-p "\\.\\(?:zip\\|7z\\|tar\\|tgz\\|gz\\|bz2\\|xz\\|zst\\|rar\\)\\'"
-                                           (downcase (car items)))))
+             (archive (and single (not item-dir-p)
+                           (strata-archive-file-p (car items))))
              (media (and workspace (or (and preview (eq strata-active-preview-kind 'media))
-                                      (and single (string-match-p
-                                                   "\\.\\(?:mp[34]\\|mkv\\|webm\\|wav\\|flac\\|ogg\\|opus\\|m4a\\|mov\\|avi\\)\\'"
-                                                   (downcase (car items))))))))
+                                      (and single (not item-dir-p)
+                                           (string-match-p
+                                            "\\.\\(?:mp[34]\\|mkv\\|webm\\|wav\\|flac\\|ogg\\|opus\\|m4a\\|mov\\|avi\\)\\'"
+                                            (downcase (car items))))))))
         (setq strata-menu--context
               (list :window window :buffer (current-buffer)
                     :always t :workspace workspace :browser browser :physical physical :dir dir
@@ -125,8 +129,12 @@
 (defun strata-menu--selected-p (state)
   "Return the checked state for menu STATE."
   (pcase state
-    (`(view ,mode) (with-current-buffer (plist-get strata-menu--context :buffer)
-                    (eq (strata-view-current-mode) mode)))
+    (`(view ,mode)
+     (let ((buf (plist-get strata-menu--context :buffer)))
+       (and (buffer-live-p buf)
+            (plist-get strata-menu--context :browser)
+            (with-current-buffer buf
+              (eq (strata-view-current-mode) mode)))))
     (`(pref ,accessor) (funcall accessor (strata-prefs)))
     (`(direction ,direction) (eq (strata-prefs-sort-direction (strata-prefs)) direction))
     (`(context ,key) (plist-get strata-menu--context (intern (concat ":" (symbol-name key)))))
@@ -138,9 +146,16 @@
     (when (window-live-p window)
       (select-window window)
       (strata-panes--sync-active-pane-from-window window)))
-  ;; Native menu-bar selections can be menu events rather than mouse-1.
-  (let ((strata-ui-input-method (if (let ((use-dialog-box t)) (use-dialog-box-p)) 'mouse 'keyboard))
-        (use-dialog-box t) (use-file-dialog t))
+  ;; `use-dialog-box-p' inspects `last-nonmenu-event', which stays a key event
+  ;; across native menu-bar clicks; also treat `(menu-bar ...)` events as mouse.
+  (let* ((mouse-p
+          (and (display-graphic-p)
+               (display-popup-menus-p)
+               (or (eq (car-safe last-input-event) 'menu-bar)
+                   (eq (car-safe last-command-event) 'menu-bar)
+                   (let ((use-dialog-box t)) (use-dialog-box-p)))))
+         (strata-ui-input-method (if mouse-p 'mouse 'keyboard))
+         (use-dialog-box t) (use-file-dialog t))
     (pcase command
       ((or 'strata-letter-bookmark-set 'strata-letter-bookmark-go)
        (let* ((letters (if (eq command 'strata-letter-bookmark-go)

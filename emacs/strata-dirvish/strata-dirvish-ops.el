@@ -168,6 +168,26 @@
           (strata--merge-directory f target)
         (copy-file f target t t t t)))))
 
+(defun strata--replace-target (src target mode)
+  "Transfer SRC onto existing TARGET using MODE (`copy' or `cut') with rollback."
+  (let* ((dir (file-name-directory (directory-file-name target)))
+         (backup (make-temp-name (expand-file-name ".strata-replace-" dir))))
+    (rename-file target backup)
+    (condition-case err
+        (progn
+          (if (eq mode 'cut)
+              (rename-file src target t)
+            (if (file-directory-p src)
+                (copy-directory src target t t)
+              (copy-file src target t t t t)))
+          (if (and (file-directory-p backup) (not (file-symlink-p backup)))
+              (delete-directory backup t)
+            (delete-file backup)))
+      (error
+       (unless (or (file-exists-p target) (file-symlink-p target))
+         (ignore-errors (rename-file backup target t)))
+       (signal (car err) (cdr err))))))
+
 (defun strata--transfer-files (files dest-dir mode &optional keep-both-default replace-default)
   "Copy or move FILES into DEST-DIR handling conflicts & Undo recording.
 MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting when set."
@@ -176,13 +196,21 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
         (all-choice nil)
         (moved 0))
     (dolist (src files)
-      (when (file-exists-p src)
+      (when (or (file-exists-p src) (file-symlink-p src))
         (strata--guard-not-self-contained src dest-dir)
         (let* ((base (file-name-nondirectory (directory-file-name src)))
                (target (expand-file-name base dest-dir))
+               (norm-src (directory-file-name (expand-file-name src)))
+               (norm-tgt (directory-file-name (expand-file-name target)))
+               (same-path-p
+                (or (equal norm-src norm-tgt)
+                    (let ((ts (ignore-errors (file-truename norm-src)))
+                          (tt (ignore-errors (file-truename norm-tgt))))
+                      (and ts tt (equal (directory-file-name ts)
+                                        (directory-file-name tt))))))
                (action
                 (cond
-                 ((not (file-exists-p target)) 'write)
+                 ((not (or (file-exists-p target) (file-symlink-p target))) 'write)
                  (keep-both-default 'keep-both)
                  (replace-default 'replace)
                  (all-choice all-choice)
@@ -196,6 +224,8 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
                     (when (strata-ui-y-or-n-p "Apply choice to any remaining conflicts? ")
                       (setq all-choice pick))
                     pick)))))
+          (when (and (eq action 'replace) same-path-p)
+            (user-error "Cannot replace '%s' with itself" base))
           (unless (eq action 'skip)
             (when (eq action 'keep-both)
               (setq target (strata-unique-copy-name target)))
@@ -203,6 +233,13 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
              ((and (eq action 'merge) (file-directory-p src) (file-directory-p target))
               (strata--merge-directory src target)
               (when (eq mode 'cut) (delete-directory src t)))
+             ((and (eq action 'replace)
+                   (or (and (file-directory-p target) (not (file-symlink-p target)))
+                       (and (file-directory-p src)
+                            (or (file-exists-p target) (file-symlink-p target)))))
+              (strata--replace-target src target mode)
+              (push (list :type (if (eq mode 'cut) 'move 'copy) :from src :to target)
+                    undo-items))
              ((eq mode 'cut)
               (rename-file src target (eq action 'replace))
               (push (list :type 'move :from src :to target) undo-items))
@@ -547,7 +584,8 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
   "Compress selected files/folders into zip, tar.gz, tar.zst, 7z, or tar (`; c')."
   (interactive)
   (let* ((dir (strata--ensure-writable-target default-directory "Compress"))
-         (files (strata-selected-files))
+         (files (or (strata-selected-files)
+                    (user-error "No file or folder selected")))
          (default-name (file-name-sans-extension
                         (file-name-nondirectory (directory-file-name (car files)))))
          (name (string-trim (strata-ui-read-string "Archive name (without extension): "
@@ -709,6 +747,36 @@ wrapping folder named after the archive so parent folders stay uncluttered."
 
 ;;;; Open With (.desktop scanner + Recent Apps)
 
+(defun strata-desktop--parse-file (file)
+  "Return (LABEL . CMD) from `[Desktop Entry]' in FILE when runnable and visible."
+  (with-temp-buffer
+    (insert-file-contents file nil 0 16384)
+    (goto-char (point-min))
+    (when (re-search-forward "^\\[Desktop Entry\\][ \t]*$" nil t)
+      (let* ((start (match-end 0))
+             (end (if (re-search-forward "^\\[" nil t) (match-beginning 0) (point-max)))
+             (field (lambda (key)
+                      (goto-char start)
+                      (when (re-search-forward
+                             (format "^%s=\\(.*\\)$" (regexp-quote key)) end t)
+                        (string-trim (match-string 1)))))
+             (type (funcall field "Type"))
+             (no-display (funcall field "NoDisplay"))
+             (hidden (funcall field "Hidden"))
+             (try-exec (funcall field "TryExec"))
+             (nm (funcall field "Name"))
+             (ex (funcall field "Exec"))
+             (cmd (when (and ex (not (string-empty-p ex)))
+                    (car (ignore-errors (split-string-shell-command ex))))))
+        (when (and nm cmd
+                   (not (string-empty-p nm))
+                   (or (null type) (string= type "Application"))
+                   (not (equal no-display "true"))
+                   (not (equal hidden "true"))
+                   (or (null try-exec) (string-empty-p try-exec) (executable-find try-exec))
+                   (executable-find cmd))
+          (cons (format "%s (%s)" nm (file-name-nondirectory file)) cmd))))))
+
 (defun strata-desktop-apps ()
   "Discover desktop applications across NixOS & XDG application dirs."
   (let ((dirs '("/run/current-system/sw/share/applications"
@@ -722,17 +790,8 @@ wrapping folder named after the archive so parent folders stay uncluttered."
         (when (file-directory-p exp)
           (dolist (f (directory-files exp t "\\.desktop\\'" t))
             (when (file-readable-p f)
-              (with-temp-buffer
-                (insert-file-contents f nil 0 4096)
-                (goto-char (point-min))
-                (let ((nm (when (re-search-forward "^Name=\\(.+\\)$" nil t) (match-string 1)))
-                      (ex (when (progn (goto-char (point-min))
-                                       (re-search-forward "^Exec=\\(.+\\)$" nil t))
-                            (match-string 1))))
-                  (when (and nm ex)
-                    (push (cons (format "%s (%s)" nm (file-name-nondirectory f))
-                                (car (split-string ex " " t)))
-                          apps)))))))))
+              (when-let ((entry (strata-desktop--parse-file f)))
+                (push entry apps)))))))
     (cl-delete-duplicates (nreverse apps) :key #'car :test #'equal)))
 
 (defun strata-open-with ()
@@ -892,14 +951,15 @@ The application keeps running after Emacs exits."
                 (strata-run-job (format "%s (%s)" (plist-get act :name) (file-name-nondirectory it))
                                 (append base-cmd (list it))
                                 #'strata-refresh-active-view))
-            (let ((args (or (plist-get act :args) '("{paths}")))
-                  final-args)
-              (dolist (a args)
-                (pcase a
-                  ("{paths}" (setq final-args (append final-args targets)))
-                  ("{path}" (push (car targets) final-args))
-                  ("{parent}" (push parent final-args))
-                  (_ (push a final-args))))
+            (let* ((args (or (plist-get act :args) '("{paths}")))
+                   (final-args
+                    (cl-mapcan (lambda (a)
+                                 (pcase a
+                                   ("{paths}" (copy-sequence targets))
+                                   ("{path}" (list (car targets)))
+                                   ("{parent}" (list parent))
+                                   (_ (list a))))
+                               args)))
               (strata-run-job (plist-get act :name)
                               (append base-cmd final-args)
                               #'strata-refresh-active-view))))))))

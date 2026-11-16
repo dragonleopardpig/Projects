@@ -87,7 +87,10 @@
   "Return non-nil when the active tab has the Extra Split Pane open."
   (when-let ((tab (car-safe strata-workspace-tabs)))
     (ignore tab)
-    (strata-tab-state-split-p (strata-active-tab))))
+    (let ((active (strata-active-tab)))
+      (and (strata-tab-state-split-p active)
+           (strata-tab-state-pane2 active)
+           t))))
 
 (defun strata-active-pane ()
   "Return active `strata-pane-state' in current tab."
@@ -97,6 +100,13 @@
     (if (and (strata-tab-state-split-p tab) (= (strata-tab-state-active-pane tab) 2) p2)
         p2
       p1)))
+
+(defun strata-panes--set-active-view (buffer window)
+  "Record BUFFER and WINDOW on the active pane when workspace tabs exist."
+  (when (consp strata-workspace-tabs)
+    (let ((pane (strata-active-pane)))
+      (setf (strata-pane-state-buffer pane) buffer
+            (strata-pane-state-window pane) window))))
 
 (defun strata-other-pane ()
   "Return the inactive `strata-pane-state' when split is open, or nil."
@@ -576,7 +586,13 @@ Keeps shell process & CWD alive while hidden."
                                0)
                      :tabs (mapcar (lambda (tab)
                                      (list :dir (strata-tab-state-dir tab)
-                                           :split-p (strata-tab-state-split-p tab)))
+                                           :split-p (and (strata-tab-state-split-p tab)
+                                                         (strata-tab-state-pane2 tab)
+                                                         t)
+                                           :pane2-dir (and (strata-tab-state-split-p tab)
+                                                           (strata-tab-state-pane2 tab)
+                                                           (strata-pane-state-dir
+                                                            (strata-tab-state-pane2 tab)))))
                                    live))
                (current-buffer))
         (insert "\n")))))
@@ -598,7 +614,11 @@ Keeps shell process & CWD alive while hidden."
                     (new-idx 0)
                     (i 0))
                 (dolist (entry saved)
-                  (let ((d (or (plist-get entry :dir) "~/")))
+                  (let* ((d (or (plist-get entry :dir) "~/"))
+                         (p2d (plist-get entry :pane2-dir))
+                         (has-split (and (plist-get entry :split-p)
+                                         p2d
+                                         (strata-valid-location-p p2d))))
                     (when (strata-valid-location-p d)
                       (when (eq entry orig-active)
                         (setq new-idx i))
@@ -607,9 +627,11 @@ Keeps shell process & CWD alive while hidden."
                              :label (let ((nm (file-name-nondirectory (directory-file-name d))))
                                       (if (string-empty-p nm) "/" nm))
                              :dir d
-                             :split-p (plist-get entry :split-p)
+                             :split-p (and has-split t)
                              :active-pane 1
-                             :pane1 (make-strata-pane-state :id 1 :dir d))
+                             :pane1 (make-strata-pane-state :id 1 :dir d)
+                             :pane2 (when has-split
+                                      (make-strata-pane-state :id 2 :dir p2d)))
                             live)
                       (cl-incf i))))
                 (setq strata-workspace-tabs (nreverse live)

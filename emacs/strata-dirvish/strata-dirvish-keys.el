@@ -243,7 +243,14 @@
   "Build a mouse context menu for the current item or marked group."
   (let* ((items (strata-selected-files))
          (has-items (and items t))
-         (writable (not (strata-location-virtual-p (or (dirvish-prop :root) default-directory))))
+         (single (= (length items) 1))
+         (dir (or (dirvish-prop :root) default-directory))
+         (writable (strata-path-writable-p dir))
+         (archive (and single
+                       (let ((f (car items)))
+                         (and (not (and (not (strata-path-unsafe-probe-p f))
+                                        (file-directory-p f)))
+                              (strata-archive-file-p f)))))
          (browser (and (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode) t))
          (title (if (strata-marked-files-only)
                     (format "Strata — %d selected" (length (strata-marked-files-only)))
@@ -260,7 +267,7 @@
              ["Cut" strata-cut-selection :enable ,(and has-items writable)]
              ["Paste (Keep Both)" strata-paste-keep-both
               :enable ,(and writable (plist-get strata-clipboard :files) t)]
-             ["Rename…" strata-rename :enable ,(and has-items writable)]
+             ["Rename…" strata-rename :enable ,(and single writable)]
              ["Duplicate" strata-duplicate :enable ,(and has-items writable)]
              ["Move to Trash" strata-move-to-trash :enable ,(and has-items writable)]
              "--"
@@ -277,8 +284,8 @@
                :enable ,(and has-items writable)]
               ["Copy Path" strata-copy-path :enable ,has-items]
               ["Copy Name" strata-copy-name :enable ,has-items]
-              ["Compress Archive…" strata-archive-compress :enable ,has-items]
-              ["Extract Here" strata-archive-extract :enable ,(and has-items writable)]
+              ["Compress Archive…" strata-archive-compress :enable ,(and has-items writable)]
+              ["Extract Here" strata-archive-extract :enable ,(and archive writable)]
               ["Save Clipboard Image/Text" strata-paste-content-drop :enable ,writable]
               ["Delete Permanently…" strata-delete-permanently :enable ,(and has-items writable)])
              ["Properties…" strata-show-properties-for-path]

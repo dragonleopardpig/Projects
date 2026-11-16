@@ -32,10 +32,15 @@ Dynamically bound for an entire mouse action, including follow-up dialogs.")
 (defun strata-ui-install-mouse-routing ()
   "Keep follow-up prompts graphical for all Strata mouse file entry points."
   (dolist (command '(strata-mouse-context-menu strata-mouse-drag-drop
+                    strata-mouse-drag-copy strata-mouse-drag-move
                     strata-mouse-click-entry strata-mouse-activate-at-event
+                    strata-mouse-toggle-select strata-mouse-range-select
+                    strata-mouse-add-range-select
+                    strata-view-menu strata-sort-menu
                     strata-sidebar-mouse-activate strata-computer-mouse-open
-                    strata-trash-mouse-restore strata-recent-mouse-click
-                    strata-recent-mouse-activate))
+                    strata-trash-mouse-select strata-trash-mouse-restore
+                    strata-recent-mouse-click strata-recent-mouse-activate
+                    strata-search-mouse-click strata-search-mouse-activate))
     (advice-add command :around #'strata-ui--mouse-command)))
 
 (defun strata-ui-choice (prompt choices &optional menu-p)

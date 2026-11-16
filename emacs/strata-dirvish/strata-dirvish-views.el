@@ -36,12 +36,14 @@
 (declare-function strata-tab-state-pane2 "strata-dirvish-panes" (cl-x))
 (declare-function strata-split-active-p "strata-dirvish-panes" ())
 (declare-function strata-dirvish--flatten-layout "strata-dirvish-panes" ())
+(declare-function strata-panes--set-active-view "strata-dirvish-panes" (buffer window))
 (declare-function strata-pane-clipboard-summary "strata-dirvish-ops" ())
 (declare-function strata--transfer-files "strata-dirvish-ops" (files dest-dir mode &optional keep-both-default replace-default))
 (declare-function strata-clear-all-marks "strata-dirvish-keys" ())
 (declare-function strata-preview-at-point "strata-dirvish-previews" ())
 (declare-function strata-preview-enter-at-point "strata-dirvish-previews" ())
 (declare-function strata-preview-edit-file "strata-dirvish-previews" (file))
+(declare-function strata-preview--close-standalone "strata-dirvish-previews" ())
 (declare-function strata-open-or-edit-at-point "strata-dirvish-previews" ())
 (defvar strata-preview-standalone-window)
 (defvar strata-sidebar-window)
@@ -986,6 +988,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 
 (defvar strata-mouse--suppress-mouse-3-once nil
   "Non-nil after cancelling a drag with right button to drop trailing release.")
+
+(defvar strata-mouse--recent-dir-open nil
+  "Snapshot of last single-click directory navigation to guard double-clicks.")
 
 (defun strata-mouse-install-keymap-bindings (map)
   "Install shared Strata mouse click, drag-select, and drop bindings on MAP."
@@ -2466,22 +2471,47 @@ Use only the cached filenames; do not probe files while handling motion."
             (plist-put st :watchdog-timer
                        (run-with-idle-timer 5 nil #'strata-mouse--drag-watchdog st))))))))
 
+(defun strata-mouse--suppress-dir-double-click-p (event)
+  "Return non-nil if EVENT is the trailing double-click after entering a folder."
+  (when-let ((info strata-mouse--recent-dir-open))
+    (let* ((end (event-end event))
+           (win (or (and (consp end) (posn-window end)) (selected-window)))
+           (ts (or (and (consp end) (posn-timestamp end)) 0))
+           (wall (float-time))
+           (limit-ms (if (and (numberp double-click-time) (> double-click-time 0))
+                         double-click-time
+                       500))
+           (old-ts (plist-get info :ts))
+           (ts-ok (if (and (> ts 0) (> old-ts 0))
+                      (<= (- ts old-ts) limit-ms)
+                    (<= (- wall (plist-get info :wall))
+                        (/ (float limit-ms) 1000.0)))))
+      (and (eq win (plist-get info :window)) ts-ok))))
+
 (defun strata-mouse--run-click-action (event)
   "Execute single click for EVENT: open clicked dir, preview file, or clear."
   ;; Resolve the actual hit before mouse-set-point can clamp empty space
   ;; below the listing onto its final row.  Nearest-entry lookup is for
   ;; sweeping a drag range, never for an ordinary click.
-  (let ((p (strata-mouse--entry-at-posn (event-end event))))
+  (let* ((end (event-end event))
+         (p (strata-mouse--entry-at-posn end)))
     (strata-mouse--sync-event event)
     (if p
-      (progn
-        (strata-clear-all-marks)
-        (strata-view--reset-selection-range p)
-        (if (file-directory-p p)
-            (strata-mouse--open-path p t)
-          (when (derived-mode-p 'strata-icons-mode)
-            (strata-goto-file p))
-          (strata-view--sync-preview-on-move)))
+        (progn
+          (strata-clear-all-marks)
+          (strata-view--reset-selection-range p)
+          (if (file-directory-p p)
+              (progn
+                (setq strata-mouse--recent-dir-open
+                      (list :window (selected-window)
+                            :ts (or (and (consp end) (posn-timestamp end)) 0)
+                            :wall (float-time)))
+                (strata-mouse--open-path p t))
+            (setq strata-mouse--recent-dir-open nil)
+            (when (derived-mode-p 'strata-icons-mode)
+              (strata-goto-file p))
+            (strata-view--sync-preview-on-move)))
+      (setq strata-mouse--recent-dir-open nil)
       (strata-clear-all-marks)
       (goto-char (point-max))
       (setq strata--empty-click-p t)
@@ -2512,9 +2542,13 @@ Use only the cached filenames; do not probe files while handling motion."
 
 (defun strata-mouse--run-activate-action (event)
   "Execute activation click for EVENT: open directory or edit file."
-  (strata-mouse--sync-event event)
-  (when-let ((p (strata-mouse--entry-at-point)))
-    (strata-mouse--open-path p nil)))
+  (if (and (memq 'double (event-modifiers event))
+           (strata-mouse--suppress-dir-double-click-p event))
+      (setq strata-mouse--recent-dir-open nil)
+    (setq strata-mouse--recent-dir-open nil)
+    (strata-mouse--sync-event event)
+    (when-let ((p (strata-mouse--entry-at-point)))
+      (strata-mouse--open-path p nil))))
 
 (defun strata-mouse--finish-drag (st event &optional forced-mode)
   "Finalize drag ST on release EVENT, performing selection, drop, or click."
@@ -2795,6 +2829,8 @@ Use only the cached filenames; do not probe files while handling motion."
     (strata-prefs-save)
     (pcase mode
       ('columns
+       (when (fboundp 'strata-preview--close-standalone)
+         (strata-preview--close-standalone))
        (unless (and (derived-mode-p 'dired-mode) (dirvish-curr))
          (dirvish dir)
          (set-buffer (window-buffer (selected-window))))
@@ -2811,6 +2847,8 @@ Use only the cached filenames; do not probe files while handling motion."
        (when (derived-mode-p 'dired-mode)
          (dired-hide-details-mode 1)))
       ('list
+       (when (fboundp 'strata-preview--close-standalone)
+         (strata-preview--close-standalone))
        (unless (derived-mode-p 'dired-mode)
          (dirvish dir)
          (set-buffer (window-buffer (selected-window))))
@@ -2846,6 +2884,8 @@ Use only the cached filenames; do not probe files while handling motion."
     ;; Set this on the displayed buffer after switching.  Setting it on the
     ;; source buffer leaves stale labels when Dired is reused from another view.
     (setq-local strata-local-view-mode mode)
+    (when (fboundp 'strata-panes--set-active-view)
+      (strata-panes--set-active-view (current-buffer) (selected-window)))
     (force-mode-line-update t)
     (when cur (strata-goto-file cur))
     (strata-folder-view-remember dir p)))
@@ -3053,12 +3093,15 @@ active sort key toggles ascending/descending (the 10xer sort chord)."
           ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
     (message "Group by type: %s" (if (strata-prefs-group-by-type p) "ON" "OFF"))))
 
-(defun strata-thumbnails-scale (delta)
-  "Adjust Icons view thumbnail size by DELTA px (0 resets to 64px)."
+(defun strata-thumbnails-scale (&optional delta)
+  "Adjust Icons view thumbnail size by DELTA px (0 or nil resets to 64px)."
   (interactive "P")
   (let* ((p (strata-prefs))
+         (step (cond ((null delta) 0)
+                     ((numberp delta) delta)
+                     (t (prefix-numeric-value delta))))
          (cur (strata-prefs-icons-thumbnail-size p))
-         (next (if (= delta 0) 64 (max 32 (min 256 (+ cur delta))))))
+         (next (if (= step 0) 64 (max 32 (min 256 (+ cur step))))))
     (setf (strata-prefs-icons-thumbnail-size p) next)
     (strata-prefs-save)
     (when (derived-mode-p 'strata-icons-mode) (strata-icons-refresh))

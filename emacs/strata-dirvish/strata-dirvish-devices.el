@@ -239,6 +239,19 @@ Reads only cached /proc/mounts entries cleanly with zero blocking I/O."
             (let ((resolved (expand-file-name target (or (file-name-directory path) "/"))))
               (memq (strata-path-mount-kind resolved) '(cloud network remote removable))))))))
 
+(defun strata-path-writable-p (dir)
+  "Return non-nil when DIR is writable, without statting remote or cloud mounts."
+  (and dir (not (strata-location-virtual-p dir))
+       (or (not (eq (strata-path-mount-kind dir) 'local))
+           (ignore-errors (file-writable-p dir)))))
+
+(defun strata-archive-file-p (path)
+  "Return non-nil when PATH has a supported archive filename extension."
+  (and (stringp path)
+       (string-match-p
+        "\\.\\(?:zip\\|7z\\|tar\\|tgz\\|gz\\|bz2\\|xz\\|zst\\|rar\\)\\'"
+        (downcase (directory-file-name path)))))
+
 (defun strata-mount--fuse-or-remote-p (dev mp fstype)
   "Return non-nil if mount requires non-blocking async probe instead of sync statvfs."
   (or (string-prefix-p "fuse." fstype)

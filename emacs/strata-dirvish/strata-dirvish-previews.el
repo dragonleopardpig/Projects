@@ -29,7 +29,13 @@
 (declare-function pdf-view-scroll-down-or-previous-page "pdf-view" (&optional arg))
 (declare-function doc-view-scroll-up-or-next-page "doc-view" (&optional arg))
 (declare-function doc-view-scroll-down-or-previous-page "doc-view" (&optional arg))
+(declare-function image-scroll-up "image-mode" (&optional n))
+(declare-function image-scroll-down "image-mode" (&optional n))
 (defvar strata-sidebar-window)
+(defvar strata-thumbnail-dir)
+(defvar strata-preview--file)
+(defvar strata-preview--last-browser-context)
+(defvar strata-preview-read-mode)
 (defvar dirvish--selected-window)
 (defvar dirvish--timers)
 
@@ -217,6 +223,13 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
       (when-let ((nbuf (and (window-live-p pwin) (window-buffer pwin))))
         (strata-preview--sync-read-buffer pwin nbuf ctx)))))
 
+(when (and (fboundp 'treesit-available-p) (treesit-available-p)
+           (or (not (boundp 'treesit-extra-load-path))
+               (null treesit-extra-load-path)))
+  (let ((nix-ts (expand-file-name "nix-tree-sitter.el" user-emacs-directory)))
+    (when (file-readable-p nix-ts)
+      (load nix-ts t t))))
+
 (strata-preview--ensure-common-auto-modes)
 (add-hook 'dirvish-preview-setup-hook #'strata-preview--setup-dirvish-fontlock-h)
 (when (fboundp 'dirvish--preview-update)
@@ -225,16 +238,16 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
 ;;;; Independent Per-Type Zoom Controls (Text / Image / PDF)
 
 (defun strata-preview--refresh-now ()
-  "Force immediate re-render of active Dirvish preview buffer."
-  (when-let ((dv (ignore-errors (dirvish-curr))))
-    (when (and dv (window-live-p (dv-preview-window dv)) strata-active-preview-file)
+  "Force immediate re-render of active Dirvish or standalone preview buffer."
+  (when-let ((win (strata-preview--active-window)))
+    (when strata-active-preview-file
       ;; Invalidate cached special preview buffers when zooming images/PDFs
       (when (memq strata-active-preview-kind '(image pdf))
         (dolist (b (buffer-list))
           (when (string-prefix-p " *Dirvish-preview-" (buffer-name b))
             (kill-buffer b))))
-      (let ((strata-preview--force-update t))
-        (dirvish--preview-update dv strata-active-preview-file)))))
+      (let ((dv (ignore-errors (dirvish-curr))))
+        (strata-preview--dispatch-dirvish-or-standalone dv strata-active-preview-file win)))))
 
 (defun strata-preview-zoom-in ()
   "Zoom in ONLY the currently active preview type (`text', `image', or `pdf')."
@@ -307,9 +320,8 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
 
 (defun strata-preview--apply-text-zoom ()
   "Apply independent `preview-text-scale' to the active preview window's buffer."
-  (when-let* ((dv (ignore-errors (dirvish-curr)))
-              (win (and dv (dv-preview-window dv)))
-              (buf (and (window-live-p win) (window-buffer win))))
+  (when-let* ((win (strata-preview--active-window))
+              (buf (window-buffer win)))
     (with-current-buffer buf
       (when (fboundp 'text-scale-set)
         (text-scale-set (strata-prefs-preview-text-scale (strata-prefs))))
@@ -391,8 +403,9 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
 
 (defun strata-preview-update-standalone (file &optional window)
   "Render rich preview for FILE into `*Strata Preview*' inside WINDOW."
-  (let* ((ctx (when (strata-preview--browser-window-p (selected-window))
-                (strata-preview--capture-browser-context (selected-window))))
+  (let* ((ctx (if (strata-preview--browser-window-p (selected-window))
+                  (strata-preview--capture-browser-context (selected-window))
+                strata-preview--last-browser-context))
          (ext (downcase (or (file-name-extension file) "")))
          (win (or window (get-buffer-window "*Strata Preview*") (selected-window)))
          (res (or (dirvish-strata-rich-image-dp file ext win nil)
@@ -469,21 +482,35 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
       (set-window-buffer win out-buf)
       (strata-preview--sync-read-buffer win out-buf ctx))))
 
+(defun strata-preview--active-window ()
+  "Return the currently visible Dirvish or standalone preview window, or nil."
+  (or (when-let* ((dv (ignore-errors (dirvish-curr)))
+                  (win (dv-preview-window dv)))
+        (and (window-live-p win) win))
+      (and (window-live-p strata-preview-standalone-window)
+           strata-preview-standalone-window)
+      (get-buffer-window "*Strata Preview*")))
+
+(defun strata-preview--close-standalone ()
+  "Close any open standalone `*Strata Preview*' window cleanly."
+  (when-let ((win (or (and (window-live-p strata-preview-standalone-window)
+                           strata-preview-standalone-window)
+                      (get-buffer-window "*Strata Preview*"))))
+    (when (and (window-live-p win) (not (one-window-p t)))
+      (delete-window win))
+    (setq strata-preview-standalone-window nil)))
+
 (defun strata-scroll-preview-down ()
   "Scroll preview window down (`J')."
   (interactive)
-  (let ((win (or (when-let ((dv (ignore-errors (dirvish-curr)))) (dv-preview-window dv))
-                 (get-buffer-window "*Strata Preview*"))))
-    (when (window-live-p win)
-      (with-selected-window win (scroll-up-command 5)))))
+  (when-let ((win (strata-preview--active-window)))
+    (with-selected-window win (scroll-up-command 5))))
 
 (defun strata-scroll-preview-up ()
   "Scroll preview window up (`K')."
   (interactive)
-  (let ((win (or (when-let ((dv (ignore-errors (dirvish-curr)))) (dv-preview-window dv))
-                 (get-buffer-window "*Strata Preview*"))))
-    (when (window-live-p win)
-      (with-selected-window win (scroll-down-command 5)))))
+  (when-let ((win (strata-preview--active-window)))
+    (with-selected-window win (scroll-down-command 5))))
 
 (defun strata-preview--split-standalone-window (main)
   "Create a normal (non-side) right preview window split from MAIN."
@@ -1102,10 +1129,9 @@ MODE may be:
    (t (dirvish-layout-toggle))))
 
 (defun strata-preview-find ()
-  "Search text inside currently displayed Dirvish preview window."
+  "Search text inside currently displayed Dirvish or standalone preview window."
   (interactive)
-  (when-let* ((dv (ignore-errors (dirvish-curr)))
-              (win (and dv (dv-preview-window dv))))
+  (let ((win (strata-preview--active-window)))
     (unless (window-live-p win)
       (user-error "Preview drawer is not visible"))
     (let ((pat (strata-ui-read-string "Find in preview: ")))

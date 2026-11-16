@@ -219,13 +219,14 @@
           (force-mode-line-update t)
           (message "Filter active: %s (press ESC or empty filter to clear)" q))
          ((and subp (executable-find "fd"))
-          (let* ((lines (process-lines "fd" "--max-depth" "4" "--color=never" q dir))
+          (let* ((lines (process-lines "fd" "--max-depth" "4" "--color=never" "--" q dir))
                  (picked (strata-ui-completing-read (format "Matched (%d): " (length lines)) lines nil t)))
             (when picked
-              (if (file-directory-p picked)
-                  (strata-open-location picked)
-                (strata-open-location (file-name-directory picked))
-                (strata-goto-file (expand-file-name picked dir))))))
+              (let ((clean (directory-file-name (expand-file-name picked dir))))
+                (if (file-directory-p clean)
+                    (strata-open-location clean)
+                  (strata-open-location (or (file-name-directory clean) dir))
+                  (strata-goto-file clean))))))
          (t
           (let* ((entries (strata-list-directory-entries dir))
                  (cands (cl-remove-if-not
@@ -307,10 +308,11 @@
 (defun strata-search-open-folder-at-point ()
   "Open containing folder in active pane & jump cursor to the result (`M-RET')."
   (interactive)
-  (let ((p (or (get-text-property (line-beginning-position) 'strata-search-path)
-               (user-error "No search result on this line"))))
-    (strata-open-location (file-name-directory p))
-    (strata-goto-file p)))
+  (let* ((p (or (get-text-property (line-beginning-position) 'strata-search-path)
+                (user-error "No search result on this line")))
+         (clean (directory-file-name p)))
+    (strata-open-location (or (file-name-directory clean) "/"))
+    (strata-goto-file clean)))
 
 (defun strata-global-search (&optional query)
   "Run asynchronous global `fd' search across Home + local drives (`C-k')."
@@ -369,16 +371,17 @@
                                               (t "")))
                                 'face 'strata-section-heading))
                        (dolist (path lines)
-                         (let* ((dirp (file-directory-p path))
+                         (let* ((clean (directory-file-name path))
+                                (dirp (file-directory-p clean))
                                 (line (format "   %s  %-38s  %s\n"
                                               (strata-icon-glyph (if dirp 'folder 'file))
-                                              (truncate-string-to-width (file-name-nondirectory path) 38 nil nil "…")
-                                              (propertize (abbreviate-file-name (or (file-name-directory path) "/"))
+                                              (truncate-string-to-width (file-name-nondirectory clean) 38 nil nil "…")
+                                              (propertize (abbreviate-file-name (or (file-name-directory clean) "/"))
                                                           'face 'shadow))))
                            (insert (strata-add-row-properties
-                                    line (append (list 'strata-search-path path
+                                    line (append (list 'strata-search-path clean
                                                        'mouse-face 'highlight)
-                                                 (when dirp (list 'pointer 'hand 'help-echo path)))))))
+                                                 (when dirp (list 'pointer 'hand 'help-echo clean)))))))
                        (goto-char (point-min))))))
              (when (buffer-live-p (process-buffer proc))
                (kill-buffer (process-buffer proc))))))))))
