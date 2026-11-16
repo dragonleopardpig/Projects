@@ -107,7 +107,7 @@ let
     name = "noctalia-sync-settings";
     runtimeInputs = [ suiteTools syncPython ];
     text = ''
-      exec python3 ${./sync-settings.py} "$@"
+      exec python3 ${./sync-settings.py} --config ${shellConfig} "$@"
     '';
   };
   syncSettingsCheck = pkgs.runCommand "noctalia-sync-settings-checked" {

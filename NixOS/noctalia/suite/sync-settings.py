@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Sync Nix-managed bar widget placement without discarding GUI preferences.
-Only start/center/end in bar.main belong to settings.nix; bar appearance,
-per-monitor overrides and other runtime state remain user-writable.
+Sync Nix-managed bar placement and widget colors without discarding GUI preferences.
+Bar appearance, per-monitor overrides and other runtime state remain user-writable.
 """
 
+import argparse
 import os
 from collections.abc import MutableMapping
 from pathlib import Path
@@ -17,7 +17,40 @@ import tomlkit
 from tomlkit.exceptions import ParseError
 
 
-def prune_declarative_overrides():
+def prune_widget_order(document):
+    bar = document.get("bar")
+    main = bar.get("main") if isinstance(bar, MutableMapping) else None
+    if not isinstance(main, MutableMapping):
+        return False
+    keys = {"start", "center", "end"} & main.keys()
+    for key in keys:
+        del main[key]
+    return bool(keys)
+
+
+def prune_widget_colors(document, managed_config):
+    if managed_config is None:
+        return False
+    managed = tomlkit.parse(Path(managed_config).read_text(encoding="utf-8")).get("widget")
+    widgets = document.get("widget")
+    if not isinstance(managed, MutableMapping) or not isinstance(widgets, MutableMapping):
+        return False
+    changed = False
+    for name, settings in managed.items():
+        saved = widgets.get(name)
+        if not isinstance(settings, MutableMapping) or not isinstance(saved, MutableMapping):
+            continue
+        keys = {"icon_color"} & settings.keys()
+        if "color" in settings:
+            # An icon-specific GUI color also masks the managed foreground.
+            keys |= {"color", "icon_color"}
+        for key in keys & saved.keys():
+            del saved[key]
+            changed = True
+    return changed
+
+
+def prune_declarative_overrides(managed_config=None):
     state_home = os.environ.get("NOCTALIA_STATE_HOME") or os.path.join(
         os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"),
         "noctalia-suite",
@@ -29,15 +62,10 @@ def prune_declarative_overrides():
             return False
         original = settings_file.read_text(encoding="utf-8")
         document = tomlkit.parse(original)
-        bar = document.get("bar")
-        main = bar.get("main") if isinstance(bar, MutableMapping) else None
-        if not isinstance(main, MutableMapping):
+        layout_changed = prune_widget_order(document)
+        colors_changed = prune_widget_colors(document, managed_config)
+        if not layout_changed and not colors_changed:
             return False
-        layout_keys = {"start", "center", "end"} & main.keys()
-        if not layout_keys:
-            return False
-        for key in layout_keys:
-            del main[key]
 
         # Keep comments/formatting and replace atomically, so the shell's file
         # watcher never reads a truncated settings file. Preserve its permissions.
@@ -81,5 +109,9 @@ def reload_desktop():
             pass
 
 if __name__ == "__main__":
-    prune_declarative_overrides()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, required=True,
+                        help="Nix-managed Noctalia configuration supplying widget colors")
+    arguments = parser.parse_args()
+    prune_declarative_overrides(arguments.config)
     reload_desktop()

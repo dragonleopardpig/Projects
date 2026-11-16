@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression checks for the rebuild hook that previously erased bar opacity."""
+"""Regression checks for managed colors and placement preserving GUI preferences."""
 
 from contextlib import redirect_stderr
 import importlib.util
@@ -29,6 +29,7 @@ class SettingsSyncTests(unittest.TestCase):
         self.environment = patch.dict(os.environ, {"NOCTALIA_STATE_HOME": str(self.state)})
         self.environment.start()
         self.addCleanup(self.environment.stop)
+        self.config = self.state / "managed.toml"
 
     def test_only_widget_order_is_removed(self):
         original = '''# GUI preferences
@@ -95,6 +96,80 @@ keep this text"""
                 self.settings.write_text(original)
                 self.assertFalse(sync.prune_declarative_overrides())
                 self.assertEqual(self.settings.read_text(), original)
+
+    def test_managed_colors_replace_gui_colors_without_a_bar_table(self):
+        self.config.write_text('''[widget.clock]
+color = "#CCFF00"
+[widget.session]
+color = "#FFFFFF"
+[widget.volume]
+icon_color = "#0499FF"
+''')
+        original = '''# Keep my other preferences
+[widget.clock]
+color = "#FFD166"
+icon_color = "#FFD166"
+format = "{:%H:%M}"
+[widget.session]
+icon_color = "#FF00C2"
+[widget.volume]
+color = "#123456"
+icon_color = "#654321"
+show_label = true
+[widget.unmanaged]
+color = "#ABCDEF"
+icon_color = "#FEDCBA"
+'''
+        self.settings.write_text(original)
+        expected = tomlkit.parse(original).unwrap()
+        del expected["widget"]["clock"]["color"]
+        del expected["widget"]["clock"]["icon_color"]
+        del expected["widget"]["session"]["icon_color"]
+        del expected["widget"]["volume"]["icon_color"]
+        self.assertTrue(sync.prune_declarative_overrides(self.config))
+        saved = self.settings.read_text()
+        self.assertEqual(tomlkit.parse(saved).unwrap(), expected)
+        self.assertIn("# Keep my other preferences", saved)
+        self.assertFalse(sync.prune_declarative_overrides(self.config))
+        self.assertEqual(self.settings.read_text(), saved)
+
+    def test_colors_and_layout_are_removed_together_preserving_appearance(self):
+        self.config.write_text('[widget.clock]\ncolor = "#CCFF00"\n')
+        original = '''[bar.main]
+background_opacity = 0.8
+end = ["clock"]
+[bar.main.monitor."DP-1"]
+background_opacity = 0.6
+[widget.clock]
+color = "#FFD166"
+font_scale = 1.2
+'''
+        self.settings.write_text(original)
+        expected = tomlkit.parse(original).unwrap()
+        del expected["bar"]["main"]["end"]
+        del expected["widget"]["clock"]["color"]
+        self.assertTrue(sync.prune_declarative_overrides(self.config))
+        self.assertEqual(tomlkit.parse(self.settings.read_text()).unwrap(), expected)
+
+    def test_invalid_managed_config_preserves_all_preferences(self):
+        self.config.write_text('[widget.clock\ncolor = "#CCFF00"\n')
+        original = '[bar.main]\nend = ["clock"]\n[widget.clock]\ncolor = "#FFD166"\n'
+        self.settings.write_text(original)
+        with redirect_stderr(io.StringIO()):
+            self.assertFalse(sync.prune_declarative_overrides(self.config))
+        self.assertEqual(self.settings.read_text(), original)
+
+    def test_symlinked_preferences_keep_the_link_and_file_permissions(self):
+        self.config.write_text('[widget.clock]\ncolor = "#CCFF00"\n')
+        target = self.state / "preferences.toml"
+        target.write_text('[widget.clock]\ncolor = "#FFD166"\nfont_scale = 1.2\n')
+        target.chmod(0o600)
+        self.settings.symlink_to(target)
+        self.assertTrue(sync.prune_declarative_overrides(self.config))
+        self.assertTrue(self.settings.is_symlink())
+        self.assertEqual(tomlkit.parse(target.read_text()).unwrap(),
+                         {"widget": {"clock": {"font_scale": 1.2}}})
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
     def test_missing_state_is_a_noop(self):
         self.assertFalse(sync.prune_declarative_overrides())
