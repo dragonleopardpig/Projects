@@ -737,6 +737,36 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
     map)
   "Mouse bindings for the Sort By header control in every directory layout.")
 
+(defvar strata-view-header-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [header-line mouse-1] #'strata-view-menu)
+    (define-key map [header-line mouse-2] #'strata-view-menu)
+    (define-key map [mode-line mouse-1] #'strata-view-menu)
+    (define-key map [mode-line mouse-2] #'strata-view-menu)
+    map)
+  "Mouse bindings for the View header control in every directory layout.")
+
+(defun strata-header--select-browser (event)
+  "Select the browser owning header EVENT, or use the current browser."
+  (when event
+    (let* ((clicked (posn-window (event-start event)))
+           (target
+            (when (window-live-p clicked)
+              (with-current-buffer (window-buffer clicked)
+                (if (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
+                    clicked
+                  ;; Columns puts its header in a separate Dirvish window.
+                  (when-let ((dv (dirvish-curr))) (dv-root-window dv)))))))
+      (when (window-live-p target)
+        (select-window target)
+        (strata-panes--sync-active-pane-from-window target))))
+  (unless (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
+    (user-error "Open a directory to use this menu")))
+
+(defun strata-view-current-mode ()
+  "Return the current browser's layout, preferring its buffer's setting."
+  (or strata-local-view-mode (strata-prefs-browser-mode (strata-prefs))))
+
 (defun strata-crumb--make-segment (label target)
   "Return clickable breadcrumb segment LABEL pointing to directory TARGET."
   (let ((km (make-sparse-keymap))
@@ -829,9 +859,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
     (concat (or pane-badge "") " " crumbs (when filter-pill (concat "  " filter-pill)))))
 
 (dirvish-define-mode-line strata-view-info
-  "View indicator and clickable Sort By control in the header."
+  "Clickable Sort By and View controls in the header."
   (let* ((p (strata-prefs))
-         (vmode (or strata-local-view-mode (strata-prefs-browser-mode p)))
+         (vmode (strata-view-current-mode))
          (view-lbl (pcase vmode
                      ('columns "Columns")
                      ('icons "Icons")
@@ -848,11 +878,15 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                  'mouse-face 'highlight 'pointer 'hand
                  'help-echo "Sort files by name, date, size or extension (C-c s)"
                  'local-map strata-sort-header-map 'keymap strata-sort-header-map)
-     (propertize (format " [%s] " view-lbl) 'face 'strata-hint-desc)
+     (propertize (format " [View… %s] " view-lbl)
+                 'face 'strata-header-accent
+                 'mouse-face 'highlight 'pointer 'hand
+                 'help-echo "Choose Columns, Icons, List/Tree or Compact (C-1 / C-2 / C-3 / C-4)"
+                 'local-map strata-view-header-map 'keymap strata-view-header-map)
      (or tenx ""))))
 
 (defun strata-view-header-line ()
-  "Render breadcrumbs while reserving room for the Sort By control."
+  "Render breadcrumbs while reserving room for the Sort By and View controls."
   (let* ((right (dirvish-strata-view-info-ml))
          (left (dirvish-strata-breadcrumb-ml))
          (room (max 0 (- (window-width) (string-width right) 1))))
@@ -2598,6 +2632,30 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
 
 ;;;; View Mode Switcher & Appearance Toggles
 
+(defun strata-view--menu ()
+  "Build the clickable layout menu with the current view checked."
+  (easy-menu-create-menu
+   "View…"
+   '(["Columns" (strata-view-menu-select 'columns)
+      :style radio :selected (eq (strata-view-current-mode) 'columns)]
+     ["Icons" (strata-view-menu-select 'icons)
+      :style radio :selected (eq (strata-view-current-mode) 'icons)]
+     ["List / Tree" (strata-view-menu-select 'list)
+      :style radio :selected (eq (strata-view-current-mode) 'list)]
+     ["Compact" (strata-view-menu-select 'compact)
+      :style radio :selected (eq (strata-view-current-mode) 'compact)])))
+
+(defun strata-view-menu (&optional event)
+  "Show the clickable View menu for the directory at EVENT."
+  (interactive (list (when (mouse-event-p last-input-event) last-input-event)))
+  (strata-header--select-browser event)
+  (popup-menu (strata-view--menu) event))
+
+(defun strata-view-menu-select (mode)
+  "Switch to MODE from the View menu unless it is already displayed."
+  (unless (eq (strata-view-current-mode) mode)
+    (strata-switch-view-mode mode)))
+
 (defun strata-switch-view-mode (mode)
   "Switch active browser pane to Strata view MODE (`columns', `icons', `list', `compact')."
   (interactive
@@ -2609,7 +2667,6 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
          (cur (strata-current-file)))
     (setf (strata-prefs-browser-mode p) mode)
     (strata-prefs-save)
-    (setq-local strata-local-view-mode mode)
     (pcase mode
       ('columns
        (unless (and (derived-mode-p 'dired-mode) (dirvish-curr))
@@ -2660,6 +2717,10 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
          (strata-icons-mode)
          (setq-local strata-local-view-mode 'icons)
          (strata-icons-render dir))))
+    ;; Set this on the displayed buffer after switching.  Setting it on the
+    ;; source buffer leaves stale labels when Dired is reused from another view.
+    (setq-local strata-local-view-mode mode)
+    (force-mode-line-update t)
     (when cur (strata-goto-file cur))
     (strata-folder-view-remember dir p)))
 
@@ -2776,20 +2837,7 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
 (defun strata-sort-menu (&optional event)
   "Show the clickable Sort By menu for the directory at EVENT (`C-c s')."
   (interactive (list (when (mouse-event-p last-input-event) last-input-event)))
-  (when event
-    (let* ((clicked (posn-window (event-start event)))
-           (target
-            (when (window-live-p clicked)
-              (with-current-buffer (window-buffer clicked)
-                (if (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
-                    clicked
-                  ;; Columns puts its header in a separate Dirvish window.
-                  (when-let ((dv (dirvish-curr))) (dv-root-window dv)))))))
-      (when (window-live-p target)
-        (select-window target)
-        (strata-panes--sync-active-pane-from-window target))))
-  (unless (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
-    (user-error "Open a directory to sort its files"))
+  (strata-header--select-browser event)
   (popup-menu (strata-sort--menu) event))
 
 (defun strata-sort-ascending ()

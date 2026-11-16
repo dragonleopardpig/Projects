@@ -498,6 +498,7 @@
                     ("Double-Click / Middle" "Open folder or edit file"))
                    ("VIEWS, SORT & ZOOM"
                     ("C-1 / C-2 / C-3 / C-4" "Columns / Icons Grid / List (Tree) / Compact View")
+                    ("Click View…" "Choose a layout from the header menu; the current view is checked")
                     ("C-c s / Click Sort By…" "Sort menu in every directory layout; also S-F10 then S")
                     ("Sort By… options" "Name / Modification date / Size / Type or extension / Unsorted")
                     ("Sort order" "Ascending / Descending; Folders first; Natural names (file2 before file10)")

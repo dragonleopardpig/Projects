@@ -229,19 +229,42 @@
          (strata-visited-folders nil)
          (strata-folder-view-lru nil)
          (strata-prefs-current (strata-prefs--create :browser-mode 'columns :sidebar-expanded nil))
-         (dirvish-override-dired-mode t))
+         (override-before (advice-member-p #'dirvish-dired-noselect-a 'dired-noselect)))
     (unwind-protect
         (progn
           (write-region "hello" nil (expand-file-name "note.txt" tmp))
           (make-directory (expand-file-name "sub" tmp))
+          (dirvish-override-dired-mode 1)
           (strata-dirvish-setup)
           ;; Must expand all custom Dirvish attributes without void-variable errors
           (should (listp (dirvish--attrs-expand dirvish-attributes)))
           (strata-open-location tmp)
-          (dolist (m '(columns list compact icons columns))
-            (strata-switch-view-mode m)
-            (should (eq (strata-prefs-browser-mode (strata-prefs)) m))))
+          (strata-goto-file (expand-file-name "note.txt" tmp))
+          ;; Exercise every source/destination pair using the actual menu
+          ;; actions, including returning to reused Dired buffers.
+          (dolist (source '(columns list compact icons))
+            (dolist (choice '((columns "Columns") (icons "Icons")
+                              (list "List / Tree") (compact "Compact")))
+              (strata-switch-view-mode source)
+              (let ((mode (car choice)))
+                (call-interactively
+                 (strata-test--popup-menu-command (strata-view--menu) (cadr choice)))
+                (should (eq (strata-prefs-browser-mode (strata-prefs)) mode))
+                (should (eq strata-local-view-mode mode))
+                (should (equal (strata-current-file) (expand-file-name "note.txt" tmp)))
+                (pcase mode
+                  ('columns (should (derived-mode-p 'dired-mode))
+                            (should (dv-curr-layout (dirvish-curr))))
+                  ('list (should (derived-mode-p 'dired-mode))
+                         (should-not (dv-curr-layout (dirvish-curr))))
+                  ('icons (should (derived-mode-p 'strata-icons-mode)))
+                  ('compact (should (derived-mode-p 'strata-compact-mode))))
+                (should (string-match-p
+                         (pcase mode ('list "View… Tree")
+                                (_ (concat "View… " (capitalize (symbol-name mode)))))
+                         (dirvish-strata-view-info-ml)))))))
       (ignore-errors (when (dirvish-curr) (dirvish-quit)))
+      (dirvish-override-dired-mode (if override-before 1 -1))
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
 
@@ -2355,6 +2378,7 @@
         (should (string-match-p "C-SPC / C-Click" (buffer-string)))
         (should (string-match-p "reverse direction to shrink" (buffer-string)))
         (should (string-match-p "During drag: cancel" (buffer-string)))
+        (should (string-match-p "Click View…" (buffer-string)))
         (should (string-match-p "C-c s / Click Sort By…" (buffer-string)))
         (should (string-match-p "Ascending / Descending; Folders first" (buffer-string)))
         (should-not (string-match-p "^   V / W.*Toggle Rendered" (buffer-string)))
@@ -2497,14 +2521,18 @@
       (should-not track-mouse)
       (should-not strata-mouse--drag-state))))
 
-(defun strata-test--sort-menu-command (label)
+(defun strata-test--popup-menu-command (menu label)
   "Return the actual popup menu command labeled LABEL."
   (let ((item (cl-find-if (lambda (item)
                             (and (consp item) (eq (cadr item) 'menu-item)
                                  (equal (nth 2 item) label)))
-                          (cdr (strata-sort--menu)))))
+                          (cdr menu))))
     (should item)
     (nth 3 item)))
+
+(defun strata-test--sort-menu-command (label)
+  "Return the sort menu command labeled LABEL."
+  (strata-test--popup-menu-command (strata-sort--menu) label))
 
 (defun strata-test--rendered-sort-names ()
   "Read filenames from the displayed Dired rows or rendered grid cells."
@@ -2580,7 +2608,7 @@
                    (cl-position "item2.txt" names :test #'equal)))))))
 
 (ert-deftest strata-test-sort-header-and-shortcut-in-every-layout ()
-  "The header is clickable and C-c s works in both keyboard modes."
+  "Both header controls are clickable and C-c s works in both keyboard modes."
   (dolist (view '(list columns compact icons))
     (strata-test--with-selection-view view
       (should header-line-format)
@@ -2588,7 +2616,22 @@
              (pos (string-match "Sort By…" text))
              (map (get-text-property pos 'keymap text)))
         (should pos)
-        (should (eq (lookup-key map [header-line mouse-1]) #'strata-sort-menu)))
+        (should (eq (lookup-key map [header-line mouse-1]) #'strata-sort-menu))
+        (let* ((view-pos (string-match "View…" text))
+               (view-map (get-text-property view-pos 'keymap text)))
+          (should view-pos)
+          (should (eq (lookup-key view-map [header-line mouse-1]) #'strata-view-menu))))
+      ;; Choosing the already checked layout keeps the current marks and
+      ;; buffer, rather than rebuilding the view and clearing selection.
+      (strata-view-toggle-mark)
+      (let ((before (current-buffer)))
+        (call-interactively
+         (strata-test--popup-menu-command
+          (strata-view--menu)
+          (pcase view ('columns "Columns") ('icons "Icons")
+                 ('list "List / Tree") ('compact "Compact"))))
+        (should (eq (current-buffer) before))
+        (should (equal (strata-test--selection-names) '("a.txt"))))
       (dolist (tenx '(nil t))
         (setf (strata-prefs-tenxer-mode strata-prefs-current) tenx)
         (strata-dirvish--apply-active-keymap)
@@ -2616,9 +2659,12 @@
             (cl-letf (((symbol-function 'popup-menu)
                        (lambda (&rest _) (setq menu-buffer (current-buffer))))
                       ((symbol-function 'strata-sidebar-refresh) #'ignore))
-              (strata-sort-menu (list 'mouse-1 (list second 'header-line '(10 . 10) 0))))
-            (should (eq menu-buffer other))
-            (should (= (strata-tab-state-active-pane tab) 2)))
+              (dolist (command '(strata-sort-menu strata-view-menu))
+                (select-window first)
+                (setf (strata-tab-state-active-pane tab) 1)
+                (funcall command (list 'mouse-1 (list second 'header-line '(10 . 10) 0)))
+                (should (eq menu-buffer other))
+                (should (= (strata-tab-state-active-pane tab) 2)))))
         (when (buffer-live-p other) (kill-buffer other))))))
 
 (ert-deftest strata-test-sort-global-dirvish-header-targets-root ()
@@ -2637,9 +2683,10 @@
             (set-window-buffer header aux)
             (cl-letf (((symbol-function 'popup-menu)
                        (lambda (&rest _) (setq menu-buffer (current-buffer)))))
-              (strata-sort-menu (list 'mouse-1 (list header 'header-line '(10 . 10) 0))))
-            (should (eq menu-buffer strata-test--buf))
-            (should (eq (selected-window) root)))
+              (dolist (command '(strata-sort-menu strata-view-menu))
+                (funcall command (list 'mouse-1 (list header 'header-line '(10 . 10) 0)))
+                (should (eq menu-buffer strata-test--buf))
+                (should (eq (selected-window) root)))))
         (when (buffer-live-p aux) (kill-buffer aux))
         (remhash (dv-id dv) dirvish--sessions)))))
 
