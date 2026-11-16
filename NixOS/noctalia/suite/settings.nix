@@ -12,8 +12,11 @@
       custom_labels = {
         "Keyboard - English (US)" = "US";
         "English (US)" = "US";
-        "Pinyin" = "拼";
-        "pinyin" = "拼";
+        "Rime" = "中文";
+        "rime" = "中文";
+        "ㄓ" = "中文";
+        "Pinyin" = "中文";
+        "pinyin" = "中文";
       };
     };
     # Familiar AGS app-drawer browsing, using the native shell launcher.
