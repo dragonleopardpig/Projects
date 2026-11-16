@@ -244,6 +244,7 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
 
 (defun strata-dirvish-setup ()
   "Configure Dirvish, hooks, theme blending, and Dashboard integration."
+  (strata-ui-install-mouse-routing)
   (let ((p (strata-prefs)))
     (strata-history-load)
     (strata-sync-theme-faces)

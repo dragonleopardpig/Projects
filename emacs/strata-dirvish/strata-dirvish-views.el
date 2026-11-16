@@ -2646,13 +2646,18 @@ Use only the cached filenames; do not probe files while handling motion."
                (equal (file-truename src-dir) (file-truename dest-dir)))
       (user-error "Source and destination folders are identical"))
     (let* ((mode (or forced-mode
+                    (if (strata-ui-mouse-p)
+                        (strata-ui-choice
+                         (format "Drop %d item(s) into %s"
+                                 (length files) (abbreviate-file-name dest-dir))
+                         '(("Copy" . copy) ("Move" . cut) ("Cancel" . nil)))
                      (pcase (read-char-choice
                              (format "Drop %d item(s) into %s: [c] Copy  [m] Move  [q] Cancel? "
                                      (length files) (abbreviate-file-name dest-dir))
                              '(?c ?C ?m ?M ?q ?Q ?\e))
                        ((or ?c ?C) 'copy)
                        ((or ?m ?M) 'cut)
-                       (_ nil)))))
+                       (_ nil))))))
       (when mode
         (with-selected-window src-win
           (strata--transfer-files files dest-dir mode)
@@ -2780,7 +2785,7 @@ Use only the cached filenames; do not probe files while handling motion."
 (defun strata-switch-view-mode (mode)
   "Switch active browser pane to Strata view MODE (`columns', `icons', `list', `compact')."
   (interactive
-   (list (intern (completing-read "View mode: " '("columns" "icons" "list" "compact") nil t))))
+   (list (intern (strata-ui-completing-read "View mode: " '("columns" "icons" "list" "compact") nil t))))
   (let* ((p (strata-prefs))
          (dir (or (bound-and-true-p strata-view-directory)
                   (dirvish-prop :root)
@@ -2976,7 +2981,7 @@ Use only the cached filenames; do not probe files while handling motion."
 With DIRECTION, set that order explicitly; otherwise selecting the already
 active sort key toggles ascending/descending (the 10xer sort chord)."
   (interactive
-   (list (intern (completing-read "Sort by: "
+   (list (intern (strata-ui-completing-read "Sort by: "
                                   '("name" "modified" "size" "type" "extension" "created" "unsorted")
                                   nil t))))
   (let ((p (strata-prefs)))

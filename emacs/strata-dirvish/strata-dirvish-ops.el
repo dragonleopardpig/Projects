@@ -190,10 +190,10 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
                   (let* ((opts (append '("keep-both" "replace" "skip")
                                        (when (and (file-directory-p src) (file-directory-p target))
                                          '("merge"))))
-                         (pick (intern (completing-read
+                         (pick (intern (strata-ui-completing-read
                                         (format "Conflict for '%s': " base)
                                         opts nil t nil nil "keep-both"))))
-                    (when (y-or-n-p "Apply choice to any remaining conflicts? ")
+                    (when (strata-ui-y-or-n-p "Apply choice to any remaining conflicts? ")
                       (setq all-choice pick))
                     pick)))))
           (unless (eq action 'skip)
@@ -267,7 +267,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
   (interactive)
   (let* ((files (strata-selected-files))
          (recents (assoc-default "global" (strata-prefs-send-to-recent-destinations (strata-prefs))))
-         (dest (read-directory-name "Copy selected to: " (or (car recents) default-directory))))
+         (dest (strata-ui-read-directory-name "Copy selected to: " (or (car recents) default-directory))))
     (unless files (user-error "No item selected"))
     (strata--record-send-to-dest dest)
     (strata--transfer-files files dest 'copy)))
@@ -277,7 +277,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
   (interactive)
   (let* ((files (strata-selected-files))
          (recents (assoc-default "global" (strata-prefs-send-to-recent-destinations (strata-prefs))))
-         (dest (read-directory-name "Move selected to: " (or (car recents) default-directory))))
+         (dest (strata-ui-read-directory-name "Move selected to: " (or (car recents) default-directory))))
     (unless files (user-error "No item selected"))
     (strata--record-send-to-dest dest)
     (strata--transfer-files files dest 'cut)))
@@ -296,7 +296,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
   "Create new folder in current writable directory (`C-S-n')."
   (interactive)
   (let* ((dir (strata--ensure-writable-target default-directory "Create folder"))
-         (nm (or name (read-string "New folder name: ")))
+         (nm (or name (strata-ui-read-string "New folder name: ")))
          (clean (string-trim nm)))
     (when (string-empty-p clean) (user-error "Folder name cannot be empty"))
     (let ((target (expand-file-name clean dir)))
@@ -311,7 +311,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
   "Create new empty file in current writable directory."
   (interactive)
   (let* ((dir (strata--ensure-writable-target default-directory "Create file"))
-         (nm (or name (read-string "New file name: ")))
+         (nm (or name (strata-ui-read-string "New file name: ")))
          (clean (string-trim nm)))
     (when (string-empty-p clean) (user-error "File name cannot be empty"))
     (let ((target (expand-file-name clean dir)))
@@ -327,7 +327,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
   "Yazi/Strata unified create (`a'): trailing `/' creates folder, else file."
   (interactive)
   (strata--ensure-writable-target default-directory "Create")
-  (let ((raw (read-string "Create (end with / for folder): ")))
+  (let ((raw (strata-ui-read-string "Create (end with / for folder): ")))
     (when (string-empty-p (string-trim raw)) (user-error "Name cannot be empty"))
     (if (string-suffix-p "/" raw)
         (strata-new-folder (directory-file-name raw))
@@ -339,7 +339,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
   (let ((dir (strata--ensure-writable-target default-directory "New Folder with Selection"))
         (files (strata-selected-files)))
     (unless files (user-error "Select one or more items first"))
-    (let* ((nm (string-trim (read-string "New folder name: " "New Folder")))
+    (let* ((nm (string-trim (strata-ui-read-string "New folder name: " "New Folder")))
            (target (expand-file-name nm dir)))
       (when (file-exists-p target) (user-error "Folder already exists: %s" target))
       (make-directory target t)
@@ -353,12 +353,12 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
   (let ((src (or (strata-current-file) (user-error "No item at point"))))
     (let* ((dir (file-name-directory (directory-file-name src)))
            (old (file-name-nondirectory (directory-file-name src)))
-           (input (or new-name (read-string (format "Rename '%s' to: " old) old)))
+           (input (or new-name (strata-ui-read-string (format "Rename '%s' to: " old) old)))
            (dest (expand-file-name input dir)))
       (when (equal (directory-file-name src) (directory-file-name dest))
         (user-error "Unchanged name"))
       (when (file-exists-p dest)
-        (unless (y-or-n-p (format "Target %s exists. Replace? " (file-name-nondirectory dest)))
+        (unless (strata-ui-y-or-n-p (format "Target %s exists. Replace? " (file-name-nondirectory dest)))
           (user-error "Rename cancelled")))
       (make-directory (file-name-directory dest) t)
       (rename-file src dest t)
@@ -438,13 +438,13 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
     (strata--ensure-writable-target default-directory "Trash")
     (let ((files (strata-selected-files)))
       (unless files (user-error "No item selected"))
-      (when (yes-or-no-p (format "Move %d item(s) to Trash? " (length files)))
+      (when (strata-ui-yes-or-no-p (format "Move %d item(s) to Trash? " (length files)))
         (let ((undo-items nil))
           (dolist (f files)
             (let ((trashed (strata--trash-with-gio-fallback f)))
               (if trashed
                   (push (list :type 'trash :orig f :trashed trashed) undo-items)
-                (when (yes-or-no-p (format "Filesystem for '%s' has no Trash. Delete permanently? "
+                (when (strata-ui-yes-or-no-p (format "Filesystem for '%s' has no Trash. Delete permanently? "
                                            (file-name-nondirectory f)))
                   (if (file-directory-p f) (delete-directory f t) (delete-file f))))))
           (when undo-items
@@ -460,7 +460,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
     (strata--ensure-writable-target default-directory "Permanent delete")
     (let ((files (strata-selected-files)))
       (unless files (user-error "No item selected"))
-      (when (yes-or-no-p (format "PERMANENTLY delete %d item(s)? This cannot be undone! "
+      (when (strata-ui-yes-or-no-p (format "PERMANENTLY delete %d item(s)? This cannot be undone! "
                                  (length files)))
         (dolist (f files)
           (when (file-exists-p f)
@@ -550,12 +550,12 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
          (files (strata-selected-files))
          (default-name (file-name-sans-extension
                         (file-name-nondirectory (directory-file-name (car files)))))
-         (name (string-trim (read-string "Archive name (without extension): "
+         (name (string-trim (strata-ui-read-string "Archive name (without extension): "
                                          (if (> (length files) 1) "archive" default-name))))
-         (fmt (completing-read "Format: " '("zip" "tar.gz" "tar.zst" "7z" "tar") nil t nil nil "zip"))
+         (fmt (strata-ui-completing-read "Format: " '("zip" "tar.gz" "tar.zst" "7z" "tar") nil t nil nil "zip"))
          (pw (when (and (member fmt '("zip" "7z"))
-                        (y-or-n-p "Protect archive with password? "))
-               (read-passwd "Archive password: ")))
+                        (strata-ui-y-or-n-p "Protect archive with password? "))
+               (strata-ui-read-passwd "Archive password: ")))
          (out (strata-unique-copy-name (expand-file-name (concat name "." fmt) dir)))
          (rels (mapcar (lambda (f) (file-relative-name f dir)) files))
          (cmd
@@ -590,7 +590,7 @@ wrapping folder named after the archive so parent folders stay uncluttered."
   (interactive "P")
   (let* ((archive (or (strata-current-file) (user-error "Select an archive first")))
          (base-dest (if ask-dest
-                        (read-directory-name "Extract to folder: " default-directory)
+                        (strata-ui-read-directory-name "Extract to folder: " default-directory)
                       (file-name-directory archive)))
          (roots (strata-archive--top-level-roots archive))
          (stem (file-name-sans-extension (file-name-nondirectory archive)))
@@ -696,9 +696,9 @@ wrapping folder named after the archive so parent folders stay uncluttered."
   (interactive (list (or (let ((f (strata-current-file))) (when (and f (file-directory-p f)) f))
                          default-directory)))
   (strata-guard-writable-location dir "Customize")
-  (let* ((color (completing-read "Folder color (empty to clear): "
+  (let* ((color (strata-ui-completing-read "Folder color (empty to clear): "
                                  (cons "" (mapcar #'car strata-folder-color-alist)) nil nil))
-         (icon (read-string "Custom icon/emoji (empty to keep/clear): "
+         (icon (strata-ui-read-string "Custom icon/emoji (empty to keep/clear): "
                             (or (cdr (assoc (directory-file-name (expand-file-name dir))
                                             (strata-prefs-custom-icons (strata-prefs))))
                                 ""))))
@@ -741,7 +741,7 @@ The application keeps running after Emacs exits."
   (interactive)
   (let* ((files (strata-selected-files))
          (apps (strata-desktop-apps))
-         (choice (completing-read "Open With application: " (mapcar #'car apps) nil t))
+         (choice (strata-ui-completing-read "Open With application: " (mapcar #'car apps) nil t))
          (cmd (or (cdr (assoc choice apps)) choice)))
     (unless files (user-error "No file selected"))
     (let* ((program (or (executable-find cmd)
@@ -875,10 +875,10 @@ The application keeps running after Emacs exits."
     (let* ((act (if (and index (<= 1 index (length acts)))
                     (nth (1- index) acts)
                   (let* ((names (mapcar (lambda (a) (plist-get a :name)) acts))
-                         (picked (completing-read "Run Custom Action: " names nil t)))
+                         (picked (strata-ui-completing-read "Run Custom Action: " names nil t)))
                     (cl-find picked acts :key (lambda (a) (plist-get a :name)) :test #'equal)))))
       (when (or (not (plist-get act :confirm))
-                (yes-or-no-p (format "Run custom action '%s' on %d item(s)? "
+                (strata-ui-yes-or-no-p (format "Run custom action '%s' on %d item(s)? "
                                      (plist-get act :name) (length targets))))
         (let* ((rt (plist-get act :runtime))
                (entry (plist-get act :entrypoint))
@@ -916,7 +916,7 @@ The application keeps running after Emacs exits."
 (defun strata-install-action-recipe ()
   "Install one of Strata's built-in Custom Action recipes into ~/.config/strata/actions/."
   (interactive)
-  (let* ((picked (completing-read "Install action recipe: "
+  (let* ((picked (strata-ui-completing-read "Install action recipe: "
                                   (mapcar #'cadr strata-builtin-action-recipes) nil t))
          (rec (cl-find picked strata-builtin-action-recipes :key #'cadr :test #'equal))
          (id (nth 0 rec))

@@ -295,7 +295,6 @@
               ["Undo" strata-undo :enable ,(and strata-undo-stack t)]
               ["Redo" strata-redo :enable ,(and strata-redo-stack t)]
               ["Settings & Diagnostics" strata-open-settings])
-             ["Keyboard Actions… (Shift-F10)" strata-context-menu]
              ["Shortcut Reference (?)" strata-open-shortcut-reference]))))
     ;; Reuse the same submenus as the two header buttons.
     (define-key-after menu [view]
@@ -569,6 +568,8 @@ Text terminals use `strata-context-menu', also available with Shift-F10."
                     ("ESC / C-g / Right-Click" "During drag: cancel and restore the previous selection")
                     ("Right-Click item" "Keep a marked batch; an unmarked item becomes the menu target")
                     ("Right-Click menu" "GUI actions beside the pointer; Shift-F10 / Menu opens keyboard actions")
+                    ("Mouse file actions" "Follow-up choices, names, passwords and confirmations use GUI dialogs")
+                    ("Keyboard file actions" "Keep text prompts, completion and the keyboard actions menu")
                     ("Double-Click / Middle" "Open folder or edit file"))
                    ("VIEWS, SORT & ZOOM"
                     ("C-1 / C-2 / C-3 / C-4" "Columns / Icons Grid / List (Tree) / Compact View")

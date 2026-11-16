@@ -94,7 +94,7 @@
   (interactive)
   (strata-history-load)
   (let* ((cands (mapcar #'car strata-visited-folders))
-         (picked (completing-read "Jump to folder: " (or cands (list "~/")) nil nil)))
+         (picked (strata-ui-completing-read "Jump to folder: " (or cands (list "~/")) nil nil)))
     (when (and picked (not (string-empty-p picked)))
       (strata-open-location picked t))))
 
@@ -102,7 +102,7 @@
   "Jump to or open a recently used file (`Z')."
   (interactive)
   (let* ((cands (strata-recent-files))
-         (picked (completing-read "Recent file: " cands nil t)))
+         (picked (strata-ui-completing-read "Recent file: " cands nil t)))
     (when picked
       (if (strata-prefs-search-open-files-directly (strata-prefs))
           (find-file picked)
@@ -143,7 +143,7 @@
                         (list "admin:///etc/" "sftp://" "smb://")))
          (input (minibuffer-with-setup-hook
                     (lambda () nil)
-                  (completing-read "Go to location (path or computer:///trash:///recent:///network:///sftp://): "
+                  (strata-ui-completing-read "Go to location (path or computer:///trash:///recent:///network:///sftp://): "
                                    (completion-table-in-turn cands #'completion-file-name-table)
                                    nil nil (if (strata-location-virtual-p cur) cur (abbreviate-file-name cur))))))
     (when (and input (not (string-empty-p (string-trim input))))
@@ -154,7 +154,7 @@
 (defun strata-find-in-folder (&optional backward query)
   "Jump to matching filename in current browser buffer."
   (interactive "P")
-  (let* ((q (or query (read-string (if backward "Find backward: " "Find: ")
+  (let* ((q (or query (strata-ui-read-string (if backward "Find backward: " "Find: ")
                                    strata-last-find-query)))
          (entries (strata-list-directory-entries default-directory))
          (names (mapcar (lambda (e) (cons (plist-get e :name) (plist-get e :path))) entries)))
@@ -200,11 +200,12 @@
   "Filter current folder (via `dirvish-narrow' or live match; optional subfolders with `s')."
   (interactive "P")
   (if (and (not include-subfolders)
+           (not (strata-ui-mouse-p))
            (derived-mode-p 'dired-mode)
            (fboundp 'dirvish-narrow))
       (call-interactively #'dirvish-narrow)
     (let* ((dir default-directory)
-           (q (read-string (if include-subfolders "Filter incl. subfolders: " "Filter folder: ")))
+           (q (strata-ui-read-string (if include-subfolders "Filter incl. subfolders: " "Filter folder: ")))
            (subp (or include-subfolders (strata-prefs-filter-include-subfolders (strata-prefs)))))
       (if (string-empty-p (string-trim q))
           (strata-clear-filter)
@@ -219,7 +220,7 @@
           (message "Filter active: %s (press ESC or empty filter to clear)" q))
          ((and subp (executable-find "fd"))
           (let* ((lines (process-lines "fd" "--max-depth" "4" "--color=never" q dir))
-                 (picked (completing-read (format "Matched (%d): " (length lines)) lines nil t)))
+                 (picked (strata-ui-completing-read (format "Matched (%d): " (length lines)) lines nil t)))
             (when picked
               (if (file-directory-p picked)
                   (strata-open-location picked)
@@ -235,7 +236,7 @@
                   (if (file-directory-p one)
                       (strata-open-location one)
                     (strata-goto-file one)))
-              (when-let ((picked (completing-read "Filtered matches: "
+              (when-let ((picked (strata-ui-completing-read "Filtered matches: "
                                                   (mapcar (lambda (e) (plist-get e :path)) cands)
                                                   nil t)))
                 (if (file-directory-p picked)
@@ -314,7 +315,7 @@
 (defun strata-global-search (&optional query)
   "Run asynchronous global `fd' search across Home + local drives (`C-k')."
   (interactive)
-  (let* ((q (or query (read-string "Global search (Home & mounted local drives): ")))
+  (let* ((q (or query (strata-ui-read-string "Global search (Home & mounted local drives): ")))
          (p (strata-prefs))
          (limit (max 100 (or (strata-prefs-search-entry-limit p) 5000)))
          (timeout-sec (max 1 (or (strata-prefs-search-time-limit p) 5)))

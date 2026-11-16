@@ -10,6 +10,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'strata-dirvish-ui)
 
 (defgroup strata-dirvish nil
   "Strata file manager features blended into Dirvish."

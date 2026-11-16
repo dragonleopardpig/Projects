@@ -953,7 +953,7 @@ MODE may be:
       (pcase mode
         ('discard
          (when (buffer-modified-p buf)
-           (unless (y-or-n-p (format "Discard unsaved edits in %s and abort? "
+           (unless (strata-ui-y-or-n-p (format "Discard unsaved edits in %s and abort? "
                                      (buffer-name buf)))
              (user-error "Aborted"))
            (if (and buffer-file-name (file-exists-p buffer-file-name))
@@ -963,7 +963,7 @@ MODE may be:
          (when (buffer-modified-p buf)
            (if buf-file
                (save-some-buffers nil (lambda () (eq (current-buffer) buf)))
-             (when (y-or-n-p (format "Save buffer %s? " (buffer-name buf)))
+             (when (strata-ui-y-or-n-p (format "Save buffer %s? " (buffer-name buf)))
                (save-buffer)))))))
     (when was-edit
       (strata-preview-edit-mode -1))
@@ -1108,7 +1108,7 @@ MODE may be:
               (win (and dv (dv-preview-window dv))))
     (unless (window-live-p win)
       (user-error "Preview drawer is not visible"))
-    (let ((pat (read-string "Find in preview: ")))
+    (let ((pat (strata-ui-read-string "Find in preview: ")))
       (when (and pat (not (string-empty-p pat)))
         (with-selected-window win
           (goto-char (point-min))

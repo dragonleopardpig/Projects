@@ -627,7 +627,7 @@ PROBE-FUSE is non-nil."
    ((strata-device-mounted-p dev)
     (when callback (funcall callback (strata-device-mountpoint dev))))
    ((strata-device-locked-p dev)
-    (let ((pw (read-passwd (format "Unlock passphrase for %s (%s): "
+    (let ((pw (strata-ui-read-passwd (format "Unlock passphrase for %s (%s): "
                                    (strata-device-name dev)
                                    (strata-device-device dev)))))
       (when (executable-find "udisksctl")
@@ -940,7 +940,7 @@ PROBE-FUSE is non-nil."
   "Set a custom display label for drive at point."
   (interactive)
   (let* ((dev (strata-computer--device-at-point))
-         (lbl (read-string (format "Custom label for %s (empty resets): "
+         (lbl (strata-ui-read-string (format "Custom label for %s (empty resets): "
                                    (strata-device-name dev))
                            (cdr (assoc (strata-device-id dev)
                                        (strata-prefs-device-labels (strata-prefs)))))))
@@ -1088,7 +1088,7 @@ PROBE-FUSE is non-nil."
       (user-error "Trashed item no longer exists: %s" src))
     (make-directory parent t)
     (when (file-exists-p dest)
-      (unless (y-or-n-p (format "Target %s already exists. Replace? " dest))
+      (unless (strata-ui-y-or-n-p (format "Target %s already exists. Replace? " dest))
         (user-error "Restore cancelled")))
     (rename-file src dest t)
     (when (file-exists-p info) (delete-file info))
@@ -1104,7 +1104,7 @@ PROBE-FUSE is non-nil."
   "Permanently delete trashed item at point."
   (interactive)
   (let ((it (strata-trash--item-at-point)))
-    (when (yes-or-no-p (format "Permanently delete '%s'? " (plist-get it :name)))
+    (when (strata-ui-yes-or-no-p (format "Permanently delete '%s'? " (plist-get it :name)))
       (let ((f (plist-get it :file))
             (i (plist-get it :info)))
         (when (file-exists-p f)
@@ -1118,7 +1118,7 @@ PROBE-FUSE is non-nil."
   (let ((items (strata-trash-items)))
     (if (null items)
         (message "Trash is already empty")
-      (when (yes-or-no-p (format "Permanently delete all %d items in Trash? " (length items)))
+      (when (strata-ui-yes-or-no-p (format "Permanently delete all %d items in Trash? " (length items)))
         (dolist (it items)
           (ignore-errors
             (let ((f (plist-get it :file)) (i (plist-get it :info)))
@@ -1269,7 +1269,7 @@ PROBE-FUSE is non-nil."
 (defun strata-connect-server (&optional uri)
   "Prompt for a network or admin URI (`sftp://', `smb://', `ssh://', `admin:///') and open it."
   (interactive)
-  (let ((raw (or uri (read-string "Connect to server (sftp://, smb://, ssh://, admin:///): "
+  (let ((raw (or uri (strata-ui-read-string "Connect to server (sftp://, smb://, ssh://, admin:///): "
                                   "sftp://"))))
     (strata-open-location (strata-resolve-location-uri raw))))
 
