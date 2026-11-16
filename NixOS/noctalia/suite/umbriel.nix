@@ -147,6 +147,7 @@ in {
     { match.app_id = "^(org.pulseaudio.pavucontrol|pavucontrol)$"; default_scratchpad = "volume"; default_floating_size_px = { width = 650; height = 850; }; }
     { match.app_id = "^notepad$"; default_scratchpad = "notepad"; default_floating_size_px = { width = 960; height = 950; }; }
     { match.app_id = "^(io\\.github\\.winapps\\.Settings|yad)$"; default_floating = true; default_maximize = false; }
+    { match.app_id = "^(org\\.fcitx\\..*|fcitx5-config-qt)$"; default_floating = true; default_floating_size_px = { width = 920; height = 680; }; }
     { match.app_id = "^(Microsoft .*|Command Prompt|Internet Explorer|Adobe .*|Affinity .*|Autodesk .*|SQL Server .*|LINQPad .*|Paint\\.NET|PDF Gear|xfreerdp|FreeRDP)$"; default_floating = true; default_maximize = false; }
     { match.title = "^RemoteApp Marker Window$"; border_width = 0; shadow = false; default_floating = true; default_focused = false; }
   ];

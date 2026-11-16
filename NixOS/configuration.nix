@@ -346,6 +346,315 @@ let
       exec python3 ${sioyekSnipScript} "$@"
     '';
   };
+
+  # Native C Lua module (loaded by Rime's bundled Lua 5.2 runtime) that queries
+  # the local rime-google-cloud user service over a Unix domain socket with a
+  # strict 90ms socket timeout so typing stays responsive even offline.
+  rimeGoogleCloudClient = pkgs.stdenv.mkDerivation {
+    name = "librime-cloud-client";
+    buildInputs = [ pkgs.lua5_2 ];
+    dontUnpack = true;
+    buildPhase = ''
+      cat << 'EOF' > client.c
+      #include <lua.h>
+      #include <lauxlib.h>
+      #include <sys/socket.h>
+      #include <sys/un.h>
+      #include <sys/time.h>
+      #include <unistd.h>
+      #include <stdlib.h>
+      #include <string.h>
+      #include <stdio.h>
+
+      static int l_query(lua_State *L) {
+          size_t len = 0;
+          const char *code = luaL_checklstring(L, 1, &len);
+          if (len < 4 || len > 48) {
+              lua_pushliteral(L, "");
+              return 1;
+          }
+          const char *runtime_dir = getenv("XDG_RUNTIME_DIR");
+          if (!runtime_dir || !runtime_dir[0]) {
+              lua_pushliteral(L, "");
+              return 1;
+          }
+          int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+          if (fd < 0) {
+              lua_pushliteral(L, "");
+              return 1;
+          }
+          struct timeval tv;
+          tv.tv_sec = 0;
+          tv.tv_usec = 90000;
+          setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+          setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+          struct sockaddr_un addr;
+          memset(&addr, 0, sizeof(addr));
+          addr.sun_family = AF_UNIX;
+          snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/rime-google-cloud.sock", runtime_dir);
+
+          if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+              close(fd);
+              lua_pushliteral(L, "");
+              return 1;
+          }
+          char req[64];
+          int req_len = snprintf(req, sizeof(req), "%s\n", code);
+          if (send(fd, req, (size_t)req_len, MSG_NOSIGNAL) < 0) {
+              close(fd);
+              lua_pushliteral(L, "");
+              return 1;
+          }
+          char buf[256];
+          ssize_t n = recv(fd, buf, sizeof(buf) - 1, 0);
+          close(fd);
+          if (n <= 0) {
+              lua_pushliteral(L, "");
+              return 1;
+          }
+          buf[n] = '\0';
+          char *nl = strchr(buf, '\n');
+          if (nl) *nl = '\0';
+          lua_pushstring(L, buf);
+          return 1;
+      }
+
+      int luaopen_rime_cloud(lua_State *L) {
+          lua_newtable(L);
+          lua_pushcfunction(L, l_query);
+          lua_setfield(L, -2, "query");
+          return 1;
+      }
+      EOF
+      $CC -O2 -fPIC -shared client.c -llua -o librime_cloud_client.so
+    '';
+    installPhase = ''
+      mkdir -p $out/lib
+      cp librime_cloud_client.so $out/lib/
+    '';
+  };
+
+  # Rime configuration overlay: selects rime-ice Full Pinyin as the active
+  # schema and inserts the Google Cloud Pinyin Lua filter after long_word_filter.
+  rimeCustomData = pkgs.runCommand "rime-custom-data" { } ''
+    mkdir -p $out/share/rime-data/lua
+
+    cat << 'EOF' > $out/share/rime-data/default.custom.yaml
+    patch:
+      __include: rime_ice_suggestion:/
+      schema_list:
+        - schema: rime_ice
+      menu/page_size: 7
+    EOF
+
+    cat << 'EOF' > $out/share/rime-data/rime_ice.custom.yaml
+    patch:
+      "engine/filters":
+        - lua_filter@*corrector
+        - reverse_lookup_filter@radical_reverse_lookup
+        - lua_filter@*autocap_filter
+        - lua_filter@*v_filter
+        - lua_filter@*pin_cand_filter
+        - lua_filter@*long_word_filter
+        - lua_filter@*google_cloud_pinyin
+        - lua_filter@*reduce_english_filter
+        - simplifier@emoji
+        - simplifier@traditionalize
+        - lua_filter@*search@radical_pinyin
+        - uniquifier
+    EOF
+
+    cat << 'EOF' > $out/share/rime-data/lua/google_cloud_pinyin.lua
+    local M = {}
+    local client = nil
+    local cache = {}
+    local cache_order = {}
+    local MAX_CACHE = 512
+
+    function M.init(env)
+        if not client then
+            local ok, loader = pcall(package.loadlib, "${rimeGoogleCloudClient}/lib/librime_cloud_client.so", "luaopen_rime_cloud")
+            if ok and type(loader) == "function" then
+                local ok2, mod = pcall(loader)
+                if ok2 and type(mod) == "table" then
+                    client = mod
+                end
+            end
+        end
+    end
+
+    local function query_cloud(clean_code)
+        if cache[clean_code] ~= nil then
+            return cache[clean_code]
+        end
+        if not client or not client.query then
+            return ""
+        end
+        local ok, res = pcall(client.query, clean_code)
+        local text = (ok and type(res) == "string") and res or ""
+        if text ~= "" then
+            cache[clean_code] = text
+            table.insert(cache_order, clean_code)
+            if #cache_order > MAX_CACHE then
+                local oldest = table.remove(cache_order, 1)
+                cache[oldest] = nil
+            end
+        end
+        return text
+    end
+
+    function M.func(input, env)
+        local code = env.engine.context.input or ""
+        if not code:match("^[a-z']+$") or code:match("^v") then
+            for cand in input:iter() do
+                yield(cand)
+            end
+            return
+        end
+        local clean_code = code:gsub("'", "")
+        if #clean_code < 4 or #clean_code > 40 then
+            for cand in input:iter() do
+                yield(cand)
+            end
+            return
+        end
+
+        local cloud_text = query_cloud(clean_code)
+        if cloud_text == "" then
+            for cand in input:iter() do
+                yield(cand)
+            end
+            return
+        end
+
+        local first = true
+        local inserted_cloud = false
+        for cand in input:iter() do
+            if first then
+                first = false
+                if cand.text == cloud_text then
+                    local cmt = cand.comment or ""
+                    if not cmt:find("☁", 1, true) then
+                        cmt = (cmt == "") and "☁" or (cmt .. " ☁")
+                    end
+                    yield(Candidate(cand.type, cand.start, cand._end, cand.text, cmt))
+                    inserted_cloud = true
+                else
+                    yield(cand)
+                    local cloud_cand = Candidate("cloud", 0, #code, cloud_text, "☁")
+                    yield(cloud_cand)
+                    inserted_cloud = true
+                end
+            else
+                if not (inserted_cloud and cand.text == cloud_text and cand._end == #code) then
+                    yield(cand)
+                end
+            end
+        end
+    end
+
+    return M
+    EOF
+  '';
+
+  # Fcitx5 classic UI theme matching Noctalia Suite OLO-Neon palette
+  fcitx5OloNeonTheme = pkgs.runCommand "fcitx5-olo-neon-theme" { } ''
+    dir="$out/share/fcitx5/themes/OLO-Neon"
+    mkdir -p "$dir"
+    cp "${pkgs.fcitx5-nord}/share/fcitx5/themes/Nord-Dark/arrow.png" "$dir/"
+    cp "${pkgs.fcitx5-nord}/share/fcitx5/themes/Nord-Dark/radio.png" "$dir/"
+
+    cat << 'EOF' > "$dir/theme.conf"
+    [Metadata]
+    Name=OLO-Neon
+    Version=1.0
+    Author=NixOS
+    Description=OLO-Neon theme matching Noctalia Suite
+    ScaleWithDPI=True
+
+    [InputPanel]
+    Font=Inter 13
+    NormalColor=#E9FFF8
+    HighlightCandidateColor=#00F5C8
+    HighlightColor=#00F5C8
+    HighlightBackgroundColor=#164A43
+    Spacing=4
+
+    [InputPanel/TextMargin]
+    Left=10
+    Right=10
+    Top=6
+    Bottom=6
+
+    [InputPanel/Background]
+    Color=#080D19
+    BorderColor=#FF149E
+    BorderWidth=2
+
+    [InputPanel/Background/Margin]
+    Left=4
+    Right=4
+    Top=4
+    Bottom=4
+
+    [InputPanel/Highlight]
+    Color=#164A43
+
+    [InputPanel/Highlight/Margin]
+    Left=10
+    Right=10
+    Top=6
+    Bottom=6
+
+    [Menu]
+    Font=Inter 11
+    NormalColor=#E9FFF8
+    HighlightCandidateColor=#00F5C8
+    Spacing=3
+
+    [Menu/Background]
+    Color=#080D19
+    BorderColor=#FF149E
+    BorderWidth=2
+
+    [Menu/Background/Margin]
+    Left=4
+    Right=4
+    Top=4
+    Bottom=4
+
+    [Menu/ContentMargin]
+    Left=2
+    Right=2
+    Top=2
+    Bottom=2
+
+    [Menu/Highlight]
+    Color=#164A43
+
+    [Menu/Highlight/Margin]
+    Left=10
+    Right=10
+    Top=5
+    Bottom=5
+
+    [Menu/Separator]
+    Color=#2A4757
+
+    [Menu/CheckBox]
+    Image=radio.png
+
+    [Menu/SubMenu]
+    Image=arrow.png
+
+    [Menu/TextMargin]
+    Left=5
+    Right=5
+    Top=5
+    Bottom=5
+    EOF
+  '';
 in
 {
   imports = [
@@ -1189,8 +1498,6 @@ in
   environment.variables.VISUAL = "lapce";
   environment.variables.MINDER_FORMULA_OCR = "/run/current-system/sw/bin/formulaocr-offline";
   environment.variables.MINDER_POTRACE = lib.getExe' pkgs.potrace "potrace";
-  environment.variables.GTK_IM_MODULE = lib.mkForce "";
-  environment.variables.QT_IM_MODULE = lib.mkForce "";
 
   # Optional: Enable nix-ld for automatic handling of dynamic libraries
   # This is often recommended for seamless integration with non-Nix software.
@@ -1205,13 +1512,20 @@ in
   i18n.inputMethod = {
     type = "fcitx5";
     enable = true;
+    fcitx5.waylandFrontend = true;
     fcitx5.addons = with pkgs; [
-      fcitx5-gtk   # Or fcitx5-qt for KDE Plasma
-      fcitx5-rime
-      rime-data
+      fcitx5-gtk
+      (fcitx5-rime.override {
+        rimeDataPkgs = [
+          pkgs.rime-ice
+          pkgs.rime-data
+          rimeCustomData
+        ];
+      })
       librime
       qt6Packages.fcitx5-chinese-addons
-      fcitx5-nord  # a color theme
+      fcitx5OloNeonTheme
+      fcitx5-nord
     ];
   };
 

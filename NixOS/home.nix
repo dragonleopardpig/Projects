@@ -802,24 +802,209 @@ in
     zen_mode = False
   '';
 
-  # Fcitx5 classic UI theme matching the dark desktop palette
-  xdg.configFile."fcitx5/conf/classicui.conf".text = ''
-    # Vertical Candidate List
+  # Local keep-alive Google Cloud Pinyin proxy for Rime's Lua filter.
+  systemd.user.services.rime-google-cloud = let
+    cloudProxy = pkgs.writeText "rime-google-cloud.py" ''
+      import collections
+      import http.client
+      import json
+      import os
+      from pathlib import Path
+      import re
+      import socket
+      import sys
+      import urllib.parse
+
+
+      MAX_CACHE = 4096
+      QUERY_RE = re.compile(r"^[a-z]{1,48}$")
+
+
+      class GoogleCloudClient:
+          def __init__(self):
+              self.conn = None
+              self.cache = collections.OrderedDict()
+
+          def _connect(self):
+              if self.conn is not None:
+                  try:
+                      self.conn.close()
+                  except Exception:
+                      pass
+              self.conn = http.client.HTTPSConnection("inputtools.google.com", timeout=1.2)
+
+          def query(self, code: str) -> str:
+              if code in self.cache:
+                  self.cache.move_to_end(code)
+                  return self.cache[code]
+
+              encoded = urllib.parse.quote(code, safe="")
+              path = f"/request?text={encoded}&itc=zh-t-i0-pinyin&num=5&cp=0&cs=1&ie=utf-8&oe=utf-8"
+
+              for attempt in range(2):
+                  if self.conn is None or attempt > 0:
+                      self._connect()
+                  try:
+                      self.conn.request("GET", path, headers={"Connection": "keep-alive"})
+                      resp = self.conn.getresponse()
+                      raw = resp.read()
+                      if resp.status != 200:
+                          self._connect()
+                          continue
+                      data = json.loads(raw.decode("utf-8"))
+                      text = ""
+                      if (
+                          isinstance(data, list)
+                          and len(data) >= 2
+                          and data[0] == "SUCCESS"
+                          and isinstance(data[1], list)
+                          and data[1]
+                          and isinstance(data[1][0], list)
+                          and len(data[1][0]) >= 2
+                          and isinstance(data[1][0][1], list)
+                          and data[1][0][1]
+                      ):
+                          text = str(data[1][0][1][0]).replace("\n", "").strip()
+                      if text:
+                          self.cache[code] = text
+                          if len(self.cache) > MAX_CACHE:
+                              self.cache.popitem(last=False)
+                      return text
+                  except Exception:
+                      self.conn = None
+              return ""
+
+
+      def main():
+          runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+          if not runtime_dir:
+              print("XDG_RUNTIME_DIR not set", file=sys.stderr)
+              sys.exit(1)
+
+          sock_path = Path(runtime_dir) / "rime-google-cloud.sock"
+          if sock_path.exists():
+              sock_path.unlink()
+
+          srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+          srv.bind(str(sock_path))
+          os.chmod(sock_path, 0o600)
+          srv.listen(32)
+
+          client = GoogleCloudClient()
+          while True:
+              try:
+                  conn, _ = srv.accept()
+              except Exception:
+                  continue
+              with conn:
+                  conn.settimeout(0.5)
+                  try:
+                      raw = conn.recv(128).decode("utf-8", errors="ignore")
+                      code = raw.splitlines()[0].strip() if raw else ""
+                      if not QUERY_RE.match(code):
+                          conn.sendall(b"\n")
+                          continue
+                      ans = client.query(code)
+                      conn.sendall((ans + "\n").encode("utf-8"))
+                  except Exception:
+                      pass
+
+
+      if __name__ == "__main__":
+          main()
+    '';
+  in {
+    Unit = {
+      Description = "Rime Google Cloud Pinyin keep-alive helper";
+      After = [ "network-online.target" ];
+    };
+    Service = {
+      ExecStart = "${pkgs.python3}/bin/python3 -u ${cloudProxy}";
+      Restart = "always";
+      RestartSec = 2;
+    };
+    Install = {
+      WantedBy = [ "default.target" ];
+    };
+  };
+
+  # Fcitx5 native Wayland classic UI theme (OLO-Neon), Rime Pinyin (rime-ice),
+  # and Google Cloud Pinyin deployment. Written as mutable files so GUI
+  # changes in fcitx5-config-qt persist cleanly.
+  home.activation.configureFcitx5Rime = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    rime_data_dir="${osConfig.i18n.inputMethod.package}/share/rime-data"
+    conf_dir="$HOME/.config/fcitx5/conf"
+    rime_dir="$HOME/.local/share/fcitx5/rime"
+    mkdir -p "$conf_dir" "$rime_dir/lua" "$rime_dir/build"
+
+    fcitx5_was_active=0
+    user_runtime_dir="/run/user/$(${pkgs.coreutils}/bin/id -u)"
+    if [ -S "$user_runtime_dir/bus" ]; then
+      if XDG_RUNTIME_DIR="$user_runtime_dir" DBUS_SESSION_BUS_ADDRESS="unix:path=$user_runtime_dir/bus" \
+          ${pkgs.systemd}/bin/systemctl --user is-active --quiet app-org.fcitx.Fcitx5@autostart.service; then
+        fcitx5_was_active=1
+        XDG_RUNTIME_DIR="$user_runtime_dir" DBUS_SESSION_BUS_ADDRESS="unix:path=$user_runtime_dir/bus" \
+          ${pkgs.systemd}/bin/systemctl --user stop app-org.fcitx.Fcitx5@autostart.service || true
+      fi
+    fi
+
+    rm -f "$conf_dir/classicui.conf"
+    cat << 'EOF' > "$conf_dir/classicui.conf"
     Vertical Candidate List=False
-    # Use Per Screen DPI
-    PerScreenDPI=True
-    # Font
-    Font="Inter 11"
-    # Menu Font
-    MenuFont="Inter 10"
-    # Tray Font
-    TrayFont="Inter 10"
-    # Theme
-    Theme=Nord-Dark
-    # Dark Theme
-    DarkTheme=Nord-Dark
-    # Use Dark Theme
+    PerScreenDPI=False
+    EnableFractionalScale=True
+    Font="Inter, Noto Sans CJK SC 13"
+    MenuFont="Inter, Noto Sans CJK SC 11"
+    TrayFont="Inter, Noto Sans CJK SC 11"
+    Theme=OLO-Neon
+    DarkTheme=OLO-Neon
     UseDarkTheme=True
+    EOF
+    chmod 644 "$conf_dir/classicui.conf"
+
+    rm -f "$conf_dir/cloudpinyin.conf"
+    cat << 'EOF' > "$conf_dir/cloudpinyin.conf"
+    MinimumPinyinLength=4
+    Backend=Google
+    EOF
+    chmod 644 "$conf_dir/cloudpinyin.conf"
+
+    rm -f "$HOME/.config/fcitx5/profile"
+    cat << 'EOF' > "$HOME/.config/fcitx5/profile"
+    [Groups/0]
+    Name=Default
+    Default Layout=us
+    DefaultIM=rime
+
+    [Groups/0/Items/0]
+    Name=keyboard-us
+    Layout=
+
+    [Groups/0/Items/1]
+    Name=rime
+    Layout=
+
+    [Groups/0/Items/2]
+    Name=pinyin
+    Layout=
+
+    [GroupOrder]
+    0=Default
+    EOF
+    chmod 644 "$HOME/.config/fcitx5/profile"
+
+    cp -f "$rime_data_dir/default.custom.yaml" "$rime_dir/default.custom.yaml"
+    cp -f "$rime_data_dir/rime_ice.custom.yaml" "$rime_dir/rime_ice.custom.yaml"
+    cp -f "$rime_data_dir/lua/google_cloud_pinyin.lua" "$rime_dir/lua/google_cloud_pinyin.lua"
+    chmod 644 "$rime_dir/default.custom.yaml" "$rime_dir/rime_ice.custom.yaml" "$rime_dir/lua/google_cloud_pinyin.lua"
+
+    (cd "$rime_dir" && ${pkgs.librime}/bin/rime_deployer --set-active-schema rime_ice) || true
+    ${pkgs.librime}/bin/rime_deployer --build "$rime_dir" "$rime_data_dir" "$rime_dir/build" || true
+
+    if [ "$fcitx5_was_active" = "1" ]; then
+      XDG_RUNTIME_DIR="$user_runtime_dir" DBUS_SESSION_BUS_ADDRESS="unix:path=$user_runtime_dir/bus" \
+        ${pkgs.systemd}/bin/systemctl --user start app-org.fcitx.Fcitx5@autostart.service || true
+    fi
   '';
 
   # nwg-drawer (fullscreen Unity/GNOME-Activities-style app grid) — cyberpunk
@@ -1301,6 +1486,7 @@ in
   xdg.desktopEntries.nemo                     = { name = "Files";    exec = "true"; noDisplay = true; };
   xdg.desktopEntries.iexplorer                = { name = "Internet Explorer"; exec = "true"; noDisplay = true; };
   xdg.desktopEntries."org.nomacs.ImageLounge" = { name = "nomacs";   exec = "true"; noDisplay = true; };
+  xdg.desktopEntries.fcitx5-configtool        = { name = "Fcitx 5 Configuration"; exec = "true"; noDisplay = true; };
 
 
   # Gmsh wrapper: force XWayland + software GL
