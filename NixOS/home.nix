@@ -121,11 +121,11 @@ in
     source = "${pkgs.hicolor-icon-theme}/share/icons/hicolor/index.theme";
   };
 
-  xdg.desktopEntries.sioyek-xcb = {
-    name = "Sioyek (X11)";
+  xdg.desktopEntries.sioyek = {
+    name = "Sioyek";
     exec = "/home/thinky/.local/bin/sioyek --new-window %f";
     icon = "sioyek-icon-linux";
-    comment = "Sioyek document viewer in a separate window (forced X11)";
+    comment = "Sioyek document viewer in a separate window";
     # Sioyek renders through MuPDF, so EPUB is native -- no conversion involved.
     # It has to be declared here or Sioyek never appears as a choice for one.
     mimeType = [
@@ -425,15 +425,15 @@ in
     enable = true;
     defaultApplications = {
       "inode/directory" = [ "io.github.lgse.Strata.desktop" ];
-      "application/pdf" = [ "sioyek-xcb.desktop" ];
+      "application/pdf" = [ "sioyek.desktop" ];
       # Without this an EPUB falls through to whatever the system MIME cache
       # picks -- OnlyOffice, here. Nemo's "Set as default" cannot fix that,
       # because this file is a read-only symlink into the Nix store.
-      "application/epub+zip" = [ "sioyek-xcb.desktop" ];
+      "application/epub+zip" = [ "sioyek.desktop" ];
       # Native since the sioyek-native-djvu patch; no conversion involved.
-      "image/vnd.djvu" = [ "sioyek-xcb.desktop" ];
-      "image/vnd.djvu+multipage" = [ "sioyek-xcb.desktop" ];
-      "image/x-djvu" = [ "sioyek-xcb.desktop" ];
+      "image/vnd.djvu" = [ "sioyek.desktop" ];
+      "image/vnd.djvu+multipage" = [ "sioyek.desktop" ];
+      "image/x-djvu" = [ "sioyek.desktop" ];
       "image/png" = [ "nomacs-x11.desktop" ];
       "image/jpeg" = [ "nomacs-x11.desktop" ];
       "image/gif" = [ "nomacs-x11.desktop" ];
@@ -1296,7 +1296,6 @@ in
     settings.StartupWMClass = "FreeCAD";
     terminal = false;
   };
-  xdg.desktopEntries.sioyek                   = { name = "Sioyek";   exec = "true"; noDisplay = true; };
   xdg.desktopEntries.mayo                     = { name = "Mayo";     exec = "true"; noDisplay = true; };
   xdg.desktopEntries.gmsh                     = { name = "Gmsh";     exec = "true"; noDisplay = true; };
   xdg.desktopEntries.nemo                     = { name = "Files";    exec = "true"; noDisplay = true; };
