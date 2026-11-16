@@ -165,6 +165,19 @@ in
     settings.StartupWMClass = "trident";
   };
 
+  # KrakenOS: its Qt shell names every window "kraken" (Kraken-Optical-Simulator bugs/1377) and its devenv's
+  # `kraken-ui` starts it on XWayland, as trident's entry above starts `trident-ui`.
+  xdg.desktopEntries.kraken = {
+    name = "KrakenOS";
+    genericName = "Optical simulator";
+    exec = ''${pkgs.bash}/bin/bash -lc "cd /home/thinky/Projects/Kraken-Optical-Simulator && exec direnv exec . kraken-ui"'';
+    icon = "applications-science";
+    comment = "KrakenOS optical simulator (Qt interface)";
+    categories = [ "Science" "Physics" "Engineering" ];
+    terminal = false;
+    settings.StartupWMClass = "kraken";
+  };
+
   xdg.desktopEntries.gmsh-xcb = {
     name = "Gmsh";
     exec = "/home/thinky/.local/bin/gmsh-xcb %f";
