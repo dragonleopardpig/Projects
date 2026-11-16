@@ -1129,6 +1129,14 @@
     (with-temp-buffer
       (dashboard-insert-navigator)
       (widget-setup)
+      ;; Fixed display widths survive Dashboard's face rewriting and keep
+      ;; wide Nerd glyphs clear of their labels in variable-pitch themes.
+      (let ((pos (point-min)) (padding 0))
+        (while (< pos (point-max))
+          (when (equal (get-text-property pos 'display) '(space :width 1.5))
+            (setq padding (1+ padding)))
+          (setq pos (1+ pos)))
+        (should (= padding 6)))
       (goto-char (point-min))
       (should (search-forward "Dirvish" nil t))
       (cl-letf (((symbol-function 'strata-dirvish-launch)
@@ -2347,6 +2355,8 @@
         (should (string-match-p "C-SPC / C-Click" (buffer-string)))
         (should (string-match-p "reverse direction to shrink" (buffer-string)))
         (should (string-match-p "During drag: cancel" (buffer-string)))
+        (should (string-match-p "C-c s / Click Sort By…" (buffer-string)))
+        (should (string-match-p "Ascending / Descending; Folders first" (buffer-string)))
         (should-not (string-match-p "^   V / W.*Toggle Rendered" (buffer-string)))
         (when tenxer
           (should (string-match-p "C-S-i / C-r" (buffer-string)))
@@ -2486,6 +2496,152 @@
       (strata-mouse--drag-watchdog strata-mouse--drag-state)
       (should-not track-mouse)
       (should-not strata-mouse--drag-state))))
+
+(defun strata-test--sort-menu-command (label)
+  "Return the actual popup menu command labeled LABEL."
+  (let ((item (cl-find-if (lambda (item)
+                            (and (consp item) (eq (cadr item) 'menu-item)
+                                 (equal (nth 2 item) label)))
+                          (cdr (strata-sort--menu)))))
+    (should item)
+    (nth 3 item)))
+
+(defun strata-test--rendered-sort-names ()
+  "Read filenames from the displayed Dired rows or rendered grid cells."
+  (if (derived-mode-p 'dired-mode)
+      (mapcar #'file-name-nondirectory (strata-view--entry-order))
+    (let ((pos (point-min)) paths)
+      (while (< pos (point-max))
+        (when-let ((path (get-text-property pos 'strata-entry)))
+          (unless (member path paths) (push path paths)))
+        (setq pos (next-single-property-change pos 'strata-entry nil (point-max))))
+      ;; The small test fixture fits in one Compact column; Icons cells are
+      ;; encountered in grid order, including repeated properties on cards.
+      (mapcar #'file-name-nondirectory (nreverse paths)))))
+
+(ert-deftest strata-test-sort-menu-orders-all-directory-layouts ()
+  "Popup commands really reorder files in all four layouts and retain marks."
+  (dolist (view '(list columns compact icons))
+    (strata-test--with-selection-view view
+      (cl-loop for old in strata-test--files
+               for name in '("a.txt" "b.zip" "c.txt" "d.el" "e.txt" "f.png")
+               for size in '(6 1 4 2 5 3)
+               for seconds in '(600000 500000 400000 300000 200000 100000)
+               for file = (expand-file-name name strata-test--dir)
+               do (unless (equal file old) (rename-file old file))
+               do (write-region (make-string size ?x) nil file nil 'silent)
+               do (set-file-times file (seconds-to-time seconds)))
+      (strata-sort-set 'name 'asc)
+      (strata-goto-file (car strata-test--files))
+      (strata-view-toggle-mark)
+      (dolist (choice '(("Name" ("a.txt" "b.zip" "c.txt" "d.el" "e.txt" "f.png"))
+                        ("Modification date" ("f.png" "e.txt" "d.el" "c.txt" "b.zip" "a.txt"))
+                        ("Size" ("b.zip" "d.el" "f.png" "c.txt" "e.txt" "a.txt"))
+                        ("Type / extension" ("d.el" "f.png" "a.txt" "c.txt" "e.txt" "b.zip"))))
+        (call-interactively (strata-test--sort-menu-command (car choice)))
+        (should (equal (strata-test--rendered-sort-names) (cadr choice)))
+        ;; Rechoosing a radio item must keep its direction, unlike the chord.
+        (call-interactively (strata-test--sort-menu-command (car choice)))
+        (should (eq (strata-prefs-sort-direction strata-prefs-current) 'asc))
+        (call-interactively #'strata-sort-descending)
+        (should (equal (strata-test--rendered-sort-names) (reverse (cadr choice))))
+        (should (equal (strata-test--selection-names) '("a.txt")))
+        (should (equal (file-name-nondirectory (strata-current-file)) "a.txt"))
+        (call-interactively #'strata-sort-ascending))
+      (call-interactively (strata-test--sort-menu-command "Unsorted (directory order)"))
+      (should (eq (strata-prefs-sort-key strata-prefs-current) 'unsorted))
+      ;; Unsorted order is unspecified by directory-files and ls -U; it
+      ;; must still display the complete directory without losing marks.
+      (should (equal (sort (strata-test--rendered-sort-names) #'string<)
+                     (directory-files strata-test--dir nil "\\`[^.]")))
+      (should (equal (strata-test--selection-names) '("a.txt")))
+      (should (file-exists-p strata-dirvish-state-file)))))
+
+(ert-deftest strata-test-sort-menu-folders-and-natural-names ()
+  "The folder and natural-name switches act consistently in every layout."
+  (dolist (view '(list columns compact icons))
+    (strata-test--with-selection-view view
+      (make-directory (expand-file-name "z-folder" strata-test--dir))
+      (dolist (name '("item10.txt" "item2.txt"))
+        (write-region "x" nil (expand-file-name name strata-test--dir) nil 'silent))
+      (strata-sort-set 'name 'asc)
+      (should (equal (car (strata-test--rendered-sort-names)) "z-folder"))
+      (strata-sort-descending)
+      (should (equal (car (strata-test--rendered-sort-names)) "z-folder"))
+      (strata-sort-ascending)
+      (call-interactively (strata-test--sort-menu-command "Folders first"))
+      (should (equal (car (strata-test--rendered-sort-names)) "a.txt"))
+      (let ((names (strata-test--rendered-sort-names)))
+        (should (< (cl-position "item2.txt" names :test #'equal)
+                   (cl-position "item10.txt" names :test #'equal))))
+      (call-interactively (strata-test--sort-menu-command "Natural names (file2 before file10)"))
+      (let ((names (strata-test--rendered-sort-names)))
+        (should (< (cl-position "item10.txt" names :test #'equal)
+                   (cl-position "item2.txt" names :test #'equal)))))))
+
+(ert-deftest strata-test-sort-header-and-shortcut-in-every-layout ()
+  "The header is clickable and C-c s works in both keyboard modes."
+  (dolist (view '(list columns compact icons))
+    (strata-test--with-selection-view view
+      (should header-line-format)
+      (let* ((text (dirvish-strata-view-info-ml))
+             (pos (string-match "Sort By…" text))
+             (map (get-text-property pos 'keymap text)))
+        (should pos)
+        (should (eq (lookup-key map [header-line mouse-1]) #'strata-sort-menu)))
+      (dolist (tenx '(nil t))
+        (setf (strata-prefs-tenxer-mode strata-prefs-current) tenx)
+        (strata-dirvish--apply-active-keymap)
+        (should (eq (key-binding (kbd "C-c s")) #'strata-sort-menu))))))
+
+(ert-deftest strata-test-sort-header-targets-clicked-pane ()
+  "Clicking an inactive pane's header opens the menu in that directory."
+  (strata-test--with-selection-view 'compact
+    (let* ((first (selected-window))
+           (second (split-window-right))
+           (other (generate-new-buffer "*Strata Sort Other Pane*"))
+           (tab (strata-active-tab))
+           (pane1 (strata-tab-state-pane1 tab))
+           (pane2 (make-strata-pane-state :id 2 :window second :buffer other
+                                          :dir strata-test--dir))
+           menu-buffer)
+      (unwind-protect
+          (progn
+            (with-current-buffer other (strata-compact-mode))
+            (set-window-buffer second other)
+            (setf (strata-pane-state-window pane1) first
+                  (strata-pane-state-buffer pane1) (current-buffer)
+                  (strata-tab-state-pane2 tab) pane2
+                  (strata-tab-state-split-p tab) t)
+            (cl-letf (((symbol-function 'popup-menu)
+                       (lambda (&rest _) (setq menu-buffer (current-buffer))))
+                      ((symbol-function 'strata-sidebar-refresh) #'ignore))
+              (strata-sort-menu (list 'mouse-1 (list second 'header-line '(10 . 10) 0))))
+            (should (eq menu-buffer other))
+            (should (= (strata-tab-state-active-pane tab) 2)))
+        (when (buffer-live-p other) (kill-buffer other))))))
+
+(ert-deftest strata-test-sort-global-dirvish-header-targets-root ()
+  "Columns' separate header window directs the menu back to the root browser."
+  (strata-test--with-selection-view 'columns
+    (let* ((root (selected-window))
+           (header (split-window-below))
+           (aux (generate-new-buffer "*Strata Sort Header*"))
+           (dv (dirvish--new :root-window root))
+           menu-buffer)
+      (unwind-protect
+          (progn
+            (with-current-buffer aux
+              (dirvish-misc-mode)
+              (dirvish-prop :dv (dv-id dv)))
+            (set-window-buffer header aux)
+            (cl-letf (((symbol-function 'popup-menu)
+                       (lambda (&rest _) (setq menu-buffer (current-buffer)))))
+              (strata-sort-menu (list 'mouse-1 (list header 'header-line '(10 . 10) 0))))
+            (should (eq menu-buffer strata-test--buf))
+            (should (eq (selected-window) root)))
+        (when (buffer-live-p aux) (kill-buffer aux))
+        (remhash (dv-id dv) dirvish--sessions)))))
 
 (provide 'strata-dirvish-tests)
 ;;; strata-dirvish-tests.el ends here

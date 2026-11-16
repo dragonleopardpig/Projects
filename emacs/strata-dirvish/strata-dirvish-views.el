@@ -10,6 +10,7 @@
 
 (require 'cl-lib)
 (require 'dired)
+(require 'easymenu)
 (require 'dirvish)
 (require 'dirvish-widgets nil t)
 (require 'dirvish-vc nil t)
@@ -572,7 +573,11 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       (setq flags (delete "-a" flags)))
     (when (strata-prefs-folders-first p)
       (push "--group-directories-first" flags))
-    (when (eq (strata-prefs-sort-direction p) 'desc)
+    ;; GNU ls defaults to largest/newest first for these keys.  Strata's
+    ;; ascending order means smallest/oldest first in every layout.
+    (when (if (memq sk '(size modified created))
+              (eq (strata-prefs-sort-direction p) 'asc)
+            (eq (strata-prefs-sort-direction p) 'desc))
       (push "-r" flags))
     (pcase sk
       ('modified (push "-t" flags))
@@ -723,6 +728,15 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 
 ;;;; Dirvish Header Breadcrumbs & Strata Footer Mode-Line
 
+(defvar strata-sort-header-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [header-line mouse-1] #'strata-sort-menu)
+    (define-key map [header-line mouse-2] #'strata-sort-menu)
+    (define-key map [mode-line mouse-1] #'strata-sort-menu)
+    (define-key map [mode-line mouse-2] #'strata-sort-menu)
+    map)
+  "Mouse bindings for the Sort By header control in every directory layout.")
+
 (defun strata-crumb--make-segment (label target)
   "Return clickable breadcrumb segment LABEL pointing to directory TARGET."
   (let ((km (make-sparse-keymap))
@@ -815,7 +829,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
     (concat (or pane-badge "") " " crumbs (when filter-pill (concat "  " filter-pill)))))
 
 (dirvish-define-mode-line strata-view-info
-  "Compact view, sort, and zoom indicator pills in header right."
+  "View indicator and clickable Sort By control in the header."
   (let* ((p (strata-prefs))
          (vmode (or strata-local-view-mode (strata-prefs-browser-mode p)))
          (view-lbl (pcase vmode
@@ -829,9 +843,23 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
          (tenx (when (strata-prefs-tenxer-mode p)
                  (propertize " 10X " 'face 'strata-pill-10x))))
     (concat
-     (or tenx "")
-     (propertize (format " [%s · %s %s] " view-lbl sort-lbl arrow)
-                 'face 'strata-hint-desc))))
+     (propertize (format " [Sort By… %s %s] " sort-lbl arrow)
+                 'face 'strata-header-accent
+                 'mouse-face 'highlight 'pointer 'hand
+                 'help-echo "Sort files by name, date, size or extension (C-c s)"
+                 'local-map strata-sort-header-map 'keymap strata-sort-header-map)
+     (propertize (format " [%s] " view-lbl) 'face 'strata-hint-desc)
+     (or tenx ""))))
+
+(defun strata-view-header-line ()
+  "Render breadcrumbs while reserving room for the Sort By control."
+  (let* ((right (dirvish-strata-view-info-ml))
+         (left (dirvish-strata-breadcrumb-ml))
+         (room (max 0 (- (window-width) (string-width right) 1))))
+    (concat (truncate-string-to-width left room nil nil "…")
+            (propertize " " 'display
+                        `(space :align-to (- right ,(string-width right))))
+            right)))
 
 (dirvish-define-mode-line strata-footer
   "Strata footer: selection summary, clipboard, chord indicator, and hints."
@@ -844,7 +872,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
          (hints (when (and (strata-prefs-show-keybinding-hints p) (not chord))
                   (if (strata-prefs-tenxer-mode p)
                       " j/k Nav  g Go  , Sort  ; Act  t Tabs  i Peek  f Filter  ~ Keys"
-                    " ←/→ Nav  C-1..4 View  F3 Split  C-` Term  C-k Search  C-, Prefs  ? Keys"))))
+                    " ←/→ Nav  C-1..4 View  C-c s Sort  F3 Split  C-k Search  C-, Prefs  ? Keys"))))
     (concat
      (if (> count 0)
          (propertize (format " %d selected " count) 'face 'strata-header-accent)
@@ -983,7 +1011,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
   (add-hook 'visual-line-mode-hook #'strata--enforce-no-wrap nil t)
   (add-hook 'after-change-major-mode-hook #'strata--enforce-no-wrap 90 t)
   (setq-local header-line-format
-              '(:eval (concat (dirvish-strata-breadcrumb-ml) "   " (dirvish-strata-view-info-ml))))
+              '(:eval (strata-view-header-line)))
   (setq-local mode-line-format
               '(:eval (dirvish-strata-footer-ml)))
   (add-hook 'post-command-hook #'strata-view--sync-preview-on-move nil t))
@@ -1155,7 +1183,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
   (add-hook 'visual-line-mode-hook #'strata--enforce-no-wrap nil t)
   (add-hook 'after-change-major-mode-hook #'strata--enforce-no-wrap 90 t)
   (setq-local header-line-format
-              '(:eval (concat (dirvish-strata-breadcrumb-ml) "   " (dirvish-strata-view-info-ml))))
+              '(:eval (strata-view-header-line)))
   (setq-local mode-line-format
               '(:eval (dirvish-strata-footer-ml)))
   (add-hook 'post-command-hook #'strata-icons--post-command-hook nil t)
@@ -2716,23 +2744,86 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
    (t
     (strata-view-up-directory))))
 
-(defun strata-sort-set (key)
+(defun strata-sort--menu ()
+  "Build the clickable sort menu with current choices marked."
+  (easy-menu-create-menu
+   "Sort By…"
+   '(["Name" (strata-sort-set 'name (strata-prefs-sort-direction (strata-prefs)))
+      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'name)]
+     ["Modification date" (strata-sort-set 'modified (strata-prefs-sort-direction (strata-prefs)))
+      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'modified)]
+     ["Size" (strata-sort-set 'size (strata-prefs-sort-direction (strata-prefs)))
+      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'size)]
+     ["Type / extension" (strata-sort-set 'extension (strata-prefs-sort-direction (strata-prefs)))
+      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'extension)]
+     ["Unsorted (directory order)" (strata-sort-set 'unsorted 'asc)
+      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'unsorted)]
+     "--"
+     ["Ascending (A–Z, smallest, oldest)" strata-sort-ascending
+      :style radio :selected (eq (strata-prefs-sort-direction (strata-prefs)) 'asc)
+      :enable (not (eq (strata-prefs-sort-key (strata-prefs)) 'unsorted))]
+     ["Descending (Z–A, largest, newest)" strata-sort-descending
+      :style radio :selected (eq (strata-prefs-sort-direction (strata-prefs)) 'desc)
+      :enable (not (eq (strata-prefs-sort-key (strata-prefs)) 'unsorted))]
+     "--"
+     ["Folders first" strata-sort-toggle-folders-first
+      :style toggle :selected (strata-prefs-folders-first (strata-prefs))
+      :enable (not (eq (strata-prefs-sort-key (strata-prefs)) 'unsorted))]
+     ["Natural names (file2 before file10)" strata-sort-toggle-natural
+      :style toggle :selected (strata-prefs-natural-sort (strata-prefs))
+      :enable (eq (strata-prefs-sort-key (strata-prefs)) 'name)])))
+
+(defun strata-sort-menu (&optional event)
+  "Show the clickable Sort By menu for the directory at EVENT (`C-c s')."
+  (interactive (list (when (mouse-event-p last-input-event) last-input-event)))
+  (when event
+    (let* ((clicked (posn-window (event-start event)))
+           (target
+            (when (window-live-p clicked)
+              (with-current-buffer (window-buffer clicked)
+                (if (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
+                    clicked
+                  ;; Columns puts its header in a separate Dirvish window.
+                  (when-let ((dv (dirvish-curr))) (dv-root-window dv)))))))
+      (when (window-live-p target)
+        (select-window target)
+        (strata-panes--sync-active-pane-from-window target))))
+  (unless (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
+    (user-error "Open a directory to sort its files"))
+  (popup-menu (strata-sort--menu) event))
+
+(defun strata-sort-ascending ()
+  "Sort the current directory in ascending order."
+  (interactive)
+  (strata-sort-set (strata-prefs-sort-key (strata-prefs)) 'asc))
+
+(defun strata-sort-descending ()
+  "Sort the current directory in descending order."
+  (interactive)
+  (strata-sort-set (strata-prefs-sort-key (strata-prefs)) 'desc))
+
+(defun strata-sort-set (key &optional direction)
   "Sort active browser by KEY (`name', `modified', `size', `type', `extension', `created', `unsorted').
-Clicking the already active sort key toggles ascending/descending."
+With DIRECTION, set that order explicitly; otherwise selecting the already
+active sort key toggles ascending/descending (the 10xer sort chord)."
   (interactive
    (list (intern (completing-read "Sort by: "
                                   '("name" "modified" "size" "type" "extension" "created" "unsorted")
                                   nil t))))
   (let ((p (strata-prefs)))
-    (if (eq (strata-prefs-sort-key p) key)
-        (setf (strata-prefs-sort-direction p)
-              (if (eq (strata-prefs-sort-direction p) 'asc) 'desc 'asc))
-      (setf (strata-prefs-sort-key p) key
-            (strata-prefs-sort-direction p) 'asc))
+    (if direction
+        (setf (strata-prefs-sort-key p) key
+              (strata-prefs-sort-direction p) direction)
+      (if (eq (strata-prefs-sort-key p) key)
+          (setf (strata-prefs-sort-direction p)
+                (if (eq (strata-prefs-sort-direction p) 'asc) 'desc 'asc))
+        (setf (strata-prefs-sort-key p) key
+              (strata-prefs-sort-direction p) 'asc)))
     (strata-prefs-save)
     (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
           ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
           ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
+    (force-mode-line-update t)
     (message "Sorted by %s (%s)" key (strata-prefs-sort-direction p))))
 
 (defun strata-sort-toggle-folders-first ()

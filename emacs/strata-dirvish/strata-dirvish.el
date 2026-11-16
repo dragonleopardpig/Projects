@@ -93,6 +93,12 @@ Always falls back to `~/' when the target or saved directory does not exist."
   (unless noninteractive
     (strata-tabs-save)))
 
+(defun strata-dirvish-dashboard-icon (kind face)
+  "Return KIND's icon with fixed padding before Dashboard's button label.
+Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
+  (concat (strata-icon-glyph kind face)
+          (propertize " " 'display '(space :width 1.5))))
+
 (defun strata-dirvish-dashboard-install ()
   "Blend crisp Strata navigator buttons into Emacs Dashboard."
   (when (boundp 'dashboard-navigator-buttons)
@@ -109,36 +115,36 @@ Always falls back to `~/' when the target or saved directory does not exist."
       (when (boundp 'dashboard-set-navigator)
         (setq dashboard-set-navigator t)))
     (setq dashboard-navigator-buttons
-          `(((,(strata-icon-glyph 'folder 'strata-header-accent)
+          `(((,(strata-dirvish-dashboard-icon 'folder 'strata-header-accent)
               "Dirvish"
               "Open Strata-Dirvish File Browser (C-c d)"
               (lambda (&rest _) (strata-dirvish-launch))
-              strata-header-accent "" "")
-             (,(strata-icon-glyph 'computer 'strata-crumb-segment)
+              strata-header-accent "" "  ")
+             (,(strata-dirvish-dashboard-icon 'computer 'strata-crumb-segment)
               "Computer"
               "Open Computer Drives & Cloud Mounts (computer:///)"
               (lambda (&rest _) (strata-dirvish-launch-computer))
-              strata-crumb-segment "" "")
-             (,(strata-icon-glyph 'search 'strata-hint-key)
+              strata-crumb-segment "" "  ")
+             (,(strata-dirvish-dashboard-icon 'search 'strata-hint-key)
               "Search"
               "Global Recursive Search across Home & Drives (C-k)"
               (lambda (&rest _) (call-interactively #'strata-global-search))
-              strata-hint-key "" "")
-             (,(strata-icon-glyph 'trash 'shadow)
+              strata-hint-key "" "  ")
+             (,(strata-dirvish-dashboard-icon 'trash 'shadow)
               "Trash"
               "Open Trash (trash:///)"
               (lambda (&rest _) (strata-dirvish-launch-trash))
-              shadow "" "")
-             (,(strata-icon-glyph 'recent 'shadow)
+              shadow "" "  ")
+             (,(strata-dirvish-dashboard-icon 'recent 'shadow)
               "Recent"
               "Open Recent Files (recent:///)"
               (lambda (&rest _) (strata-dirvish-launch-recent))
-              shadow "" "")
-             (,(strata-icon-glyph 'gear 'shadow)
+              shadow "" "  ")
+             (,(strata-dirvish-dashboard-icon 'gear 'shadow)
               "Prefs"
               "Open Strata Settings & Diagnostics (C-,)"
               (lambda (&rest _) (strata-open-settings))
-              shadow "" ""))))))
+              shadow "" "  "))))))
 
 (defun strata-dirvish--collapse-guard (orig-fn f-name)
   "Skip `dirvish-collapse--cache' for F-NAME on FUSE, cloud, or remote mounts."

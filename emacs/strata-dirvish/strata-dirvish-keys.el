@@ -274,7 +274,8 @@
     ("1" "Columns View" strata-view-columns)
     ("2" "Icons Grid View" strata-view-icons)
     ("3" "List / Tree View" strata-view-list)
-    ("4" "Compact View" strata-view-compact)]
+    ("4" "Compact View" strata-view-compact)
+    ("S" "Sort By… (C-c s)" strata-sort-menu)]
    ["File Operations"
     ("y" "Copy" strata-copy-selection)
     ("x" "Cut" strata-cut-selection)
@@ -497,6 +498,9 @@
                     ("Double-Click / Middle" "Open folder or edit file"))
                    ("VIEWS, SORT & ZOOM"
                     ("C-1 / C-2 / C-3 / C-4" "Columns / Icons Grid / List (Tree) / Compact View")
+                    ("C-c s / Click Sort By…" "Sort menu in every directory layout; also S-F10 then S")
+                    ("Sort By… options" "Name / Modification date / Size / Type or extension / Unsorted")
+                    ("Sort order" "Ascending / Descending; Folders first; Natural names (file2 before file10)")
                     ("TAB" "Expand / Collapse folder subtree (List/Tree view)")
                     (,(if tenx "C-. / ." "C-.") "Toggle Hidden Dot-files")
                     (,(if tenx "M-v / W / M-w" "M-v / M-w") "Toggle Rendered Document Mode / Preview Line Wrap")
@@ -525,7 +529,8 @@
                     ("m <a-z> / ' <a-z>" "10xer: Set / Jump Persistent Letter Bookmark")
                     ("C-u / C-d / C-b / C-f" "10xer: Half Page Up / Down / Page Up / Down")
                     ("g <key>" "Go: h Home, e Computer, t Trash, n Network, r Recent, 1-9 Pins, +/- Pin")
-                    (", <key>" "Sort: a Name, m Mod, s Size, e Type, x Ext, b Created, f Folders first, g Group")
+                    (", <key>" "Sort: a Name, m Mod, s Size, e Type, x Ext, b Created, u Unsorted, n Natural, l Reverse, f Folders first, g Group")
+                    ("Repeat sort chord" "Selecting the same sort key again reverses its order")
                     ("; <key>" "Actions: t Term, c Compress, e/E Extract, 1-9 Action, . Folder Action")
                     ("t <key>" "Tabs: n New, x Close, t Prev, 1-9 Tab N")
                     ("C-M-SPC / C-M-←/→" "Media Play-Pause / Seek ±5s (mpv IPC)"))))
@@ -567,6 +572,7 @@
     (define-key map (kbd "C-2") #'strata-view-icons)
     (define-key map (kbd "C-3") #'strata-view-list)
     (define-key map (kbd "C-4") #'strata-view-compact)
+    (define-key map (kbd "C-c s") #'strata-sort-menu)
     (define-key map (kbd "C-=") #'strata-preview-zoom-in)
     (define-key map (kbd "C-+") #'strata-preview-zoom-in)
     (define-key map (kbd "C--") #'strata-preview-zoom-out)
@@ -753,6 +759,10 @@
   (if strata-dirvish-mode
       (progn
         (add-hook 'post-command-hook #'strata-view--selection-post-command nil t)
+        ;; Extra panes may use ordinary Dired without Dirvish's header composer.
+        (when (and (derived-mode-p 'dired-mode) (null header-line-format)
+                   (not (when-let ((dv (dirvish-curr))) (dv-curr-layout dv))))
+          (setq-local header-line-format '(:eval (strata-view-header-line))))
         (strata-dirvish--apply-active-keymap))
     (remove-hook 'post-command-hook #'strata-view--selection-post-command t)
     (strata-dirvish-tenxer-mode -1)))
