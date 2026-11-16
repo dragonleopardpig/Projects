@@ -29,38 +29,6 @@ def is_lid_closed(lid_glob: str = "/proc/acpi/button/lid/*/state") -> bool:
     return False
 
 
-def is_internal_on_secondary_gpu(
-    internal_name: str,
-    drm_sysfs: str = "/sys/class/drm",
-    wlr_drm_devices: str | None = None,
-) -> bool:
-    if not internal_name:
-        return False
-    if wlr_drm_devices is None:
-        wlr_drm_devices = os.environ.get("WLR_DRM_DEVICES", "")
-    first_entry = next((part.strip() for part in wlr_drm_devices.split(":") if part.strip()), "")
-    if not first_entry:
-        return False
-    primary_card = os.path.basename(first_entry)
-    if not primary_card:
-        return False
-
-    connected_cards: list[str] = []
-    pattern = os.path.join(drm_sysfs, f"card*-{internal_name}", "status")
-    for status_path in glob.glob(pattern):
-        try:
-            with open(status_path, "r", encoding="utf-8") as f:
-                if f.read().strip() == "connected":
-                    conn_dir = os.path.basename(os.path.dirname(status_path))
-                    connected_cards.append(conn_dir.split("-", 1)[0])
-        except Exception:
-            pass
-
-    if not connected_cards or primary_card in connected_cards:
-        return False
-    return True
-
-
 def get_outputs() -> list[dict]:
     try:
         res = subprocess.run(["umbriel", "outputs", "--json"], capture_output=True, text=True, check=True)
@@ -161,7 +129,6 @@ def calculate_next_state(
     lid_closed: bool,
     existing_sections: dict[str, dict],
     requested_mode: str = "",
-    internal_on_secondary_gpu: bool = False,
 ) -> tuple[str, dict[str, dict], str]:
     """Calculate the action, new sections dict, and user-facing message."""
     if not outputs:
@@ -174,22 +141,32 @@ def calculate_next_state(
         return "input", {}, ""
 
     if not internal or not externals:
+        if internal and not externals and not lid_closed:
+            internal_key = get_identity_key(internal, outputs)
+            if not bool(internal.get("enabled", False)) or existing_sections.get(internal_key, {}).get("enabled") is False:
+                new_sections = {k: dict(v) for k, v in existing_sections.items()}
+                internal_sec = new_sections.setdefault(internal_key, {})
+                internal_sec.pop("enabled", None)
+                internal_sec["scale"] = internal_sec.get("scale", internal.get("scale") or get_default_scale(internal))
+                internal_sec["position"] = [0, 0]
+                return "apply", new_sections, "Built-in display"
+        if requested_mode == "relayout":
+            return "none", {}, ""
         return "toggle_panel", {}, ""
 
     internal_on = bool(internal.get("enabled", False))
     external_on = any(bool(o.get("enabled", False)) for o in externals)
 
     forced_message: str | None = None
-    if lid_closed or internal_on_secondary_gpu:
-        reason = "Laptop lid is closed" if lid_closed else "Re-login with lid open to use built-in display"
-        warning_action = "lid_closed_warning" if lid_closed else "gpu_locked_warning"
+    if lid_closed:
         if internal_on or not external_on:
             target_mode = "external"
-            forced_message = f"External display only ({reason})"
+            forced_message = "External display only (Laptop lid is closed)"
+        elif requested_mode == "relayout":
+            return "none", {}, ""
         else:
-            return warning_action, {}, f"External display only ({reason})"
-
-    if forced_message is None:
+            return "lid_closed_warning", {}, "External display only (Laptop lid is closed)"
+    else:
         if internal_on and external_on:
             current_mode = "extend"
         elif external_on and not internal_on:
@@ -199,7 +176,12 @@ def calculate_next_state(
         else:
             current_mode = "unknown"
 
-        if requested_mode in ("external", "laptop", "internal", "extend"):
+        if requested_mode == "relayout":
+            if not internal_on and not external_on:
+                target_mode = "extend"
+            else:
+                return "none", {}, ""
+        elif requested_mode in ("external", "laptop", "internal", "extend"):
             target_mode = "laptop" if requested_mode == "internal" else requested_mode
         else:
             if current_mode == "external":
@@ -296,8 +278,6 @@ def main() -> None:
 
     outputs = get_outputs()
     lid_closed = is_lid_closed()
-    internal = next((o for o in outputs if re.match(r"^(eDP|LVDS|DSI)-", o.get("name", ""))), None)
-    internal_secondary = is_internal_on_secondary_gpu(internal["name"]) if internal else False
 
     config_home = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
     outputs_path = os.path.join(config_home, "umbriel", "outputs.toml")
@@ -308,7 +288,6 @@ def main() -> None:
         lid_closed,
         existing_sections,
         requested_mode=arg,
-        internal_on_secondary_gpu=internal_secondary,
     )
 
     if action == "input":
@@ -324,13 +303,6 @@ def main() -> None:
         subprocess.run([
             "notify-send", "-a", "Displays", "-i", "video-display",
             "External display only", "Laptop lid is closed"
-        ], check=False)
-        sys.exit(0)
-
-    if action == "gpu_locked_warning":
-        subprocess.run([
-            "notify-send", "-a", "Displays", "-i", "video-display",
-            "External display only", "Re-login with lid open to use built-in display"
         ], check=False)
         sys.exit(0)
 

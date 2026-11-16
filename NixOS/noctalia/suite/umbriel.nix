@@ -13,12 +13,16 @@ in {
   ];
   general = {
     mod_key = "Super";
-    autostart = [ shellCommand ];
+    autostart = [ shellCommand "${displayCycleCommand} relayout" ];
     # Match the previous Hyprland force_zero_scaling behavior: X11 clients
     # render at physical pixels and scale text/UI through XSETTINGS, rather
     # than stretching a low-resolution framebuffer at fractional output scales.
     xwayland_native_resolution = true;
     xwayland_xsettings = true;
+  };
+  events = {
+    lid_close = "${displayCycleCommand} relayout";
+    lid_open = "${displayCycleCommand} relayout";
   };
   colors = {
     background = dark.surface; text_primary = dark.on_surface;
