@@ -402,8 +402,9 @@ UNIT-SYSTEM overrides `(strata-prefs-unit-system (strata-prefs))'."
 
 (defun strata-format-drive-free-size (free total &optional unit-system)
   "Format FREE bytes relative to TOTAL drive bytes cleanly.
-When FREE < TOTAL would round to the exact same string as TOTAL in TOTAL's unit
-\(e.g., 5.49 TB vs 5.5 TB), step down one unit so usage is never hidden."
+Use GB from 1,000 MB upward, or GiB from 1,024 MiB in binary mode.
+Keep larger free-space values in that unit too.  Add precision near TOTAL
+to avoid rounding free space up to the drive's full capacity."
   (let* ((sys (or unit-system (strata-prefs-unit-system (strata-prefs))))
          (base (if (eq sys 'binary) 1024.0 1000.0))
          (units (if (eq sys 'binary)
@@ -411,8 +412,24 @@ When FREE < TOTAL would round to the exact same string as TOTAL in TOTAL's unit
                   '("B" "kB" "MB" "GB" "TB" "PB")))
          (def-free (strata-format-bytes free sys))
          (def-total (strata-format-bytes total sys)))
-    (if (or (>= free total) (not (string= def-free def-total)))
-        def-free
+    (cond
+     ((>= free (expt base 3))
+      (let* ((scale (expt base 3))
+             (value (/ (float free) scale))
+             (decimals 1)
+             (factor 10.0)
+             (rounded (/ (fround (* value factor)) factor)))
+        (while (and (< free total) (>= (* rounded scale) total) (< decimals 3))
+          (setq decimals (1+ decimals)
+                factor (* factor 10.0)
+                rounded (/ (fround (* value factor)) factor)))
+        (when (and (< free total) (>= (* rounded scale) total))
+          (setq rounded (/ (floor (* value factor)) factor)))
+        (replace-regexp-in-string
+         "\\.0 \\([A-Za-z]+\\)\\'" " \\1"
+         (format (format "%%.%df %%s" decimals) rounded (nth 3 units)))))
+     ((or (>= free total) (not (string= def-free def-total))) def-free)
+     (t
       (let* ((total-idx (let ((v (float total)) (i 0))
                           (while (and (>= v base) (< i (1- (length units))))
                             (setq v (/ v base) i (1+ i)))
@@ -428,7 +445,7 @@ When FREE < TOTAL would round to the exact same string as TOTAL in TOTAL's unit
                      "\\.0 \\([A-Za-z]+\\)\\'" " \\1"
                      (format "%.1f %s" rounded (nth i units))))))
           (setq i (1- i)))
-        (or found def-free)))))
+        (or found def-free))))))
 
 (defun strata-format-time (time &optional mode)
   "Format Emacs TIME according to MODE (`relative', `iso', or `locale')."

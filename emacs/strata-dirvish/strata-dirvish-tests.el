@@ -44,10 +44,34 @@
   (should-not (strata-sanitize-capacity 0 0)))
 
 (ert-deftest strata-test-accurate-drive-free-size ()
-  ;; Step down unit when rounding free in total's unit would match total!
+  ;; Free space stays in GB even when TB or GB rounding hides tiny usage.
   (should-not (string= (strata-format-drive-free-size 5489790935040 5497558138880 'metric)
                        (strata-format-bytes 5497558138880 'metric)))
-  (should (string-match-p "GB" (strata-format-drive-free-size 5489790935040 5497558138880 'metric))))
+  (dolist (case '((999000000 2000000000 "999 MB")
+                  (1000000000 2000000000 "1 GB")
+                  (1500000000 2000000000 "1.5 GB")
+                  (1000000000 1000000001 "1 GB")
+                  (1999900000 2000000000 "1.999 GB")
+                  (1000000000000 1000000000000 "1000 GB")
+                  (2198480420864 2198486384640 "2198.48 GB")
+                  (5489790935040 5497558138880 "5489.8 GB")))
+    (pcase-let ((`(,free ,total ,expected) case))
+      (should (equal (strata-format-drive-free-size free total 'metric) expected))))
+  (let ((gib (expt 1024 3)))
+    (should (equal (strata-format-drive-free-size (* 1023 (expt 1024 2)) (* 2 gib) 'binary)
+                   "1023 MiB"))
+    (should (equal (strata-format-drive-free-size gib (* 2 gib) 'binary) "1 GiB"))
+    (should (equal (strata-format-drive-free-size (* 1.5 gib) (* 2 gib) 'binary) "1.5 GiB"))
+    (should (equal (strata-format-drive-free-size (* 1024 gib) (* 1024 gib) 'binary)
+                   "1024 GiB"))))
+
+(ert-deftest strata-test-capacity-bars-use-gigabytes-for-free-space ()
+  "Both sidebar and detailed drive capacity bars use the GB free-space format."
+  (let ((strata-prefs-current (strata-prefs--create :unit-system 'metric))
+        (usage '(2198486384640 . 2198480420864)))
+    (should (string-suffix-p "2198.48 GB" (strata-format-capacity-bar usage 10 t)))
+    (should (string-match-p "2198\\.48 GB free of 2\\.2 TB"
+                            (strata-format-capacity-bar usage 18 nil)))))
 
 (ert-deftest strata-test-custom-device-icons-and-virtual-guards ()
   (let ((gd (make-strata-device :name "Google Drive" :mountpoint "/home/u/Google Drive" :placement 'cloud))
