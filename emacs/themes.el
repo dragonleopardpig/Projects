@@ -51,6 +51,10 @@
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
 
+;; * Terminal colours and theme shortcuts
+(load (expand-file-name "vterm-theme.el"
+                        (file-name-directory (or load-file-name buffer-file-name))))
+
 ;; * Toggle Frame Transparency F12
 (defvar my/frame-transparency-enabled t
   "Whether frame transparency is enabled.")

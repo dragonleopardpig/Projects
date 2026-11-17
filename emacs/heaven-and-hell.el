@@ -110,9 +110,10 @@ Themes will be loaded if they weren't loaded previously."
 		 (set-background-color "#232627"))
 	(progn (setq heaven-and-hell-theme-type 'light)
 	       (set-background-color "white")))
-      (org-mode-restart)
-      (outline-show-children)
-      (outline-show-entry)
+      (when (derived-mode-p 'org-mode)
+        (org-mode-restart)
+        (outline-show-children)
+        (outline-show-entry))
       ;; *********
       )))
 
