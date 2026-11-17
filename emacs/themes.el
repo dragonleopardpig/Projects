@@ -50,15 +50,13 @@
 (menu-bar-mode 1)
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
-;; (set-frame-parameter nil 'alpha-background 85)
-;; (add-to-list 'default-frame-alist '(alpha-background . 85))
 
 ;; * Toggle Frame Transparency F12
 (defvar my/frame-transparency-enabled t
   "Whether frame transparency is enabled.")
 
-(defvar my/frame-transparency-value 85
-  "Transparency value when enabled (0–100).")
+(defvar my/frame-transparency-value 95
+  "Background opacity when transparency is enabled (0–100).")
 
 (defun my/toggle-frame-transparency ()
   "Toggle frame transparency."
