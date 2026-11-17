@@ -29,9 +29,12 @@
 (declare-function strata-panes--pane-for-window "strata-dirvish-panes" (win))
 (declare-function strata-panes--sync-active-pane-from-window "strata-dirvish-panes" (&optional win))
 (declare-function strata-panes--valid-main-window-p "strata-dirvish-panes" (win))
+(declare-function strata-panes--main-window "strata-dirvish-panes" (&optional pane))
 (declare-function strata-panes--window-dir "strata-dirvish-panes" (&optional win))
 (declare-function strata-pane-state-id "strata-dirvish-panes" (cl-x))
 (declare-function strata-pane-state-buffer "strata-dirvish-panes" (cl-x))
+(declare-function strata-pane-state-history-back "strata-dirvish-panes" (cl-x))
+(declare-function strata-pane-state-history-fwd "strata-dirvish-panes" (cl-x))
 (declare-function strata-tab-state-pane1 "strata-dirvish-panes" (cl-x))
 (declare-function strata-tab-state-pane2 "strata-dirvish-panes" (cl-x))
 (declare-function strata-split-active-p "strata-dirvish-panes" ())
@@ -42,6 +45,8 @@
 (declare-function strata-clear-all-marks "strata-dirvish-keys" ())
 (declare-function strata-preview-at-point "strata-dirvish-previews" ())
 (declare-function strata-preview-enter-at-point "strata-dirvish-previews" ())
+(declare-function strata-history-back "strata-dirvish-search" ())
+(declare-function strata-history-forward "strata-dirvish-search" ())
 (declare-function strata-preview-edit-file "strata-dirvish-previews" (file))
 (declare-function strata-preview--close-standalone "strata-dirvish-previews" ())
 (declare-function strata-open-or-edit-at-point "strata-dirvish-previews" ())
@@ -1007,6 +1012,53 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 (defvar strata-mouse--recent-dir-open nil
   "Snapshot of last single-click directory navigation to guard double-clicks.")
 
+(defun strata-mouse--history (direction event)
+  "Navigate DIRECTION in the browser pane owning mouse EVENT."
+  ;; `mouse-event-p' only recognizes the primary buttons on some Emacs builds.
+  ;; Thumb buttons still carry the normal positional event structure.
+  (let* ((clicked (and (consp event) (posn-window (event-start event))))
+         (target (and (window-live-p clicked)
+                      (with-current-buffer (window-buffer clicked)
+                        (if (and (strata-panes--valid-main-window-p clicked)
+                                 (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode
+                                                 'strata-computer-mode 'strata-trash-mode
+                                                 'strata-recent-mode 'strata-network-mode))
+                            clicked
+                          (when-let ((dv (dirvish-curr))) (dv-root-window dv)))))))
+    (setq target (or (and (window-live-p target) target) (strata-panes--main-window)))
+    (when (window-live-p target)
+      (select-window target)
+      (strata-panes--sync-active-pane-from-window target)
+      (let ((pane (strata-active-pane)))
+        ;; At either end of history the thumb button behaves like a disabled
+        ;; Back or Forward control instead of interrupting mouse navigation.
+        (if (eq direction 'back)
+            (when (strata-pane-state-history-back pane) (strata-history-back))
+          (when (strata-pane-state-history-fwd pane) (strata-history-forward)))))))
+
+(defun strata-mouse-history-back (&optional event)
+  "Go back in the pane under mouse EVENT, or the active pane."
+  (interactive (list (when (consp last-input-event) last-input-event)))
+  (strata-mouse--history 'back event))
+
+(defun strata-mouse-history-forward (&optional event)
+  "Go forward in the pane under mouse EVENT, or the active pane."
+  (interactive (list (when (consp last-input-event) last-input-event)))
+  (strata-mouse--history 'forward event))
+
+(defun strata-mouse-install-history-bindings (map)
+  "Install Back/Forward thumb buttons and hardware keys on browser MAP."
+  (dolist (pair '((8 . strata-mouse-history-back) (9 . strata-mouse-history-forward)))
+    (dolist (prefix '("mouse-" "double-mouse-" "triple-mouse-" "drag-mouse-"
+                      "down-mouse-" "double-down-mouse-" "triple-down-mouse-"))
+      (let ((event (intern (format "%s%d" prefix (car pair))))
+            (command (if (string-match-p "down-" prefix) #'ignore (cdr pair))))
+        (dolist (area '(nil header-line mode-line))
+          (define-key map (if area (vector area event) (vector event)) command)))))
+  (define-key map [XF86Back] #'strata-mouse-history-back)
+  (define-key map [XF86Forward] #'strata-mouse-history-forward)
+  map)
+
 (defun strata-mouse-install-keymap-bindings (map)
   "Install shared Strata mouse click, drag-select, and drop bindings on MAP."
   (define-key map (kbd "<down-mouse-1>") #'strata-mouse-down-entry)
@@ -1025,6 +1077,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
   (define-key map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
   (define-key map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event)
   (define-key map (kbd "<mouse-3>") #'strata-mouse-context-menu)
+  (strata-mouse-install-history-bindings map)
   map)
 
 (defvar strata-compact-mode-map
@@ -1554,6 +1607,56 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
         ((derived-mode-p 'strata-compact-mode) (strata-compact-prev-item))
         ((derived-mode-p 'dired-mode) (dired-previous-line 1))
         (t (call-interactively #'previous-line))))
+
+(defun strata-view--move-focus (move)
+  "Run MOVE within file entries, preserving marks and stopping at boundaries."
+  (let ((current (strata-current-file)))
+    (if current
+        (progn
+          (condition-case nil (funcall move)
+            ((beginning-of-buffer end-of-buffer) nil))
+          (unless (strata-current-file) (strata-goto-file current)))
+      (strata-goto-file (car (strata-view--entry-order))))
+    (deactivate-mark)
+    (strata-view--reset-selection-range (strata-current-file))
+    (strata-view--update-selection-highlight)))
+
+(defun strata-view--focus-down ()
+  "Move focus down one entry or grid row, keeping explicit selections."
+  (interactive)
+  (strata-view--move-focus #'strata-nav-next-line))
+
+(defun strata-view--focus-up ()
+  "Move focus up one entry or grid row, keeping explicit selections."
+  (interactive)
+  (strata-view--move-focus #'strata-nav-prev-line))
+
+(defun strata-view--focus-horizontal (direction)
+  "Move focus DIRECTION columns or entries without opening folders."
+  (strata-view--move-focus
+   (lambda ()
+     (cond
+      ((derived-mode-p 'strata-icons-mode)
+       (if (> direction 0) (strata-icons-next-cell) (strata-icons-prev-cell)))
+      ((derived-mode-p 'strata-compact-mode)
+       (let* ((order (strata-view--entry-order))
+              (index (cl-position (strata-current-file) order :test #'equal))
+              (rows (max 1 strata-compact-rows))
+              (column (and index (+ (/ index rows) direction))))
+         (when (and column (>= column 0) (< (* column rows) (length order)))
+           (strata-goto-file (nth (min (1- (length order)) (+ index (* direction rows))) order)))))
+      ((> direction 0) (strata-nav-next-line))
+      (t (strata-nav-prev-line))))))
+
+(defun strata-view--focus-right ()
+  "Move focus right one entry or column, preserving explicit selections."
+  (interactive)
+  (strata-view--focus-horizontal 1))
+
+(defun strata-view--focus-left ()
+  "Move focus left one entry or column, preserving explicit selections."
+  (interactive)
+  (strata-view--focus-horizontal -1))
 
 (defun strata-view--entry-order ()
   "Return ordered list of entry paths visible in the current browser buffer."

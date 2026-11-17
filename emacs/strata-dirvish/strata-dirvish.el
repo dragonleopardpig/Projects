@@ -270,6 +270,9 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
       (define-key dirvish-directory-view-mode-map (kbd "<mouse-1>") #'strata-mouse-click-entry)
       (define-key dirvish-directory-view-mode-map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
       (define-key dirvish-directory-view-mode-map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event))
+    (dolist (map '(dirvish-directory-view-mode-map dirvish-misc-mode-map
+                   dirvish-special-preview-mode-map))
+      (when (boundp map) (strata-mouse-install-history-bindings (symbol-value map))))
     (add-hook 'dirvish-directory-view-mode-hook #'strata-dirvish--dirview-setup)
     (advice-add 'dirvish-post-command-h :around #'strata-view--dirvish-post-command)
     (when (fboundp 'dirvish--create-parent-buffer)

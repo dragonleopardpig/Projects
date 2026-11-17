@@ -787,6 +787,7 @@ Keeps shell process & CWD alive while hidden."
     (define-key map (kbd "X") #'strata-trash-empty)
     (define-key map (kbd "c") #'strata-sidebar-toggle-rail)
     (define-key map (kbd "g") #'strata-sidebar-force-refresh)
+    (strata-mouse-install-history-bindings map)
     map)
   "Keymap for `*Strata Sidebar*' buffer.")
 
