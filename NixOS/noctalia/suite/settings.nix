@@ -91,6 +91,7 @@
       "tordex/xwayland"                 # community: is the focused window XWayland?
       "community/kitty-control"         # local/community: kitty terminal control panel
       "local/agent-status"              # local: Antigravity lifecycle status + scratchpad toggle
+      "local/gpu-status"                # local: active renderer GPU + per-monitor scanout GPU
     ];
     auto_update = "none";
   };
@@ -119,7 +120,7 @@
     reserve_space = true;
     start = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
     center = [ "active_window" "xwayland" ];
-    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "umbriel-displays" "kitty-control" "session" ];
+    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
   };
   widget = {
     launcher = {
@@ -159,6 +160,7 @@
     umbriel-companion.type = "noctalia/umbriel-companion:bar";
     umbriel-displays.type = "prponkshe/umbriel-displays:bar";
     umbriel-displays.color = barAccents.desktop;
+    gpu-status.type = "local/gpu-status:bar";
     kitty-control.type = "community/kitty-control:bar";
     kitty-control.color = barAccents.neonPurple;
     agent-status.type = "local/agent-status:bar";

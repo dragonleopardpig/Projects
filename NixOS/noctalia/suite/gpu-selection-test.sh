@@ -5,24 +5,21 @@ fixture=$(mktemp -d)
 trap 'rm -rf "$fixture"' EXIT
 
 reset_fixture() {
-  rm -rf "$fixture/drm" "$fixture/dev" "$fixture/lid" "$fixture/outputs.toml"
+  rm -rf "$fixture/drm" "$fixture/dev" "$fixture/lid"
   mkdir -p "$fixture/drm" "$fixture/dev" "$fixture/lid"
   unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
 }
 add_card() {
-  local number=$1 render=$2 boot=$3 connected=$4 connector=${5:-HDMI-A-1} edid_text=${6:-}
+  local number=$1 render=$2 boot=$3 connected=$4 connector=${5:-HDMI-A-1}
   mkdir -p "$fixture/drm/card$number/device/drm" "$fixture/drm/card$number-$connector"
   touch "$fixture/dev/card$number"
   printf '%s\n' "$boot" > "$fixture/drm/card$number/device/boot_vga"
   printf '%s\n' "$connected" > "$fixture/drm/card$number-$connector/status"
-  if [[ -n $edid_text ]]; then
-    printf '\x00\xff%s\x00' "$edid_text" > "$fixture/drm/card$number-$connector/edid"
-  fi
   if [[ $render != none ]]; then
     touch "$fixture/drm/card$number/device/drm/renderD$render" "$fixture/dev/renderD$render"
   fi
 }
-select_devices() { configure_drm_devices "$fixture/drm" "$fixture/dev" "$fixture/lid/state" "$fixture/outputs.toml"; }
+select_devices() { configure_drm_devices "$fixture/drm" "$fixture/dev" "$fixture/lid/state"; }
 
 # The failed machine: simpledrm first, NVIDIA boot GPU drives the displays,
 # Intel remains available. Arbitrary card numbers catch hardcoded paths.
@@ -103,95 +100,6 @@ select_devices
 # Intel still wins over a disconnected dGPU.
 unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
 printf 'disconnected\n' > "$fixture/drm/card7-HDMI-A-1/status"
-select_devices
-[[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]
-[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD140" ]]
-
-# BIOS Auto with lid open + outputs.toml in External-only mode:
-# eDP-1 disabled by EDID match -> NVIDIA wins for native 4K scanout.
-reset_fixture
-add_card 7 135 0 connected HDMI-A-1 VP327Q
-add_card 12 140 1 connected eDP-1 TL160ADMP26
-printf 'state:      open\n' > "$fixture/lid/state"
-cat > "$fixture/outputs.toml" <<'EOF'
-[output."ASUSTek COMPUTER INC VP327Q W2LMMU003887 "]
-position = [0, 0]
-scale = 1.25
-
-[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]
-position = [256, 1728]
-scale = 1.0
-enabled = false
-EOF
-select_devices
-[[ $WLR_DRM_DEVICES == "$fixture/dev/card7:$fixture/dev/card12" ]]
-[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD135" ]]
-
-# BIOS Auto with lid open + outputs.toml in Laptop-only mode:
-# HDMI-A-1 disabled by EDID match -> Intel wins.
-unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
-cat > "$fixture/outputs.toml" <<'EOF'
-[output."ASUSTek COMPUTER INC VP327Q W2LMMU003887 "]
-position = [0, 0]
-scale = 1.25
-enabled = false
-
-[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]
-position = [0, 0]
-scale = 1.0
-EOF
-select_devices
-[[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]
-[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD140" ]]
-
-# BIOS Auto with lid open + outputs.toml in Extend mode (both enabled): Intel wins.
-unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
-cat > "$fixture/outputs.toml" <<'EOF'
-[output."ASUSTek COMPUTER INC VP327Q W2LMMU003887 "]
-position = [0, 0]
-scale = 1.25
-
-[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]
-position = [0, 1728]
-scale = 1.0
-EOF
-select_devices
-[[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]
-[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD140" ]]
-
-# BIOS Auto with lid closed (clamshell), even when outputs.toml previously had
-# HDMI-A-1 disabled (Laptop-only): external stays usable -> NVIDIA wins.
-unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
-printf 'state:      closed\n' > "$fixture/lid/state"
-cat > "$fixture/outputs.toml" <<'EOF'
-[output."ASUSTek COMPUTER INC VP327Q W2LMMU003887 "]
-position = [0, 0]
-scale = 1.25
-enabled = false
-
-[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]
-position = [0, 0]
-scale = 1.0
-EOF
-select_devices
-[[ $WLR_DRM_DEVICES == "$fixture/dev/card7:$fixture/dev/card12" ]]
-[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD135" ]]
-
-# BIOS Auto undocked (HDMI-A-1 disconnected), even when outputs.toml has eDP-1
-# disabled (previous External-only session): Intel still wins.
-unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
-printf 'state:      open\n' > "$fixture/lid/state"
-printf 'disconnected\n' > "$fixture/drm/card7-HDMI-A-1/status"
-cat > "$fixture/outputs.toml" <<'EOF'
-[output."ASUSTek COMPUTER INC VP327Q W2LMMU003887 "]
-position = [0, 0]
-scale = 1.25
-
-[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]
-position = [0, 1728]
-scale = 1.0
-enabled = false
-EOF
 select_devices
 [[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]
 [[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD140" ]]

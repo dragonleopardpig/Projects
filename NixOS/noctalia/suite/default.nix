@@ -102,6 +102,19 @@ let
     python3 ${./test-agent-status.py} ${./agent-status.py}
     touch $out
   '';
+  gpuStatus = pkgs.writeShellApplication {
+    name = "noctalia-gpu-status";
+    runtimeInputs = [ umbriel pkgs.python3 ];
+    text = ''
+      exec python3 ${./gpu-status.py} "$@"
+    '';
+  };
+  gpuStatusCheck = pkgs.runCommand "noctalia-gpu-status-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    python3 ${./test-gpu-status.py} ${./gpu-status.py}
+    touch $out
+  '';
   syncPython = pkgs.python3.withPackages (ps: [ ps.tomlkit ]);
   syncSettings = pkgs.writeShellApplication {
     name = "noctalia-sync-settings";
@@ -118,7 +131,7 @@ let
   '';
   suiteTools = pkgs.symlinkJoin {
     name = "noctalia-suite-tools";
-    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle ];
+    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle gpuStatus ];
   };
   shellConfig = toml.generate "noctalia-suite.toml" (import ./settings.nix {
     themeName = theme.name;
@@ -170,6 +183,7 @@ let
   validatedSuite = pkgs.runCommand "noctalia-suite-validated" { } ''
     test -f ${gpuSelectionCheck}
     test -f ${displayCycleCheck}
+    test -f ${gpuStatusCheck}
     export NOCTALIA_STATE_HOME="$TMPDIR/noctalia-suite-validation"
     export NOCTALIA_CONFIG_HOME=${configHome}
     ${lib.getExe shell} config validate ${shellConfig}
@@ -235,7 +249,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck displayCycle displayCycleCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck displayCycle displayCycleCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;

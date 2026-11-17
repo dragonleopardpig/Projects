@@ -1,0 +1,14 @@
+id = "local/gpu-status"
+name = "Active GPU & Monitor Status"
+version = "1.0.0"
+plugin_api = 45
+author = "local"
+license = "MIT"
+dependencies = ["umbriel"]
+tags = ["gpu", "display", "bar", "hardware", "umbriel"]
+icon = "cpu"
+description = "Displays the active rendering GPU and per-monitor scanout GPU."
+
+[[widget]]
+id = "bar"
+entry = "bar.luau"
