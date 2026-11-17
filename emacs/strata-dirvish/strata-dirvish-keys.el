@@ -316,15 +316,17 @@ Text terminals use `strata-context-menu', also available with Shift-F10."
   (interactive "e")
   (if (bound-and-true-p strata-mouse--suppress-mouse-3-once)
       (setq strata-mouse--suppress-mouse-3-once nil)
-    (let ((file (strata-mouse--entry-at-posn (event-end event))))
+    (let ((file (strata-mouse--entry-at-posn (event-end event)))
+          (compact-position (strata-mouse--compact-position (event-end event))))
       (strata-mouse--sync-event event)
+      (when file
+        (setq strata--empty-click-p nil strata--empty-click-position nil))
       ;; A menu on an unmarked item must operate on that item, not an old batch.
       (unless (and file (member (strata--path-key file)
                                (mapcar #'strata--path-key (strata-marked-files-only))))
         (strata-clear-all-marks))
       (unless file
-        (goto-char (point-max))
-        (setq strata--empty-click-p t)))
+        (strata-mouse--clear-focus compact-position)))
     (strata-view--update-selection-highlight)
     (if (display-popup-menus-p)
         (popup-menu (strata-context--popup-menu) event)

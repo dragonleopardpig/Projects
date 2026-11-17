@@ -69,21 +69,32 @@
 
 ;;;; File Selection & Cursor Introspection Across All 4 Views
 
+(defvar-local strata--empty-click-p nil
+  "Non-nil while an empty-space click leaves the browser without a current item.")
+
+(defvar-local strata--empty-click-position nil
+  "Visible cursor position used by Compact view after a blank-space click.")
+
+(defun strata-view--empty-selection-p ()
+  "Whether point still represents an empty-space deselection."
+  (and strata--empty-click-p
+       (if strata--empty-click-position
+           (= (point) strata--empty-click-position)
+         (eobp))))
+
 (defun strata-current-file ()
   "Return absolute path of entry under point in any Strata view buffer."
-  (or (get-text-property (point) 'strata-entry)
-      (get-text-property (line-beginning-position) 'strata-entry)
-      (and (derived-mode-p 'dired-mode)
-           (ignore-errors (dired-get-filename nil t)))
-      (when-let ((tr (get-text-property (line-beginning-position) 'strata-trash-item)))
-        (plist-get tr :file))
-      (get-text-property (line-beginning-position) 'strata-recent-path)))
+  (unless (strata-view--empty-selection-p)
+    (or (get-text-property (point) 'strata-entry)
+        (get-text-property (line-beginning-position) 'strata-entry)
+        (and (derived-mode-p 'dired-mode)
+             (ignore-errors (dired-get-filename nil t)))
+        (when-let ((tr (get-text-property (line-beginning-position) 'strata-trash-item)))
+          (plist-get tr :file))
+        (get-text-property (line-beginning-position) 'strata-recent-path))))
 
 (defvar-local strata--selection-anchor-entry nil
   "Anchor path for Shift-click and Shift-arrow range multi-selection.")
-
-(defvar-local strata--empty-click-p nil
-  "Non-nil while an empty-space click leaves the browser without a current item.")
 
 (defvar-local strata--selection-range-active nil
   "Non-nil while extending the current keyboard or click range.")
@@ -103,7 +114,8 @@
 
 (defun strata-view--selection-post-command ()
   "Start the next range at point after ordinary navigation or file commands."
-  (unless (eobp) (setq strata--empty-click-p nil))
+  (unless (strata-view--empty-selection-p)
+    (setq strata--empty-click-p nil strata--empty-click-position nil))
   (unless (or (null this-command)
               (bound-and-true-p strata-mouse--drag-state)
               (memq this-command
@@ -208,6 +220,7 @@
     (strata--clear-selection-highlight)
     (let ((marked-keys (mapcar #'strata--path-key (bound-and-true-p strata-marked-entries))))
       (cond
+       ((strata-view--empty-selection-p))
        ((derived-mode-p 'dired-mode)
         (let (cur-beg cur-end)
           (ignore-errors
@@ -269,6 +282,7 @@
        ((derived-mode-p 'dired-mode)
         (let ((moved (or (ignore-errors (dired-goto-file target))
                          (ignore-errors (dired-goto-file (concat target "/"))))))
+          (when moved (setq strata--empty-click-p nil strata--empty-click-position nil))
           (strata-view--update-selection-highlight)
           moved))
        ((or (derived-mode-p 'strata-compact-mode)
@@ -296,6 +310,7 @@
           (ignore icons-p)
           (when-let ((dest (or label-match first-match)))
             (goto-char dest)
+            (setq strata--empty-click-p nil strata--empty-click-position nil)
             (strata-view--update-selection-highlight)
             dest)))))))
 
@@ -1734,6 +1749,31 @@ With ADDITIVE, retain marks that preceded this range."
   (when (fboundp 'strata-panes--sync-active-pane-from-window)
     (strata-panes--sync-active-pane-from-window (selected-window))))
 
+(defun strata-mouse--compact-position (posn)
+  "Capture the visible Compact viewport before moving point to mouse POSN."
+  (when-let ((win (and (consp posn) (posn-window posn))))
+    (when (and (window-live-p win)
+               (with-current-buffer (window-buffer win) (derived-mode-p 'strata-compact-mode)))
+      (list (window-point win) (window-start win)
+            (window-hscroll win) (window-vscroll win t)))))
+
+(defun strata-mouse--clear-focus (&optional compact-position)
+  "Deselect without scrolling Compact view away from COMPACT-POSITION."
+  (if compact-position
+      (progn
+        ;; EOB can fall below the last fully visible row in a GUI font.
+        ;; Parking point there makes redisplay recenter and hide early folders.
+        (goto-char (min (car compact-position) (point-max)))
+        (set-window-start nil (min (nth 1 compact-position) (point-max)) t)
+        (set-window-hscroll nil (nth 2 compact-position))
+        (set-window-vscroll nil (nth 3 compact-position) t)
+        (setq strata--empty-click-position (point)))
+    (goto-char (point-max))
+    (setq strata--empty-click-position nil))
+  (setq strata--empty-click-p t)
+  (strata-view--reset-selection-range)
+  (strata-view--update-selection-highlight))
+
 (defun strata-mouse--dired-entry-at-pt (pt)
   "Resolve nearest Dired entry path around buffer position PT."
   (save-excursion
@@ -2494,10 +2534,12 @@ Use only the cached filenames; do not probe files while handling motion."
   ;; below the listing onto its final row.  Nearest-entry lookup is for
   ;; sweeping a drag range, never for an ordinary click.
   (let* ((end (event-end event))
+         (compact-position (strata-mouse--compact-position end))
          (p (strata-mouse--entry-at-posn end)))
     (strata-mouse--sync-event event)
     (if p
         (progn
+          (setq strata--empty-click-p nil strata--empty-click-position nil)
           (strata-clear-all-marks)
           (strata-view--reset-selection-range p)
           (if (file-directory-p p)
@@ -2513,10 +2555,7 @@ Use only the cached filenames; do not probe files while handling motion."
             (strata-view--sync-preview-on-move)))
       (setq strata-mouse--recent-dir-open nil)
       (strata-clear-all-marks)
-      (goto-char (point-max))
-      (setq strata--empty-click-p t)
-      (strata-view--reset-selection-range)
-      (strata-view--update-selection-highlight))))
+      (strata-mouse--clear-focus compact-position))))
 
 (defun strata-mouse--run-toggle-action (event)
   "Execute control-click for EVENT: toggle mark on clicked entry."

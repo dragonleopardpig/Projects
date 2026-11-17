@@ -12,6 +12,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'text-property-search)
 
 (add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
 (require 'strata-dirvish)
@@ -3429,6 +3430,48 @@
           (kill-buffer b)))
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
+
+(ert-deftest strata-test-compact-empty-click-keeps-viewport ()
+  "Blank clicks deselect a full Compact listing without hiding its early rows."
+  (strata-test--with-selection-view 'compact
+    (dotimes (i 80)
+      (make-directory (expand-file-name (format "folder-%02d" i) strata-test--dir)))
+    (strata-compact-refresh)
+    (let ((entries (strata-view--entry-order))
+          (win (selected-window)))
+      (dolist (kind '(mouse-1 native mouse-3))
+        (strata-goto-file (nth (+ strata-compact-rows 4) entries))
+        (strata-view-toggle-mark)
+        (set-window-start win (save-excursion (goto-char (point-min)) (forward-line 2) (point)) t)
+        (set-window-hscroll win 3)
+        (redisplay t)
+        (let* ((start (window-start win))
+               (hscroll (window-hscroll win))
+               (posn (list win (point-max) '(800 . 200) 0)))
+          (pcase kind
+            ('native (strata-test--play-events (list 'down-mouse-1 posn 1)
+                                              (list 'mouse-1 posn 1)))
+            ('mouse-3
+             (cl-letf (((symbol-function 'display-popup-menus-p) (lambda (&rest _) t))
+                       ((symbol-function 'popup-menu) #'ignore))
+               (strata-mouse-context-menu (list kind posn 1))))
+            (_ (strata-mouse-click-entry (list kind posn 1))))
+          (let ((this-command 'strata-mouse-click-entry)) (run-hooks 'post-command-hook))
+          (redisplay t)
+          (should (= (window-start win) start))
+          (should (= (window-hscroll win) hscroll))
+          (should (equal entries (strata-view--entry-order)))
+          (should-not (strata-current-file))
+          (should-not (strata-marked-files-only))
+          (should-not strata--selection-overlays)
+          ;; Every directory still has a rendered cell, including the first.
+          (dolist (file entries)
+            (should (save-excursion
+                      (goto-char (point-min))
+                      (text-property-search-forward 'strata-entry file t))))
+          (strata-compact-next-item)
+          (should (strata-current-file))
+          (should-not strata--empty-click-p))))))
 
 (require 'strata-dirvish-window-tests)
 
