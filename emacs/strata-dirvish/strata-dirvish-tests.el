@@ -3473,6 +3473,58 @@
           (should (strata-current-file))
           (should-not strata--empty-click-p))))))
 
+(ert-deftest strata-test-delete-keeps-adjacent-file-in-all-views ()
+  "Trash and permanent delete focus one surviving neighbour in listing order."
+  (dolist (view '(columns list compact icons))
+    (dolist (command '(strata-move-to-trash strata-delete-permanently))
+      (dolist (spec '(((2) 3 2) ((0) 1 0) ((5) 4 5) ((1 2 3) 4 2)
+                      ((1 4) 2 1) ((0 1 2 3 4 5) nil 2)))
+        (ert-info ((format "%S / %S / %S" view command spec))
+          (strata-test--with-selection-view view
+            (let* ((removed (mapcar (lambda (i) (nth i strata-test--files)) (car spec)))
+                   (expected (and (nth 1 spec) (nth (nth 1 spec) strata-test--files)))
+                   (trash (expand-file-name "trash" strata-test--root))
+                   (strata-undo-stack nil) (strata-redo-stack nil))
+              (make-directory trash)
+              (when (cdr removed)
+                (dolist (file removed) (strata-view--set-entry-mark file t t))
+                (strata-view--refresh-after-mark))
+              (strata-goto-file (nth (nth 2 spec) strata-test--files))
+              (cl-letf (((symbol-function 'strata-ui-yes-or-no-p) (lambda (&rest _) t))
+                        ((symbol-function 'strata--trash-with-gio-fallback)
+                         (lambda (file)
+                           (let ((target (expand-file-name (file-name-nondirectory file) trash)))
+                             (rename-file file target)
+                             target))))
+                (let ((this-command command))
+                  (call-interactively command)
+                  (run-hooks 'post-command-hook)))
+              (dolist (file removed) (should-not (file-exists-p file)))
+              (should (equal (strata-current-file) expected))
+              (should-not (strata-marked-files-only))
+              (should-not strata--selection-range-active)
+              (if expected
+                  (progn
+                    (should (= (length strata--selection-overlays) 1))
+                    (let ((overlay (car strata--selection-overlays)))
+                      (should (equal (buffer-substring-no-properties
+                                      (overlay-start overlay) (overlay-end overlay))
+                                     (file-name-nondirectory expected)))))
+                (should-not strata--selection-overlays)))))))))
+
+(ert-deftest strata-test-delete-cancellation-keeps-focus-and-files ()
+  "Declining either deletion confirmation preserves the original selection."
+  (dolist (view '(columns list compact icons))
+    (dolist (command '(strata-move-to-trash strata-delete-permanently))
+      (strata-test--with-selection-view view
+        (let ((file (nth 2 strata-test--files)))
+          (strata-goto-file file)
+          (cl-letf (((symbol-function 'strata-ui-yes-or-no-p) (lambda (&rest _) nil)))
+            (call-interactively command))
+          (should (equal (strata-current-file) file))
+          (should (= (length strata--selection-overlays) 1))
+          (dolist (entry strata-test--files) (should (file-exists-p entry))))))))
+
 (require 'strata-dirvish-window-tests)
 
 (provide 'strata-dirvish-tests)

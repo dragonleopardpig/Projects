@@ -440,6 +440,49 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
 
 ;;;; Trash & Undo/Redo Engine
 
+(defun strata--removal-focus-candidates ()
+  "Remember current entry and its neighbours before removing files.
+Prefer the next surviving entry, then the previous one, in the displayed order."
+  (let* ((order (cl-remove-if
+                 (lambda (file) (member (file-name-nondirectory (directory-file-name file)) '("." "..")))
+                 (strata-view--entry-order)))
+         (current (strata-current-file))
+         (index (and current
+                     (cl-position (strata--path-key current) order
+                                  :key #'strata--path-key :test #'equal))))
+    (if index
+        (append (list current) (nthcdr (1+ index) order)
+                (reverse (cl-subseq order 0 index)))
+      (append (when current (list current)) order))))
+
+(defun strata--refresh-after-removal (candidates)
+  "Refresh after removal and focus the first surviving entry in CANDIDATES."
+  ;; Discard old ranges before read-in moves overlay endpoints.  Rebuild the
+  ;; highlight only after the refreshed buffer has a valid neighbouring file.
+  (strata--clear-selection-highlight)
+  (setq strata-visual-anchor nil)
+  (strata-view--reset-selection-range)
+  (deactivate-mark)
+  ;; Dirvish saves the current filename before reverting and restores its
+  ;; subtree afterwards.  A deleted path sends that search to the last row
+  ;; (and fails on an empty listing), so give it a surviving neighbour first.
+  (when (derived-mode-p 'dired-mode)
+    (unless (cl-some (lambda (file)
+                       (and (or (file-exists-p file) (file-symlink-p file))
+                            (dired-goto-file file)))
+                     candidates)
+      (goto-char (point-max))))
+  (strata-refresh-active-view)
+  (unless (cl-some (lambda (file)
+                     (and (or (file-exists-p file) (file-symlink-p file))
+                          (strata-goto-file file)))
+                   candidates)
+    (goto-char (point-max))
+    (setq strata--empty-click-p t strata--empty-click-position nil))
+  (strata-view--reset-selection-range (strata-current-file))
+  (strata-view--update-selection-highlight)
+  (force-mode-line-update t))
+
 (defun strata--trash-with-gio-fallback (path)
   "Trash PATH via XDG spec / `gio trash', returning trashed destination or nil."
   (let* ((trash-files (expand-file-name "files" (strata-trash--dir)))
@@ -476,7 +519,8 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
     (let ((files (strata-selected-files)))
       (unless files (user-error "No item selected"))
       (when (strata-ui-yes-or-no-p (format "Move %d item(s) to Trash? " (length files)))
-        (let ((undo-items nil))
+        (let ((undo-items nil)
+              (candidates (strata--removal-focus-candidates)))
           (dolist (f files)
             (let ((trashed (strata--trash-with-gio-fallback f)))
               (if trashed
@@ -486,7 +530,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
                   (if (file-directory-p f) (delete-directory f t) (delete-file f))))))
           (when undo-items
             (strata-undo--push (list :batch (nreverse undo-items))))
-          (strata-refresh-active-view)
+          (strata--refresh-after-removal candidates)
           (message "Moved %d item(s) to Trash" (length files)))))))
 
 (defun strata-delete-permanently ()
@@ -499,10 +543,11 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
       (unless files (user-error "No item selected"))
       (when (strata-ui-yes-or-no-p (format "PERMANENTLY delete %d item(s)? This cannot be undone! "
                                  (length files)))
-        (dolist (f files)
-          (when (file-exists-p f)
-            (if (file-directory-p f) (delete-directory f t) (delete-file f))))
-        (strata-refresh-active-view)
+        (let ((candidates (strata--removal-focus-candidates)))
+          (dolist (f files)
+            (when (file-exists-p f)
+              (if (file-directory-p f) (delete-directory f t) (delete-file f))))
+          (strata--refresh-after-removal candidates))
         (message "Deleted %d item(s) permanently" (length files))))))
 
 (defun strata-undo ()

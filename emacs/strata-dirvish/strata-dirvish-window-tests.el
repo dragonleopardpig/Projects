@@ -229,5 +229,39 @@
       (should (window-live-p (dv-preview-window dv)))
       (should (equal roles (strata-window-test--roles group))))))
 
+(ert-deftest strata-test-window-delete-retains-adjacent-highlight-after-watch ()
+  "A full Columns session keeps one adjacent highlight through live refresh."
+  (strata-window-test--with-browser 'columns
+    (dolist (name '("a.txt" "b.txt" "c.txt" "d.txt" "e.txt" "f.txt"))
+      (write-region "Delete regression\n" nil (expand-file-name name directory) nil 'silent))
+    (revert-buffer nil t)
+    (strata-goto-file (expand-file-name "c.txt" directory))
+    (let ((old-highlight (car strata--selection-overlays)))
+      (cl-letf (((symbol-function 'strata-ui-yes-or-no-p) (lambda (&rest _) t)))
+        (let ((this-command 'strata-delete-permanently))
+          (call-interactively #'strata-delete-permanently)
+          (run-hooks 'post-command-hook)))
+      (should-not (overlay-buffer old-highlight)))
+    (dolist (refresh '(nil t))
+      (when refresh
+        (strata-watch--refresh-dired (current-buffer) (list (expand-file-name "c.txt" directory)) nil))
+      (should (equal (strata-current-file) (expand-file-name "d.txt" directory)))
+      (should (= (length strata--selection-overlays) 1))
+      (let ((overlay (car strata--selection-overlays)))
+        (should (equal (buffer-substring-no-properties (overlay-start overlay) (overlay-end overlay))
+                       "d.txt")))
+      (should (eq (selected-window) main))
+      (should (equal (strata-window-test--roles group) '(footer header index parent preview sidebar))))
+    ;; Dirvish's subtree restoration must also accept an entirely empty folder.
+    (strata-select-all)
+    (cl-letf (((symbol-function 'strata-ui-yes-or-no-p) (lambda (&rest _) t)))
+      (let ((this-command 'strata-delete-permanently))
+        (call-interactively #'strata-delete-permanently)
+        (run-hooks 'post-command-hook)))
+    (should-not (strata-current-file))
+    (should-not (strata-marked-files-only))
+    (should-not strata--selection-overlays)
+    (should-not (directory-files directory nil directory-files-no-dot-files-regexp))))
+
 (provide 'strata-dirvish-window-tests)
 ;;; strata-dirvish-window-tests.el ends here
