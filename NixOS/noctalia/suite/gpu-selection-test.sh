@@ -5,8 +5,9 @@ fixture=$(mktemp -d)
 trap 'rm -rf "$fixture"' EXIT
 
 reset_fixture() {
-  rm -rf "$fixture/drm" "$fixture/dev" "$fixture/lid" "$fixture/outputs.toml" "$fixture/next-mode"
+  rm -rf "$fixture/drm" "$fixture/dev" "$fixture/lid" "$fixture/outputs.toml" "$fixture/next-mode" "$fixture/boot-id"
   mkdir -p "$fixture/drm" "$fixture/dev" "$fixture/lid"
+  printf 'boot-111\n' > "$fixture/boot-id"
   unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
 }
 add_card() {
@@ -20,7 +21,7 @@ add_card() {
   fi
 }
 select_devices() {
-  configure_drm_devices "$fixture/drm" "$fixture/dev" "$fixture/lid/state" "$fixture/outputs.toml" "$fixture/next-mode"
+  configure_drm_devices "$fixture/drm" "$fixture/dev" "$fixture/lid/state" "$fixture/outputs.toml" "$fixture/next-mode" "$fixture/boot-id"
 }
 
 # The failed machine: simpledrm first, NVIDIA boot GPU drives the displays,
@@ -106,15 +107,23 @@ select_devices
 [[ $WLR_DRM_DEVICES == "$fixture/dev/card7:$fixture/dev/card12" ]]
 [[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD135" ]]
 
-# Staged F7 switch to Intel (next-display-mode = extend) overrides External-only when lid is open.
+# Staged F7 switch to Intel (matching boot_id) overrides External-only on same-boot relogin.
 unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
-printf 'extend\n' > "$fixture/next-mode"
+printf 'boot-111 extend\n' > "$fixture/next-mode"
 select_devices
 [[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]
 [[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD140" ]]
 
+# Stale staged F7 switch from a previous boot is ignored after reboot (NVIDIA still wins).
+unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
+printf 'boot-old extend\n' > "$fixture/next-mode"
+select_devices
+[[ $WLR_DRM_DEVICES == "$fixture/dev/card7:$fixture/dev/card12" ]]
+[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD135" ]]
+
 # Staged Intel switch is ignored when lid is closed (clamshell still forces NVIDIA).
 unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
+printf 'boot-111 extend\n' > "$fixture/next-mode"
 printf 'state:      closed\n' > "$fixture/lid/state"
 select_devices
 [[ $WLR_DRM_DEVICES == "$fixture/dev/card7:$fixture/dev/card12" ]]

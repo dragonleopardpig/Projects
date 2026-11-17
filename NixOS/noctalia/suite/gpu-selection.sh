@@ -7,10 +7,12 @@ configure_drm_devices() {
   local lid_glob="${3:-/proc/acpi/button/lid/*/state}"
   local outputs_toml="${4-}"
   local next_mode_file="${5-}"
+  local boot_id_file="${6:-/proc/sys/kernel/random/boot_id}"
   local config_home state_home line current_output='' output_disabled=0
   local card name render card_node render_node status conn_dir conn_name short_name
   local any_connected usable_connected config_disabled disabled_key token boot_vga score
-  local lid_closed=0 lid_file lid_state='' force_internal=0 next_mode=''
+  local lid_closed=0 lid_file lid_state='' force_internal=0
+  local current_boot_id='' staged_boot='' next_mode=''
   local best_score=-1 primary_card='' primary_render=''
   local -a cards=()
   local -a disabled_outputs=()
@@ -43,10 +45,11 @@ configure_drm_devices() {
     fi
   done
 
-  if (( ! lid_closed )) && [[ -n $next_mode_file && -r $next_mode_file ]]; then
-    next_mode=$(< "$next_mode_file")
-    next_mode=${next_mode//[[:space:]]/}
-    if [[ $next_mode == extend || $next_mode == laptop || $next_mode == internal ]]; then
+  if (( ! lid_closed )) && [[ -n $next_mode_file && -r $next_mode_file && -r $boot_id_file ]]; then
+    read -r current_boot_id < "$boot_id_file" || current_boot_id=''
+    read -r staged_boot next_mode < "$next_mode_file" || true
+    if [[ -n $current_boot_id && $staged_boot == "$current_boot_id" ]] &&
+       [[ $next_mode == extend || $next_mode == laptop || $next_mode == internal ]]; then
       force_internal=1
     fi
   fi

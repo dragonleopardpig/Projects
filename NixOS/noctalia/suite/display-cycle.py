@@ -97,26 +97,40 @@ def secondary_external_vendor(
     return ""
 
 
+def get_boot_id(boot_id_path: str = "/proc/sys/kernel/random/boot_id") -> str:
+    try:
+        with open(boot_id_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return ""
+
+
 def get_next_mode_path() -> str:
     state_home = os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
     return os.path.join(state_home, "noctalia-suite", "next-display-mode")
 
 
-def read_staged_mode(path: str) -> str:
+def read_staged_mode(path: str, boot_id_path: str = "/proc/sys/kernel/random/boot_id") -> str:
     if not path or not os.path.exists(path):
         return ""
     try:
+        current_boot_id = get_boot_id(boot_id_path)
         with open(path, "r", encoding="utf-8") as f:
-            val = f.read().strip().lower()
-            return "laptop" if val == "internal" else val
+            parts = f.read().split()
+        if len(parts) != 2 or not current_boot_id or parts[0] != current_boot_id:
+            return ""
+        val = parts[1].strip().lower()
+        return "laptop" if val == "internal" else val
     except Exception:
         return ""
 
 
-def write_staged_mode(path: str, mode: str) -> None:
+def write_staged_mode(path: str, mode: str, boot_id_path: str = "/proc/sys/kernel/random/boot_id") -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    boot_id = get_boot_id(boot_id_path)
+    payload = f"{boot_id} {mode}\n" if boot_id else f"{mode}\n"
     with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(path), suffix=".tmp", delete=False) as f:
-        f.write(f"{mode}\n")
+        f.write(payload)
         tmp_name = f.name
     os.replace(tmp_name, path)
 
@@ -442,16 +456,16 @@ def main() -> None:
 
     if action == "stage_intel":
         write_staged_mode(next_mode_path, message)
-        label = "Laptop display" if message == "laptop" else "Extend displays"
+        label = "Laptop" if message == "laptop" else "Extend"
         _notify(
-            f"Next login: {label} (Intel)",
-            "Press Super+Escape to re-login on Intel, or F7 again to cancel",
+            f"Queued Intel ({label}) for next login",
+            "HDMI stays on NVIDIA right now. Super+Escape to apply, or F7 again to cancel",
         )
         sys.exit(0)
 
     if action == "unstage_intel":
         clear_staged_mode(next_mode_path)
-        _notify("Staying on External display only", "Canceled switch to Intel")
+        _notify("Canceled Intel switch", "Staying on direct NVIDIA External only")
         sys.exit(0)
 
     if action == "none":

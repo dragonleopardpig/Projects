@@ -375,6 +375,21 @@ class DisplayCycleTests(unittest.TestCase):
                 cycle.is_internal_on_secondary_gpu("eDP-1", drm_sysfs=drm_dir, wlr_drm_devices="/dev/dri/card1:/dev/dri/card2")
             )
 
+    def test_staged_mode_expires_across_reboots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            mode_file = os.path.join(tmp, "next-display-mode")
+            boot_file = os.path.join(tmp, "boot_id")
+            with open(boot_file, "w") as f:
+                f.write("boot-aaa\n")
+
+            cycle.write_staged_mode(mode_file, "extend", boot_id_path=boot_file)
+            self.assertEqual(cycle.read_staged_mode(mode_file, boot_id_path=boot_file), "extend")
+
+            # After a reboot, boot_id changes and the old stage file must be ignored.
+            with open(boot_file, "w") as f:
+                f.write("boot-bbb\n")
+            self.assertEqual(cycle.read_staged_mode(mode_file, boot_id_path=boot_file), "")
+
 
 if __name__ == "__main__":
     unittest.main()
