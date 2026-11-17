@@ -20,6 +20,10 @@
 (declare-function vterm-send-string "vterm" (string &optional paste-p))
 (declare-function vterm-copy-mode "vterm" (&optional arg))
 (declare-function strata-record-history "strata-dirvish-search" (pane dir))
+(declare-function strata-windows-display-sidebar "strata-dirvish-windows" (buffer width))
+(declare-function strata-windows-display-terminal "strata-dirvish-windows" (main height pane))
+(declare-function strata-windows--delete "strata-dirvish-windows" (window))
+(declare-function strata-windows--reconcile "strata-dirvish-windows" (&optional frame))
 
 ;;;; Workspace, Tab & Dual-Pane State
 
@@ -128,22 +132,25 @@
       dir)))
 
 (defun strata-panes--pane-for-window (win)
-  "Return `strata-pane-state' owning live browser window WIN in split mode, or nil."
-  (when (and (strata-split-active-p)
-             (strata-panes--valid-main-window-p win))
-    (let* ((tab (strata-active-tab))
-           (p1 (strata-tab-state-pane1 tab))
-           (p2 (strata-tab-state-pane2 tab))
-           (w1 (and p1 (strata-pane-state-window p1)))
-           (w2 (and p2 (strata-pane-state-window p2)))
-           (b1 (and p1 (strata-pane-state-buffer p1)))
-           (b2 (and p2 (strata-pane-state-buffer p2)))
-           (wbuf (window-buffer win)))
-      (cond
-       ((and p1 (eq win w1)) p1)
-       ((and p2 (eq win w2)) p2)
-       ((and p1 (not (window-live-p w1)) (not (eq b1 b2)) (eq wbuf b1)) p1)
-       ((and p2 (not (window-live-p w2)) (not (eq b1 b2)) (eq wbuf b2)) p2)))))
+  "Return the pane owning browser or embedded terminal window WIN."
+  (or (and (window-live-p win)
+           (memq (window-parameter win 'strata-window-role) '(index terminal))
+           (window-parameter win 'strata-window-pane))
+      (when (and (strata-split-active-p)
+                 (strata-panes--valid-main-window-p win))
+        (let* ((tab (strata-active-tab))
+               (p1 (strata-tab-state-pane1 tab))
+               (p2 (strata-tab-state-pane2 tab))
+               (w1 (and p1 (strata-pane-state-window p1)))
+               (w2 (and p2 (strata-pane-state-window p2)))
+               (b1 (and p1 (strata-pane-state-buffer p1)))
+               (b2 (and p2 (strata-pane-state-buffer p2)))
+               (wbuf (window-buffer win)))
+          (cond
+           ((and p1 (eq win w1)) p1)
+           ((and p2 (eq win w2)) p2)
+           ((and p1 (not (window-live-p w1)) (not (eq b1 b2)) (eq wbuf b1)) p1)
+           ((and p2 (not (window-live-p w2)) (not (eq b1 b2)) (eq wbuf b2)) p2))))))
 
 (defun strata-panes--sync-active-pane-from-window (&optional win)
   "Sync active split pane to match main browser WIN (default `selected-window')."
@@ -152,7 +159,8 @@
       (let* ((tab (strata-active-tab))
              (id (strata-pane-state-id matched))
              (changed (/= (strata-tab-state-active-pane tab) id)))
-        (setf (strata-pane-state-window matched) w)
+        (unless (eq (window-parameter w 'strata-window-role) 'terminal)
+          (setf (strata-pane-state-window matched) w))
         (when changed
           (setf (strata-tab-state-active-pane tab) id)
           (force-mode-line-update t)
@@ -307,7 +315,7 @@ Return non-nil if the sidebar was newly opened and rendered."
             (strata-sidebar-mode)))
         (strata-sidebar-render)
         (setq strata-sidebar-window
-              (display-buffer-in-side-window buf `((side . left) (slot . -1) (window-width . ,w))))
+              (strata-windows-display-sidebar buf w))
         t))))
 
 ;;;; Location Navigation Inside Active Pane
@@ -529,7 +537,7 @@ Keeps shell process & CWD alive while hidden."
              (term-win (selected-window)))
         (setf (strata-pane-state-terminal-open pane) nil)
         (when (not (one-window-p t))
-          (delete-window term-win))
+          (strata-windows--delete term-win))
         (when (window-live-p (strata-pane-state-window pane))
           (select-window (strata-pane-state-window pane))))
     (let* ((pane (strata-active-pane))
@@ -538,7 +546,7 @@ Keeps shell process & CWD alive while hidden."
       (cond
        (existing-win
         (setf (strata-pane-state-terminal-open pane) nil)
-        (delete-window existing-win))
+        (strata-windows--delete existing-win))
        (t
         (unless (buffer-live-p tbuf)
           (setq tbuf (strata-pane--spawn-terminal
@@ -551,11 +559,12 @@ Keeps shell process & CWD alive while hidden."
                                   (strata-pane-state-window pane))
                              (selected-window)))
                (h (max 8 (/ (window-total-height pane-win) 3)))
-               (twin (split-window pane-win (- h) 'below)))
+               (twin (strata-windows-display-terminal pane-win h pane)))
           (setf (strata-pane-state-window pane) pane-win
                 (strata-pane-state-terminal-open pane) t)
           (select-window twin)
-          (switch-to-buffer tbuf)))))))
+          (switch-to-buffer tbuf)
+          (strata-windows--reconcile)))))))
 
 (defun strata-open-external-terminal (&optional dir)
   "Launch host terminal emulator externally at DIR."
@@ -895,7 +904,7 @@ Keeps shell process & CWD alive while hidden."
   (let ((p (strata-prefs)))
     (if (window-live-p strata-sidebar-window)
         (progn
-          (delete-window strata-sidebar-window)
+          (strata-windows--delete strata-sidebar-window)
           (setq strata-sidebar-window nil)
           (setf (strata-prefs-sidebar-expanded p) nil)
           (strata-prefs-save))
@@ -906,7 +915,7 @@ Keeps shell process & CWD alive while hidden."
             (strata-sidebar-mode)))
         (strata-sidebar-render)
         (setq strata-sidebar-window
-              (display-buffer-in-side-window buf `((side . left) (slot . -1) (window-width . ,w))))
+              (strata-windows-display-sidebar buf w))
         (setf (strata-prefs-sidebar-expanded p) t)
         (strata-prefs-save)))))
 

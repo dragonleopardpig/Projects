@@ -12,6 +12,9 @@
 
 ;;; Code:
 
+(defvar strata-windows--changing)
+(declare-function strata-windows--delete "strata-dirvish-windows" (window))
+
 (require 'cl-lib)
 (require 'dirvish)
 (require 'shr)
@@ -497,7 +500,7 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
                            strata-preview-standalone-window)
                       (get-buffer-window "*Strata Preview*"))))
     (when (and (window-live-p win) (not (one-window-p t)))
-      (delete-window win))
+      (strata-windows--delete win))
     (setq strata-preview-standalone-window nil)))
 
 (defun strata-scroll-preview-down ()
@@ -514,7 +517,10 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
 
 (defun strata-preview--split-standalone-window (main)
   "Create a normal (non-side) right preview window split from MAIN."
-  (let* ((left-w (max 24 (round (* (window-total-width main) 0.58))))
+  (let* ((ignore-window-parameters t)
+         (strata-windows--changing t)
+         (window-combination-limit t)
+         (left-w (max 24 (round (* (window-total-width main) 0.58))))
          (pwin (split-window main left-w 'right)))
     (set-window-buffer pwin (get-buffer-create "*Strata Preview*"))
     (setq strata-preview-standalone-window pwin)

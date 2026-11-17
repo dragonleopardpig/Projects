@@ -593,6 +593,9 @@ Text terminals use `strata-context-menu', also available with Shift-F10."
                     ("10xer: J / K" "Scroll Preview Window Down / Up"))
                    ("PANES, TERMINAL & TABS"
                     ("F3 / F6" "Toggle Extra Split Pane / Switch Active Pane")
+                    ("C-x 3 / C-x 2" "Split an Emacs window beside / below the whole browser")
+                    ("C-x o / C-x 0 / C-x 1" "Other window / Close window group / Keep window group")
+                    ("M-x transpose-frame" "Transpose browser, editor and terminal groups")
                     ("C-S-c / C-S-x" "Copy / Move selection to Other Pane (or Drag across panes)")
                     ("C-` / F9 / C-M-t" "Toggle Pane Embedded Terminal / External Terminal")
                     (,(if tenx "C-n / C-S-b" "C-b / C-S-b") "Toggle / Focus Left Sidebar (c inside Sidebar: Rail mode)")

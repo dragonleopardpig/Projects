@@ -3430,5 +3430,7 @@
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
 
+(require 'strata-dirvish-window-tests)
+
 (provide 'strata-dirvish-tests)
 ;;; strata-dirvish-tests.el ends here

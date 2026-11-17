@@ -21,6 +21,7 @@
 (require 'strata-dirvish-keys)
 (require 'strata-dirvish-watch)
 (require 'strata-dirvish-menu)
+(require 'strata-dirvish-windows)
 
 (defun strata-dirvish--sync-auto-revert ()
   "Disable Dired auto-revert and notify watches on FUSE/cloud/remote mounts."
@@ -180,6 +181,7 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
 (defun strata-dirvish--after-build-layout (&rest _)
   "Ensure `*Strata Sidebar*' stays visible after Dirvish builds or reuses layout."
   (when (and (not strata-dirvish--in-sidebar-ensure)
+             (not strata-windows--changing)
              (not strata-dirvish--quitting)
              (fboundp 'strata-sidebar-ensure)
              (strata-prefs-sidebar-expanded (strata-prefs))
@@ -247,6 +249,7 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
   "Configure Dirvish, hooks, theme blending, and Dashboard integration."
   (strata-ui-install-mouse-routing)
   (strata-menu-install)
+  (strata-windows-install)
   (let ((p (strata-prefs)))
     (strata-history-load)
     (strata-sync-theme-faces)
