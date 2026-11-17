@@ -39,6 +39,7 @@ let
   greeter = pkgs.noctalia-greeter;
   drmLauncher = pkgs.writeShellApplication {
     name = "noctalia-drm-launch";
+    runtimeInputs = [ pkgs.coreutils ];
     text = builtins.readFile ./gpu-selection.sh + ''
       configure_drm_devices
       exec "$@"

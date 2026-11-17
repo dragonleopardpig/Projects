@@ -5,7 +5,7 @@ fixture=$(mktemp -d)
 trap 'rm -rf "$fixture"' EXIT
 
 reset_fixture() {
-  rm -rf "$fixture/drm" "$fixture/dev" "$fixture/lid"
+  rm -rf "$fixture/drm" "$fixture/dev" "$fixture/lid" "$fixture/outputs.toml" "$fixture/next-mode"
   mkdir -p "$fixture/drm" "$fixture/dev" "$fixture/lid"
   unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
 }
@@ -19,7 +19,9 @@ add_card() {
     touch "$fixture/drm/card$number/device/drm/renderD$render" "$fixture/dev/renderD$render"
   fi
 }
-select_devices() { configure_drm_devices "$fixture/drm" "$fixture/dev" "$fixture/lid/state"; }
+select_devices() {
+  configure_drm_devices "$fixture/drm" "$fixture/dev" "$fixture/lid/state" "$fixture/outputs.toml" "$fixture/next-mode"
+}
 
 # The failed machine: simpledrm first, NVIDIA boot GPU drives the displays,
 # Intel remains available. Arbitrary card numbers catch hardcoded paths.
@@ -79,26 +81,76 @@ export WLR_RENDER_DRM_DEVICE=/custom/render
 select_devices
 [[ $WLR_RENDER_DRM_DEVICE == /custom/render && -z ${WLR_DRM_DEVICES:-} ]]
 # BIOS Auto: Intel drives eDP-1 (boot_vga=1), NVIDIA drives HDMI-A-1 (boot_vga=0).
-# With lid open, Intel wins so eDP-1 stays usable without i915 page-flip stalls.
+# With lid open and no disabled outputs (Extend), Intel wins.
 reset_fixture
 add_card 7 135 0 connected HDMI-A-1
 add_card 12 140 1 connected eDP-1
+printf 'TL160ADMP26\n' > "$fixture/drm/card12-eDP-1/edid"
+printf 'VP327Q\n' > "$fixture/drm/card7-HDMI-A-1/edid"
 printf 'state:      open\n' > "$fixture/lid/state"
 select_devices
 [[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]
 [[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD140" ]]
 
-# BIOS Auto with lid closed (clamshell) and external connected: NVIDIA wins for
-# native 60 Hz 4K scanout without cross-GPU PCIe copies.
+# BIOS Auto with lid open and External-only in outputs.toml (eDP-1 disabled by EDID):
+# NVIDIA wins for direct 60 Hz 4K scanout without cross-GPU PCIe copies.
+unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
+cat > "$fixture/outputs.toml" <<'EOF'
+[output."ASUSTek COMPUTER INC VP327Q W2LMMU003887 "]
+position = [0, 0]
+
+[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]
+enabled = false
+EOF
+select_devices
+[[ $WLR_DRM_DEVICES == "$fixture/dev/card7:$fixture/dev/card12" ]]
+[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD135" ]]
+
+# Staged F7 switch to Intel (next-display-mode = extend) overrides External-only when lid is open.
+unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
+printf 'extend\n' > "$fixture/next-mode"
+select_devices
+[[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]
+[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD140" ]]
+
+# Staged Intel switch is ignored when lid is closed (clamshell still forces NVIDIA).
+unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
+printf 'state:      closed\n' > "$fixture/lid/state"
+select_devices
+[[ $WLR_DRM_DEVICES == "$fixture/dev/card7:$fixture/dev/card12" ]]
+[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD135" ]]
+rm -f "$fixture/next-mode"
+
+# BIOS Auto with lid open and Laptop-only in outputs.toml (HDMI-A-1 disabled):
+# Intel wins.
+unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
+printf 'state:      open\n' > "$fixture/lid/state"
+cat > "$fixture/outputs.toml" <<'EOF'
+[output."ASUSTek COMPUTER INC VP327Q W2LMMU003887 "]
+enabled = false
+
+[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]
+position = [0, 0]
+EOF
+select_devices
+[[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]
+[[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD140" ]]
+
+# BIOS Auto with lid closed and external previously disabled in outputs.toml:
+# NVIDIA still wins in clamshell mode so external monitor lights up.
 unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
 printf 'state:      closed\n' > "$fixture/lid/state"
 select_devices
 [[ $WLR_DRM_DEVICES == "$fixture/dev/card7:$fixture/dev/card12" ]]
 [[ $WLR_RENDER_DRM_DEVICE == "$fixture/dev/renderD135" ]]
 
-# BIOS Auto undocked with lid closed (eDP-1 connected on Intel, NVIDIA disconnected):
-# Intel still wins over a disconnected dGPU.
+# BIOS Auto undocked with eDP-1 disabled in outputs.toml and NVIDIA disconnected:
+# Intel still wins over a disconnected dGPU so relayout can recover eDP-1.
 unset WLR_DRM_DEVICES WLR_RENDER_DRM_DEVICE
+cat > "$fixture/outputs.toml" <<'EOF'
+[output."Tianma Microelectronics Ltd. TL160ADMP26 Unknown"]
+enabled = false
+EOF
 printf 'disconnected\n' > "$fixture/drm/card7-HDMI-A-1/status"
 select_devices
 [[ $WLR_DRM_DEVICES == "$fixture/dev/card12:$fixture/dev/card7" ]]

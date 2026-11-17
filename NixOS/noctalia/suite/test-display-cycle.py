@@ -260,16 +260,48 @@ class DisplayCycleTests(unittest.TestCase):
         )
         self.assertEqual(action, "none")
 
-    def test_internal_on_secondary_gpu_guards_against_panel_switch(self):
-        # Already external-only -> warning on F7 without config rewrite
+    def test_internal_on_secondary_gpu_stages_intel_without_panel_switch(self):
+        # First F7 in NVIDIA-primary External-only stages Extend for next Intel login
         action, _, msg = cycle.calculate_next_state(
             [self.asus_external, self.tianma_internal],
             lid_closed=False,
             existing_sections={},
             internal_on_secondary_gpu=True,
         )
+        self.assertEqual((action, msg), ("stage_intel", "extend"))
+
+        # Second F7 cancels the staged Intel switch before logout
+        action, _, msg = cycle.calculate_next_state(
+            [self.asus_external, self.tianma_internal],
+            lid_closed=False,
+            existing_sections={},
+            internal_on_secondary_gpu=True,
+            staged_mode="extend",
+        )
+        self.assertEqual((action, msg), ("unstage_intel", "Staying on External display only"))
+
+        # Explicit external request without staged switch -> warning without config rewrite
+        action, _, msg = cycle.calculate_next_state(
+            [self.asus_external, self.tianma_internal],
+            lid_closed=False,
+            existing_sections={},
+            requested_mode="external",
+            internal_on_secondary_gpu=True,
+        )
         self.assertEqual(action, "gpu_locked_warning")
         self.assertIn("Re-login with lid open", msg)
+
+        # Next-login relayout on Intel primary consumes staged "extend" even if eDP-1 was disabled
+        action, sections, msg = cycle.calculate_next_state(
+            [self.asus_external, self.tianma_internal],
+            lid_closed=False,
+            existing_sections={"Tianma Microelectronics Ltd. TL160ADMP26 Unknown": {"enabled": False}},
+            requested_mode="relayout",
+            internal_on_secondary_gpu=False,
+            staged_mode="extend",
+        )
+        self.assertEqual((action, msg), ("apply", "Extend displays"))
+        self.assertNotIn("enabled", sections["Tianma Microelectronics Ltd. TL160ADMP26 Unknown"])
 
         # Already external-only -> relayout stays silent (no-op)
         action, _, _ = cycle.calculate_next_state(
@@ -292,6 +324,26 @@ class DisplayCycleTests(unittest.TestCase):
         self.assertEqual(action, "apply")
         self.assertIn("Re-login with lid open", msg)
         self.assertTrue(sections["Tianma Microelectronics Ltd. TL160ADMP26 Unknown"].get("enabled") is False)
+
+    def test_secondary_external_vendor_detection(self):
+        with tempfile.TemporaryDirectory() as drm_dir:
+            card0_hdmi = os.path.join(drm_dir, "card0-HDMI-A-1")
+            card0_dev = os.path.join(drm_dir, "card0", "device")
+            os.makedirs(card0_hdmi)
+            os.makedirs(card0_dev)
+            with open(os.path.join(card0_hdmi, "status"), "w") as f:
+                f.write("connected\n")
+            with open(os.path.join(card0_dev, "uevent"), "w") as f:
+                f.write("DRIVER=nvidia\n")
+
+            self.assertEqual(
+                cycle.secondary_external_vendor(["HDMI-A-1"], drm_sysfs=drm_dir, wlr_drm_devices="/dev/dri/card1:/dev/dri/card0"),
+                "NVIDIA",
+            )
+            self.assertEqual(
+                cycle.secondary_external_vendor(["HDMI-A-1"], drm_sysfs=drm_dir, wlr_drm_devices="/dev/dri/card0:/dev/dri/card1"),
+                "",
+            )
 
     def test_is_internal_on_secondary_gpu_detection(self):
         with tempfile.TemporaryDirectory() as drm_dir:
