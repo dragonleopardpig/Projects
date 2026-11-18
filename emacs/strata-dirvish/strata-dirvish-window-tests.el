@@ -240,6 +240,45 @@
               ;; Closing/maximizing a pane must not kill its file browser.
               (should (buffer-live-p buffer)))))))))
 
+(ert-deftest strata-test-window-preview-zoom-survives-return-and-refresh ()
+  "Keyboard zoom persists after leaving/rebuilding previews in every layout."
+  (dolist (mode '(compact icons list columns))
+    (dolist (keys '("C-x C-+ + C-<left>" "C-+ + C-<left>" "C-= = C-<left>"))
+      (ert-info ((format "%s: %s" mode keys))
+        (strata-window-test--with-browser mode
+          (let ((file (expand-file-name "sample.txt" directory))
+                (other (expand-file-name "another.txt" directory)))
+            (write-region "Another text preview\n" nil other nil 'silent)
+            (strata-goto-file file)
+            (call-interactively (if (eq mode 'icons) #'strata-preview-enter-at-point
+                                  (key-binding (kbd "<right>"))))
+            (should (bound-and-true-p strata-preview-read-mode))
+            (execute-kbd-macro (kbd keys))
+            (should (eq (selected-window) main))
+            (should (= (strata-prefs-preview-text-scale (strata-prefs)) 2))
+            ;; A redraw used to restore the old preference, undoing native zoom.
+            (strata-preview-at-point)
+            (let ((preview (strata-preview--active-window)))
+              (should (window-live-p preview))
+              (should (= (buffer-local-value 'text-scale-mode-amount (window-buffer preview)) 2)))
+            ;; It is a shared text preference, including newly visited files.
+            (strata-refresh-active-view)
+            (strata-goto-file other)
+            (call-interactively (if (eq mode 'icons) #'strata-preview-enter-at-point
+                                  (key-binding (kbd "<right>"))))
+            (should (bound-and-true-p strata-preview-read-mode))
+            (should (= text-scale-mode-amount 2))
+            (should (= (strata-prefs-preview-text-scale (strata-prefs-load)) 2))
+            (should (= (strata-prefs-preview-image-scale (strata-prefs)) 1.0))
+            (should (= (strata-prefs-preview-pdf-scale (strata-prefs)) 1.0))
+            ;; Native Emacs reset is persisted too.
+            (execute-kbd-macro (kbd "C-x C-0 C-<left>"))
+            (should (eq (selected-window) main))
+            (should (= (strata-prefs-preview-text-scale (strata-prefs)) 0))
+            (strata-preview-at-point)
+            (let ((preview (strata-preview--active-window)))
+              (should-not (buffer-local-value 'text-scale-mode (window-buffer preview))))))))))
+
 (ert-deftest strata-test-window-transpose-error-restores-usable-layout ()
   "A failed layout transformation restores editor buffers and window roles."
   (strata-window-test--with-browser 'columns

@@ -17,6 +17,7 @@
 
 (require 'cl-lib)
 (require 'dirvish)
+(require 'face-remap)
 (require 'shr)
 (require 'subr-x)
 (require 'strata-dirvish-prefs)
@@ -65,6 +66,9 @@
 
 (defvar strata-preview--force-update nil
   "Dynamically non-nil when preview update is explicitly requested by Strata.")
+
+(defvar strata-preview--applying-text-zoom nil
+  "Non-nil while restoring saved text zoom during preview rendering.")
 
 (defconst strata-preview--common-mode-specs
   '(("\\.ts\\'"                              "probe.ts"        typescript-ts-mode typescript)
@@ -186,7 +190,9 @@ Returns fontified `buffer-string' with realized `face' text properties."
             (and (fboundp 'treesit-parser-list) (treesit-parser-list)))
     (font-lock-mode 1)
     (ignore-errors
-      (font-lock-ensure (point-min) (min (point-max) strata-preview-max-bytes)))))
+      (font-lock-ensure (point-min) (min (point-max) strata-preview-max-bytes))))
+  (when (eq strata-active-preview-kind 'text)
+    (strata-preview--set-text-scale)))
 
 (defun strata-preview--guard-dirvish-update (orig-fn dv index)
   "Prevent background Dirvish preview updates from clobbering focused panes.
@@ -321,13 +327,43 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
        (strata-preview--apply-text-zoom)
        (message "Text preview zoom reset (0)")))))
 
+(defun strata-preview--set-text-scale ()
+  "Restore saved text zoom without treating rendering as a user zoom change."
+  (let ((strata-preview--applying-text-zoom t))
+    (text-scale-set (strata-prefs-preview-text-scale (strata-prefs)))))
+
+(defun strata-preview--remember-text-scale ()
+  "Persist native Emacs text zoom changes made inside a text preview."
+  (when (and (not strata-preview--applying-text-zoom)
+             (eq strata-active-preview-kind 'text)
+             (or (bound-and-true-p strata-preview-read-mode)
+                 (bound-and-true-p strata-preview-edit-mode)))
+    (let* ((p (strata-prefs))
+           (scale (if text-scale-mode text-scale-mode-amount 0)))
+      (unless (= scale (strata-prefs-preview-text-scale p))
+        (setf (strata-prefs-preview-text-scale p) scale)
+        (strata-prefs-save)))))
+
+(defun strata-preview--bind-zoom-keys (map &optional plain)
+  "Bind preview zoom controls in MAP, including plain keys when PLAIN."
+  (dolist (binding '(("C-+" . strata-preview-zoom-in)
+                     ("C-=" . strata-preview-zoom-in)
+                     ("C--" . strata-preview-zoom-out)
+                     ("C-0" . strata-preview-zoom-reset)))
+    (define-key map (kbd (car binding)) (cdr binding)))
+  (when plain
+    (dolist (binding '(("+" . strata-preview-zoom-in)
+                       ("=" . strata-preview-zoom-in)
+                       ("-" . strata-preview-zoom-out)
+                       ("0" . strata-preview-zoom-reset)))
+      (define-key map (kbd (car binding)) (cdr binding)))))
+
 (defun strata-preview--apply-text-zoom ()
   "Apply independent `preview-text-scale' to the active preview window's buffer."
   (when-let* ((win (strata-preview--active-window))
               (buf (window-buffer win)))
     (with-current-buffer buf
-      (when (fboundp 'text-scale-set)
-        (text-scale-set (strata-prefs-preview-text-scale (strata-prefs))))
+      (strata-preview--set-text-scale)
       (setq-local truncate-lines (not (strata-prefs-preview-text-wrap (strata-prefs)))))))
 
 (defun strata-toggle-rendered-document ()
@@ -400,8 +436,7 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
           (insert (propertize (format "  Unreadable file: %s\n" (file-name-nondirectory file))
                               'face 'shadow)))))
       (setq-local truncate-lines (not (strata-prefs-preview-text-wrap (strata-prefs))))
-      (when (fboundp 'text-scale-set)
-        (text-scale-set (strata-prefs-preview-text-scale (strata-prefs))))
+      (strata-preview--set-text-scale)
       (goto-char (point-min)))))
 
 (defun strata-preview-update-standalone (file &optional window)
@@ -425,8 +460,7 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
            (erase-buffer)
            (insert-buffer-substring b))
          (setq-local truncate-lines (not (strata-prefs-preview-text-wrap (strata-prefs))))
-         (when (fboundp 'text-scale-set)
-           (text-scale-set (strata-prefs-preview-text-scale (strata-prefs))))
+         (strata-preview--set-text-scale)
          (goto-char (point-min))))
       (`(shell . ,cmd)
        (setq strata-active-preview-file file)
@@ -487,7 +521,8 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
 
 (defun strata-preview--active-window ()
   "Return the currently visible Dirvish or standalone preview window, or nil."
-  (or (when-let* ((dv (ignore-errors (dirvish-curr)))
+  (or (when (strata-preview--preview-window-p (selected-window)) (selected-window))
+      (when-let* ((dv (ignore-errors (dirvish-curr)))
                   (win (dv-preview-window dv)))
         (and (window-live-p win) win))
       (and (window-live-p strata-preview-standalone-window)
@@ -821,6 +856,8 @@ When FOCUS-READ-ONLY is non-nil, enter the preview pane in
     map)
   "Keymap active while navigating Strata's preview pane in read-only mode.")
 
+(strata-preview--bind-zoom-keys strata-preview-read-mode-map t)
+
 (define-minor-mode strata-preview-read-mode
   "Minor mode active while reading/scrolling inside Strata's preview pane.
 Keeps the buffer strictly read-only, enables keyboard scrolling, and binds
@@ -832,8 +869,10 @@ Keeps the buffer strictly read-only, enables keyboard scrolling, and binds
         (setq-local buffer-read-only t)
         (unless cursor-type
           (setq-local cursor-type t))
-        (add-hook 'kill-buffer-hook #'strata-preview-edit--on-kill nil t))
-    (remove-hook 'kill-buffer-hook #'strata-preview-edit--on-kill t)))
+        (add-hook 'kill-buffer-hook #'strata-preview-edit--on-kill nil t)
+        (add-hook 'text-scale-mode-hook #'strata-preview--remember-text-scale nil t))
+    (remove-hook 'kill-buffer-hook #'strata-preview-edit--on-kill t)
+    (remove-hook 'text-scale-mode-hook #'strata-preview--remember-text-scale t)))
 
 (defun strata-preview-enter-at-point ()
   "Preview item at point and enter it read-only (`<right>')."
@@ -848,6 +887,8 @@ Keeps the buffer strictly read-only, enables keyboard scrolling, and binds
     (define-key map (kbd "C-c k") #'strata-preview-edit-abort)
     map)
   "Keymap active while direct-editing a file in Strata's preview pane.")
+
+(strata-preview--bind-zoom-keys strata-preview-edit-mode-map)
 
 (defun strata-preview-edit--restore-browser (win bbuf bdir view &optional file defer-preview)
   "Restore previous Strata browser view in WIN for BBUF/BDIR in VIEW.
@@ -921,8 +962,11 @@ to return left, or `C-c k' to abort and discard edits."
   :lighter " Preview-Edit"
   :keymap strata-preview-edit-mode-map
   (if strata-preview-edit-mode
-      (add-hook 'kill-buffer-hook #'strata-preview-edit--on-kill nil t)
-    (remove-hook 'kill-buffer-hook #'strata-preview-edit--on-kill t)))
+      (progn
+        (add-hook 'kill-buffer-hook #'strata-preview-edit--on-kill nil t)
+        (add-hook 'text-scale-mode-hook #'strata-preview--remember-text-scale nil t))
+    (remove-hook 'kill-buffer-hook #'strata-preview-edit--on-kill t)
+    (remove-hook 'text-scale-mode-hook #'strata-preview--remember-text-scale t)))
 
 (defun strata-preview--invalidate-cache (dv file &optional kill-visiting)
   "Drop cached preview text and throwaway preview buffers for FILE in DV.
@@ -1159,8 +1203,7 @@ MODE may be:
       (setq buffer-read-only t
             strata-active-preview-kind (or kind 'text))
       (setq-local truncate-lines (not (strata-prefs-preview-text-wrap (strata-prefs))))
-      (when (fboundp 'text-scale-set)
-        (text-scale-set (strata-prefs-preview-text-scale (strata-prefs)))))
+      (strata-preview--set-text-scale))
     buf))
 
 (defun strata-preview--safe-insert-markdown (file buf)

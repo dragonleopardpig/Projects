@@ -126,6 +126,42 @@
           (should (= (strata-prefs-preview-text-scale strata-prefs-current) 1)))
       (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
 
+(ert-deftest strata-test-preview-native-zoom-only-persists-preview-changes ()
+  "Native text zoom saves read/edit previews without affecting ordinary buffers."
+  (let* ((strata-dirvish-state-dir (make-temp-file "strata-native-zoom-" t))
+         (strata-dirvish-state-file (expand-file-name "prefs.eld" strata-dirvish-state-dir))
+         (strata-prefs-current (strata-prefs--create))
+         (strata-active-preview-kind 'text))
+    (unwind-protect
+        (with-temp-buffer
+          (text-scale-set 1)
+          (should (= (strata-prefs-preview-text-scale (strata-prefs)) 0))
+          (strata-preview-read-mode 1)
+          (text-scale-set 2)
+          (should (= (strata-prefs-preview-text-scale (strata-prefs)) 2))
+          ;; Rendering may reset a buffer before restoring the saved scale.
+          (let ((strata-preview--applying-text-zoom t)) (text-scale-set 0))
+          (should (= (strata-prefs-preview-text-scale (strata-prefs)) 2))
+          (strata-preview--set-text-scale)
+          (should (= text-scale-mode-amount 2))
+          (strata-preview-read-mode -1)
+          (text-scale-set 3)
+          (should (= (strata-prefs-preview-text-scale (strata-prefs)) 2))
+          (strata-preview-edit-mode 1)
+          (text-scale-set 4)
+          (should (= (strata-prefs-preview-text-scale (strata-prefs)) 4))
+          (should-not (lookup-key strata-preview-edit-mode-map (kbd "+")))
+          (strata-preview-edit-mode -1)
+          (setq strata-active-preview-kind 'image)
+          (strata-preview-read-mode 1)
+          (text-scale-set 5)
+          (should (= (strata-prefs-preview-text-scale (strata-prefs)) 4))
+          (should (= (strata-prefs-preview-image-scale (strata-prefs)) 1.0))
+          (should (= (strata-prefs-preview-pdf-scale (strata-prefs)) 1.0))
+          (strata-preview-read-mode -1)
+          (should (= (strata-prefs-preview-text-scale (strata-prefs-load)) 4)))
+      (delete-directory strata-dirvish-state-dir t))))
+
 (ert-deftest strata-test-compact-and-icons-render-and-filter ()
   (let ((tmp (make-temp-file "strata-views-" t)))
     (unwind-protect
