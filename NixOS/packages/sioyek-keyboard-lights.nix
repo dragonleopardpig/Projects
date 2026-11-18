@@ -163,6 +163,12 @@ in
   fi
 
   exec ${lib.getExe gproSioyekApply}
-'') // {
-  passthru.gproLed = gproLedSioyek;
-}
+'').overrideAttrs (old: {
+  # Real passthru, so configuration.nix can reach them as
+  # sioyekKeyboardApply.gproLed / .gproSioyekApply (a plain
+  # `// { passthru.gproLed = ...; }` only makes `.passthru.gproLed`).
+  passthru = (old.passthru or { }) // {
+    gproLed = gproLedSioyek;
+    inherit gproSioyekApply;
+  };
+})

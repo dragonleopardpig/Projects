@@ -843,8 +843,8 @@ in
     # ── Hardware & Power ──
     brightnessctl              # Screen brightness control
     ddcutil                    # External monitor brightness via DDC/CI
-    gproLedSioyek              # GPRO live/udev profile matching Sioyek highlights
-    gproSioyekApply            # Legacy GPRO-only palette command
+    sioyekKeyboardApply.gproLed          # GPRO live/udev profile matching Sioyek highlights
+    sioyekKeyboardApply.gproSioyekApply  # Legacy GPRO-only palette command
     sioyekKeyboardApply        # Auto-detect GPRO or PRO X TKL and apply its palette
     power-profiles-daemon      # Power profile management (balanced, performance, saver)
     simple-scan                # Simple GNOME scan GUI (flatbed / quick scans)
