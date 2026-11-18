@@ -279,6 +279,38 @@
             (let ((preview (strata-preview--active-window)))
               (should-not (buffer-local-value 'text-scale-mode (window-buffer preview))))))))))
 
+(ert-deftest strata-test-window-text-zoom-stays-out-of-images-and-follows-edit ()
+  "Text zoom skips image previews; RET edit opens at it and zoom keys persist it."
+  (dolist (mode '(compact icons list columns))
+    (ert-info ((format "%s" mode))
+      (strata-window-test--with-browser mode
+        (let ((file (expand-file-name "sample.txt" directory))
+              (image (expand-file-name "photo.png" directory)))
+          (write-region "not really a png" nil image nil 'silent)
+          (strata-refresh-active-view)
+          (setf (strata-prefs-preview-text-scale (strata-prefs)) 2)
+          ;; An image preview right after zoomed text renders at text scale 0.
+          (strata-goto-file image)
+          (strata-preview-at-point)
+          (should (eq strata-active-preview-kind 'image))
+          (let ((preview (strata-preview--active-window)))
+            (should (window-live-p preview))
+            (should-not (buffer-local-value 'text-scale-mode (window-buffer preview))))
+          ;; RET on a text file edits it at the saved text zoom...
+          (strata-goto-file file)
+          (call-interactively (key-binding (kbd "RET")))
+          (should (bound-and-true-p strata-preview-edit-mode))
+          (should (equal buffer-file-name file))
+          (should (eq strata-active-preview-kind 'text))
+          (should (= text-scale-mode-amount 2))
+          ;; ...and both zoom keys change the text zoom, not the image zoom.
+          (execute-kbd-macro (kbd "C-+"))
+          (should (= (strata-prefs-preview-text-scale (strata-prefs)) 3))
+          (should (= text-scale-mode-amount 3))
+          (execute-kbd-macro (kbd "C-x C-+"))
+          (should (= (strata-prefs-preview-text-scale (strata-prefs-load)) 4))
+          (should (= (strata-prefs-preview-image-scale (strata-prefs)) 1.0)))))))
+
 (ert-deftest strata-test-window-transpose-error-restores-usable-layout ()
   "A failed layout transformation restores editor buffers and window roles."
   (strata-window-test--with-browser 'columns

@@ -1344,6 +1344,46 @@
         (setq pos (next-single-property-change pos 'face nil (point-max))))
       found)))
 
+(ert-deftest strata-test-nix-grammars-load-despite-site-start-path ()
+  "The Nix grammar bundle is added even when site-start pre-filled the path."
+  (skip-unless (and (fboundp 'treesit-available-p) (treesit-available-p)))
+  (let ((file (make-temp-file "strata-nix-ts-" nil ".el"
+                              "(add-to-list 'treesit-extra-load-path \"/strata-test/grammars/lib\")\n"))
+        ;; What NixOS's site-start.el leaves behind before any user config.
+        (treesit-extra-load-path '("/nix/store/strata-test-emacs-packages-deps/lib/")))
+    (unwind-protect
+        (progn
+          (strata-preview--load-nix-grammars file)
+          (should (member "/strata-test/grammars/lib" treesit-extra-load-path))
+          (should (member "/nix/store/strata-test-emacs-packages-deps/lib/"
+                          treesit-extra-load-path))
+          ;; preload.el may have loaded it already: a second load adds nothing.
+          (strata-preview--load-nix-grammars file)
+          (should (= (length treesit-extra-load-path) 2)))
+      (delete-file file))))
+
+(ert-deftest strata-test-dired-dot-entries-are-not-browser-entries ()
+  "`.' and `..' lines shown by -a switches are neither entries nor the current file."
+  (let* ((dir (make-temp-file "strata-dots-" t))
+         (file (expand-file-name "a.txt" dir))
+         (dired-listing-switches "-al")
+         buf)
+    (unwind-protect
+        (progn
+          (write-region "x" nil file nil 'silent)
+          (setq buf (dired-noselect dir))
+          (with-current-buffer buf
+            (should (equal (strata-view--entry-order) (list file)))
+            (goto-char (point-min))
+            (should (re-search-forward " \\.$" nil t))
+            (should-not (strata-current-file))
+            (should (re-search-forward " \\.\\.$" nil t))
+            (should-not (strata-current-file))
+            (should (strata-goto-file file))
+            (should (equal (strata-current-file) file))))
+      (when (buffer-live-p buf) (kill-buffer buf))
+      (delete-directory dir t))))
+
 (ert-deftest strata-test-syntax-highlight-common-extensions ()
   "Common file extensions and Dirvish Columns preview render with syntax faces."
   (let* ((tmp (make-temp-file "strata-hl-" t))

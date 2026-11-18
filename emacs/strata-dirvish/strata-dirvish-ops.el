@@ -443,9 +443,7 @@ MODE is `copy' or `cut'. KEEP-BOTH-DEFAULT or REPLACE-DEFAULT skips prompting wh
 (defun strata--removal-focus-candidates ()
   "Remember current entry and its neighbours before removing files.
 Prefer the next surviving entry, then the previous one, in the displayed order."
-  (let* ((order (cl-remove-if
-                 (lambda (file) (member (file-name-nondirectory (directory-file-name file)) '("." "..")))
-                 (strata-view--entry-order)))
+  (let* ((order (strata-view--entry-order))
          (current (strata-current-file))
          (index (and current
                      (cl-position (strata--path-key current) order

@@ -87,13 +87,25 @@
            (= (point) strata--empty-click-position)
          (eobp))))
 
+(defun strata-view--dot-entry-p (path)
+  "Non-nil if PATH names a directory's own `.' or `..' listing line.
+Dired shows them under `-a' switches; they are not entries a browser
+can focus, select or act on, and `expand-file-name' would fold \"dir/.\"
+into \"dir\" so `strata-goto-file' could never land on them anyway."
+  (member (file-name-nondirectory path) '("." "..")))
+
+(defun strata-view--dired-entry-at-point ()
+  "Return the Dired file on this line, unless it is `.' or `..'."
+  (when-let ((f (ignore-errors (dired-get-filename nil t))))
+    (unless (strata-view--dot-entry-p f) f)))
+
 (defun strata-current-file ()
   "Return absolute path of entry under point in any Strata view buffer."
   (unless (strata-view--empty-selection-p)
     (or (get-text-property (point) 'strata-entry)
         (get-text-property (line-beginning-position) 'strata-entry)
         (and (derived-mode-p 'dired-mode)
-             (ignore-errors (dired-get-filename nil t)))
+             (strata-view--dired-entry-at-point))
         (when-let ((tr (get-text-property (line-beginning-position) 'strata-trash-item)))
           (plist-get tr :file))
         (get-text-property (line-beginning-position) 'strata-recent-path))))
@@ -1671,7 +1683,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
         (goto-char (point-min))
         (while (not (eobp))
           (unless (invisible-p (line-beginning-position))
-            (when-let ((f (ignore-errors (dired-get-filename nil t))))
+            (when-let ((f (strata-view--dired-entry-at-point)))
               (push f out)))
           (forward-line 1)))
       (nreverse out)))

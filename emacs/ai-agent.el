@@ -63,8 +63,93 @@
            (when (and point-after-edit (= source-point captured-point))
              (goto-char point-after-edit)))))))
 
+(defconst my/agent--latex-math-environments
+  '("equation" "align" "gather" "multline" "flalign" "alignat" "eqnarray"
+    "displaymath" "math")
+  "LaTeX environments holding a whole displayed formula (starred forms too).")
+
+(defun my/agent--latex-live-match-p ()
+  "Non-nil when the last match is live LaTeX: not escaped, not in a comment."
+  (let ((beg (match-beginning 0)))
+    (and (not (eq (char-before beg) ?\\))
+         (not (save-match-data (save-excursion (nth 4 (syntax-ppss beg))))))))
+
+(defun my/agent--latex-search (regexp backward &optional bound)
+  "Move to the next live match of REGEXP, searching BACKWARD if non-nil.
+BOUND limits the search.  Return non-nil when found."
+  (let (found)
+    (while (and (not found)
+                (if backward
+                    (re-search-backward regexp bound t)
+                  (re-search-forward regexp bound t)))
+      (setq found (my/agent--latex-live-match-p)))
+    found))
+
+(defun my/agent--latex-environment-bounds ()
+  "Bounds of the display-math environment on or around point's line, or nil."
+  (let ((token (concat "\\\\\\(begin\\|end\\)[ \t]*{\\("
+                       (regexp-opt my/agent--latex-math-environments)
+                       "\\*?\\)}"))
+        (bol (line-beginning-position)))
+    (save-excursion
+      (goto-char (line-end-position))
+      (when (my/agent--latex-search token t)
+        (let ((name (regexp-quote (match-string-no-properties 2))))
+          (if (equal (match-string 1) "begin")
+              (let ((beg (match-beginning 0)))
+                (goto-char (match-end 0))
+                (and (my/agent--latex-search (concat "\\\\end[ \t]*{" name "}") nil)
+                     (>= (match-end 0) bol)
+                     (cons beg (match-end 0))))
+            ;; Nearest token is an \end: point is inside only if that \end
+            ;; is on point's own line.
+            (let ((end (match-end 0)))
+              (and (>= (match-beginning 0) bol)
+                   (my/agent--latex-search (concat "\\\\begin[ \t]*{" name "}") t)
+                   (cons (match-beginning 0) end)))))))))
+
+(defun my/agent--latex-paragraph-bounds ()
+  "Return (START . END) of the blank-line-delimited paragraph at point."
+  (save-excursion
+    (let ((blank "[ \t]*$") start)
+      (forward-line 0)
+      (while (and (not (bobp))
+                  (save-excursion (forward-line -1) (not (looking-at-p blank))))
+        (forward-line -1))
+      (setq start (point))
+      (end-of-line)
+      (while (and (not (eobp))
+                  (save-excursion (forward-line 1) (not (looking-at-p blank))))
+        (forward-line 1)
+        (end-of-line))
+      (cons start (point)))))
+
+(defun my/agent--latex-display-bounds ()
+  "Bounds of a \\=\\[...\\=\\] or $$...$$ display on or around point's line.
+TeX ends display math at a blank line, so only the paragraph is scanned."
+  (let ((bol (line-beginning-position))
+        (eol (line-end-position))
+        (para (my/agent--latex-paragraph-bounds))
+        open found)
+    (save-excursion
+      (goto-char (car para))
+      (while (and (not found)
+                  (my/agent--latex-search "\\$\\$\\|\\\\\\[\\|\\\\\\]" nil (cdr para)))
+        (let ((tok (match-string-no-properties 0)))
+          (cond
+           ((null open)
+            (unless (equal tok "\\]")
+              (setq open (cons (match-beginning 0) tok))))
+           ((equal (cdr open) (if (equal tok "\\]") "\\[" tok))
+            (when (and (<= (car open) eol) (>= (match-end 0) bol))
+              (setq found (cons (car open) (match-end 0))))
+            (setq open nil)))))
+      found)))
+
 (defun my/agent--latex-bounds (region)
-  "Find selected REGION, an Org math element, or the current line."
+  "Find selected REGION, a math element, or the current line.
+Org buffers use the Org math element at point; TeX buffers the display
+math (environment, \\=\\[...\\=\\] or $$...$$) on or around point's line."
   (let ((element (and (derived-mode-p 'org-mode) (org-element-context))))
     (cond
      (region (cons (marker-position (car region)) (marker-position (cdr region))))
@@ -72,6 +157,9 @@
       (cons (org-element-property :begin element)
             (- (org-element-property :end element)
                (or (org-element-property :post-blank element) 0))))
+     ((and (derived-mode-p 'tex-mode 'TeX-mode 'latex-mode 'LaTeX-mode)
+           (or (my/agent--latex-environment-bounds)
+               (my/agent--latex-display-bounds))))
      (t (cons (line-beginning-position) (line-end-position))))))
 
 (defun my/agent-context (id)

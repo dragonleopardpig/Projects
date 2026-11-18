@@ -248,7 +248,9 @@ self-contained and survives whatever the Emacs image layer does."
 
 ;; * Neotree
 (require 'neotree)
-(global-set-key [f4] 'neotree-toggle)
+;; No F4 here: themes.el (loaded later) binds <f4> to
+;; `heaven-and-hell-toggle-theme', so an F4 binding for `neotree-toggle'
+;; was always shadowed.  Use M-x neotree-toggle.
 (setq neo-theme (if (display-graphic-p) 'icons 'arrow))
 (setq neo-window-fixed-size nil)
 (setq neo-smart-open t)
@@ -620,44 +622,57 @@ windows two pages at a time."
 ;; * Open ipynb
 (require 'markdown-mode nil t)
 
+(defun my/ipynb--text (value)
+  "Return nbformat multiline VALUE as one string.
+nbformat v4 stores `source', `text' and mime data either as a single
+string or as a list of line strings."
+  (cond ((stringp value) value)
+        ((listp value) (mapconcat (lambda (s) (if (stringp s) s "")) value ""))
+        (t "")))
+
 (defun ipynb-to-markdown (file)
-  (interactive "f")
+  "Show Jupyter notebook FILE as Markdown in the buffer `ipynb-as-markdown'."
+  (interactive "fNotebook: ")
   (let* ((data (with-temp-buffer
-                 (insert-file-literally file)
-                 (json-parse-string (buffer-string)
-                                    :object-type 'alist
-                                    :array-type 'list)))
+                 ;; Notebooks are UTF-8 JSON; decode them as such.
+                 (let ((coding-system-for-read 'utf-8))
+                   (insert-file-contents file))
+                 (json-parse-buffer :object-type 'alist
+                                    :array-type 'list
+                                    :null-object nil
+                                    :false-object nil)))
          (metadata (alist-get 'metadata data))
-         (kernelspec (alist-get 'kernelspec metadata))
-         (language (alist-get 'language kernelspec)))
-    (pop-to-buffer "ipynb-as-markdown")
-    ;; (when (featurep 'markdown-mode)
-    ;;   (markdown-mode))
-    (dolist (c (alist-get 'cells data))
-      (let* ((contents (alist-get 'source c))
-             (outputs (alist-get 'outputs c)))
-        (pcase (alist-get 'cell_type c)
-          ("markdown"
-           (when contents
-             (mapcar #'insert contents)
-             (insert "\n\n")))
-          ("code"
-           (when contents
-             (insert "```")
-             (insert language)
-             (insert "\n")
-             (mapcar #'insert contents)
-             (insert "\n```\n\n")
-             (dolist (x outputs)
-               (when-let (text (alist-get 'text x))
-                 (insert "```stdout\n")
-                 (insert (mapconcat #'identity text ""))
-                 (insert "\n```\n\n"))
-               (when-let (data (alist-get 'data x))
-                 (when-let (im64 (alist-get 'image/png data))
-                   (let ((imdata (base64-decode-string im64)))
-                     (insert-image (create-image imdata 'png t)))))
-               (insert "\n\n")))))))))
+         (language (seq-find #'stringp
+                             (list (alist-get 'language (alist-get 'kernelspec metadata))
+                                   (alist-get 'name (alist-get 'language_info metadata)))
+                             ""))
+         (buf (get-buffer-create "ipynb-as-markdown")))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        ;; (when (featurep 'markdown-mode)
+        ;;   (markdown-mode))
+        (dolist (c (alist-get 'cells data))
+          (let ((source (my/ipynb--text (alist-get 'source c))))
+            (pcase (alist-get 'cell_type c)
+              ("markdown"
+               (unless (string-empty-p source)
+                 (insert source "\n\n")))
+              ("code"
+               (unless (string-empty-p source)
+                 (insert "```" language "\n" source "\n```\n\n")
+                 (dolist (x (alist-get 'outputs c))
+                   (let ((text (my/ipynb--text (alist-get 'text x))))
+                     (unless (string-empty-p text)
+                       (insert "```stdout\n" text "\n```\n\n")))
+                   (when-let* ((im64 (my/ipynb--text
+                                      (alist-get 'image/png (alist-get 'data x))))
+                               ((not (string-empty-p im64)))
+                               (imdata (ignore-errors (base64-decode-string im64))))
+                     (insert-image (create-image imdata 'png t)))
+                   (insert "\n\n")))))))
+        (goto-char (point-min))))
+    (pop-to-buffer buf)))
 
 ;; * Convert ipynb to org
 (setq code-cells-convert-ipynb-style '(
@@ -821,12 +836,17 @@ buffer's text scale."
                'org-latex-overlay)
            (my/text-scale--resize-fragment ov))))))
 (defun my/text-scale--resize-fragment (ov)
-  (overlay-put ov 'display
-	       (cons 'image
-		     (plist-put
-		      (cdr (overlay-get ov 'display))
-		      :scale (+ 1.0 (* 0.15 text-scale-mode-amount))
-		      ))))
+  "Scale the LaTeX preview image shown by overlay OV to the text scale.
+Leaves OV alone unless its `display' is an image spec, and keeps the
+scale positive however far the text is zoomed out."
+  (let ((display (overlay-get ov 'display))
+        (amount (if (boundp 'text-scale-mode-amount) text-scale-mode-amount 0)))
+    (when (eq (car-safe display) 'image)
+      (overlay-put ov 'display
+                   (cons 'image
+                         ;; A fresh plist: the old spec may be shared.
+                         (plist-put (copy-sequence (cdr display))
+                                    :scale (max 0.1 (+ 1.0 (* 0.15 amount)))))))))
 (add-hook 'text-scale-mode-hook #'my/text-scale-adjust-latex-previews)
 (advice-add 'org-fragtog--post-cmd :after #'my/text-scale-adjust-latex-previews)
 

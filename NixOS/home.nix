@@ -13,6 +13,12 @@ let
   # as the prebuilt .so in ~/Projects/emacs/tree-sitter/.
   emacsTreesitGrammars =
     (pkgs.emacsPackagesFor pkgs.emacs-pgtk).treesit-grammars.with-all-grammars;
+  # Python for lsp-bridge's own backend (lsp_bridge.py), exposed below as
+  # ~/.local/bin/lsp-bridge-python.  No project devenv has this stack, and
+  # ~/Projects/emacs/language.el no longer borrows a project venv for it.
+  lspBridgePython = pkgs.python3.withPackages (ps: with ps; [
+    epc orjson sexpdata six setuptools paramiko rapidfuzz watchdog packaging
+  ]);
 
   # Precompiled Tree-sitter grammars and syntax highlighting queries for Lapce.
   # Lapce 0.4.6 attempts to download grammars from GitHub releases matching its version (v0.4.6),
@@ -2891,6 +2897,17 @@ in
       (require 'treesit)
       (add-to-list 'treesit-extra-load-path "${emacsTreesitGrammars}/lib"))
   '';
+
+  # lsp-bridge's backend interpreter (see lspBridgePython above).  A named
+  # wrapper rather than a profile package, so it cannot collide with the
+  # other python3 environments on PATH.
+  home.file.".local/bin/lsp-bridge-python" = {
+    executable = true;
+    text = ''
+      #!${pkgs.runtimeShell}
+      exec ${lspBridgePython}/bin/python3 "$@"
+    '';
+  };
 
   # One-shot clean-machine bootstrap for the Emacs setup.  Idempotent:
   # seeds ~/.emacs.d/init.el (only if absent, so Custom's appended lines

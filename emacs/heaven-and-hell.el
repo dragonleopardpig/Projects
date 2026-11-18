@@ -112,8 +112,11 @@ Themes will be loaded if they weren't loaded previously."
 	       (set-background-color "white")))
       (when (derived-mode-p 'org-mode)
         (org-mode-restart)
-        (outline-show-children)
-        (outline-show-entry))
+        ;; Both outline calls signal "Before first heading" when point is
+        ;; above the first heading (e.g. in the #+TITLE preamble).
+        (unless (org-before-first-heading-p)
+          (outline-show-children)
+          (outline-show-entry)))
       ;; *********
       )))
 

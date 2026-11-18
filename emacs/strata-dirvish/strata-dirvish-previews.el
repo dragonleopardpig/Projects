@@ -232,12 +232,18 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
       (when-let ((nbuf (and (window-live-p pwin) (window-buffer pwin))))
         (strata-preview--sync-read-buffer pwin nbuf ctx)))))
 
-(when (and (fboundp 'treesit-available-p) (treesit-available-p)
-           (or (not (boundp 'treesit-extra-load-path))
-               (null treesit-extra-load-path)))
-  (let ((nix-ts (expand-file-name "nix-tree-sitter.el" user-emacs-directory)))
-    (when (file-readable-p nix-ts)
-      (load nix-ts t t))))
+(defun strata-preview--load-nix-grammars (&optional file)
+  "Load the home-manager generated grammar FILE, ~/.emacs.d/nix-tree-sitter.el.
+Loaded whatever `treesit-extra-load-path' holds: NixOS's site-start.el
+already puts emacs-packages-deps' lib/ there, so a non-empty path is no
+sign the grammar bundle is on it.  The file only `add-to-list's, so a
+second load after preload.el's is harmless."
+  (when (and (fboundp 'treesit-available-p) (treesit-available-p))
+    (let ((nix-ts (or file (expand-file-name "nix-tree-sitter.el" user-emacs-directory))))
+      (when (file-readable-p nix-ts)
+        (load nix-ts t t)))))
+
+(strata-preview--load-nix-grammars)
 
 (strata-preview--ensure-common-auto-modes)
 (add-hook 'dirvish-preview-setup-hook #'strata-preview--setup-dirvish-fontlock-h)
@@ -331,6 +337,16 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
   "Restore saved text zoom without treating rendering as a user zoom change."
   (let ((strata-preview--applying-text-zoom t))
     (text-scale-set (strata-prefs-preview-text-scale (strata-prefs)))))
+
+(defun strata-preview--sync-text-scale ()
+  "Give the current preview buffer the zoom its preview kind owns.
+Image and PDF previews zoom by re-rendering at their own scale, so they
+sit at text scale 0; every other kind uses the saved text zoom, as the
+zoom commands do."
+  (if (memq strata-active-preview-kind '(image pdf))
+      (let ((strata-preview--applying-text-zoom t))
+        (text-scale-set 0))
+    (strata-preview--set-text-scale)))
 
 (defun strata-preview--remember-text-scale ()
   "Persist native Emacs text zoom changes made inside a text preview."
@@ -460,7 +476,6 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
            (erase-buffer)
            (insert-buffer-substring b))
          (setq-local truncate-lines (not (strata-prefs-preview-text-wrap (strata-prefs))))
-         (strata-preview--set-text-scale)
          (goto-char (point-min))))
       (`(shell . ,cmd)
        (setq strata-active-preview-file file)
@@ -515,6 +530,10 @@ Also attaches `strata-preview-read-mode' metadata to newly updated previews."
                          (insert row))))))
                (goto-char (point-min))))
          (strata-preview--render-source-file file out-buf))))
+    ;; `*Strata Preview*' is shared by every kind: an image after a zoomed
+    ;; text file must not inherit the text zoom, nor a text file after it 0.
+    (with-current-buffer out-buf
+      (strata-preview--sync-text-scale))
     (when (window-live-p win)
       (set-window-buffer win out-buf)
       (strata-preview--sync-read-buffer win out-buf ctx))))
@@ -1128,7 +1147,14 @@ MODE may be:
                        (and (fboundp 'treesit-parser-list) (treesit-parser-list)))
                    (bound-and-true-p global-font-lock-mode))
           (font-lock-mode 1))
-        (strata-preview-edit-mode 1))
+        (strata-preview-edit-mode 1)
+        ;; Editing text is a text preview: open at the saved text zoom, and
+        ;; make zoom keys (C-+/C--, C-x C-+) act on and persist text zoom
+        ;; even when the last preview was an image, PDF or folder.
+        (unless (derived-mode-p 'image-mode 'pdf-view-mode 'doc-view-mode)
+          (setq strata-active-preview-file file
+                strata-active-preview-kind 'text)
+          (strata-preview--set-text-scale)))
       (strata-preview--apply-browser-context buf ctx pwin)
       (if (window-live-p pwin)
           (progn
@@ -1203,7 +1229,7 @@ MODE may be:
       (setq buffer-read-only t
             strata-active-preview-kind (or kind 'text))
       (setq-local truncate-lines (not (strata-prefs-preview-text-wrap (strata-prefs))))
-      (strata-preview--set-text-scale))
+      (strata-preview--sync-text-scale))
     buf))
 
 (defun strata-preview--safe-insert-markdown (file buf)

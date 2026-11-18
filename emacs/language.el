@@ -44,31 +44,54 @@ DIR defaults to the current buffer's directory.  Walks up looking for
               (cand (expand-file-name executable bindir)))
     (and (file-executable-p cand) cand)))
 
-;; Initial lsp-bridge backend python: try a known-good devenv at load time,
-;; otherwise fall back to PATH python3.  The buffer-specific hook below
-;; updates this as the user moves between projects.
-(setq lsp-bridge-python-command
-      (or (my/devenv-python-near "~/Projects/Kraken-Optical-Simulator/")
-          (my/devenv-python-near "~/Projects/org/")
-          (executable-find "python3")))
+;; ** lsp-bridge backend python
+;; lsp-bridge's backend (lsp_bridge.py) is ONE process for the whole Emacs
+;; session, and it needs its own Python stack (epc, sexpdata, six,
+;; watchdog, rapidfuzz, paramiko, packaging; orjson optional).  No project
+;; devenv installs that stack, so the backend must not follow the buffer's
+;; devenv: a project venv makes it die at startup with "No module named
+;; 'epc'", and switching interpreters per buffer restarted the backend --
+;; killing every LSP session -- whenever a non-devenv file was visited.
+;; NixOS/home.nix builds ~/.local/bin/lsp-bridge-python with the stack.
+;; The project's own Python is the language server's business
+;; (basedpyright finds the project venv itself), not the backend's.
+(defconst my/lsp-bridge-python-modules
+  '("epc" "sexpdata" "six" "watchdog" "rapidfuzz" "paramiko" "packaging")
+  "Python modules lsp-bridge's backend cannot start without.")
 
-(defun my/lsp-bridge-refresh-python ()
-  "Point `lsp-bridge-python-command' at the buffer's devenv python.
-lsp-bridge runs a single backend process per session; if the resolved
-python changes (e.g. you switched projects), restart the backend so the
-new interpreter is picked up."
-  (when (boundp 'lsp-bridge-python-command)
-    (let* ((py (or (my/devenv-python-near)
-                   (executable-find "python3")))
-           (changed (and py (not (string= py lsp-bridge-python-command)))))
-      (when py (setq lsp-bridge-python-command py))
-      (when (and changed
-                 (fboundp 'lsp-bridge-restart-process)
-                 (bound-and-true-p lsp-bridge-mode))
-        (lsp-bridge-restart-process)))))
+(defun my/lsp-bridge-python-usable-p (python)
+  "Return non-nil if PYTHON imports every module in `my/lsp-bridge-python-modules'."
+  (and python
+       (file-executable-p python)
+       (eql 0 (ignore-errors
+                (call-process python nil nil nil "-c"
+                              (concat "import "
+                                      (string-join my/lsp-bridge-python-modules
+                                                   ", ")))))))
 
-(add-hook 'python-base-mode-hook #'my/lsp-bridge-refresh-python)
-(add-hook 'lsp-bridge-mode-hook  #'my/lsp-bridge-refresh-python)
+(defun my/lsp-bridge-find-python ()
+  "Return a Python able to run lsp-bridge's backend, or nil.
+The Nix-built `lsp-bridge-python' is trusted as built; any other
+candidate is probed for the modules first."
+  (let ((nix (or (executable-find "lsp-bridge-python")
+                 (let ((f (expand-file-name "~/.local/bin/lsp-bridge-python")))
+                   (and (file-executable-p f) f)))))
+    (or nix
+        (seq-find #'my/lsp-bridge-python-usable-p
+                  (delete-dups (delq nil (list (executable-find "python3")
+                                               (executable-find "python"))))))))
+
+(defvar my/lsp-bridge-python (my/lsp-bridge-find-python)
+  "Interpreter for lsp-bridge's backend, or nil when none can run it.")
+
+(if my/lsp-bridge-python
+    (setq lsp-bridge-python-command my/lsp-bridge-python)
+  (display-warning
+   'lsp-bridge
+   (format "No Python can import %s, so lsp-bridge stays off.  \
+Rebuild NixOS (home.nix provides ~/.local/bin/lsp-bridge-python)."
+           (string-join my/lsp-bridge-python-modules ", "))
+   :warning))
 
 ;; Add devenv profile bins to PATH so lsp-bridge can find LSP servers
 ;; (clangd, rust-analyzer, basedpyright, etc.)  Each entry is conditional
@@ -175,8 +198,11 @@ new interpreter is picked up."
 
 (setq lsp-bridge-user-langserver-dir "~/.config/lsp-bridge/langserver")
 (require 'lsp-bridge)
-(with-eval-after-load 'envrc
-  (global-lsp-bridge-mode))
+;; Without a usable backend python, turning the mode on would only start a
+;; backend that crashes at once (see `my/lsp-bridge-python').
+(when my/lsp-bridge-python
+  (with-eval-after-load 'envrc
+    (global-lsp-bridge-mode)))
 (setq lsp-bridge-enable-completion-in-string nil)
 
 ;; lsp-bridge keybindings

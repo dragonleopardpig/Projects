@@ -94,6 +94,62 @@
       (erase-buffer) (insert "$\\alpha + \\beta$") (goto-char 5)
       (should (eq (alist-get 'valid (my/agent-check-latex (my/agent-capture-context))) t)))))
 
+(defconst my/agent-test-latex-document
+  (concat "Intro text.\n"
+          "\\begin{equation}\n  a = b\n  + c\n\\end{equation}\n"
+          "After.\n"
+          "% \\begin{equation} commented out\n"
+          "Mid $x$ line.\n"
+          "\\[\n  \\frac{1}{2} \\\\[2pt]\n\\]\n"
+          "\n$$\nE = mc^2\n$$\n"
+          "\n\\begin{align*}\n  x &= 1\n\\end{align*}\n")
+  "A latex-mode buffer with multi-line displays of every supported kind.")
+
+(defun my/agent-test-latex-fragment-at (needle &optional bol)
+  "Return the agent's fragment with point after NEEDLE (at its line start if BOL)."
+  (goto-char (point-min))
+  (search-forward needle)
+  (when bol (forward-line 0))
+  (let ((bounds (my/agent--latex-bounds nil)))
+    (buffer-substring-no-properties (car bounds) (cdr bounds))))
+
+(ert-deftest my/agent-latex-mode-uses-whole-display-not-one-line ()
+  "Without a region, a TeX buffer's fragment is the whole display at point."
+  (with-temp-buffer
+    (latex-mode)
+    (insert my/agent-test-latex-document)
+    (let ((equation "\\begin{equation}\n  a = b\n  + c\n\\end{equation}"))
+      (should (equal (my/agent-test-latex-fragment-at "a = b") equation))
+      ;; Point on the \begin or \end line still means the environment.
+      (should (equal (my/agent-test-latex-fragment-at "\\begin{equation}" t) equation))
+      (should (equal (my/agent-test-latex-fragment-at "\\end{equation") equation)))
+    ;; The `\\[2pt]' line break inside is not a new display.
+    (should (equal (my/agent-test-latex-fragment-at "frac")
+                   "\\[\n  \\frac{1}{2} \\\\[2pt]\n\\]"))
+    (should (equal (my/agent-test-latex-fragment-at "mc^2") "$$\nE = mc^2\n$$"))
+    (should (equal (my/agent-test-latex-fragment-at "x &=")
+                   "\\begin{align*}\n  x &= 1\n\\end{align*}"))
+    ;; Outside display math, and in comments, it stays the current line.
+    (should (equal (my/agent-test-latex-fragment-at "After") "After."))
+    (should (equal (my/agent-test-latex-fragment-at "Mid") "Mid $x$ line."))
+    (should (equal (my/agent-test-latex-fragment-at "commented")
+                   "% \\begin{equation} commented out"))))
+
+(ert-deftest my/agent-latex-mode-checks-whole-environment ()
+  "check_latex compiles the whole multi-line environment at point."
+  (skip-unless (executable-find "latex"))
+  (with-temp-buffer
+    (latex-mode)
+    (insert my/agent-test-latex-document)
+    (goto-char (point-min)) (search-forward "a = b")
+    (let ((result (my/agent-test-request `((action . "check_latex")
+                                          (context_id . ,(my/agent-capture-context))))))
+      (should (eq (alist-get 'valid result) t))
+      (should (= (alist-get 'fragment_start result)
+                 (save-excursion (goto-char (point-min))
+                                 (search-forward "\\begin{equation}")
+                                 (match-beginning 0)))))))
+
 (ert-deftest my/agent-killed-buffer-gives-actionable-error ()
   (let* ((buffer (generate-new-buffer " *agent-killed-test*"))
          (id (with-current-buffer buffer (my/agent-capture-context))))
