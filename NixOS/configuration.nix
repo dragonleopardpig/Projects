@@ -659,7 +659,6 @@ in
 {
   imports = [
     ./modules/always-on.nix
-    ./modules/strata.nix
     ./modules/hyprfm.nix
   ];
 
@@ -744,7 +743,7 @@ in
   hardware.logitech.wireless.enable = true;
   hardware.logitech.wireless.enableGraphical = true;  # Solaar GUI/device access
 
-  # GVFS for Nemo trash, network mounts, etc.
+  # GVFS for file-manager trash and network mounts.
   services.gvfs.enable = true;
   services.udisks2.enable = true;
 
@@ -1286,12 +1285,8 @@ in
     sassc                      # SASS/SCSS CSS compiler (for theme building)
     astronautPkg               # SDDM login screen theme (random variant per boot)
 
-    # ── File Managers ──
-    nemo-with-extensions       # Cinnamon file manager with plugins
-    nemo-fileroller
-    cinnamon-desktop           # gsettings schemas for Nemo (terminal, etc.)
+    # ── Archive Tools (HyprFM is provided by modules/hyprfm.nix) ──
     file-roller
-    (callPackage ./packages/spacedrive-compatible.nix { })
 
     # ── Image & Media Tools ──
     imagemagick                # Image conversion and manipulation (CLI)

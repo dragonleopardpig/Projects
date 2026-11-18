@@ -66,7 +66,7 @@ let
       pkgs.glib
       pkgs.kitty
       pkgs.bash
-      pkgs.nemo-with-extensions
+      pkgs.xdg-utils
       pkgs.coreutils
       pkgs.procps
     ];
@@ -142,7 +142,7 @@ in
     force = true;
   };
 
-  # Custom scalable icons for Proton Drive tray, launchers, and Nemo
+  # Custom scalable icons for Proton Drive tray, launchers, and file managers
   home.file.".local/share/icons/hicolor/scalable/apps/protondrive.svg" = {
     source = ../assets/protondrive-icons/protondrive.svg;
     force = true;
@@ -202,33 +202,6 @@ in
     force = true;
   };
 
-  # Nemo Context Menu Actions
-  xdg.dataFile."nemo/actions/sync_proton_drive.nemo_action".text = ''
-    [Nemo Action]
-    Active=true
-    Name=Sync with Proton Drive
-    Comment=Add this folder to Proton Drive sync list
-    Exec=/home/thinky/.local/bin/protondrive-control add "%F"
-    Icon-Name=protondrive
-    Selection=s
-    Extensions=dir;
-    Conditions=exec /home/thinky/.local/bin/protondrive-control not-synced %F;
-    Quote=double
-  '';
-
-  xdg.dataFile."nemo/actions/unsync_proton_drive.nemo_action".text = ''
-    [Nemo Action]
-    Active=true
-    Name=Remove from Proton Drive Sync
-    Comment=Remove this folder from Proton Drive sync list
-    Exec=/home/thinky/.local/bin/protondrive-control remove "%F"
-    Icon-Name=edit-delete
-    Selection=s
-    Extensions=dir;
-    Conditions=exec /home/thinky/.local/bin/protondrive-control is-synced %F;
-    Quote=double
-  '';
-
   # Desktop Application Launchers
   xdg.desktopEntries.protondrive-tray = {
     name = "Proton Drive";
@@ -248,7 +221,7 @@ in
     categories = [ "Utility" "Settings" "FileTools" ];
   };
 
-  # GTK Sidebar Bookmarks in Nemo
+  # GTK Sidebar Bookmarks
   home.activation.protondriveBookmarks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     ${pkgs.python3}/bin/python3 - <<'PY'
     from pathlib import Path
@@ -280,7 +253,7 @@ in
   # Systemd User Service: Proton Drive FUSE Mount
   systemd.user.services.protondrive-mount = {
     Unit = {
-      Description = "Proton Drive FUSE mount for Nemo and file access";
+      Description = "Proton Drive FUSE mount for file-manager access";
       Wants = [ "network-online.target" ];
       After = [ "graphical-session.target" "network-online.target" ];
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";

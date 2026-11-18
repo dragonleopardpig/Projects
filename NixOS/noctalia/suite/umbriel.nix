@@ -68,12 +68,11 @@ in {
     "Mod+P" = spawn "protonvpn-app";
     "Mod+W" = spawn "walker";
     "Mod+B" = spawn "kitty -e btop";
-    "Mod+N" = spawn "strata";
+    "Mod+H" = spawn "hyprfm";
     "Mod+S" = spawn "$HOME/.local/bin/sioyek --new-window";
     "Mod+Y" = spawn "kitty -e yazi";
     "Mod+M" = spawn "minder";
     "Mod+Return" = spawn terminalCommand;
-    "Mod+Shift+N" = spawn "$HOME/.local/bin/nemo-x11";
     "Mod+Space" = spawn "noctalia msg panel-toggle launcher";
     "Mod+Shift+V" = spawn "noctalia msg panel-toggle clipboard";
     "Mod+Comma" = spawn "noctalia msg settings-open";

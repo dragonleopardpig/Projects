@@ -158,11 +158,11 @@
         "quill-icons": "quill-icons"
       },
       "locked": {
-        "lastModified": 1794554525,
-        "narHash": "sha256-BZfaSpREelZmbLL7/26Yq5OO/pvXnecujSdpwur96n8=",
+        "lastModified": 1794962968,
+        "narHash": "sha256-9fQsgCIToANKtAd0xsS7RNXivF3eJ+2t+Ek+pAzmlh4=",
         "owner": "dragonleopardpig",
         "repo": "hyprfm",
-        "rev": "f329548cb420a2dd9d22d248a33ff16c2cf38cb4",
+        "rev": "5437d57b4968f50e4030919b987ab0ccac3b4b52",
         "type": "github"
       },
       "original": {
@@ -289,22 +289,6 @@
     },
     "nixpkgs_5": {
       "locked": {
-        "lastModified": 1791956154,
-        "narHash": "sha256-jBYGPi4udQ9uo4KQp9m2J0546nJVQitG15gvZSaVVAs=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "55bfb4d7437bd4e09ab7cba58a43bd68eb310044",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_6": {
-      "locked": {
         "lastModified": 1775710090,
         "narHash": "sha256-ar3rofg+awPB8QXDaFJhJ2jJhu+KqN/PRCXeyuXR76E=",
         "owner": "NixOS",
@@ -420,28 +404,8 @@
         "nixpkgs": "nixpkgs_3",
         "noctalia-suite": "noctalia-suite",
         "pdf-prep": "pdf-prep",
-        "strata": "strata",
         "walker": "walker",
         "winapps": "winapps"
-      }
-    },
-    "strata": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_5"
-      },
-      "locked": {
-        "lastModified": 1794565232,
-        "narHash": "sha256-CF6tepACSkqfHs6NIuSp37f5upU82mqJFUuf5EHNR6c=",
-        "owner": "dragonleopardpig",
-        "repo": "strata",
-        "rev": "8f12b46324b519a58a289549d36f9d4b2e421d4c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "dragonleopardpig",
-        "ref": "feat/1-pane-controls-compact-search",
-        "repo": "strata",
-        "type": "github"
       }
     },
     "systems": {
@@ -494,7 +458,7 @@
         "elephant": [
           "elephant"
         ],
-        "nixpkgs": "nixpkgs_6",
+        "nixpkgs": "nixpkgs_5",
         "systems": "systems_2"
       },
       "locked": {

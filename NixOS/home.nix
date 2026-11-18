@@ -1,9 +1,5 @@
 { lib, config, osConfig, inputs, pkgs, ... }:
 let
-  nemoMegaLibraryPath = lib.makeLibraryPath [
-    pkgs.nemo
-    pkgs.glib
-  ];
   megasyncWalkerIcon = pkgs.runCommand "megasync-walker-icon.png"
     { nativeBuildInputs = [ pkgs.imagemagick ]; } ''
     magick "${pkgs.megasync.src}/src/MEGAUpdater/app_ico.ico[0]" -resize 256x256 "PNG32:$out"
@@ -246,71 +242,6 @@ in
   home.file.".local/share/icons/hicolor/256x256/apps/megasync.png".source = megasyncWalkerIcon;
   home.file.".local/share/icons/hicolor/256x256/apps/MEGAsync.png".source = megasyncWalkerIcon;
 
-  home.file.".local/bin/mega-nemo-action" = {
-    source = ./scripts/mega-nemo-action.py;
-    executable = true;
-    force = true;
-  };
-
-  xdg.dataFile."nemo/actions/mega_upload.nemo_action".text = ''
-    [Nemo Action]
-    Active=true
-    Name=Upload to MEGA
-    Comment=Upload selected file(s) or folder(s) to your MEGA account
-    Exec=/home/thinky/.local/bin/mega-nemo-action upload %F
-    Icon-Name=megasync
-    Selection=notnone
-    Extensions=any;
-    Quote=double
-  '';
-
-  xdg.dataFile."nemo/actions/mega_sync.nemo_action".text = ''
-    [Nemo Action]
-    Active=true
-    Name=Sync with MEGA
-    Comment=Set up folder synchronization in MEGAsync
-    Exec=/home/thinky/.local/bin/mega-nemo-action sync "%F"
-    Icon-Name=megasync
-    Selection=s
-    Extensions=dir;
-    Quote=double
-  '';
-
-  home.file.".local/bin/nemo-x11" = {
-    executable = true;
-    text = ''
-      #!/usr/bin/env bash
-      set -eu
-
-      DEB_PATH="$HOME/Downloads/nemo-megasync-xUbuntu_24.04_amd64.deb"
-      APP_DIR="$HOME/.local/opt/nemo-megasync-deb"
-      EXT_DIR="$APP_DIR/usr/lib/x86_64-linux-gnu/nemo/extensions-3.0"
-      STAMP="$APP_DIR/.deb-source"
-
-      if [ -f "$DEB_PATH" ]; then
-        DEB_ID="$(${pkgs.coreutils}/bin/stat -c '%Y:%s' "$DEB_PATH")"
-        mkdir -p "$APP_DIR"
-        if [ ! -f "$EXT_DIR/libMEGAShellExtNemo.so" ] || [ ! -f "$STAMP" ] || [ "$(${pkgs.coreutils}/bin/cat "$STAMP" 2>/dev/null || true)" != "$DEB_ID" ]; then
-          TMP_DIR="$(${pkgs.coreutils}/bin/mktemp -d "$HOME/.local/opt/nemo-megasync-deb.tmp.XXXXXX")"
-          trap '${pkgs.coreutils}/bin/rm -rf "$TMP_DIR"' EXIT
-          ${pkgs.dpkg}/bin/dpkg -x "$DEB_PATH" "$TMP_DIR"
-          printf '%s\n' "$DEB_ID" > "$TMP_DIR/.deb-source"
-          ${pkgs.coreutils}/bin/rm -rf "$APP_DIR"
-          ${pkgs.coreutils}/bin/mv "$TMP_DIR" "$APP_DIR"
-          trap - EXIT
-        fi
-        export LD_LIBRARY_PATH="$EXT_DIR:${nemoMegaLibraryPath}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-        export NEMO_EXTENSION_DIR="$EXT_DIR"
-        export NEMO_EXTENSION_DIRS="$EXT_DIR"
-        export XDG_DATA_DIRS="$APP_DIR/usr/share''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
-      fi
-
-      export GDK_BACKEND=x11
-      export QT_QPA_PLATFORM=xcb
-      exec nemo "$@"
-    '';
-  };
-
   home.file.".local/bin/nomacs-x11" = {
     executable = true;
     text = ''
@@ -320,30 +251,6 @@ in
       export QT_QPA_PLATFORM=xcb
       exec ${pkgs.nomacs}/bin/nomacs "$@"
     '';
-  };
-
-  xdg.desktopEntries.hyprfm = {
-    name = "HyprFM";
-    genericName = "File Manager";
-    comment = "A lightweight Qt6/QML file manager for Hyprland";
-    exec = "hyprfm %U";
-    icon = "io.github.soyeb_jim285.HyprFM";
-    categories = [ "System" "FileManager" "Utility" "Qt" ];
-    mimeType = [ "inode/directory" ];
-    terminal = false;
-    settings = {
-      StartupWMClass = "hyprfm";
-      Keywords = "files;explorer;manager;browser;filesystem;";
-    };
-  };
-
-  xdg.desktopEntries.nemo-x11 = {
-    name = "Nemo";
-    exec = "/home/thinky/.local/bin/nemo-x11 %U";
-    icon = "nemo";
-    comment = "Nemo file manager (XWayland)";
-    categories = [ "Utility" "FileManager" ];
-    terminal = false;
   };
 
   xdg.desktopEntries.nomacs-x11 = {
@@ -416,31 +323,13 @@ in
     terminal = false;
   };
 
-  home.file.".local/bin/filen-nemo-action" = {
-    source = ./scripts/filen-nemo-action.py;
-    executable = true;
-    force = true;
-  };
-
-  xdg.dataFile."nemo/actions/filen_sync.nemo_action".text = ''
-    [Nemo Action]
-    Active=true
-    Name=Sync with Filen
-    Comment=Configure folder synchronization in Filen Desktop
-    Exec=/home/thinky/.local/bin/filen-nemo-action sync "%F"
-    Icon-Name=filen-desktop
-    Selection=s
-    Extensions=dir;
-    Quote=double
-  '';
-
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
-      "inode/directory" = [ "io.github.lgse.Strata.desktop" ];
+      "inode/directory" = [ "io.github.soyeb_jim285.HyprFM.desktop" ];
       "application/pdf" = [ "sioyek.desktop" ];
       # Without this an EPUB falls through to whatever the system MIME cache
-      # picks -- OnlyOffice, here. Nemo's "Set as default" cannot fix that,
+      # picks -- OnlyOffice, here. A file manager's "Set as default" cannot fix that,
       # because this file is a read-only symlink into the Nix store.
       "application/epub+zip" = [ "sioyek.desktop" ];
       # Native since the sioyek-native-djvu patch; no conversion involved.
@@ -486,7 +375,7 @@ in
       "image/jpeg" = [ "iexplorer.desktop" ];
       "image/png" = [ "iexplorer.desktop" ];
       "video/webm" = [ "iexplorer.desktop" ];
-      "inode/directory" = [ "nemo-x11.desktop" ];
+      "inode/directory" = [ "io.github.soyeb_jim285.HyprFM.desktop" ];
     };
   };
   
@@ -494,7 +383,7 @@ in
   xdg.dataFile."lapce-stable/grammars".source = "${lapceTreeSitter}/grammars";
   xdg.configFile."lapce-stable/queries".source = "${lapceTreeSitter}/queries";
 
-  # GtkSourceView 5 language specifications for Emacs Lisp & Org Mode (Strata preview & GTK text editors)
+  # GtkSourceView 5 language specifications for Emacs Lisp & Org Mode (GTK text editors)
   xdg.dataFile."gtksourceview-5/language-specs/emacs-lisp.lang".source = ./modules/strata/emacs-lisp.lang;
   xdg.dataFile."gtksourceview-5/language-specs/org.lang".source = ./modules/strata/org.lang;
 
@@ -1286,7 +1175,7 @@ in
       /run/wrappers/bin/fusermount3 -u -z "$MNT" 2>/dev/null || true
       mkdir -p "$MNT"
 
-      # Ensure GTK bookmark for Nemo exists
+      # Ensure the GTK cloud bookmark exists
       grep -q "file://$MNT FileLu" "$HOME/.config/gtk-3.0/bookmarks" 2>/dev/null || echo "file://$MNT FileLu" >> "$HOME/.config/gtk-3.0/bookmarks"
 
       exec "$BIN" mount "$REMOTE" "$MNT" \
@@ -1329,7 +1218,7 @@ in
 
   systemd.user.services.filelu-mount = {
     Unit = {
-      Description = "FileLu Cloud FUSE mount for Nemo and file access";
+      Description = "FileLu Cloud FUSE mount for file-manager access";
       Wants = [ "network-online.target" ];
       After = [ "graphical-session.target" "network-online.target" ];
       ConditionPathExists = "${config.home.homeDirectory}/.FileLuSync/rcfslu.conf";
@@ -1493,7 +1382,19 @@ in
   };
   xdg.desktopEntries.mayo                     = { name = "Mayo";     exec = "true"; noDisplay = true; };
   xdg.desktopEntries.gmsh                     = { name = "Gmsh";     exec = "true"; noDisplay = true; };
-  xdg.desktopEntries.nemo                     = { name = "Files";    exec = "true"; noDisplay = true; };
+  # An old Chrome web-app shortcut is independent of the WinApps app chooser.
+  # Mask this exact desktop ID on every host, including unmanaged old copies.
+  xdg.dataFile."applications/asana.desktop" = {
+    force = true;
+    text = ''
+      [Desktop Entry]
+      Type=Application
+      Name=Asana
+      Exec=true
+      Hidden=true
+      NoDisplay=true
+    '';
+  };
   xdg.desktopEntries.iexplorer                = { name = "Internet Explorer"; exec = "true"; noDisplay = true; };
   xdg.desktopEntries."org.nomacs.ImageLounge" = { name = "nomacs";   exec = "true"; noDisplay = true; };
   xdg.desktopEntries.fcitx5-configtool        = { name = "Fcitx 5 Configuration"; exec = "true"; noDisplay = true; };
@@ -3115,7 +3016,7 @@ in
         -ovl -k \
         -c 8 -is 64 -spacing 20 \
         -term kitty \
-        -fm "strata" \
+        -fm "hyprfm" \
         -closebtn right \
         -pblock "$HOME/.local/bin/lock-and-blank" \
         -pbexit "hyprctl dispatch exit" \
@@ -3539,7 +3440,7 @@ in
           "$mod, P, exec, protonvpn-app"
           "$mod, W, exec, walker"
           "$mod, B, exec, kitty -e btop"
-          "$mod, N, exec, strata"
+          "$mod, H, exec, hyprfm"
           "$mod, S, exec, ~/.local/bin/sioyek --new-window"
           "$mod, Y, exec, kitty -e yazi"
           "$mod, Escape, exit,"
@@ -4074,7 +3975,7 @@ in
     tray = "auto";
     settings = {
       program_options = {
-        file_manager = "strata";
+        file_manager = "hyprfm";
       };
     };
   };
@@ -4673,14 +4574,5 @@ Please diagnose what caused them and explain how to resolve them."
       XDG_RUNTIME_DIR="$user_runtime_dir" ${pkgs.systemd}/bin/systemctl --user try-restart ags || true
     fi
   '';
-  # ── Nemo "Open Terminal Here" ──
-  # Nemo reads the Cinnamon dconf key to decide which terminal to launch.
-  # The gsettings schema ID is org.cinnamon.desktop.default-applications.terminal
-  # but the actual dconf path is /org/cinnamon/desktop/applications/terminal/.
-  dconf.settings."org/cinnamon/desktop/applications/terminal" = {
-    exec = "kitty";
-    exec-arg = "";
-  };
-
   home.stateVersion = "25.11";
 }

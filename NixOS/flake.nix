@@ -52,8 +52,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
-    # Share the reviewed feature branch across hosts through the fork.
-    strata.url = "github:dragonleopardpig/strata/feat/1-pane-controls-compact-search";
     hyprfm = {
       url = "github:dragonleopardpig/hyprfm";
       inputs.nixpkgs.follows = "nixpkgs";

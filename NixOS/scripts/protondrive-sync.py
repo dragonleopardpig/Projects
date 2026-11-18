@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Proton Drive Sync & Tray Manager for NixOS / Hyprland / Nemo
+Proton Drive Sync & Tray Manager for NixOS / Wayland
 Manages rclone mount, bidirectional folder syncing (bisync), tray indicator,
-settings GUI, and Nemo context actions.
+settings GUI, and folder actions.
 """
 
 import argparse
@@ -887,7 +887,7 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             main_box.pack_start(acc_frame, False, False, 0)
 
             # Mount status bar
-            mount_frame = Gtk.Frame(label="Proton Drive Cloud Mount (Nemo Drag-and-Drop)")
+            mount_frame = Gtk.Frame(label="Proton Drive Cloud Mount (File Manager Access)")
             mount_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, border_width=8)
             mount_frame.add(mount_box)
 
@@ -895,8 +895,8 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             self.mount_status_lbl.set_hexpand(True)
             self.btn_toggle_mount = Gtk.Button(label="Mount")
             self.btn_toggle_mount.connect("clicked", self.on_toggle_mount)
-            self.btn_open_mount = Gtk.Button(label="Open in Nemo")
-            self.btn_open_mount.connect("clicked", lambda _: subprocess.Popen(["nemo", mount_point]))
+            self.btn_open_mount = Gtk.Button(label="Open Folder")
+            self.btn_open_mount.connect("clicked", lambda _: subprocess.Popen(["xdg-open", mount_point]))
 
             mount_box.pack_start(self.mount_status_lbl, True, True, 0)
             mount_box.pack_start(self.btn_toggle_mount, False, False, 0)
@@ -945,7 +945,7 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             btn_del.connect("clicked", self.on_remove_folder)
             btn_sync_sel = Gtk.Button(label="🔄 Sync Selected Now")
             btn_sync_sel.connect("clicked", self.on_sync_selected)
-            btn_open_sel = Gtk.Button(label="📁 Open Local in Nemo")
+            btn_open_sel = Gtk.Button(label="📁 Open Local Folder")
             btn_open_sel.connect("clicked", self.on_open_selected)
 
             tb_box.pack_start(btn_add, False, False, 0)
@@ -1191,7 +1191,7 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             model, tree_iter = sel.get_selected()
             if tree_iter:
                 local_path = model.get_value(tree_iter, 2)
-                subprocess.Popen(["nemo", local_path])
+                subprocess.Popen(["xdg-open", local_path])
 
         def on_interval_changed(self, spin):
             config_mgr.data["auto_sync_interval_minutes"] = int(spin.get_value())
@@ -1328,7 +1328,7 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             is_mounted = RcloneOps.is_mounted(mount_point)
             if is_mounted:
                 item_open_drive = Gtk.MenuItem(label="☁ Open Proton Drive (Cloud)")
-                item_open_drive.connect("activate", lambda _: subprocess.Popen(["nemo", mount_point]))
+                item_open_drive.connect("activate", lambda _: subprocess.Popen(["xdg-open", mount_point]))
                 self.menu.append(item_open_drive)
 
                 item_mount = Gtk.MenuItem(label="⏏ Unmount Proton Drive")
@@ -1363,7 +1363,7 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
                 for f in folders:
                     folder_name = Path(f["local_path"]).name
                     f_item = Gtk.MenuItem(label=f"{folder_name} ({f.get('status', 'idle')})")
-                    f_item.connect("activate", lambda _, path=f["local_path"]: subprocess.Popen(["nemo", path]))
+                    f_item.connect("activate", lambda _, path=f["local_path"]: subprocess.Popen(["xdg-open", path]))
                     sub_menu.append(f_item)
             else:
                 none_item = Gtk.MenuItem(label="(No folders configured)")

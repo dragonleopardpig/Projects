@@ -18,7 +18,7 @@ let
       pkgs.libnotify
       pkgs.librsvg
       pkgs.rclone
-      pkgs.nemo-with-extensions
+      pkgs.xdg-utils
       pkgs.coreutils
       pkgs.procps
     ];
@@ -132,33 +132,6 @@ in
     force = true;
   };
 
-  # Nemo Context Menu Actions
-  xdg.dataFile."nemo/actions/sync_google_drive.nemo_action".text = ''
-    [Nemo Action]
-    Active=true
-    Name=Sync with Google Drive
-    Comment=Add this folder to Google Drive sync list
-    Exec=/home/thinky/.local/bin/gdrive-control add "%F"
-    Icon-Name=gdrive
-    Selection=s
-    Extensions=dir;
-    Conditions=exec /home/thinky/.local/bin/gdrive-control not-synced %F;
-    Quote=double
-  '';
-
-  xdg.dataFile."nemo/actions/unsync_google_drive.nemo_action".text = ''
-    [Nemo Action]
-    Active=true
-    Name=Remove from Google Drive Sync
-    Comment=Remove this folder from Google Drive sync list
-    Exec=/home/thinky/.local/bin/gdrive-control remove "%F"
-    Icon-Name=edit-delete
-    Selection=s
-    Extensions=dir;
-    Conditions=exec /home/thinky/.local/bin/gdrive-control is-synced %F;
-    Quote=double
-  '';
-
   # Desktop Application Launchers
   xdg.desktopEntries.gdrive-tray = {
     name = "Google Drive";
@@ -178,7 +151,7 @@ in
     categories = [ "Utility" "Settings" "FileTools" ];
   };
 
-  # GTK Sidebar Bookmarks in Nemo
+  # GTK Sidebar Bookmarks
   home.activation.cloudBookmarks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     ${pkgs.python3}/bin/python3 - <<'PY'
     from pathlib import Path
@@ -226,7 +199,7 @@ in
   # Systemd User Service: Google Drive FUSE Mount
   systemd.user.services.gdrive-mount = {
     Unit = {
-      Description = "Google Drive FUSE mount for Nemo and file access";
+      Description = "Google Drive FUSE mount for file-manager access";
       Wants = [ "network-online.target" ];
       After = [ "graphical-session.target" "network-online.target" ];
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";
@@ -251,7 +224,7 @@ in
   # Systemd User Service: MEGA Cloud FUSE Mount
   systemd.user.services.mega-mount = {
     Unit = {
-      Description = "MEGA Cloud FUSE mount for Nemo and file access";
+      Description = "MEGA Cloud FUSE mount for file-manager access";
       Wants = [ "network-online.target" ];
       After = [ "graphical-session.target" "network-online.target" ];
       ConditionPathExists = "${home}/.config/rclone/rclone.conf";
