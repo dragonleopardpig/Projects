@@ -1159,10 +1159,8 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
               (strata-preview-update-standalone f pwin)))))))))
 
 (defun strata-compact--fit-name (name maxw full-p)
-  "Truncate NAME cleanly to MAXW unless FULL-P is non-nil."
-  (if (or full-p (<= (length name) maxw))
-      name
-    (concat (substring name 0 (max 4 (- maxw 1))) "…")))
+  "Fit NAME within MAXW display columns unless FULL-P is non-nil."
+  (if full-p name (truncate-string-to-width name maxw nil nil "…")))
 
 (defun strata-compact-render (&optional dir)
   "Render DIR into vertical top-to-bottom, left-to-right columns."
@@ -1171,9 +1169,35 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
          (p (strata-prefs))
          (full-p (strata-prefs-compact-full-names p))
          (entries (strata-list-directory-entries d p))
+         (cells
+          (mapcar
+           (lambda (e)
+             (let* ((path (plist-get e :path))
+                    (dir-p (plist-get e :dir-p))
+                    (marked (member path strata-marked-entries))
+                    (prefix (concat (propertize (if marked "*" " ") 'face 'dired-marked)
+                                    (strata-file--glyph path dir-p) " "))
+                    (shown (strata-compact--fit-name (plist-get e :name)
+                                                    (- 26 (string-width prefix) 1) full-p))
+                    (face (cond (marked 'dired-marked)
+                                ((strata-file--badge-face path))
+                                (dir-p 'dired-directory)
+                                (t 'default)))
+                    (cell (concat prefix (propertize shown 'face face 'strata-entry-label t))))
+               (add-text-properties 0 (length cell)
+                                    (append (list 'strata-entry path
+                                                  'strata-entry-dir dir-p
+                                                  'help-echo path)
+                                            (when dir-p '(mouse-face highlight pointer hand)))
+                                    cell)
+               cell))
+           entries))
          (rows (max 6 (- (window-body-height) 2)))
-         (max-name (if entries (apply #'max (mapcar (lambda (e) (length (plist-get e :name))) entries)) 16))
-         (cell-w (if full-p (min 64 (+ 5 max-name)) 26))
+         ;; Full names must fit the stride too; capping only the spacing lets
+         ;; a long name push every later cell on its row out of alignment.
+         (cell-w (if full-p
+                     (if cells (+ 2 (apply #'max (mapcar #'string-width cells))) 21)
+                   26))
          (ncols (max 1 (ceiling (max 1 (length entries)) (float rows))))
          (inhibit-read-only t)
          (cur (strata-current-file)))
@@ -1186,30 +1210,10 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       (dotimes (c ncols)
         (let ((idx (+ (* c rows) r)))
           (when (< idx (length entries))
-            (let* ((e (nth idx entries))
-                   (path (plist-get e :path))
-                   (name (plist-get e :name))
-                   (dir-p (plist-get e :dir-p))
-                   (marked (member path strata-marked-entries))
-                   (icon (strata-file--glyph path dir-p))
-                   (shown (strata-compact--fit-name name (- cell-w 4) full-p))
-                   (face (cond (marked 'dired-marked)
-                               ((strata-file--badge-face path))
-                               (dir-p 'dired-directory)
-                               (t 'default)))
-                   (cell (concat
-                          (propertize (if marked "*" " ") 'face 'dired-marked)
-                          icon " "
-                          (propertize shown 'face face 'strata-entry-label t)))
+            (let* ((cell (nth idx cells))
                    (pad (max 1 (- cell-w (string-width cell)))))
-              (add-text-properties 0 (length cell)
-                                   (append (list 'strata-entry path
-                                                 'strata-entry-dir dir-p
-                                                 'help-echo path)
-                                           (when dir-p
-                                             '(mouse-face highlight pointer hand)))
-                                   cell)
-              (insert cell (make-string pad ?\s))))))
+              (insert cell (propertize (make-string pad ?\s)
+                                      'display `(space :align-to ,(* (1+ c) cell-w))))))))
       (insert "\n"))
     (goto-char (point-min))
     (cond

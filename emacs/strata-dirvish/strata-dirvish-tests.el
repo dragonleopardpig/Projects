@@ -3433,6 +3433,54 @@
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory strata-dirvish-state-dir t)))))
 
+(ert-deftest strata-test-compact-columns-align-long-and-wide-names ()
+  "Compact columns align with full long names, wide text and mixed icon widths."
+  (strata-test--with-selection-view 'compact
+    (dolist (name (list "00-short.txt"
+                        (concat "01-" (make-string 140 ?a) ".txt")
+                        (concat "02-" (make-string 24 ?界) ".txt")
+                        (concat "03-" (make-string 30 ?é) ".txt")))
+      (write-region "fixture" nil (expand-file-name name strata-test--dir) nil 'silent))
+    (let ((focus (nth 1 strata-test--files))
+          (marked (car strata-test--files)))
+      (strata-view--set-entry-mark marked t)
+      (strata-goto-file focus)
+      (cl-letf (((symbol-function 'window-body-height) (lambda (&rest _) 8))
+                ((symbol-function 'strata-file--glyph)
+                 (lambda (path &optional _)
+                   (if (string-prefix-p "02-" (file-name-nondirectory path)) "界" "▤"))))
+        (dolist (full '(nil t))
+          (setf (strata-prefs-compact-full-names strata-prefs-current) full)
+          (strata-compact-refresh)
+          (when full (should (> strata-compact-col-width 140)))
+          (should (equal (strata-current-file) focus))
+          (should (equal (strata-marked-files-only) (list marked)))
+          (save-excursion
+            (goto-char (point-min))
+            (let ((row 0) (column 0) match)
+              (while (setq match (text-property-search-forward 'strata-entry nil
+                                                               (lambda (_ path) path)))
+                (let* ((start (prop-match-beginning match))
+                       (end (prop-match-end match))
+                       (line (line-number-at-pos start)))
+                  (unless (= line row) (setq row line column 0))
+                  (save-excursion
+                    (goto-char start)
+                    (should (= (current-column) (* column strata-compact-col-width))))
+                  (when full
+                    (let* ((label (next-single-property-change start 'strata-entry-label nil end))
+                           (text (buffer-substring-no-properties label end)))
+                      (should (equal text (file-name-nondirectory (prop-match-value match))))))
+                  (cl-incf column)))))
+          ;; Wider cells retain the existing column navigation order.
+          (let ((files (strata-view--entry-order)))
+            (strata-goto-file (car files))
+            (strata-compact-next-col)
+            (should (equal (strata-current-file) (nth strata-compact-rows files)))
+            (strata-compact-prev-col)
+            (should (equal (strata-current-file) (car files)))
+            (strata-goto-file focus)))))))
+
 (ert-deftest strata-test-compact-empty-click-keeps-viewport ()
   "Blank clicks deselect a full Compact listing without hiding its early rows."
   (strata-test--with-selection-view 'compact
@@ -3570,7 +3618,7 @@
 (ert-deftest strata-test-control-arrows-compact-column-boundaries ()
   "Ctrl+Left/Right move between real Compact columns and stop at their edges."
   (strata-test--with-selection-view 'compact
-    (dotimes (i 80)
+    (dotimes (i (max 80 (+ 10 (window-body-height))))
       (write-region "test" nil (expand-file-name (format "g-%02d.txt" i) strata-test--dir) nil 'silent))
     (strata-compact-refresh)
     (let* ((files (strata-view--entry-order))
