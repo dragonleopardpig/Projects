@@ -2,7 +2,7 @@
 #
 # Machine-specific filesystem UUIDs remain in hardware-configuration.nix;
 # reusable portability settings live in ../universal-boot.nix.
-{ ... }:
+{ pkgs, ... }:
 {
   imports = [
     ./hardware-configuration.nix
@@ -18,4 +18,8 @@
 
   # Wipe / on every boot; see modules/impermanence.nix for what survives.
   custom.impermanence.enable = true;
+
+  # PortableSSD is the rescue system for migrating CRUCIAL-SSD to the same
+  # layout (hosts/Crucial-SSD/MIGRATE.md).
+  environment.systemPackages = [ (pkgs.callPackage ../../packages/crucial-btrfs-migrate.nix { }) ];
 }

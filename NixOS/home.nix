@@ -4488,7 +4488,7 @@ Please diagnose what caused them and explain how to resolve them."
     enable = true;
     enableBashIntegration = true;
     nix-direnv.enable = true;
-    stdlib = lib.mkIf ((osConfig.custom.impermanence.enable or false) && (osConfig.custom.impermanence.cleanDevArtifacts or false)) ''
+    stdlib = lib.mkIf ((osConfig.custom.impermanence.enable or false) && (osConfig.custom.impermanence.cleanDevArtifacts or false) && (osConfig.custom.impermanence.cleanDevEnvironments or true)) ''
       direnv_layout_dir() {
         local hash name
         hash=$(printf '%s' "$PWD" | ${pkgs.coreutils}/bin/sha1sum | ${pkgs.coreutils}/bin/cut -c1-12)

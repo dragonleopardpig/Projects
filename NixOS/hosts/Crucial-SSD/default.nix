@@ -4,6 +4,7 @@
 {
   imports = [
     ./hardware-configuration.nix
+    ./layouts.nix
     ../universal-boot.nix
     ../X299-SSD/nvidia.nix
     ../../modules/winapps.nix
@@ -37,7 +38,6 @@
     '';
   };
 
-  swapDevices = [
-    { device = "/var/lib/swapfile"; size = 16384; }
-  ];
+  # Root filesystem + swap: layouts.nix (custom.crucialLayout, "ext4" until
+  # the disk is migrated per MIGRATE.md).
 }

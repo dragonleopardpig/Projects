@@ -2,13 +2,22 @@
 # empty one on every boot, and only what is listed here survives.
 #
 # Imported by every host through flake.nix but inert until a host sets
-# `custom.impermanence.enable = true;` (PortableSSD only, for now).
+# `custom.impermanence.enable = true;` (PortableSSD; CRUCIAL-SSD once migrated,
+# see hosts/Crucial-SSD/MIGRATE.md).
 #
 # Expected btrfs layout (see hosts/PortableSSD/disko.nix):
-#   @root    -> /         wiped every boot (old copies kept in old_roots/)
-#   @nix     -> /nix      kept
-#   @persist -> /persist  kept; system state bind-mounted from here
-#   @home    -> /home     kept (whole /home survives; tighten later if wanted)
+#   @root        -> /               wiped every boot (old copies kept in old_roots/)
+#   @nix         -> /nix            kept
+#   @persist     -> /persist        kept; system state bind-mounted from here
+#   @home        -> /home           kept (whole /home survives; tighten later if wanted)
+#   @tmp         -> /tmp            deleted outright every boot (tmpSubvolume)
+#   @dev-scratch -> /var/cache/dev  deleted outright every boot (cleanDevArtifacts)
+# The initrd creates @tmp and @dev-scratch itself, so they need no disko entry.
+#
+# On every host (enabled or not) a pre-switch check refuses to switch/boot into
+# a configuration whose impermanence setting does not match the running root,
+# so a plain `nixos-rebuild switch` cannot lock passwords or break boot while a
+# host is being migrated.  Override with NIXOS_NO_CHECK=1.
 #
 # Before the first boot the password hashes MUST exist, or nobody can log in:
 #   sudo mkdir -p /mnt/persist/passwords
@@ -23,8 +32,9 @@ let
   targetHome = config.users.users.${cfg.devTargetUser}.home or "/home/${cfg.devTargetUser}";
   userScratch = "${cfg.devScratchDir}/${cfg.devTargetUser}";
   scratchSubdirs = [
-    "cargo-target"
+    "cargo-build"
     "cargo-home"
+    "bun"
     "direnv"
     "pycache"
     "uv"
@@ -53,9 +63,42 @@ let
       exec python3 ${./impermanence-clean-dev.py} \
         --home-dir ${lib.escapeShellArg targetHome} \
         --projects-dir ${lib.escapeShellArg cfg.devProjectsDir} \
+        ${lib.optionalString (!cfg.cleanDevEnvironments) "--keep-environments"} \
         "$@"
     '';
   };
+
+  # Runs before every switch-to-configuration (switch, boot, test, check).
+  # $2 is the action.  The wanted state is baked in from this configuration.
+  layoutGuard = ''
+    action="''${2-}"
+    if [ "$action" = dry-activate ]; then
+      exit 0
+    fi
+    root_fs=$(${pkgs.util-linux}/bin/findmnt -no FSTYPE / 2>/dev/null || true)
+    root_opts=$(${pkgs.util-linux}/bin/findmnt -no OPTIONS / 2>/dev/null || true)
+    running=no
+    if [ "$root_fs" = btrfs ]; then
+      case ",$root_opts," in
+        *,subvol=/@root,*) running=yes ;;
+      esac
+    fi
+    want=${if cfg.enable then "yes" else "no"}
+    if [ "$running" != "$want" ]; then
+      echo "impermanence-layout: refusing '$action'."
+      if [ "$want" = yes ]; then
+        echo "  This configuration wipes / on every boot (btrfs subvol=@root), but the"
+        echo "  running root is $root_fs ($root_opts)."
+        echo "  Switching would lock the passwords (/persist/passwords) and the next boot"
+        echo "  would not find its root.  Migrate the disk first (hosts/Crucial-SSD/MIGRATE.md)."
+      else
+        echo "  The running root is the impermanent btrfs subvol=@root, but this"
+        echo "  configuration expects a plain root; booting it would not find /."
+      fi
+      echo "  To override (you know the disk already matches): NIXOS_NO_CHECK=1"
+      exit 1
+    fi
+  '';
 in
 {
   options.custom.impermanence = {
@@ -80,6 +123,29 @@ in
         Wiped roots are moved to old_roots/ on the top-level subvolume instead of
         being deleted at once, so a forgotten file can still be recovered.  They
         are deleted after this many days.
+      '';
+    };
+
+    tmpSubvolume = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Mount /tmp from a separate @tmp subvolume that the initrd deletes and
+        recreates outright on every boot.  Otherwise /tmp lives on @root and a
+        wiped root keeps its /tmp in old_roots/ for keepOldRootsDays.  While
+        running, systemd's own tmp.conf still ages /tmp files out after 10 days.
+      '';
+    };
+
+    cleanDevEnvironments = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        With cleanDevArtifacts, also remove dependency environments
+        (.devenv, .direnv, .venv/venv, node_modules) under devProjectsDir on
+        every boot.  Set false where they are costly to rebuild: then only
+        stale .devenv/shell-*.sh scripts are pruned, and direnv layouts stay
+        in the project instead of the wiped scratch volume.
       '';
     };
 
@@ -112,7 +178,10 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
+  config = lib.mkMerge [
+  { system.preSwitchChecks.impermanence-layout = layoutGuard; }
+
+  (lib.mkIf cfg.enable {
     assertions = [
       {
         assertion = config.boot.initrd.systemd.enable;
@@ -168,6 +237,13 @@ in
         done
 
         btrfs subvolume create /btrfs_tmp/@root
+        ${lib.optionalString cfg.tmpSubvolume ''
+          if [ -e /btrfs_tmp/@tmp ]; then
+            delete_subvolume_recursively /btrfs_tmp/@tmp
+          fi
+          btrfs subvolume create /btrfs_tmp/@tmp
+          chmod 1777 /btrfs_tmp/@tmp
+        ''}
         ${lib.optionalString cfg.cleanDevArtifacts ''
           if [ -e /btrfs_tmp/@dev-scratch ]; then
             delete_subvolume_recursively /btrfs_tmp/@dev-scratch
@@ -182,6 +258,12 @@ in
     # Mount @home in initrd too so initrd user activation hits @home
     # instead of creating an empty /home/thinky on @root and overmounting later.
     fileSystems."/home".neededForBoot = true;
+
+    fileSystems."/tmp" = lib.mkIf cfg.tmpSubvolume {
+      device = cfg.device;
+      fsType = "btrfs";
+      options = [ "subvol=@tmp" "compress=zstd" "noatime" ];
+    };
 
     fileSystems.${cfg.devScratchDir} = lib.mkIf cfg.cleanDevArtifacts {
       device = cfg.device;
@@ -198,8 +280,14 @@ in
     );
 
     environment.sessionVariables = lib.mkIf cfg.cleanDevArtifacts {
-      CARGO_TARGET_DIR = "${userScratch}/cargo-target";
+      # Not CARGO_TARGET_DIR: a shared target dir breaks scripts that expect
+      # ./target/release/<bin> (strata, spacedrive) and makes concurrent builds
+      # of different projects lock and evict each other.  build-dir (cargo
+      # >= 1.91) moves only the bulky intermediates, one dir per workspace;
+      # final binaries stay in ./target (removed at boot by the sweep).
+      CARGO_BUILD_BUILD_DIR = "${userScratch}/cargo-build/{workspace-path-hash}";
       CARGO_HOME = "${userScratch}/cargo-home";
+      BUN_INSTALL_CACHE_DIR = "${userScratch}/bun";
       PYTHONPYCACHEPREFIX = "${userScratch}/pycache";
       UV_CACHE_DIR = "${userScratch}/uv";
       PIP_CACHE_DIR = "${userScratch}/pip";
@@ -233,6 +321,26 @@ in
         ProtectSystem = "strict";
         ReadWritePaths = [ "-${targetHome}" "-${cfg.devProjectsDir}" ];
         NoNewPrivileges = true;
+      };
+    };
+
+    # Trash is user data, so it is never emptied at boot; items trashed more
+    # than 30 days ago go daily.  trash-empty reads each item's DeletionDate,
+    # unlike a tmpfiles age rule, which would purge old files inside a
+    # directory trashed today.
+    systemd.user.services.trash-age = lib.mkIf cfg.cleanDevArtifacts {
+      description = "Remove items trashed more than 30 days ago";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.trash-cli}/bin/trash-empty -f 30";
+      };
+    };
+    systemd.user.timers.trash-age = lib.mkIf cfg.cleanDevArtifacts {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "daily";
+        Persistent = true;
+        RandomizedDelaySec = "1h";
       };
     };
 
@@ -286,5 +394,6 @@ in
 
     # sudo would otherwise show its lecture after every reboot.
     security.sudo.extraConfig = "Defaults lecture = never";
-  };
+  })
+  ];
 }

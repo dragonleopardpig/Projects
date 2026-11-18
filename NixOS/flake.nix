@@ -639,6 +639,19 @@
         inherit (nixpkgs) lib;
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
       };
+      # The same with CRUCIAL-SSD's settings (swap subvolume, environments
+      # kept, pre-switch guard).
+      checks.x86_64-linux.impermanence-crucial = import ./tests/impermanence.nix {
+        inherit inputs;
+        inherit (nixpkgs) lib;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        variant = "crucial";
+      };
+      # VM rehearsal of the CRUCIAL-SSD ext4 -> btrfs migration tool.
+      checks.x86_64-linux.crucial-migration = import ./tests/crucial-migration.nix {
+        inherit (nixpkgs) lib;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      };
 
       # X299 Desktop (external SSD clone)
       nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
@@ -647,6 +660,13 @@
       nixosConfigurations.CRUCIAL-SSD = mkSystem ./hosts/Crucial-SSD;
       # Compatibility with existing commands using the original flake name.
       nixosConfigurations.Crucial-SSD = mkSystem ./hosts/Crucial-SSD;
+      # The same host on its migrated disk (btrfs, root wiped on boot).  Built
+      # for hosts/Crucial-SSD/MIGRATE.md; once migrated, layouts.nix defaults
+      # to "btrfs" and this output becomes identical to CRUCIAL-SSD.
+      nixosConfigurations.CRUCIAL-SSD-btrfs = mkSystem {
+        imports = [ ./hosts/Crucial-SSD ];
+        custom.crucialLayout = "btrfs";
+      };
 
       # M90aPro Laptop Configuration
       nixosConfigurations.M90aPro = mkSystem ./hosts/M90aPro;

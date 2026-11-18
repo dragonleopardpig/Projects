@@ -17,10 +17,8 @@
 
   boot.initrd.luks.devices."cryptroot".device = "/dev/disk/by-uuid/77595ddf-4ac1-4521-a712-25f2dfaa02c3";
 
-  fileSystems."/" = {
-    device = "/dev/mapper/cryptroot";
-    fsType = "ext4";
-  };
+  # The root filesystem (ext4 today, btrfs subvolumes after the migration)
+  # lives in layouts.nix; the LUKS container above is the same for both.
 
   fileSystems."/boot" = {
     device = "/dev/disk/by-uuid/42F5-D6BF";

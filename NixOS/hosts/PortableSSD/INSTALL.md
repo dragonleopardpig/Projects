@@ -18,6 +18,14 @@ Btrfs subvolumes inside the LUKS container:
 | `@nix`     | `/nix`     | Yes                                                   |
 | `@persist` | `/persist` | Yes: system state bind-mounted from here              |
 | `@home`    | `/home`    | Yes                                                   |
+| `@tmp`     | `/tmp`     | **No**: deleted outright on every boot (made by the initrd) |
+| `@dev-scratch` | `/var/cache/dev` | **No**: dev build/tool caches, deleted on every boot (made by the initrd) |
+
+On boot, `impermanence-clean-dev` also removes regenerable artifacts under
+`~/Projects` (Rust `target/`, `__pycache__`, `.devenv`, `.venv`, `node_modules`,
+docs builds, `result` links) and tool caches in `~`; `clean-dev-cache --dry-run`
+lists what it would remove.  CRUCIAL-SSD uses the same module but keeps the
+dependency environments (`hosts/Crucial-SSD/MIGRATE.md`).
 
 The root wipe ("impermanence") is configured in
 [`modules/impermanence.nix`](../../modules/impermanence.nix), which also lists
