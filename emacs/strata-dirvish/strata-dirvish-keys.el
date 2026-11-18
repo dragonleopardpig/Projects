@@ -271,6 +271,12 @@
              ["Duplicate" strata-duplicate :enable ,(and has-items writable)]
              ["Move to Trash" strata-move-to-trash :enable ,(and has-items writable)]
              "--"
+             ["Extract Here" strata-archive-extract :visible ,archive :enable ,writable]
+             ["Extract to Folder…" (strata-archive-extract t) :visible ,archive :enable ,writable]
+             ["Compress…" strata-archive-compress :enable ,(and has-items writable)]
+             ["Compress with Encryption…" strata-archive-compress-encrypted
+              :enable ,(and has-items writable)]
+             "--"
              ["New Folder…" strata-new-folder :enable ,writable]
              ["New File…" strata-new-file :enable ,writable]
              ("Selection"
@@ -284,8 +290,6 @@
                :enable ,(and has-items writable)]
               ["Copy Path" strata-copy-path :enable ,has-items]
               ["Copy Name" strata-copy-name :enable ,has-items]
-              ["Compress Archive…" strata-archive-compress :enable ,(and has-items writable)]
-              ["Extract Here" strata-archive-extract :enable ,(and archive writable)]
               ["Save Clipboard Image/Text" strata-paste-content-drop :enable ,writable]
               ["Delete Permanently…" strata-delete-permanently :enable ,(and has-items writable)])
              ["Properties…" strata-show-properties-for-path]
@@ -372,6 +376,7 @@ Text terminals use `strata-context-menu', also available with Shift-F10."
     ("z" "Undo" strata-undo)
     ("Z" "Redo" strata-redo)
     ("c" "Compress Archive…" strata-archive-compress)
+    ("C-e" "Compress with Encryption…" strata-archive-compress-encrypted)
     ("e" "Extract Here" strata-archive-extract)
     ("v" "Save Clipboard Image/Text" strata-paste-content-drop)
     ("Y" "Copy Path" strata-copy-path)]
@@ -570,15 +575,17 @@ Text terminals use `strata-context-menu', also available with Shift-F10."
                     ("Current file" "Used by copy/cut and file actions when no items are marked")
                     ("10xer: v ... v" "Set anchor, move, press v again to mark the inclusive range"))
                    ("MOUSE & DRAG SELECTION"
-                    ("Drag within pane" "Replace marks with a live range; reverse drag to shrink")
+                    ("Drag unmarked / empty space" "Select a live range; reverse drag to shrink")
                     ("Icons / Compact drag" "Select a rectangle across rows and columns")
                     ("C-Drag / S-Drag" "Add a range to existing marks within the same pane")
-                    ("Drag to other pane" "Transfer the marked group; choose Copy / Move / Cancel")
+                    ("Drop onto folder / pane" "Transfer files into that folder; choose Copy / Move / Cancel")
                     ("Dragging marked files" "A badge follows the pointer with filenames, count and destination")
-                    ("C-Drag / S-Drag across" "Copy / Move into another pane (Ctrl wins with both modifiers)")
+                    ("C-Drag / S-Drag onto folder" "Copy / Move into a folder or pane (Ctrl wins with both modifiers)")
                     ("ESC / C-g / Right-Click" "During drag: cancel and restore the previous selection")
                     ("Right-Click item" "Keep a marked batch; an unmarked item becomes the menu target")
                     ("Right-Click menu" "GUI actions beside the pointer; Shift-F10 / Menu opens keyboard actions")
+                    ("Right-Click archives" "Extract Here / Extract to Folder; multiple roots get a wrapping folder")
+                    ("Right-Click → Compress…" "Create an archive; Compress with Encryption uses AES and a confirmed password")
                     ("Mouse Back / Forward" "Navigate the folder history of the pane under the pointer")
                     ("Mouse file actions" "Follow-up choices, names, passwords and confirmations use GUI dialogs")
                     ("Keyboard file actions" "Keep text prompts, completion and the keyboard actions menu")

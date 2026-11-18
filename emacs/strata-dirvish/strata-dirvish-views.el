@@ -2102,16 +2102,13 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
         (strata-view--update-selection-highlight)
         (force-mode-line-update t))))))
 
-(defun strata-mouse--has-drop-target-p (src-win)
-  "Return non-nil when another pane or visible Places sidebar can accept drops."
-  (or (and (bound-and-true-p strata-sidebar-window)
-           (window-live-p strata-sidebar-window)
-           (not (eq strata-sidebar-window src-win)))
-      (cl-some (lambda (w)
-                 (and (not (eq w src-win))
-                      (fboundp 'strata-panes--valid-main-window-p)
-                      (strata-panes--valid-main-window-p w)))
-               (window-list (and (window-live-p src-win) (window-frame src-win)) 'no-minibuf))))
+(defun strata-mouse--drag-files (entry marked)
+  "Return the original drag payload for ENTRY and pre-drag MARKED files."
+  (if (and marked (or (not entry)
+                      (member (strata--path-key entry)
+                              (mapcar #'strata--path-key marked))))
+      marked
+    (when entry (list entry))))
 
 (defun strata-mouse--drag-exceeded-p (start-xy end-xy start-win end-win exact-start cur-entry)
   "Return non-nil once drag movement crosses click threshold or changes entry."
@@ -2215,7 +2212,7 @@ Use only the cached filenames; do not probe files while handling motion."
            (destination (if drop-dir
                             (concat "To: " (abbreviate-file-name drop-dir))
                           (if (eq (posn-window (event-end event)) (plist-get st :src-win))
-                              "Drag to another pane or Places folder"
+                              "Drag to a folder, another pane or Places"
                             "No drop here")))
            (key (list files action destination))
            (now (float-time)))
@@ -2487,25 +2484,23 @@ Use only the cached filenames; do not probe files while handling motion."
                  (pre-keys (plist-get st :pre-keys))
                  (last-keys-cell (plist-get st :last-keys-cell))
                  (last-hover-cell (plist-get st :last-hover-cell))
-                 (carry-marked-p (plist-get st :carry-marked-p)))
+                 (carry-marked-p (plist-get st :carry-marked-p))
+                 (drop-marked (if exact-start pre-marked (strata-marked-files-only))))
             (unless (plist-get st :dragged-p)
               (when (strata-mouse--drag-exceeded-p
                      (plist-get st :start-xy) (posn-x-y end)
                      src-win dst-win exact-start cur)
                 (plist-put st :dragged-p t)))
             (when (plist-get st :dragged-p)
-              (let ((drop-dir (and dst-win (not (eq dst-win src-win))
-                                   (strata-mouse--drag-target-dir dst-win end))))
+              (let ((drop-dir (strata-mouse--drop-dir
+                               src-win dst-win end exact-start drop-marked)))
                 (cond
                  (drop-dir
                   (strata-mouse--stop-timer-field st :scroll-timer)
                   (when (and carry-marked-p (not (equal (car last-keys-cell) pre-keys)))
                     (setcar last-keys-cell pre-keys)
                     (strata-mouse--apply-selection-keys order pre-keys nil))
-                  (let* ((cur-marked (or (strata-marked-files-only)
-                                         (when-let ((ns (plist-get st :near-start)))
-                                           (list ns))))
-                         (n (max 1 (length (if carry-marked-p pre-marked cur-marked)))))
+                  (let ((n (length (strata-mouse--drag-files exact-start drop-marked))))
                     (message "Drop %d item(s) into %s to copy/move"
                              n (abbreviate-file-name drop-dir))))
                  ((or (eq dst-win src-win) (null dst-win))
@@ -2518,9 +2513,7 @@ Use only the cached filenames; do not probe files while handling motion."
                   (strata-mouse--stop-timer-field st :scroll-timer)))
                 (if (or carry-marked-p drop-dir)
                     (strata-mouse--show-drag-feedback
-                     st ev (if carry-marked-p pre-marked
-                             (or (strata-marked-files-only)
-                                 (when exact-start (list exact-start))))
+                     st ev (strata-mouse--drag-files exact-start drop-marked)
                      drop-dir)
                   (strata-mouse--hide-drag-feedback st))))))))))
 
@@ -2557,9 +2550,7 @@ Use only the cached filenames; do not probe files while handling motion."
               (and exact-start (member (strata--path-key exact-start) pre-keys)))
              (carry-marked-p
               (and started-on-marked-p
-                   (not ctrl-p)
-                   (or shift-p
-                       (strata-mouse--has-drop-target-p src-win))))
+                   (not ctrl-p)))
              (rect-p (derived-mode-p 'strata-compact-mode 'strata-icons-mode))
              (anchor (if shift-p
                          (or strata--selection-anchor-entry near-start)
@@ -2724,8 +2715,12 @@ Use only the cached filenames; do not probe files while handling motion."
           (select-window src-win)
           (when (fboundp 'strata-panes--sync-active-pane-from-window)
             (strata-panes--sync-active-pane-from-window src-win))
-          (let* ((drop-dir (and (not (eq dst-win src-win))
-                                (strata-mouse--drag-target-dir dst-win end)))
+          (let* ((drop-marked (if (plist-get st :exact-start)
+                                  (plist-get st :pre-marked)
+                                (strata-marked-files-only)))
+                 (drop-dir (strata-mouse--drop-dir
+                            src-win dst-win end (plist-get st :exact-start)
+                            drop-marked))
                  (effective-mode
                   (or forced-mode
                       (cond ((memq 'control end-mods) 'copy)
@@ -2743,17 +2738,11 @@ Use only the cached filenames; do not probe files while handling motion."
                   (strata-mouse--drag-drop-now
                    src-win dst-win (plist-get st :start) end
                    (plist-get st :exact-start)
-                   (or (strata-marked-files-only) (plist-get st :pre-marked))
+                   drop-marked
                    effective-mode))
               (let ((anchor (plist-get st :anchor))
-                    (exact-start (plist-get st :exact-start))
                     (hover (or cur (car (plist-get st :last-hover-cell)))))
-                (when (and anchor hover
-                           (or (not carry-marked-p)
-                               (and (eq dst-win src-win)
-                                    exact-start
-                                    (not (equal (strata--path-key hover)
-                                                (strata--path-key exact-start))))))
+                (when (and anchor hover (not carry-marked-p))
                   (setq-local strata--selection-anchor-entry anchor)
                   (strata-mouse--sync-drag-range
                    (plist-get st :order) (plist-get st :base-keys) anchor hover
@@ -2784,8 +2773,9 @@ Use only the cached filenames; do not probe files while handling motion."
       (strata-mouse--finish-drag st event)
     (strata-mouse--run-range-action event t)))
 
-(defun strata-mouse--drag-target-dir (dst-win end-posn)
-  "Resolve writable drop folder for drag-and-drop into DST-WIN at END-POSN."
+(defun strata-mouse--drag-target-dir (dst-win end-posn &optional folder-only)
+  "Resolve a drop folder in DST-WIN at END-POSN.
+FOLDER-ONLY requires an actual folder entry rather than the pane background."
   (when (window-live-p dst-win)
     (cond
      ((eq dst-win (bound-and-true-p strata-sidebar-window))
@@ -2801,26 +2791,39 @@ Use only the cached filenames; do not probe files while handling motion."
      ((and (fboundp 'strata-panes--valid-main-window-p)
            (strata-panes--valid-main-window-p dst-win)
            (fboundp 'strata-panes--window-dir))
-      (strata-panes--window-dir dst-win)))))
+      (let ((entry (strata-mouse--entry-at-posn end-posn)))
+        (if (and entry (file-directory-p entry))
+            entry
+          (unless folder-only (strata-panes--window-dir dst-win))))))))
+
+(defun strata-mouse--drop-dir (src-win dst-win end entry marked)
+  "Resolve END as a folder drop for the original ENTRY/MARKED payload.
+Inside the source pane, blank-space drags keep selecting and a selected
+folder cannot itself become the drop target."
+  (let* ((same-pane (eq src-win dst-win))
+         (files (strata-mouse--drag-files entry marked))
+         (dir (and (or (not same-pane) entry)
+                   (strata-mouse--drag-target-dir dst-win end same-pane))))
+    (when (and dir
+               (not (member (strata--path-key dir)
+                            (mapcar #'strata--path-key files))))
+      dir)))
 
 (defun strata-mouse--drag-drop-now (src-win dst-win _start end src-entry marked &optional forced-mode)
   "Copy or move MARKED/SRC-ENTRY dragged from SRC-WIN into DST-WIN."
-  (let* ((marked-keys (mapcar #'strata--path-key marked))
-         (files (if (and marked
-                         (or (not src-entry)
-                             (member (strata--path-key src-entry) marked-keys)))
-                    marked
-                  (when src-entry (list src-entry))))
-         (dest-dir (strata-mouse--drag-target-dir dst-win end))
+  (let* ((files (strata-mouse--drag-files src-entry marked))
+         (dest-dir (strata-mouse--drop-dir src-win dst-win end src-entry marked))
          (src-dir (and (fboundp 'strata-panes--window-dir)
                        (strata-panes--window-dir src-win))))
     (unless files
       (user-error "No file or folder selected to drag"))
     (unless (and dest-dir (file-directory-p dest-dir))
-      (user-error "Drop onto another split pane folder or Places directory"))
+      (user-error "Drop onto a folder, another pane or a Places directory"))
     (when (and src-dir
                (equal (file-truename src-dir) (file-truename dest-dir)))
       (user-error "Source and destination folders are identical"))
+    ;; Check the whole batch before transferring any item.
+    (dolist (file files) (strata--guard-not-self-contained file dest-dir))
     (let* ((mode (or forced-mode
                     (if (strata-ui-mouse-p)
                         (strata-ui-choice
@@ -2845,7 +2848,7 @@ Use only the cached filenames; do not probe files while handling motion."
             (strata-view--refresh-after-mark)))))))
 
 (defun strata-mouse-drag-drop (event &optional forced-mode)
-  "Drag highlighted files inside a pane to select, or across panes to copy/move."
+  "Drag to select files, or drop files onto a folder or pane to copy/move."
   (interactive "e")
   (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
       (strata-mouse--finish-drag st event forced-mode)
@@ -2860,6 +2863,12 @@ Use only the cached filenames; do not probe files while handling motion."
         (let* ((src-entry (strata-mouse--entry-at-posn start t))
                (marked (strata-marked-files-only)))
           (cond
+           ((strata-mouse--drop-dir src-win dst-win end src-entry marked)
+            (strata-mouse--drag-drop-now
+             src-win dst-win start end src-entry marked
+             (or forced-mode
+                 (cond ((memq 'control (event-modifiers event)) 'copy)
+                       ((memq 'shift (event-modifiers event)) 'cut)))))
            ((eq src-win dst-win)
             (let ((end-entry (strata-mouse--entry-at-posn end t)))
               (cond
@@ -2892,12 +2901,12 @@ Use only the cached filenames; do not probe files while handling motion."
                        ((memq 'shift (event-modifiers event)) 'cut)))))))))))
 
 (defun strata-mouse-drag-copy (event)
-  "Drag highlighted files into another split pane and copy (`C-<drag-mouse-1>')."
+  "Drag files into a folder or pane and copy (`C-<drag-mouse-1>')."
   (interactive "e")
   (strata-mouse-drag-drop event 'copy))
 
 (defun strata-mouse-drag-move (event)
-  "Drag highlighted files into another split pane and move (`S-<drag-mouse-1>')."
+  "Drag files into a folder or pane and move (`S-<drag-mouse-1>')."
   (interactive "e")
   (strata-mouse-drag-drop event 'cut))
 

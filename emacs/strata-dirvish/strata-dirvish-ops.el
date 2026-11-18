@@ -625,9 +625,10 @@ Prefer the next surviving entry, then the previous one, in the displayed order."
 
 ;;;; Archives Compress & Smart Extract
 
-(defun strata-archive-compress ()
-  "Compress selected files/folders into zip, tar.gz, tar.zst, 7z, or tar (`; c')."
-  (interactive)
+(defun strata-archive-compress (&optional encrypt)
+  "Compress selected files/folders (`; c').
+With ENCRYPT (interactively, a prefix), require an encrypted 7z or ZIP archive."
+  (interactive "P")
   (let* ((dir (strata--ensure-writable-target default-directory "Compress"))
          (files (or (strata-selected-files)
                     (user-error "No file or folder selected")))
@@ -635,36 +636,89 @@ Prefer the next surviving entry, then the previous one, in the displayed order."
                         (file-name-nondirectory (directory-file-name (car files)))))
          (name (string-trim (strata-ui-read-string "Archive name (without extension): "
                                          (if (> (length files) 1) "archive" default-name))))
-         (fmt (strata-ui-completing-read "Format: " '("zip" "tar.gz" "tar.zst" "7z" "tar") nil t nil nil "zip"))
-         (pw (when (and (member fmt '("zip" "7z"))
-                        (strata-ui-y-or-n-p "Protect archive with password? "))
-               (strata-ui-read-passwd "Archive password: ")))
-         (out (strata-unique-copy-name (expand-file-name (concat name "." fmt) dir)))
-         (rels (mapcar (lambda (f) (file-relative-name f dir)) files))
-         (cmd
-          (pcase fmt
-            ("zip" (append '("7z" "a" "-tzip") (when (and pw (not (string-empty-p pw))) (list (concat "-p" pw))) (list out) rels))
-            ("7z" (append '("7z" "a" "-t7z") (when (and pw (not (string-empty-p pw))) (list (concat "-p" pw))) (list out) rels))
-            ("tar.gz" (append '("tar" "-czf" ) (list out) rels))
-            ("tar.zst" (append '("tar" "--zstd" "-cf") (list out) rels))
-            ("tar" (append '("tar" "-cf") (list out) rels)))))
-    (let ((default-directory dir))
-      (strata-run-job (format "Compress %s" (file-name-nondirectory out)) cmd
-                      (lambda () (strata-refresh-active-view) (strata-goto-file out))))
-    (when pw (clear-string pw))))
+         (formats (if encrypt '("7z" "zip") '("zip" "tar.gz" "tar.zst" "7z" "tar")))
+         (fmt (strata-ui-completing-read "Format: " formats nil t nil nil (car formats)))
+         (source (current-buffer))
+         pw)
+    (unless (and (not (string-empty-p name))
+                 (equal name (file-name-nondirectory name))
+                 (not (member name '("." ".."))))
+      (user-error "Enter an archive filename without a directory"))
+    (unless (member fmt formats) (user-error "Unsupported archive format: %s" fmt))
+    (unless (executable-find (if (member fmt '("zip" "7z")) "7z" "tar"))
+      (user-error "Archive tool %s is unavailable" (if (member fmt '("zip" "7z")) "7z" "tar")))
+    (unwind-protect
+        (progn
+          (when (and (member fmt '("zip" "7z"))
+                     (or encrypt (strata-ui-y-or-n-p "Protect archive with password? ")))
+            (setq pw (strata-ui-read-passwd "Archive password: " t))
+            (when (string-empty-p pw) (user-error "Encryption requires a nonempty password")))
+          (let* ((out (strata-unique-copy-name (expand-file-name (concat name "." fmt) dir)))
+                 (rels (mapcar (lambda (f) (concat "./" (file-relative-name f dir))) files))
+                 (cmd
+                  (if (member fmt '("zip" "7z"))
+                      (append (list "7z" "a" (concat "-t" fmt))
+                              (when pw
+                                (list (concat "-p" pw)
+                                      (if (equal fmt "7z") "-mhe=on" "-mem=AES256")))
+                              (list "--" out) rels)
+                    (append (pcase fmt
+                              ("tar.gz" '("tar" "-czf"))
+                              ("tar.zst" '("tar" "--zstd" "-cf"))
+                              (_ '("tar" "-cf")))
+                            (list out "--") rels))))
+            (let ((default-directory dir))
+              (strata-run-job
+               (format "Compress %s" (file-name-nondirectory out)) cmd
+               (lambda ()
+                 (when (buffer-live-p source)
+                   (with-current-buffer source
+                     (strata-refresh-active-view)
+                     (strata-goto-file out))))))))
+      (when pw (clear-string pw)))))
 
-(defun strata-archive--top-level-roots (archive)
-  "Return distinct top-level entry names inside ARCHIVE."
-  (when (executable-find "7z")
+(defun strata-archive-compress-encrypted ()
+  "Create an AES-encrypted 7z or ZIP archive of the selected files/folders."
+  (interactive)
+  (strata-archive-compress t))
+
+(defun strata-archive--tar-p (archive)
+  "Return non-nil for tar archives, including compressed tar variants."
+  (string-match-p "\\.\\(?:tar\\(?:\\.\\(?:gz\\|bz2\\|xz\\|zst\\)\\)?\\|tgz\\|tbz2?\\|txz\\|tzst\\)\\'"
+                  (downcase archive)))
+
+(defun strata-archive--inspect (archive &optional password)
+  "List ARCHIVE noninteractively, returning its exit status and output.
+PASSWORD is supplied only when opening an encrypted archive."
+  (let ((tar-p (strata-archive--tar-p archive)))
+    (unless (executable-find (if tar-p "tar" "7z"))
+      (user-error "Archive tool %s is unavailable" (if tar-p "tar" "7z")))
     (with-temp-buffer
-      (when (= 0 (process-file "7z" nil t nil "l" "-ba" archive))
-        (let (roots)
-          (dolist (line (split-string (buffer-string) "\n" t))
-            (when (string-match " \\([^ ]+\\)\\'" line)
-              (let* ((p (match-string 1 line))
-                     (top (car (split-string p "/" t))))
-                (when top (push top roots)))))
-          (delete-dups roots))))))
+      (let ((status (apply #'process-file (if tar-p "tar" "7z") nil t nil
+                           (if tar-p (list "-tf" archive)
+                             (append '("l" "-slt" "-ba")
+                                     (when password (list (concat "-p" password)))
+                                     (list "--" archive))))))
+        (cons status (buffer-string))))))
+
+(defun strata-archive--roots (listing tar-p)
+  "Read top-level entry names from LISTING, using tar format when TAR-P."
+  (let (roots)
+    (dolist (line (split-string listing "\n" t))
+      (let ((path (if tar-p (string-remove-suffix "\r" line)
+                    (when (string-match "\\`Path = \\(.*?\\)\r?\\'" line)
+                      (match-string 1 line)))))
+        (when path
+          (while (string-prefix-p "./" path) (setq path (substring path 2)))
+          (when-let ((top (car (split-string path "/" t))))
+            (unless (member top roots) (push top roots))))))
+    (nreverse roots)))
+
+(defun strata-archive--top-level-roots (archive &optional password)
+  "Return distinct top-level entry names inside ARCHIVE, using PASSWORD if set."
+  (let ((info (strata-archive--inspect archive password)))
+    (when (eq (car info) 0)
+      (strata-archive--roots (cdr info) (strata-archive--tar-p archive)))))
 
 (defun strata-archive-extract (&optional ask-dest)
   "Smart extract archive at point (`; e` here, `; E` choose folder).
@@ -675,20 +729,35 @@ wrapping folder named after the archive so parent folders stay uncluttered."
          (base-dest (if ask-dest
                         (strata-ui-read-directory-name "Extract to folder: " default-directory)
                       (file-name-directory archive)))
-         (roots (strata-archive--top-level-roots archive))
-         (stem (file-name-sans-extension (file-name-nondirectory archive)))
-         (stem (if (string-suffix-p ".tar" stem) (file-name-sans-extension stem) stem))
-         (target-dir (if (<= (length roots) 1)
-                         base-dest
-                       (strata-unique-copy-name (expand-file-name stem base-dest)))))
+         (tar-p (strata-archive--tar-p archive))
+         (info (strata-archive--inspect archive))
+         (source (current-buffer))
+         password)
     (strata-guard-writable-location base-dest "Extract archive")
-    (make-directory target-dir t)
-    (strata-run-job
-     (format "Extract %s" (file-name-nondirectory archive))
-     (list "7z" "x" "-y" (concat "-o" target-dir) archive)
-     (lambda ()
-       (strata-refresh-active-view)
-       (message "Extracted -> %s" (abbreviate-file-name target-dir))))))
+    (unwind-protect
+        (progn
+          (when (and (not tar-p)
+                     (string-match-p "Encrypted = [+]\\|[Ee]nter password\\|encrypted archive" (cdr info)))
+            (setq password (strata-ui-read-passwd "Archive password: "))
+            (when (string-empty-p password) (user-error "Enter the archive password"))
+            (setq info (strata-archive--inspect archive password)))
+          (unless (eq (car info) 0) (user-error "Cannot read archive: %s" (string-trim (cdr info))))
+          (let* ((roots (strata-archive--roots (cdr info) tar-p))
+                 (stem (file-name-sans-extension (file-name-nondirectory archive)))
+                 (stem (if (string-suffix-p ".tar" stem) (file-name-sans-extension stem) stem))
+                 (target-dir (if (<= (length roots) 1) base-dest
+                               (strata-unique-copy-name (expand-file-name stem base-dest)))))
+            (make-directory target-dir t)
+            (strata-run-job
+             (format "Extract %s" (file-name-nondirectory archive))
+             (if tar-p (list "tar" "-xf" archive "-C" target-dir)
+               (append (list "7z" "x" "-y" "-aou" (concat "-o" target-dir))
+                       (when password (list (concat "-p" password))) (list "--" archive)))
+             (lambda ()
+               (when (buffer-live-p source)
+                 (with-current-buffer source (strata-refresh-active-view)))
+               (message "Extracted -> %s" (abbreviate-file-name target-dir))))))
+      (when password (clear-string password)))))
 
 ;;;; Properties Modal/Buffer & Customize Folder
 
@@ -911,7 +980,8 @@ The application keeps running after Emacs exits."
         items)))
 
 (defun strata-run-job (label cmd &optional on-done)
-  "Execute CMD asynchronously logging status & output to `*Strata Jobs*'."
+  "Execute CMD asynchronously logging status & output to `*Strata Jobs*'.
+Call ON-DONE only after a successful exit."
   (let* ((id (cl-incf strata-next-job-id))
          (buf (generate-new-buffer (format " *strata-job-%d*" id)))
          (job (list :id id :label label :status 'running :started (current-time) :output "")))
@@ -932,7 +1002,7 @@ The application keeps running after Emacs exits."
            (plist-put job :output txt)
            (when (buffer-live-p buf) (kill-buffer buf))
            (when (get-buffer "*Strata Jobs*") (strata-jobs-dashboard t))
-           (when on-done (funcall on-done))
+           (when (and ok on-done) (funcall on-done))
            (message "Job %s: %s" label (if ok "done" (format "failed (%s)" txt)))))))
     job))
 

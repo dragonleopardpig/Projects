@@ -249,7 +249,7 @@ Reads only cached /proc/mounts entries cleanly with zero blocking I/O."
   "Return non-nil when PATH has a supported archive filename extension."
   (and (stringp path)
        (string-match-p
-        "\\.\\(?:zip\\|7z\\|tar\\|tgz\\|gz\\|bz2\\|xz\\|zst\\|rar\\)\\'"
+        "\\.\\(?:zip\\|7z\\|tar\\|tgz\\|tbz2?\\|txz\\|tzst\\|gz\\|bz2\\|xz\\|zst\\|rar\\)\\'"
         (downcase (directory-file-name path)))))
 
 (defun strata-mount--fuse-or-remote-p (dev mp fstype)

@@ -193,6 +193,7 @@
      ["Delete Permanently…" strata-delete-permanently writable-items]
      "--"
      ["Compress Archive…" strata-archive-compress writable-items]
+     ["Compress with Encryption…" strata-archive-compress-encrypted writable-items]
      ["Extract Here" strata-archive-extract archive]
      ["Extract to Folder…" strata-archive-extract archive (t)]
      ["Properties…" strata-show-properties-for-path physical]
