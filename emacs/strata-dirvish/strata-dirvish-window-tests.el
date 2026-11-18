@@ -193,11 +193,11 @@
           (buffer (get-buffer-create "*Strata Window Test Editor*"))
           (roles (strata-window-test--roles group)))
       (set-window-buffer other buffer)
-      (delete-other-windows)
+      (call-interactively (key-binding (kbd "C-x 1")))
       (should-not (window-live-p other))
       (should (equal roles (strata-window-test--roles group)))
       ;; Keeping the only application group is harmless.
-      (delete-other-windows)
+      (call-interactively (key-binding (kbd "C-x 1")))
       (let ((editor (split-window-right)))
         (set-window-buffer editor buffer)
         (delete-window main)
@@ -210,6 +210,35 @@
       (should (eq (window-buffer (selected-window)) buffer))
       (should (one-window-p t))
       (should-not (window-parameter (selected-window) 'strata-window-group)))))
+
+(ert-deftest strata-test-window-interactive-keep-and-close-f3-panes ()
+  "The actual C-x 1/0 commands keep or close either F3 pane in every view."
+  (dolist (mode '(columns list compact icons))
+    (dolist (side '(1 2))
+      (dolist (key '("C-x 1" "C-x 0"))
+        (ert-info ((format "%s, pane %d, %s" mode side key))
+          (strata-window-test--with-browser mode
+            (call-interactively (key-binding (kbd "<f3>")))
+            (let* ((tab (strata-active-tab))
+                   (p1 (strata-tab-state-pane1 tab))
+                   (p2 (strata-tab-state-pane2 tab))
+                   (window (strata-pane-state-window (if (= side 1) p1 p2)))
+                   (other (strata-pane-state-window (if (= side 1) p2 p1)))
+                   (buffer (window-buffer window)))
+              (should (window-live-p window))
+              (should (window-live-p other))
+              (select-window window)
+              (strata-panes--sync-active-pane-from-window)
+              (call-interactively (key-binding (kbd key)))
+              (if (equal key "C-x 1")
+                  (progn
+                    (should (eq (selected-window) window))
+                    (should (eq (window-buffer window) buffer))
+                    (should-not (window-live-p other)))
+                (should-not (window-live-p window))
+                (should (window-live-p other)))
+              ;; Closing/maximizing a pane must not kill its file browser.
+              (should (buffer-live-p buffer)))))))))
 
 (ert-deftest strata-test-window-transpose-error-restores-usable-layout ()
   "A failed layout transformation restores editor buffers and window roles."

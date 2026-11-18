@@ -1464,7 +1464,7 @@
           (let ((strata-preview-standalone-window nil))
             (cl-letf (((symbol-function 'dirvish-curr) (lambda () nil)))
               (setq edit-buf (strata-preview-edit-file py))
-              (delete-other-windows) ;; C-x 1
+              (call-interactively (key-binding (kbd "C-x 1")))
               (should (one-window-p t))
               (should (eq (window-buffer (selected-window)) edit-buf))
               ;; Previous browser buffer remains live and switchable via C-x b.

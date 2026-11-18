@@ -194,8 +194,8 @@
           (setf (strata-windows--group-directory group) default-directory)))
       (strata-windows--reconcile))))
 
-(defun strata-windows--delete-others (original &optional window)
-  "Scope internal Dirvish cleanup without changing ordinary Emacs behavior."
+(defun strata-windows--delete-others (original &optional window interactive)
+  "Scope Dirvish cleanup, forwarding WINDOW and INTERACTIVE to ORIGINAL."
   (unless strata-windows--building
     (let* ((w (or window (selected-window)))
            (group (window-parameter w 'strata-window-group))
@@ -207,12 +207,12 @@
           ;; A file being read or edited can still be maximized with C-x 1.
           (let ((ignore-window-parameters t) (strata-windows--changing t))
             (strata-windows--unatom (frame-root-window (window-frame w)))
-            (funcall original window)
+            (funcall original window interactive)
             (strata-windows--tag w nil nil)
             (when-let ((dv (and group (strata-windows--group-dv group))))
               (setf (dv-curr-layout dv) nil (dv-winconf dv) nil (dv-preview-window dv) nil)))
         (unless (eq atom (frame-root-window (window-frame w)))
-          (funcall original window))))))
+          (funcall original window interactive))))))
 
 (defun strata-windows--display (original buffer alist)
   "Scale Dirvish BUFFER's ALIST to the browser width, using ORIGINAL."
