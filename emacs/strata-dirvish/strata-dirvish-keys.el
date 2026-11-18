@@ -264,6 +264,7 @@
              ["Open in New Frame" strata-open-in-new-frame :enable ,has-items]
              "--"
              ["Copy" strata-copy-selection :enable ,has-items]
+             ["Copy Path" strata-copy-path :enable ,has-items]
              ["Cut" strata-cut-selection :enable ,(and has-items writable)]
              ["Paste (Keep Both)" strata-paste-keep-both
               :enable ,(and writable (plist-get strata-clipboard :files) t)]
@@ -288,7 +289,6 @@
                :enable ,(and writable (plist-get strata-clipboard :files) t)]
               ["New Folder with Selection…" strata-new-folder-with-selection
                :enable ,(and has-items writable)]
-              ["Copy Path" strata-copy-path :enable ,has-items]
               ["Copy Name" strata-copy-name :enable ,has-items]
               ["Save Clipboard Image/Text" strata-paste-content-drop :enable ,writable]
               ["Delete Permanently…" strata-delete-permanently :enable ,(and has-items writable)])
