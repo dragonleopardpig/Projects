@@ -297,6 +297,8 @@
       (set-window-buffer new buffer)
       (set-window-dedicated-p new t)
       (set-window-parameter new 'no-other-window t)
+      ;; Splits beside the browser (F3, C-x 3) take room from the panes only.
+      (window-preserve-size new t t)
       (enhanced-dirvish-windows--tag new g 'sidebar))
     (enhanced-dirvish-windows--reconcile)
     new))

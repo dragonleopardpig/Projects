@@ -430,12 +430,102 @@ Return non-nil if the sidebar was newly opened and rendered."
 
 ;;;; Split Extra Pane Controls (F3 / F6)
 
+(defun enhanced-dirvish-panes--extra-shown-p (tab)
+  "Return non-nil when split TAB's extra pane is on screen.
+A tab restored from tabs.eld, or one switched to, can be split while only
+its pane 1 is shown; F3 must then open the extra pane, not close it."
+  (let* ((p1 (enhanced-dirvish-tab-state-pane1 tab))
+         (p2 (enhanced-dirvish-tab-state-pane2 tab))
+         (w2 (and p2 (enhanced-dirvish-pane-state-window p2))))
+    (and (enhanced-dirvish-tab-state-split-p tab)
+         (window-live-p w2)
+         (eq (window-frame w2) (selected-frame))
+         (not (eq w2 (and p1 (enhanced-dirvish-pane-state-window p1))))
+         (enhanced-dirvish-panes--valid-main-window-p w2))))
+
+(defun enhanced-dirvish-panes--open-extra (tab &optional window)
+  "Show TAB's extra pane in WINDOW, or in a new window beside pane 1.
+Pane 1 is in the selected window.  A new window takes half of pane 1's
+width only: the split goes beside the whole browser, whose sidebar keeps
+its width.  Pane 2 opens at its own folder in the browser view mode and
+becomes the active pane.  Return its window."
+  (let* ((p2 (enhanced-dirvish-tab-state-pane2 tab))
+         (w2 (if (window-live-p window)
+                 window
+               (split-window-right
+                (- (max window-min-width (/ (window-total-width) 2)))))))
+    (set-window-parameter w2 'enhanced-dirvish-window-pane p2)
+    (setf (enhanced-dirvish-tab-state-split-p tab) t
+          (enhanced-dirvish-tab-state-active-pane tab) 2
+          (enhanced-dirvish-pane-state-window p2) w2)
+    (select-window w2)
+    (enhanced-dirvish-open-location (enhanced-dirvish-pane-state-dir p2))
+    w2))
+
+(defun enhanced-dirvish-panes--focus-pane (tab id)
+  "Select TAB's pane ID (falling back to pane 1) and make it active."
+  (let* ((p2 (and (eql id 2) (enhanced-dirvish-panes--extra-shown-p tab)
+                  (enhanced-dirvish-tab-state-pane2 tab)))
+         (pane (or p2 (enhanced-dirvish-tab-state-pane1 tab)))
+         (w (enhanced-dirvish-pane-state-window pane)))
+    (when (window-live-p w)
+      (select-window w))
+    (setf (enhanced-dirvish-tab-state-active-pane tab) (enhanced-dirvish-pane-state-id pane))
+    (force-mode-line-update t)
+    (enhanced-dirvish-sidebar-refresh)))
+
+(defun enhanced-dirvish-panes-restore-extra ()
+  "Show the active tab's extra pane when the tab is split but it is not shown.
+Used when the browser opens on a split tab restored from tabs.eld; focus
+stays on the pane the tab had active."
+  ;; `enhanced-dirvish-split-active-p' first: it never creates a tab.
+  (when-let ((tab (and (enhanced-dirvish-split-active-p) (enhanced-dirvish-active-tab))))
+    (unless (enhanced-dirvish-panes--extra-shown-p tab)
+      (let ((focus (enhanced-dirvish-tab-state-active-pane tab)))
+        (select-window (enhanced-dirvish-panes--main-window
+                        (enhanced-dirvish-tab-state-pane1 tab)))
+        (enhanced-dirvish-panes--open-extra tab)
+        (enhanced-dirvish-panes--focus-pane tab focus)))))
+
+(defun enhanced-dirvish-panes--show-active-tab (old)
+  "Show the active tab's panes in the windows tab OLD's panes had.
+Pane 1 takes OLD's pane 1 window.  A split tab's extra pane takes OLD's
+extra pane window, or a new one beside pane 1; an extra pane window the
+active tab has no use for closes.  Focus goes to the tab's active pane."
+  (let* ((tab (enhanced-dirvish-active-tab))
+         (p1 (or (enhanced-dirvish-tab-state-pane1 tab)
+                 (setf (enhanced-dirvish-tab-state-pane1 tab)
+                       (make-enhanced-dirvish-pane-state
+                        :id 1 :dir (enhanced-dirvish-tab-state-dir tab)))))
+         (focus (enhanced-dirvish-tab-state-active-pane tab))
+         (prev (or old tab))
+         (old-p1 (enhanced-dirvish-tab-state-pane1 prev))
+         (w2 (and (enhanced-dirvish-panes--extra-shown-p prev)
+                  (enhanced-dirvish-pane-state-window (enhanced-dirvish-tab-state-pane2 prev))))
+         (w1 (let ((w (and old-p1 (enhanced-dirvish-pane-state-window old-p1))))
+               (if (and (enhanced-dirvish-panes--valid-main-window-p w) (not (eq w w2)))
+                   w
+                 (enhanced-dirvish-panes--main-window p1)))))
+    (when (eq w1 w2) (setq w2 nil))
+    ;; Windows keep the pane they showed; hand them to this tab's panes.
+    (select-window w1)
+    (set-window-parameter w1 'enhanced-dirvish-window-pane p1)
+    (setf (enhanced-dirvish-tab-state-active-pane tab) 1
+          (enhanced-dirvish-pane-state-window p1) w1)
+    (enhanced-dirvish-open-location (enhanced-dirvish-pane-state-dir p1))
+    (cond
+     ((and (enhanced-dirvish-tab-state-split-p tab) (enhanced-dirvish-tab-state-pane2 tab))
+      (enhanced-dirvish-panes--open-extra tab w2))
+     ((and (window-live-p w2) (not (eq w2 (selected-window))))
+      (ignore-errors (delete-window w2))))
+    (enhanced-dirvish-panes--focus-pane tab focus)))
+
 (defun enhanced-dirvish-toggle-extra-pane ()
   "Toggle Nemo-style Extra Split Pane (`F3').
 Closing the extra pane while focused promotes its location & view into Pane 1."
   (interactive)
   (let ((tab (enhanced-dirvish-active-tab)))
-    (if (enhanced-dirvish-tab-state-split-p tab)
+    (if (enhanced-dirvish-panes--extra-shown-p tab)
         ;; Close split
         (let* ((was-p2 (= (enhanced-dirvish-tab-state-active-pane tab) 2))
                (p1 (enhanced-dirvish-tab-state-pane1 tab))
@@ -463,19 +553,11 @@ Closing the extra pane while focused promotes its location & view into Pane 1."
         (enhanced-dirvish--flatten-layout)
         (setf (enhanced-dirvish-pane-state-dir p1) cur-dir
               (enhanced-dirvish-pane-state-buffer p1) (current-buffer)
-              (enhanced-dirvish-pane-state-window p1) (selected-window))
-        (let ((w2 (split-window-right)))
-          (setf (enhanced-dirvish-tab-state-pane1 tab) p1
-                (enhanced-dirvish-tab-state-pane2 tab) p2
-                (enhanced-dirvish-tab-state-split-p tab) t
-                (enhanced-dirvish-tab-state-active-pane tab) 2
-                (enhanced-dirvish-pane-state-window p2) w2)
-          (select-window w2)
-          (let ((dired-listing-switches (enhanced-dirvish-compute-dired-switches)))
-            (dired (enhanced-dirvish-pane-state-dir p2)))
-          (setf (enhanced-dirvish-pane-state-buffer p2) (current-buffer)))
+              (enhanced-dirvish-pane-state-window p1) (selected-window)
+              (enhanced-dirvish-tab-state-pane1 tab) p1
+              (enhanced-dirvish-tab-state-pane2 tab) p2)
+        (enhanced-dirvish-panes--open-extra tab)
         (force-mode-line-update t)
-        (enhanced-dirvish-tabs-save)
         (message "Opened Extra Pane (F6 switches pane, C-S-c/C-S-x copies/moves across panes)")))))
 
 (defun enhanced-dirvish-switch-other-pane ()
@@ -657,10 +739,10 @@ Keeps shell process & CWD alive while hidden."
                :id (cl-incf enhanced-dirvish-next-tab-id)
                :label (file-name-nondirectory (directory-file-name d))
                :dir d :active-pane 1 :pane1 p1)))
-    (enhanced-dirvish-active-tab) ; ensure initialized
-    (setq enhanced-dirvish-workspace-tabs (append enhanced-dirvish-workspace-tabs (list tab))
-          enhanced-dirvish-active-tab-index (1- (length enhanced-dirvish-workspace-tabs)))
-    (enhanced-dirvish-open-location d)
+    (let ((old (enhanced-dirvish-active-tab))) ; also initializes the tab list
+      (setq enhanced-dirvish-workspace-tabs (append enhanced-dirvish-workspace-tabs (list tab))
+            enhanced-dirvish-active-tab-index (1- (length enhanced-dirvish-workspace-tabs)))
+      (enhanced-dirvish-panes--show-active-tab old))
     (message "Tab %d/%d: %s" (1+ enhanced-dirvish-active-tab-index) (length enhanced-dirvish-workspace-tabs)
              (enhanced-dirvish-tab-state-label tab))))
 
@@ -677,25 +759,27 @@ Keeps shell process & CWD alive while hidden."
             (cl-remove closing enhanced-dirvish-workspace-tabs :test #'eq)
             enhanced-dirvish-active-tab-index
             (max 0 (min enhanced-dirvish-active-tab-index (1- (length enhanced-dirvish-workspace-tabs)))))
-      (enhanced-dirvish-open-location (enhanced-dirvish-tab-state-dir (enhanced-dirvish-active-tab))))))
+      (enhanced-dirvish-panes--show-active-tab closing))))
 
 (defun enhanced-dirvish-tab-reopen-closed ()
   "Reopen most recently closed Enhanced Dirvish tab (`C-S-t')."
   (interactive)
   (if (null enhanced-dirvish-closed-tabs)
       (message "No closed tabs to reopen")
-    (let ((tab (pop enhanced-dirvish-closed-tabs)))
+    (let ((tab (pop enhanced-dirvish-closed-tabs))
+          (old (enhanced-dirvish-active-tab)))
       (setq enhanced-dirvish-workspace-tabs (append enhanced-dirvish-workspace-tabs (list tab))
             enhanced-dirvish-active-tab-index (1- (length enhanced-dirvish-workspace-tabs)))
-      (enhanced-dirvish-open-location (enhanced-dirvish-tab-state-dir tab)))))
+      (enhanced-dirvish-panes--show-active-tab old))))
 
 (defun enhanced-dirvish-tab-switch-index (n)
   "Switch to 1-based Enhanced Dirvish tab number N."
   (interactive "p")
   (when enhanced-dirvish-workspace-tabs
-    (let ((idx (max 0 (min (1- n) (1- (length enhanced-dirvish-workspace-tabs))))))
+    (let ((idx (max 0 (min (1- n) (1- (length enhanced-dirvish-workspace-tabs)))))
+          (old (enhanced-dirvish-active-tab)))
       (setq enhanced-dirvish-active-tab-index idx)
-      (enhanced-dirvish-open-location (enhanced-dirvish-tab-state-dir (enhanced-dirvish-active-tab)))
+      (enhanced-dirvish-panes--show-active-tab old)
       (message "Tab %d/%d: %s" (1+ idx) (length enhanced-dirvish-workspace-tabs)
                (enhanced-dirvish-tab-state-label (enhanced-dirvish-active-tab))))))
 
@@ -703,17 +787,19 @@ Keeps shell process & CWD alive while hidden."
   "Cycle to next Enhanced Dirvish workspace tab."
   (interactive)
   (when (> (length enhanced-dirvish-workspace-tabs) 1)
-    (setq enhanced-dirvish-active-tab-index
-          (mod (1+ enhanced-dirvish-active-tab-index) (length enhanced-dirvish-workspace-tabs)))
-    (enhanced-dirvish-open-location (enhanced-dirvish-tab-state-dir (enhanced-dirvish-active-tab)))))
+    (let ((old (enhanced-dirvish-active-tab)))
+      (setq enhanced-dirvish-active-tab-index
+            (mod (1+ enhanced-dirvish-active-tab-index) (length enhanced-dirvish-workspace-tabs)))
+      (enhanced-dirvish-panes--show-active-tab old))))
 
 (defun enhanced-dirvish-tab-previous ()
   "Cycle to previous Enhanced Dirvish workspace tab."
   (interactive)
   (when (> (length enhanced-dirvish-workspace-tabs) 1)
-    (setq enhanced-dirvish-active-tab-index
-          (mod (1- enhanced-dirvish-active-tab-index) (length enhanced-dirvish-workspace-tabs)))
-    (enhanced-dirvish-open-location (enhanced-dirvish-tab-state-dir (enhanced-dirvish-active-tab)))))
+    (let ((old (enhanced-dirvish-active-tab)))
+      (setq enhanced-dirvish-active-tab-index
+            (mod (1- enhanced-dirvish-active-tab-index) (length enhanced-dirvish-workspace-tabs)))
+      (enhanced-dirvish-panes--show-active-tab old))))
 
 (defun enhanced-dirvish-tab-move (delta)
   "Move current tab by DELTA (-1 left, +1 right) and persist order."

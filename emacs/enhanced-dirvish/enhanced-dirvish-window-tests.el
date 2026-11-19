@@ -60,6 +60,41 @@
   (sort (mapcar (lambda (w) (window-parameter w 'enhanced-dirvish-window-role))
                 (enhanced-dirvish-windows--owned group)) #'string<))
 
+(ert-deftest enhanced-dirvish-test-window-f3-keeps-sidebar-width ()
+  "F3 halves pane 1 only; the sidebar on the left keeps its width.
+The user's report: opening the split pane resized the leftmost pane, the
+sidebar (28 -> 14 columns), because the split halved the whole browser."
+  (dolist (mode '(compact list columns))
+    (enhanced-dirvish-window-test--with-browser mode
+      (ignore main group pane)
+      (let* ((sidebar enhanced-dirvish-sidebar-window)
+             (sidebar-width (window-total-width sidebar))
+             (tab (enhanced-dirvish-active-tab)))
+        (should (window-live-p sidebar))
+        (should (eq (key-binding (kbd "<f3>")) #'enhanced-dirvish-toggle-extra-pane))
+        (call-interactively (key-binding (kbd "<f3>")))
+        (let ((w1 (enhanced-dirvish-pane-state-window (enhanced-dirvish-tab-state-pane1 tab)))
+              (w2 (enhanced-dirvish-pane-state-window (enhanced-dirvish-tab-state-pane2 tab))))
+          (should (enhanced-dirvish-panes--extra-shown-p tab))
+          (should (= (window-total-width sidebar) sidebar-width))
+          (should (<= (abs (- (window-total-width w1) (window-total-width w2))) 1))
+          (should (= (+ sidebar-width (window-total-width w1) (window-total-width w2))
+                     (window-total-width (frame-root-window))))
+          ;; Pane 2 opens in the browser view, not always as a Dired list.
+          (should (eq (buffer-local-value 'major-mode (window-buffer w2))
+                      (if (eq mode 'compact) 'enhanced-dirvish-compact-mode 'dired-mode)))
+          (select-window w1)
+          (enhanced-dirvish-panes--on-window-selection-change)
+          (call-interactively (key-binding (kbd "<f3>")))
+          (should-not (window-live-p w2))
+          (should (= (window-total-width sidebar) sidebar-width))
+          (should (= (+ sidebar-width (window-total-width w1))
+                     (window-total-width (frame-root-window))))
+          ;; A standard split beside the browser leaves the sidebar alone too.
+          (let ((other (split-window-right)))
+            (should (= (window-total-width sidebar) sidebar-width))
+            (delete-window other)))))))
+
 (ert-deftest enhanced-dirvish-test-window-standard-splits-contain-columns ()
   "C-x 2/3 leave all browser windows together and preserve navigation."
   (enhanced-dirvish-window-test--with-browser 'columns

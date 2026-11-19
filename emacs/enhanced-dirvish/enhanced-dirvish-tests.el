@@ -1724,6 +1724,106 @@
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory enhanced-dirvish-state-dir t)))))
 
+(defvar dashboard-navigator-buttons)
+
+(ert-deftest enhanced-dirvish-test-saved-split-comes-back-and-f3-closes-it ()
+  "A tab saved split opens split, so the first F3 closes it.
+The user's steps: a fresh Emacs, the dashboard's Dirvish button, F3.  F3
+said \"Closed split pane\" with one pane on screen and had to be pressed
+again.  Switching tabs shows each tab's own split the same way."
+  (let* ((tmp (make-temp-file "enhanced-dirvish-split-restore-" t))
+         (one (expand-file-name "one" tmp))
+         (two (expand-file-name "two" tmp))
+         (three (expand-file-name "three" tmp))
+         (enhanced-dirvish-state-dir (make-temp-file "enhanced-dirvish-split-st-" t))
+         (enhanced-dirvish-state-file (expand-file-name "prefs.eld" enhanced-dirvish-state-dir))
+         (enhanced-dirvish-tabs-state-file (expand-file-name "tabs.eld" enhanced-dirvish-state-dir))
+         (enhanced-dirvish-history-file (expand-file-name "history.eld" enhanced-dirvish-state-dir))
+         (enhanced-dirvish-sidebar-window nil)
+         (dashboard-navigator-buttons nil)
+         (override dirvish-override-dired-mode)
+         (width (frame-width)) (height (frame-height))
+         (said nil)
+         (shown (lambda ()
+                  (mapcar (lambda (w)
+                            (with-current-buffer (window-buffer w)
+                              (directory-file-name
+                               (or enhanced-dirvish-view-directory default-directory))))
+                          (cl-remove-if-not #'enhanced-dirvish-panes--valid-main-window-p
+                                            (window-list nil 'nomini (frame-first-window))))))
+         (press (lambda (key)
+                  (cl-letf (((symbol-function 'message)
+                             (lambda (fmt &rest args)
+                               (when fmt (push (apply #'format fmt args) said)))))
+                    (call-interactively (key-binding (kbd key)))))))
+    (dolist (d (list one two three))
+      (make-directory d t))
+    (unwind-protect
+        (dolist (mode '(compact list))
+          (let ((enhanced-dirvish-prefs-current
+                 (enhanced-dirvish-prefs--create :browser-mode mode :restore-tabs t
+                                                 :sidebar-expanded t))
+                (enhanced-dirvish-workspace-tabs nil)
+                (enhanced-dirvish-closed-tabs nil)
+                (enhanced-dirvish-active-tab-index 0))
+            (with-temp-file enhanced-dirvish-tabs-state-file
+              (prin1 (list :active 0 :tabs (list (list :dir one :split-p t :pane2-dir two)
+                                                 (list :dir three :split-p nil)))
+                     (current-buffer)))
+            (save-window-excursion
+              (let ((ignore-window-parameters t))
+                (enhanced-dirvish-windows--unatom (frame-root-window))
+                (delete-other-windows))
+              (set-frame-size (selected-frame) 200 65)
+              (dirvish-override-dired-mode 1)
+              (enhanced-dirvish-setup)
+              (enhanced-dirvish-dashboard-install)
+              (switch-to-buffer (get-buffer-create "*dashboard*"))
+              (let ((button (cl-find "Dirvish" (car dashboard-navigator-buttons)
+                                     :key #'cadr :test #'equal)))
+                (should button)
+                (funcall (nth 3 button)))
+              (let ((tab (enhanced-dirvish-active-tab)))
+                (should (equal (funcall shown) (list one two)))
+                (should (= (enhanced-dirvish-tab-state-active-pane tab) 1))
+                (should (eq (selected-window)
+                            (enhanced-dirvish-pane-state-window
+                             (enhanced-dirvish-tab-state-pane1 tab)))))
+              (funcall press "<f3>")
+              (should (equal (car said) "Closed split pane"))
+              (should (equal (funcall shown) (list one)))
+              (funcall press "<f3>")
+              (should (string-prefix-p "Opened Extra Pane" (car said)))
+              (should (equal (funcall shown) (list one two)))
+              ;; Each tab shows its own split.
+              (enhanced-dirvish-tab-next)
+              (should (equal (funcall shown) (list three)))
+              (enhanced-dirvish-tab-previous)
+              (should (equal (funcall shown) (list one two)))
+              (should (= (enhanced-dirvish-tab-state-active-pane (enhanced-dirvish-active-tab)) 2))
+              (enhanced-dirvish-tab-new one)
+              (should (equal (funcall shown) (list one)))
+              (enhanced-dirvish-tab-close)
+              (should (equal (funcall shown) (list three)))
+              (enhanced-dirvish-tab-switch-index 1)
+              (should (equal (funcall shown) (list one two)))
+              (funcall press "<f3>")
+              (should (equal (car said) "Closed split pane")))))
+      (dirvish-override-dired-mode (if override 1 -1))
+      (set-frame-size (selected-frame) width height)
+      (when-let ((sb (get-buffer "*Enhanced Dirvish Sidebar*")))
+        (kill-buffer sb))
+      (dolist (b (buffer-list))
+        (when (buffer-live-p b)
+          (with-current-buffer b
+            (when (or (equal (buffer-name b) "*dashboard*")
+                      (and default-directory
+                           (string-prefix-p (file-truename tmp)
+                                            (file-truename default-directory))))
+              (kill-buffer b)))))
+      (ignore-errors (delete-directory tmp t))
+      (ignore-errors (delete-directory enhanced-dirvish-state-dir t)))))
+
 (ert-deftest enhanced-dirvish-test-split-panes-same-named-folders-stay-apart ()
   "Entering a folder in one split pane never moves the other pane.
 The user's steps: F3, both panes in an unzipped B90120A-1/, then Enter on
