@@ -1726,11 +1726,13 @@
 
 (defvar dashboard-navigator-buttons)
 
-(ert-deftest enhanced-dirvish-test-saved-split-comes-back-and-f3-closes-it ()
-  "A tab saved split opens split, so the first F3 closes it.
-The user's steps: a fresh Emacs, the dashboard's Dirvish button, F3.  F3
-said \"Closed split pane\" with one pane on screen and had to be pressed
-again.  Switching tabs shows each tab's own split the same way."
+(ert-deftest enhanced-dirvish-test-launch-starts-with-one-pane-and-f3-opens-split ()
+  "The browser always starts with one pane, so the first F3 opens the split.
+The user's steps: a fresh Emacs, the dashboard's Dirvish button, F3.  A tab
+saved split was restored as split with one pane on screen, so F3 said
+\"Closed split pane\" and had to be pressed again.  The user chose to
+always start with one pane; F3 reopens pane 2 where it was.  Switching
+tabs shows each tab's own split."
   (let* ((tmp (make-temp-file "enhanced-dirvish-split-restore-" t))
          (one (expand-file-name "one" tmp))
          (two (expand-file-name "two" tmp))
@@ -1784,16 +1786,21 @@ again.  Switching tabs shows each tab's own split the same way."
                 (should button)
                 (funcall (nth 3 button)))
               (let ((tab (enhanced-dirvish-active-tab)))
-                (should (equal (funcall shown) (list one two)))
-                (should (= (enhanced-dirvish-tab-state-active-pane tab) 1))
+                (should (equal (funcall shown) (list one)))
+                (should-not (enhanced-dirvish-split-active-p))
                 (should (eq (selected-window)
                             (enhanced-dirvish-pane-state-window
                              (enhanced-dirvish-tab-state-pane1 tab)))))
               (funcall press "<f3>")
+              (should (string-prefix-p "Opened Extra Pane" (car said)))
+              (should (equal (funcall shown) (list one two)))
+              ;; F6 back to pane 1: closing from pane 2 keeps pane 2's folder.
+              (should (eq (key-binding (kbd "<f6>")) #'enhanced-dirvish-switch-other-pane))
+              (funcall press "<f6>")
+              (funcall press "<f3>")
               (should (equal (car said) "Closed split pane"))
               (should (equal (funcall shown) (list one)))
               (funcall press "<f3>")
-              (should (string-prefix-p "Opened Extra Pane" (car said)))
               (should (equal (funcall shown) (list one two)))
               ;; Each tab shows its own split.
               (enhanced-dirvish-tab-next)

@@ -73,9 +73,7 @@ Always falls back to `~/' when the target or saved directory does not exist."
                      (from-dash tab-dir)
                      (t default-directory)))
          (target (if (enhanced-dirvish-valid-location-p candidate) candidate home)))
-    (enhanced-dirvish-open-location target t)
-    ;; A tab saved split comes back split, so the first F3 closes it.
-    (enhanced-dirvish-panes-restore-extra)))
+    (enhanced-dirvish-open-location target t)))
 
 (defun enhanced-dirvish-launch-computer ()
   "Open Enhanced Dirvish `computer:///' virtual view."

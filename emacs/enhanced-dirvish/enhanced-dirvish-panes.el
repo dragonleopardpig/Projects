@@ -432,8 +432,8 @@ Return non-nil if the sidebar was newly opened and rendered."
 
 (defun enhanced-dirvish-panes--extra-shown-p (tab)
   "Return non-nil when split TAB's extra pane is on screen.
-A tab restored from tabs.eld, or one switched to, can be split while only
-its pane 1 is shown; F3 must then open the extra pane, not close it."
+A split tab can have only pane 1 shown, for example after its extra
+pane's window was deleted; F3 must then open the extra pane, not close it."
   (let* ((p1 (enhanced-dirvish-tab-state-pane1 tab))
          (p2 (enhanced-dirvish-tab-state-pane2 tab))
          (w2 (and p2 (enhanced-dirvish-pane-state-window p2))))
@@ -473,19 +473,6 @@ becomes the active pane.  Return its window."
     (setf (enhanced-dirvish-tab-state-active-pane tab) (enhanced-dirvish-pane-state-id pane))
     (force-mode-line-update t)
     (enhanced-dirvish-sidebar-refresh)))
-
-(defun enhanced-dirvish-panes-restore-extra ()
-  "Show the active tab's extra pane when the tab is split but it is not shown.
-Used when the browser opens on a split tab restored from tabs.eld; focus
-stays on the pane the tab had active."
-  ;; `enhanced-dirvish-split-active-p' first: it never creates a tab.
-  (when-let ((tab (and (enhanced-dirvish-split-active-p) (enhanced-dirvish-active-tab))))
-    (unless (enhanced-dirvish-panes--extra-shown-p tab)
-      (let ((focus (enhanced-dirvish-tab-state-active-pane tab)))
-        (select-window (enhanced-dirvish-panes--main-window
-                        (enhanced-dirvish-tab-state-pane1 tab)))
-        (enhanced-dirvish-panes--open-extra tab)
-        (enhanced-dirvish-panes--focus-pane tab focus)))))
 
 (defun enhanced-dirvish-panes--show-active-tab (old)
   "Show the active tab's panes in the windows tab OLD's panes had.
@@ -716,7 +703,9 @@ Keeps shell process & CWD alive while hidden."
                              :label (let ((nm (file-name-nondirectory (directory-file-name d))))
                                       (if (string-empty-p nm) "/" nm))
                              :dir d
-                             :split-p (and has-split t)
+                             ;; The browser always starts with one pane (user
+                             ;; choice); F3 reopens pane 2 where it was.
+                             :split-p nil
                              :active-pane 1
                              :pane1 (make-enhanced-dirvish-pane-state :id 1 :dir d)
                              :pane2 (when has-split
