@@ -1,14 +1,14 @@
 # Root filesystem layouts for CRUCIAL-SSD.
 #
-#   ext4  -- today's disk: ext4 inside LUKS, everything persists.
-#   btrfs -- after MIGRATE.md: btrfs subvolumes inside the SAME LUKS container,
-#            / wiped on every boot (modules/impermanence.nix), dev artifacts
-#            cleaned, dependency environments (.devenv/.venv/node_modules) kept.
+#   btrfs -- the disk since 2026-11-20 (MIGRATE.md): btrfs subvolumes inside
+#            the LUKS container, / wiped on every boot (modules/impermanence.nix),
+#            dev artifacts cleaned, dependency environments
+#            (.devenv/.venv/node_modules) kept.
+#   ext4  -- the layout before it: ext4 inside LUKS, everything persists.  Only
+#            for a rollback (MIGRATE.md) until the staging image is released.
 #
-# The live host stays on "ext4" until the disk is migrated; the flake output
-# CRUCIAL-SSD-btrfs builds the "btrfs" system for the migration.  If the two
-# ever disagree with the running disk, the impermanence pre-switch check
-# refuses the switch.
+# If this setting ever disagrees with the running disk, the impermanence
+# pre-switch check refuses the switch.
 #
 # No disko here on purpose: this disk also holds CRUCIALDATA (sda3) and the
 # WinApps partition (sda4); a disko spec run by mistake would erase them.
@@ -25,7 +25,7 @@ in
 {
   options.custom.crucialLayout = lib.mkOption {
     type = lib.types.enum [ "ext4" "btrfs" ];
-    default = "ext4";
+    default = "btrfs";
     description = "Root filesystem layout of the CRUCIAL-SSD disk (see hosts/Crucial-SSD/MIGRATE.md).";
   };
 

@@ -661,13 +661,6 @@
       nixosConfigurations.CRUCIAL-SSD = mkSystem ./hosts/Crucial-SSD;
       # Compatibility with existing commands using the original flake name.
       nixosConfigurations.Crucial-SSD = mkSystem ./hosts/Crucial-SSD;
-      # The same host on its migrated disk (btrfs, root wiped on boot).  Built
-      # for hosts/Crucial-SSD/MIGRATE.md; once migrated, layouts.nix defaults
-      # to "btrfs" and this output becomes identical to CRUCIAL-SSD.
-      nixosConfigurations.CRUCIAL-SSD-btrfs = mkSystem {
-        imports = [ ./hosts/Crucial-SSD ];
-        custom.crucialLayout = "btrfs";
-      };
 
       # M90aPro Laptop Configuration
       nixosConfigurations.M90aPro = mkSystem ./hosts/M90aPro;

@@ -1,5 +1,9 @@
 # CRUCIAL-SSD: ext4 → impermanent btrfs
 
+**Done 2026-11-20**: CRUCIAL-SSD runs the btrfs layout; `layouts.nix` defaults
+to `"btrfs"` and the temporary `CRUCIAL-SSD-btrfs` flake output is gone (so
+`prepare` no longer applies).  Left: B6 after a week of good boots.
+
 One-time move of this host to the layout PortableSSD already uses: `/` wiped on
 every boot, regenerable dev artifacts cleaned, everything else kept.  The tool
 is `crucial-btrfs-migrate` (`scripts/crucial-btrfs-migrate.sh`, installed on
@@ -108,8 +112,9 @@ From PortableSSD:
 sudo crucial-btrfs-migrate rollback        # writes the ext4 image back
 ```
 
-Then boot CRUCIAL-SSD and pick the **previous** generation in the GRUB menu
-(the newest one is the btrfs system), and run
+Then boot CRUCIAL-SSD and pick the newest generation that is **older than
+2026-11-20** in the GRUB menu (the ext4 system).  Set
+`default = "ext4";` in `hosts/Crucial-SSD/layouts.nix`, commit, and run
 `sudo nixos-rebuild boot --flake ~/Projects/NixOS#CRUCIAL-SSD --impure`
 to make the ext4 system the default again.
 
