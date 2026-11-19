@@ -1,51 +1,51 @@
-;;; strata-dirvish-prefs.el --- Preferences, TOML sync, and Noctalia theming -*- lexical-binding: t; -*-
+;;; enhanced-dirvish-prefs.el --- Preferences, TOML sync, and Noctalia theming -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Core state, preferences, formatting helpers, and theme-reactive faces for
-;; Strata-flavored Dirvish inside Emacs.  Settings interoperate cleanly with
-;; ~/.config/strata/settings.toml and persist Emacs overrides in
-;; `strata-dirvish-state-file'.
+;; Enhanced Dirvish inside Emacs.  Defaults may be seeded from
+;; ~/.config/enhanced-dirvish/settings.toml; Emacs overrides persist in
+;; `enhanced-dirvish-state-file'.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'strata-dirvish-ui)
+(require 'enhanced-dirvish-ui)
 
-(defgroup strata-dirvish nil
-  "Strata file manager features blended into Dirvish."
+(defgroup enhanced-dirvish nil
+  "A full file manager built on Dirvish."
   :group 'dirvish
-  :prefix "strata-dirvish-")
+  :prefix "enhanced-dirvish-")
 
-(defcustom strata-dirvish-config-dir
-  (expand-file-name "strata" (or (getenv "XDG_CONFIG_HOME") "~/.config"))
-  "XDG directory containing Strata TOML configuration files."
+(defcustom enhanced-dirvish-config-dir
+  (expand-file-name "enhanced-dirvish" (or (getenv "XDG_CONFIG_HOME") "~/.config"))
+  "XDG directory holding the TOML configuration (settings.toml, actions/)."
   :type 'directory
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defcustom strata-dirvish-state-dir
-  (expand-file-name "dirvish/strata/" user-emacs-directory)
-  "Emacs state directory for Strata-Dirvish persistent data."
+(defcustom enhanced-dirvish-state-dir
+  (expand-file-name "dirvish/enhanced-dirvish/" user-emacs-directory)
+  "Emacs state directory for Enhanced Dirvish persistent data."
   :type 'directory
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defcustom strata-dirvish-state-file
-  (expand-file-name "prefs.eld" strata-dirvish-state-dir)
-  "Persistent Emacs override file for `strata-dirvish'."
+(defcustom enhanced-dirvish-state-file
+  (expand-file-name "prefs.eld" enhanced-dirvish-state-dir)
+  "Persistent Emacs override file for `enhanced-dirvish'."
   :type 'file
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defcustom strata-dirvish-desktop-cua-clipboard nil
+(defcustom enhanced-dirvish-desktop-cua-clipboard nil
   "When non-nil in Default mode, bind `C-c', `C-x', and `C-v' directly.
 Left nil by default so Emacs prefix keys (`C-x' and `C-c') keep working
 everywhere; copy/cut/paste remain bound cleanly to `C-c c', `C-c x', `C-c v',
 `M-w', `C-w', and in 10xer mode to `y', `x', `p'."
   :type 'boolean
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
 ;;;; Preferences Struct & Defaults
 
-(cl-defstruct (strata-prefs (:constructor strata-prefs--create))
+(cl-defstruct (enhanced-dirvish-prefs (:constructor enhanced-dirvish-prefs--create))
   (browser-mode 'columns)          ; columns | icons | list | compact
   (expandable-tree t)              ; expandable folders in list view
   (tenxer-mode nil)                ; Yazi/Vim modal file management
@@ -121,17 +121,17 @@ everywhere; copy/cut/paste remain bound cleanly to `C-c c', `C-c x', `C-c v',
   (send-to-recent-destinations nil) ; alist ((SRC-KEY . (DEST1 DEST2 ...)) ...)
   (marks nil))                     ; alist ((?a . PATH) ...)
 
-(defvar strata-prefs-current nil
-  "Active `strata-prefs' instance for Strata-Dirvish.")
+(defvar enhanced-dirvish-prefs-current nil
+  "Active `enhanced-dirvish-prefs' instance for Enhanced Dirvish.")
 
-(defvar strata-folder-view-lru nil
+(defvar enhanced-dirvish-folder-view-lru nil
   "LRU alist of per-folder view/sort state, capped at 128 entries.")
 
-(defconst strata-folder-view-lru-limit 128)
+(defconst enhanced-dirvish-folder-view-lru-limit 128)
 
-;;;; Lightweight TOML Subset Parser for ~/.config/strata/*.toml
+;;;; Lightweight TOML Subset Parser for ~/.config/enhanced-dirvish/*.toml
 
-(defun strata-toml--unquote (raw)
+(defun enhanced-dirvish-toml--unquote (raw)
   "Trim whitespace and unquote TOML literal RAW."
   (let ((s (string-trim raw)))
     (cond
@@ -145,7 +145,7 @@ everywhere; copy/cut/paste remain bound cleanly to `C-c c', `C-c x', `C-c v',
       (substring s 1 -1))
      (t s))))
 
-(defun strata-toml--strip-comment (line)
+(defun enhanced-dirvish-toml--strip-comment (line)
   "Strip unquoted # comment from TOML LINE."
   (let ((in-dq nil)
         (in-sq nil)
@@ -164,7 +164,7 @@ everywhere; copy/cut/paste remain bound cleanly to `C-c c', `C-c x', `C-c v',
       (setq i (1+ i)))
     (if cut (substring line 0 cut) line)))
 
-(defun strata-toml--parse-array (raw)
+(defun enhanced-dirvish-toml--parse-array (raw)
   "Parse a simple single-line TOML string array RAW into a list of strings."
   (let* ((inner (string-trim raw))
          (inner (if (and (string-prefix-p "[" inner) (string-suffix-p "]" inner))
@@ -172,21 +172,21 @@ everywhere; copy/cut/paste remain bound cleanly to `C-c c', `C-c x', `C-c v',
                   inner)))
     (if (string-empty-p (string-trim inner))
         nil
-      (mapcar #'strata-toml--unquote
+      (mapcar #'enhanced-dirvish-toml--unquote
               (split-string inner "," t "[ \t\n\r]+")))))
 
-(defun strata-toml--parse-value (raw)
+(defun enhanced-dirvish-toml--parse-value (raw)
   "Parse scalar or simple array value RAW from TOML."
   (let ((s (string-trim raw)))
     (cond
      ((string= s "true") t)
      ((string= s "false") :false)
-     ((string-prefix-p "[" s) (strata-toml--parse-array s))
+     ((string-prefix-p "[" s) (enhanced-dirvish-toml--parse-array s))
      ((string-match-p "\\`-?[0-9]+\\'" s) (string-to-number s))
      ((string-match-p "\\`-?[0-9]+\\.[0-9]+\\'" s) (string-to-number s))
-     (t (strata-toml--unquote s)))))
+     (t (enhanced-dirvish-toml--unquote s)))))
 
-(defun strata-toml-parse-file (file)
+(defun enhanced-dirvish-toml-parse-file (file)
   "Parse key/value pairs and [section] tables from TOML FILE.
 Returns an alist mapping section string (\"\" for root) to an alist of
 \(KEY . VALUE)."
@@ -197,7 +197,7 @@ Returns an alist mapping section string (\"\" for root) to an alist of
             (result nil)
             (lines (split-string (buffer-string) "\n")))
         (while lines
-          (let* ((raw (strata-toml--strip-comment (car lines)))
+          (let* ((raw (enhanced-dirvish-toml--strip-comment (car lines)))
                  (line (string-trim raw)))
             (setq lines (cdr lines))
             (cond
@@ -205,33 +205,33 @@ Returns an alist mapping section string (\"\" for root) to an alist of
              ((string-match "\\`\\[\\[?\\([^]]+\\)\\]\\]?\\'" line)
               (setq section (match-string 1 line)))
              ((string-match "\\`\\([^=]+\\)=\\(.*\\)\\'" line)
-              (let ((k (strata-toml--unquote (match-string 1 line)))
+              (let ((k (enhanced-dirvish-toml--unquote (match-string 1 line)))
                     (v (string-trim (match-string 2 line))))
                 ;; Join multi-line arrays when needed
                 (while (and (string-prefix-p "[" v)
                             (not (string-suffix-p "]" v))
                             lines)
-                  (setq v (concat v " " (string-trim (strata-toml--strip-comment (car lines)))))
+                  (setq v (concat v " " (string-trim (enhanced-dirvish-toml--strip-comment (car lines)))))
                   (setq lines (cdr lines)))
                 (let* ((sec-cell (or (assoc section result)
                                      (car (push (cons section nil) result))))
-                       (parsed (strata-toml--parse-value v)))
+                       (parsed (enhanced-dirvish-toml--parse-value v)))
                   (setf (cdr sec-cell)
                         (cons (cons k parsed)
                               (assoc-delete-all k (cdr sec-cell))))))))))
         (nreverse result)))))
 
-(defun strata-toml--bool (val default)
+(defun enhanced-dirvish-toml--bool (val default)
   "Convert parsed TOML value VAL to Elisp boolean with DEFAULT fallback."
   (cond ((eq val t) t)
         ((eq val :false) nil)
         (t default)))
 
-(defun strata-prefs-import-strata-toml (&optional prefs)
-  "Seed PREFS from existing ~/.config/strata/settings.toml if present."
-  (let* ((p (or prefs (strata-prefs--create)))
-         (toml-file (expand-file-name "settings.toml" strata-dirvish-config-dir))
-         (parsed (strata-toml-parse-file toml-file))
+(defun enhanced-dirvish-prefs-import-enhanced-dirvish-toml (&optional prefs)
+  "Seed PREFS from existing ~/.config/enhanced-dirvish/settings.toml if present."
+  (let* ((p (or prefs (enhanced-dirvish-prefs--create)))
+         (toml-file (expand-file-name "settings.toml" enhanced-dirvish-config-dir))
+         (parsed (enhanced-dirvish-toml-parse-file toml-file))
          (root (cdr (assoc "" parsed))))
     (when root
       (cl-labels ((getk (k) (cdr (assoc k root)))
@@ -240,115 +240,115 @@ Returns an alist mapping section string (\"\" for root) to an alist of
                       (if (and (stringp v) (not (string-empty-p v)))
                           (intern (downcase v))
                         def))))
-        (setf (strata-prefs-browser-mode p) (symk "browser_mode" (strata-prefs-browser-mode p)))
-        (setf (strata-prefs-expandable-tree p)
-              (strata-toml--bool (getk "expandable_folders_in_list")
-                                 (strata-prefs-expandable-tree p)))
-        (setf (strata-prefs-tenxer-mode p)
-              (strata-toml--bool (getk "tenxer_mode") (strata-prefs-tenxer-mode p)))
-        (setf (strata-prefs-type-to-search p)
-              (strata-toml--bool (getk "type_to_search") (strata-prefs-type-to-search p)))
-        (setf (strata-prefs-arrow-navigation-scoped p)
-              (strata-toml--bool (getk "arrow_navigation_scoped")
-                                 (strata-prefs-arrow-navigation-scoped p)))
-        (setf (strata-prefs-show-keybinding-hints p)
-              (strata-toml--bool (getk "show_keybinding_hints")
-                                 (strata-prefs-show-keybinding-hints p)))
-        (setf (strata-prefs-reduce-motion p)
-              (strata-toml--bool (getk "reduce_motion") (strata-prefs-reduce-motion p)))
-        (setf (strata-prefs-sort-key p) (symk "sort_key" (strata-prefs-sort-key p)))
+        (setf (enhanced-dirvish-prefs-browser-mode p) (symk "browser_mode" (enhanced-dirvish-prefs-browser-mode p)))
+        (setf (enhanced-dirvish-prefs-expandable-tree p)
+              (enhanced-dirvish-toml--bool (getk "expandable_folders_in_list")
+                                 (enhanced-dirvish-prefs-expandable-tree p)))
+        (setf (enhanced-dirvish-prefs-tenxer-mode p)
+              (enhanced-dirvish-toml--bool (getk "tenxer_mode") (enhanced-dirvish-prefs-tenxer-mode p)))
+        (setf (enhanced-dirvish-prefs-type-to-search p)
+              (enhanced-dirvish-toml--bool (getk "type_to_search") (enhanced-dirvish-prefs-type-to-search p)))
+        (setf (enhanced-dirvish-prefs-arrow-navigation-scoped p)
+              (enhanced-dirvish-toml--bool (getk "arrow_navigation_scoped")
+                                 (enhanced-dirvish-prefs-arrow-navigation-scoped p)))
+        (setf (enhanced-dirvish-prefs-show-keybinding-hints p)
+              (enhanced-dirvish-toml--bool (getk "show_keybinding_hints")
+                                 (enhanced-dirvish-prefs-show-keybinding-hints p)))
+        (setf (enhanced-dirvish-prefs-reduce-motion p)
+              (enhanced-dirvish-toml--bool (getk "reduce_motion") (enhanced-dirvish-prefs-reduce-motion p)))
+        (setf (enhanced-dirvish-prefs-sort-key p) (symk "sort_key" (enhanced-dirvish-prefs-sort-key p)))
         (let ((dir (getk "sort_direction")))
           (when (stringp dir)
-            (setf (strata-prefs-sort-direction p)
+            (setf (enhanced-dirvish-prefs-sort-direction p)
                   (if (string-prefix-p "desc" (downcase dir)) 'desc 'asc))))
-        (setf (strata-prefs-folders-first p)
-              (strata-toml--bool (getk "folders_first") (strata-prefs-folders-first p)))
-        (setf (strata-prefs-natural-sort p)
-              (strata-toml--bool (getk "natural_sort") (strata-prefs-natural-sort p)))
-        (setf (strata-prefs-case-sensitive-sort p)
-              (strata-toml--bool (getk "case_sensitive_sort")
-                                 (strata-prefs-case-sensitive-sort p)))
-        (setf (strata-prefs-group-by-type p)
-              (strata-toml--bool (getk "group_by_type") (strata-prefs-group-by-type p)))
-        (setf (strata-prefs-show-hidden p)
-              (strata-toml--bool (getk "show_hidden") (strata-prefs-show-hidden p)))
-        (setf (strata-prefs-date-format p) (symk "date_format" (strata-prefs-date-format p)))
-        (setf (strata-prefs-unit-system p) (symk "unit_system" (strata-prefs-unit-system p)))
-        (setf (strata-prefs-compact-full-names p)
-              (strata-toml--bool (getk "compact_full_names")
-                                 (strata-prefs-compact-full-names p)))
-        (setf (strata-prefs-columns-mirror-selection p)
-              (strata-toml--bool (getk "columns_mirror_selection")
-                                 (strata-prefs-columns-mirror-selection p)))
-        (setf (strata-prefs-columns-show-sizes p)
-              (strata-toml--bool (getk "columns_show_sizes")
-                                 (strata-prefs-columns-show-sizes p)))
-        (setf (strata-prefs-render-documents-by-default p)
-              (strata-toml--bool (getk "render_documents_by_default")
-                                 (strata-prefs-render-documents-by-default p)))
-        (setf (strata-prefs-preview-text-wrap p)
-              (strata-toml--bool (getk "preview_text_wrap")
-                                 (strata-prefs-preview-text-wrap p)))
-        (setf (strata-prefs-preview-autoplay p)
-              (strata-toml--bool (getk "preview_autoplay")
-                                 (strata-prefs-preview-autoplay p)))
-        (setf (strata-prefs-preview-muted p)
-              (strata-toml--bool (getk "preview_muted") (strata-prefs-preview-muted p)))
+        (setf (enhanced-dirvish-prefs-folders-first p)
+              (enhanced-dirvish-toml--bool (getk "folders_first") (enhanced-dirvish-prefs-folders-first p)))
+        (setf (enhanced-dirvish-prefs-natural-sort p)
+              (enhanced-dirvish-toml--bool (getk "natural_sort") (enhanced-dirvish-prefs-natural-sort p)))
+        (setf (enhanced-dirvish-prefs-case-sensitive-sort p)
+              (enhanced-dirvish-toml--bool (getk "case_sensitive_sort")
+                                 (enhanced-dirvish-prefs-case-sensitive-sort p)))
+        (setf (enhanced-dirvish-prefs-group-by-type p)
+              (enhanced-dirvish-toml--bool (getk "group_by_type") (enhanced-dirvish-prefs-group-by-type p)))
+        (setf (enhanced-dirvish-prefs-show-hidden p)
+              (enhanced-dirvish-toml--bool (getk "show_hidden") (enhanced-dirvish-prefs-show-hidden p)))
+        (setf (enhanced-dirvish-prefs-date-format p) (symk "date_format" (enhanced-dirvish-prefs-date-format p)))
+        (setf (enhanced-dirvish-prefs-unit-system p) (symk "unit_system" (enhanced-dirvish-prefs-unit-system p)))
+        (setf (enhanced-dirvish-prefs-compact-full-names p)
+              (enhanced-dirvish-toml--bool (getk "compact_full_names")
+                                 (enhanced-dirvish-prefs-compact-full-names p)))
+        (setf (enhanced-dirvish-prefs-columns-mirror-selection p)
+              (enhanced-dirvish-toml--bool (getk "columns_mirror_selection")
+                                 (enhanced-dirvish-prefs-columns-mirror-selection p)))
+        (setf (enhanced-dirvish-prefs-columns-show-sizes p)
+              (enhanced-dirvish-toml--bool (getk "columns_show_sizes")
+                                 (enhanced-dirvish-prefs-columns-show-sizes p)))
+        (setf (enhanced-dirvish-prefs-render-documents-by-default p)
+              (enhanced-dirvish-toml--bool (getk "render_documents_by_default")
+                                 (enhanced-dirvish-prefs-render-documents-by-default p)))
+        (setf (enhanced-dirvish-prefs-preview-text-wrap p)
+              (enhanced-dirvish-toml--bool (getk "preview_text_wrap")
+                                 (enhanced-dirvish-prefs-preview-text-wrap p)))
+        (setf (enhanced-dirvish-prefs-preview-autoplay p)
+              (enhanced-dirvish-toml--bool (getk "preview_autoplay")
+                                 (enhanced-dirvish-prefs-preview-autoplay p)))
+        (setf (enhanced-dirvish-prefs-preview-muted p)
+              (enhanced-dirvish-toml--bool (getk "preview_muted") (enhanced-dirvish-prefs-preview-muted p)))
         (when (numberp (getk "icons_thumbnail_size"))
-          (setf (strata-prefs-icons-thumbnail-size p) (getk "icons_thumbnail_size")))
-        (setf (strata-prefs-show-thumbnails p)
-              (strata-toml--bool (getk "show_thumbnails") (strata-prefs-show-thumbnails p)))
-        (setf (strata-prefs-restore-tabs p)
-              (strata-toml--bool (getk "restore_tabs") (strata-prefs-restore-tabs p)))
-        (setf (strata-prefs-remember-folder-views p)
-              (strata-toml--bool (getk "remember_folder_views")
-                                 (strata-prefs-remember-folder-views p)))
-        (setf (strata-prefs-filter-include-subfolders p)
-              (strata-toml--bool (getk "filter_include_subfolders")
-                                 (strata-prefs-filter-include-subfolders p)))
+          (setf (enhanced-dirvish-prefs-icons-thumbnail-size p) (getk "icons_thumbnail_size")))
+        (setf (enhanced-dirvish-prefs-show-thumbnails p)
+              (enhanced-dirvish-toml--bool (getk "show_thumbnails") (enhanced-dirvish-prefs-show-thumbnails p)))
+        (setf (enhanced-dirvish-prefs-restore-tabs p)
+              (enhanced-dirvish-toml--bool (getk "restore_tabs") (enhanced-dirvish-prefs-restore-tabs p)))
+        (setf (enhanced-dirvish-prefs-remember-folder-views p)
+              (enhanced-dirvish-toml--bool (getk "remember_folder_views")
+                                 (enhanced-dirvish-prefs-remember-folder-views p)))
+        (setf (enhanced-dirvish-prefs-filter-include-subfolders p)
+              (enhanced-dirvish-toml--bool (getk "filter_include_subfolders")
+                                 (enhanced-dirvish-prefs-filter-include-subfolders p)))
         (when (listp (getk "search_exclusions"))
           (when-let ((ex (getk "search_exclusions")))
-            (setf (strata-prefs-search-exclusions p) ex)))
+            (setf (enhanced-dirvish-prefs-search-exclusions p) ex)))
         (when (numberp (getk "search_time_limit"))
-          (setf (strata-prefs-search-time-limit p) (max 0 (getk "search_time_limit"))))
+          (setf (enhanced-dirvish-prefs-search-time-limit p) (max 0 (getk "search_time_limit"))))
         (when (numberp (getk "search_entry_limit"))
-          (setf (strata-prefs-search-entry-limit p) (max 0 (getk "search_entry_limit")))))
+          (setf (enhanced-dirvish-prefs-search-entry-limit p) (max 0 (getk "search_entry_limit")))))
       ;; Table sections
-      (dolist (sec '(("folder_colors" . strata-prefs-folder-colors)
-                     ("custom_icons" . strata-prefs-custom-icons)
-                     ("device_labels" . strata-prefs-device-labels)))
+      (dolist (sec '(("folder_colors" . enhanced-dirvish-prefs-folder-colors)
+                     ("custom_icons" . enhanced-dirvish-prefs-custom-icons)
+                     ("device_labels" . enhanced-dirvish-prefs-device-labels)))
         (when-let ((entries (cdr (assoc (car sec) parsed))))
-          (setf (cl-struct-slot-value 'strata-prefs
-                                      (intern (string-remove-prefix "strata-prefs-"
+          (setf (cl-struct-slot-value 'enhanced-dirvish-prefs
+                                      (intern (string-remove-prefix "enhanced-dirvish-prefs-"
                                                                     (symbol-name (cdr sec))))
                                       p)
                 entries))))
     p))
 
-(defun strata-prefs-load ()
-  "Load `strata-prefs-current' from Emacs state + Strata TOML defaults."
-  (let ((base (strata-prefs-import-strata-toml)))
-    (when (file-readable-p strata-dirvish-state-file)
+(defun enhanced-dirvish-prefs-load ()
+  "Load `enhanced-dirvish-prefs-current' from Emacs state and TOML defaults."
+  (let ((base (enhanced-dirvish-prefs-import-enhanced-dirvish-toml)))
+    (when (file-readable-p enhanced-dirvish-state-file)
       (condition-case nil
           (with-temp-buffer
-            (insert-file-contents strata-dirvish-state-file)
+            (insert-file-contents enhanced-dirvish-state-file)
             (let ((data (read (current-buffer))))
               (when (listp data)
                 (dolist (kv data)
                   (when (consp kv)
                     (ignore-errors
-                      (setf (cl-struct-slot-value 'strata-prefs (car kv) base)
+                      (setf (cl-struct-slot-value 'enhanced-dirvish-prefs (car kv) base)
                             (cdr kv))))))))
         (error nil)))
-    (setq strata-prefs-current base)))
+    (setq enhanced-dirvish-prefs-current base)))
 
-(defun strata-prefs-save ()
-  "Persist `strata-prefs-current' to `strata-dirvish-state-file'."
-  (when strata-prefs-current
-    (make-directory (file-name-directory strata-dirvish-state-file) t)
+(defun enhanced-dirvish-prefs-save ()
+  "Persist `enhanced-dirvish-prefs-current' to `enhanced-dirvish-state-file'."
+  (when enhanced-dirvish-prefs-current
+    (make-directory (file-name-directory enhanced-dirvish-state-file) t)
     (let ((alist
            (mapcar (lambda (slot)
-                     (cons slot (cl-struct-slot-value 'strata-prefs slot strata-prefs-current)))
+                     (cons slot (cl-struct-slot-value 'enhanced-dirvish-prefs slot enhanced-dirvish-prefs-current)))
                    '(browser-mode expandable-tree tenxer-mode tenxer-delete-confirm
                      type-to-search arrow-navigation-scoped show-keybinding-hints reduce-motion
                      sort-key sort-direction folders-first natural-sort case-sensitive-sort
@@ -367,23 +367,24 @@ Returns an alist mapping section string (\"\" for root) to an alist of
                      search-open-files-directly search-exclusions search-time-limit
                      search-entry-limit filter-include-subfolders cross-volume-drop-strategy
                      folder-colors custom-icons device-labels send-to-recent-destinations marks))))
-      (with-temp-file strata-dirvish-state-file
+      (with-temp-file enhanced-dirvish-state-file
         (let ((print-length nil)
               (print-level nil))
           (prin1 alist (current-buffer))
           (insert "\n"))))))
 
-(defun strata-prefs ()
-  "Return active `strata-prefs' struct, loading lazily if needed."
-  (or strata-prefs-current (strata-prefs-load)))
+(defun enhanced-dirvish-prefs ()
+  "Return active `enhanced-dirvish-prefs' struct, loading lazily if needed."
+  (or enhanced-dirvish-prefs-current (enhanced-dirvish-prefs-load)))
 
 ;;;; Formatting Helpers (Metric / Binary, Relative Dates, Drive Capacity Accuracy)
 
-(defun strata-format-bytes (bytes &optional unit-system decimals)
+(defun enhanced-dirvish-format-bytes (bytes &optional unit-system decimals)
   "Format BYTES in human readable Metric (1000) or Binary (1024) units.
-UNIT-SYSTEM overrides `(strata-prefs-unit-system (strata-prefs))'."
+UNIT-SYSTEM overrides `(enhanced-dirvish-prefs-unit-system
+(enhanced-dirvish-prefs))'."
   (let* ((bytes (max 0 (float (or bytes 0))))
-         (sys (or unit-system (strata-prefs-unit-system (strata-prefs))))
+         (sys (or unit-system (enhanced-dirvish-prefs-unit-system (enhanced-dirvish-prefs))))
          (base (if (eq sys 'binary) 1024.0 1000.0))
          (units (if (eq sys 'binary)
                     '("B" "KiB" "MiB" "GiB" "TiB" "PiB")
@@ -398,21 +399,21 @@ UNIT-SYSTEM overrides `(strata-prefs-unit-system (strata-prefs))'."
       (let* ((dec (or decimals 1))
              (fmt (format "%%.%df %%s" dec))
              (s (format fmt val (nth idx units))))
-        ;; Trim trailing .0 for cleaner Strata typography
+        ;; Trim trailing .0 for cleaner Enhanced Dirvish typography
         (replace-regexp-in-string "\\.0 \\([A-Za-z]+\\)\\'" " \\1" s)))))
 
-(defun strata-format-drive-free-size (free total &optional unit-system)
+(defun enhanced-dirvish-format-drive-free-size (free total &optional unit-system)
   "Format FREE bytes relative to TOTAL drive bytes cleanly.
 Use GB from 1,000 MB upward, or GiB from 1,024 MiB in binary mode.
 Keep larger free-space values in that unit too.  Add precision near TOTAL
 to avoid rounding free space up to the drive's full capacity."
-  (let* ((sys (or unit-system (strata-prefs-unit-system (strata-prefs))))
+  (let* ((sys (or unit-system (enhanced-dirvish-prefs-unit-system (enhanced-dirvish-prefs))))
          (base (if (eq sys 'binary) 1024.0 1000.0))
          (units (if (eq sys 'binary)
                     '("B" "KiB" "MiB" "GiB" "TiB" "PiB")
                   '("B" "kB" "MB" "GB" "TB" "PB")))
-         (def-free (strata-format-bytes free sys))
-         (def-total (strata-format-bytes total sys)))
+         (def-free (enhanced-dirvish-format-bytes free sys))
+         (def-total (enhanced-dirvish-format-bytes total sys)))
     (cond
      ((>= free (expt base 3))
       (let* ((scale (expt base 3))
@@ -448,10 +449,10 @@ to avoid rounding free space up to the drive's full capacity."
           (setq i (1- i)))
         (or found def-free))))))
 
-(defun strata-format-time (time &optional mode)
+(defun enhanced-dirvish-format-time (time &optional mode)
   "Format Emacs TIME according to MODE (`relative', `iso', or `locale')."
   (when time
-    (let ((fmt (or mode (strata-prefs-date-format (strata-prefs)))))
+    (let ((fmt (or mode (enhanced-dirvish-prefs-date-format (enhanced-dirvish-prefs)))))
       (pcase fmt
         ('iso (format-time-string "%Y-%m-%d %H:%M" time))
         ('locale (format-time-string "%b %e %Y %H:%M" time))
@@ -468,171 +469,171 @@ to avoid rounding free space up to the drive's full capacity."
 
 ;;;; Theme-Reactive Faces (Noctalia / Ef / Modus / Custom Themes)
 
-(defface strata-header-accent
+(defface enhanced-dirvish-header-accent
   '((t :inherit font-lock-keyword-face :weight bold))
-  "Accent badge in Strata Dirvish header."
-  :group 'strata-dirvish)
+  "Accent badge in the Enhanced Dirvish header."
+  :group 'enhanced-dirvish)
 
-(defface strata-crumb-segment
+(defface enhanced-dirvish-crumb-segment
   '((t :inherit dired-directory :weight medium))
   "Breadcrumb path segment face."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-crumb-separator
+(defface enhanced-dirvish-crumb-separator
   '((t :inherit shadow))
   "Breadcrumb separator face."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-pill-10x
+(defface enhanced-dirvish-pill-10x
   '((t :inherit match :weight bold :box (:line-width (-1 . -1))))
   "10xer mode pill badge in footer."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-pill-chord
+(defface enhanced-dirvish-pill-chord
   '((t :inherit warning :weight bold :box (:line-width (-1 . -1))))
   "Active multi-key chord pill badge."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-pill-filter
+(defface enhanced-dirvish-pill-filter
   '((t :inherit isearch :weight bold :box (:line-width (-1 . -1))))
   "Active filter pill badge."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-hint-key
+(defface enhanced-dirvish-hint-key
   '((t :inherit font-lock-constant-face :weight bold))
   "Keycap face inside shortcut footer and shortcut reference."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-hint-desc
+(defface enhanced-dirvish-hint-desc
   '((t :inherit shadow :height 0.92))
   "Key description face inside shortcut footer."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-bar-ok
+(defface enhanced-dirvish-bar-ok
   '((t :inherit success :weight bold))
   "Drive capacity bar normal usage (< 80%)."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-bar-warn
+(defface enhanced-dirvish-bar-warn
   '((t :inherit warning :weight bold))
   "Drive capacity bar warning usage (>= 80%)."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-bar-danger
+(defface enhanced-dirvish-bar-danger
   '((t :inherit error :weight bold))
   "Drive capacity bar critical usage (>= 90%)."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-section-heading
+(defface enhanced-dirvish-section-heading
   '((t :inherit font-lock-type-face :weight bold :height 0.95))
   "Section heading in sidebar, computer:///, and settings."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-pane-active-badge
+(defface enhanced-dirvish-pane-active-badge
   '((t :inherit font-lock-function-name-face :weight bold))
   "Badge shown in the focused split pane header."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-pane-inactive-badge
+(defface enhanced-dirvish-pane-inactive-badge
   '((t :inherit shadow))
   "Badge shown in the unfocused split pane header."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-preview-heading-1
+(defface enhanced-dirvish-preview-heading-1
   '((t :inherit outline-1 :weight bold :height 1.35))
-  "Rendered Markdown heading 1 in Strata preview."
-  :group 'strata-dirvish)
+  "Rendered Markdown heading 1 in Enhanced Dirvish preview."
+  :group 'enhanced-dirvish)
 
-(defface strata-preview-heading-2
+(defface enhanced-dirvish-preview-heading-2
   '((t :inherit outline-2 :weight bold :height 1.2))
-  "Rendered Markdown heading 2 in Strata preview."
-  :group 'strata-dirvish)
+  "Rendered Markdown heading 2 in Enhanced Dirvish preview."
+  :group 'enhanced-dirvish)
 
-(defface strata-preview-heading-3
+(defface enhanced-dirvish-preview-heading-3
   '((t :inherit outline-3 :weight bold :height 1.08))
-  "Rendered Markdown heading 3+ in Strata preview."
-  :group 'strata-dirvish)
+  "Rendered Markdown heading 3+ in Enhanced Dirvish preview."
+  :group 'enhanced-dirvish)
 
-(defface strata-preview-code
+(defface enhanced-dirvish-preview-code
   '((t :inherit font-lock-builtin-face :extend t))
   "Code block/inline code face in rendered preview."
-  :group 'strata-dirvish)
+  :group 'enhanced-dirvish)
 
-(defface strata-entry-selected
+(defface enhanced-dirvish-entry-selected
   '((t :inherit region :weight bold))
-  "Face used to highlight the selected file or directory name across Strata views."
-  :group 'strata-dirvish)
+  "Face used to highlight the selected file or directory name across views."
+  :group 'enhanced-dirvish)
 
-(defface strata-folder-red '((t :foreground "#f7768e" :weight bold)) "Folder badge red." :group 'strata-dirvish)
-(defface strata-folder-amber '((t :foreground "#e0af68" :weight bold)) "Folder badge amber." :group 'strata-dirvish)
-(defface strata-folder-green '((t :foreground "#9ece6a" :weight bold)) "Folder badge green." :group 'strata-dirvish)
-(defface strata-folder-cyan '((t :foreground "#7dcfff" :weight bold)) "Folder badge cyan." :group 'strata-dirvish)
-(defface strata-folder-blue '((t :foreground "#7aa2f7" :weight bold)) "Folder badge blue." :group 'strata-dirvish)
-(defface strata-folder-purple '((t :foreground "#bb9af7" :weight bold)) "Folder badge purple." :group 'strata-dirvish)
+(defface enhanced-dirvish-folder-red '((t :foreground "#f7768e" :weight bold)) "Folder badge red." :group 'enhanced-dirvish)
+(defface enhanced-dirvish-folder-amber '((t :foreground "#e0af68" :weight bold)) "Folder badge amber." :group 'enhanced-dirvish)
+(defface enhanced-dirvish-folder-green '((t :foreground "#9ece6a" :weight bold)) "Folder badge green." :group 'enhanced-dirvish)
+(defface enhanced-dirvish-folder-cyan '((t :foreground "#7dcfff" :weight bold)) "Folder badge cyan." :group 'enhanced-dirvish)
+(defface enhanced-dirvish-folder-blue '((t :foreground "#7aa2f7" :weight bold)) "Folder badge blue." :group 'enhanced-dirvish)
+(defface enhanced-dirvish-folder-purple '((t :foreground "#bb9af7" :weight bold)) "Folder badge purple." :group 'enhanced-dirvish)
 
-(defconst strata-folder-color-alist
-  '(("red" . strata-folder-red)
-    ("amber" . strata-folder-amber)
-    ("orange" . strata-folder-amber)
-    ("yellow" . strata-folder-amber)
-    ("green" . strata-folder-green)
-    ("teal" . strata-folder-cyan)
-    ("cyan" . strata-folder-cyan)
-    ("blue" . strata-folder-blue)
-    ("purple" . strata-folder-purple)
-    ("violet" . strata-folder-purple))
-  "Mapping from Strata folder color names to faces.")
+(defconst enhanced-dirvish-folder-color-alist
+  '(("red" . enhanced-dirvish-folder-red)
+    ("amber" . enhanced-dirvish-folder-amber)
+    ("orange" . enhanced-dirvish-folder-amber)
+    ("yellow" . enhanced-dirvish-folder-amber)
+    ("green" . enhanced-dirvish-folder-green)
+    ("teal" . enhanced-dirvish-folder-cyan)
+    ("cyan" . enhanced-dirvish-folder-cyan)
+    ("blue" . enhanced-dirvish-folder-blue)
+    ("purple" . enhanced-dirvish-folder-purple)
+    ("violet" . enhanced-dirvish-folder-purple))
+  "Mapping from Enhanced Dirvish folder color names to faces.")
 
-(defun strata-theme--face-color (face attr fallback)
+(defun enhanced-dirvish-theme--face-color (face attr fallback)
   "Resolve FACE's ATTR color safely, falling back to FALLBACK."
   (let ((c (ignore-errors (face-attribute face attr nil 'default))))
     (if (and (stringp c) (not (member c '("unspecified" "unspecified-fg" "unspecified-bg"))))
         c
       fallback)))
 
-(defun strata-sync-theme-faces (&rest _)
-  "Synchronize Strata faces to the active theme (Noctalia / Ef / etc.)."
-  (let ((primary (strata-theme--face-color 'dired-directory :foreground "#00f5c8"))
-        (secondary (strata-theme--face-color 'font-lock-type-face :foreground "#77f9e0"))
-        (tertiary (strata-theme--face-color 'font-lock-keyword-face :foreground "#61e8ff"))
-        (err (strata-theme--face-color 'error :foreground "#ff6b87"))
-        (warn (strata-theme--face-color 'warning :foreground "#ffb454"))
-        (ok (strata-theme--face-color 'success :foreground "#61e8ff"))
-        (surface-hi (strata-theme--face-color 'highlight :background "#18253d"))
-        (sel-bg (strata-theme--face-color 'region :background "#263c5e"))
-        (sel-fg (strata-theme--face-color 'region :foreground nil))
-        (fg (strata-theme--face-color 'default :foreground "#e9fff8")))
-    (set-face-attribute 'strata-header-accent nil :foreground primary :weight 'bold)
-    (set-face-attribute 'strata-crumb-segment nil :foreground primary :weight 'medium)
-    (set-face-attribute 'strata-pill-10x nil
+(defun enhanced-dirvish-sync-theme-faces (&rest _)
+  "Synchronize faces to the active theme (Noctalia / Ef / etc.)."
+  (let ((primary (enhanced-dirvish-theme--face-color 'dired-directory :foreground "#00f5c8"))
+        (secondary (enhanced-dirvish-theme--face-color 'font-lock-type-face :foreground "#77f9e0"))
+        (tertiary (enhanced-dirvish-theme--face-color 'font-lock-keyword-face :foreground "#61e8ff"))
+        (err (enhanced-dirvish-theme--face-color 'error :foreground "#ff6b87"))
+        (warn (enhanced-dirvish-theme--face-color 'warning :foreground "#ffb454"))
+        (ok (enhanced-dirvish-theme--face-color 'success :foreground "#61e8ff"))
+        (surface-hi (enhanced-dirvish-theme--face-color 'highlight :background "#18253d"))
+        (sel-bg (enhanced-dirvish-theme--face-color 'region :background "#263c5e"))
+        (sel-fg (enhanced-dirvish-theme--face-color 'region :foreground nil))
+        (fg (enhanced-dirvish-theme--face-color 'default :foreground "#e9fff8")))
+    (set-face-attribute 'enhanced-dirvish-header-accent nil :foreground primary :weight 'bold)
+    (set-face-attribute 'enhanced-dirvish-crumb-segment nil :foreground primary :weight 'medium)
+    (set-face-attribute 'enhanced-dirvish-pill-10x nil
                         :foreground fg :background surface-hi
                         :box `(:line-width (-1 . -1) :color ,primary) :weight 'bold)
-    (set-face-attribute 'strata-pill-chord nil
+    (set-face-attribute 'enhanced-dirvish-pill-chord nil
                         :foreground warn :background surface-hi
                         :box `(:line-width (-1 . -1) :color ,warn) :weight 'bold)
-    (set-face-attribute 'strata-pill-filter nil
+    (set-face-attribute 'enhanced-dirvish-pill-filter nil
                         :foreground tertiary :background surface-hi
                         :box `(:line-width (-1 . -1) :color ,tertiary) :weight 'bold)
-    (set-face-attribute 'strata-hint-key nil :foreground secondary :weight 'bold)
-    (set-face-attribute 'strata-section-heading nil :foreground secondary :weight 'bold)
-    (set-face-attribute 'strata-bar-ok nil :foreground ok)
-    (set-face-attribute 'strata-bar-warn nil :foreground warn)
-    (set-face-attribute 'strata-bar-danger nil :foreground err)
-    (set-face-attribute 'strata-preview-code nil :background surface-hi :extend t)
-    (set-face-attribute 'strata-entry-selected nil
+    (set-face-attribute 'enhanced-dirvish-hint-key nil :foreground secondary :weight 'bold)
+    (set-face-attribute 'enhanced-dirvish-section-heading nil :foreground secondary :weight 'bold)
+    (set-face-attribute 'enhanced-dirvish-bar-ok nil :foreground ok)
+    (set-face-attribute 'enhanced-dirvish-bar-warn nil :foreground warn)
+    (set-face-attribute 'enhanced-dirvish-bar-danger nil :foreground err)
+    (set-face-attribute 'enhanced-dirvish-preview-code nil :background surface-hi :extend t)
+    (set-face-attribute 'enhanced-dirvish-entry-selected nil
                         :background (if (member sel-bg '("unspecified" "unspecified-bg" nil))
                                         surface-hi sel-bg)
                         :foreground (or sel-fg 'unspecified)
                         :weight 'bold)))
 
 (with-eval-after-load 'emacs
-  (strata-sync-theme-faces))
-(add-hook 'enable-theme-functions #'strata-sync-theme-faces)
-(strata-sync-theme-faces)
+  (enhanced-dirvish-sync-theme-faces))
+(add-hook 'enable-theme-functions #'enhanced-dirvish-sync-theme-faces)
+(enhanced-dirvish-sync-theme-faces)
 
 ;;;; Verified Nerd Font Icon Engine
 
-(defconst strata-icon-table
+(defconst enhanced-dirvish-icon-table
   '((folder       #xf07b . "[+]")
     (folder-open  #xf07c . "[-]")
     (folder-git   #xe5fb . "[+]")
@@ -702,14 +703,14 @@ to avoid rounding free space up to the drive's full capacity."
 All Nerd Font codepoints are verified across Symbols Nerd Font Mono,
 CaskaydiaCove Nerd Font, and JetBrainsMono Nerd Font.")
 
-(defvar strata-icon--family-cache nil
+(defvar enhanced-dirvish-icon--family-cache nil
   "Alist caching detected Nerd Font family per Emacs terminal.")
 
-(defun strata-icon--family ()
+(defun enhanced-dirvish-icon--family ()
   "Return verified Nerd Font family name on GUI frames, or nil on TTY/batch."
   (when (display-graphic-p)
     (let* ((term (frame-terminal))
-           (cached (assq term strata-icon--family-cache)))
+           (cached (assq term enhanced-dirvish-icon--family-cache)))
       (if cached
           (cdr cached)
         (let ((fam (cl-find-if
@@ -717,30 +718,30 @@ CaskaydiaCove Nerd Font, and JetBrainsMono Nerd Font.")
                     '("Symbols Nerd Font Mono"
                       "CaskaydiaCove Nerd Font"
                       "JetBrainsMono Nerd Font"))))
-          (push (cons term fam) strata-icon--family-cache)
+          (push (cons term fam) enhanced-dirvish-icon--family-cache)
           fam)))))
 
-(defun strata-icon-glyph (kind &optional face tty-override)
+(defun enhanced-dirvish-icon-glyph (kind &optional face tty-override)
   "Return propertized crisp Nerd Font glyph for KIND tinted with optional FACE.
 Falls back cleanly to TTY-OVERRIDE or safe table string when non-graphic."
-  (let* ((spec (alist-get kind strata-icon-table))
+  (let* ((spec (alist-get kind enhanced-dirvish-icon-table))
          (cp (car spec))
          (fallback (or tty-override (cdr spec) "·"))
-         (fam (strata-icon--family)))
+         (fam (enhanced-dirvish-icon--family)))
     (if (and fam cp)
         (let* ((s (char-to-string cp))
                (fspec `(:family ,fam :height 1.05 ,@(when face (list :inherit face)))))
           (propertize s 'face fspec 'font-lock-face fspec 'rear-nonsticky t))
       (if face (propertize fallback 'face face) fallback))))
 
-(defun strata-icon--extract-family (fprop)
+(defun enhanced-dirvish-icon--extract-family (fprop)
   "Return first `:family' string found inside face spec FPROP, or nil."
   (cond
    ((null fprop) nil)
    ((keywordp (car-safe fprop)) (plist-get fprop :family))
-   ((listp fprop) (cl-some #'strata-icon--extract-family fprop))))
+   ((listp fprop) (cl-some #'enhanced-dirvish-icon--extract-family fprop))))
 
-(defun strata-icon-tint (glyph face &optional append-p)
+(defun enhanced-dirvish-icon-tint (glyph face &optional append-p)
   "Return copy of GLYPH merged with FACE while keeping any span `:family' first."
   (let* ((s (copy-sequence glyph))
          (len (length s))
@@ -748,7 +749,7 @@ Falls back cleanly to TTY-OVERRIDE or safe table string when non-graphic."
          (spans nil))
     (while (< pos len)
       (let* ((next (next-single-property-change pos 'face s len))
-             (fam (strata-icon--extract-family (get-text-property pos 'face s))))
+             (fam (enhanced-dirvish-icon--extract-family (get-text-property pos 'face s))))
         (when fam
           (push (list pos next fam) spans))
         (setq pos next)))
@@ -764,7 +765,7 @@ Falls back cleanly to TTY-OVERRIDE or safe table string when non-graphic."
         (setq pos next)))
     s))
 
-(defun strata-add-row-properties (str props)
+(defun enhanced-dirvish-add-row-properties (str props)
   "Apply row text PROPS to STR, keeping `mouse-face' off trailing newline.
 Excluding the trailing newline prevents Emacs redisplay from merging
 adjacent rows into one whole-group hover highlight."
@@ -781,5 +782,5 @@ adjacent rows into one whole-group hover highlight."
       (add-text-properties 0 hi-end (list 'mouse-face mf) str))
     str))
 
-(provide 'strata-dirvish-prefs)
-;;; strata-dirvish-prefs.el ends here
+(provide 'enhanced-dirvish-prefs)
+;;; enhanced-dirvish-prefs.el ends here

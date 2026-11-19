@@ -20,31 +20,31 @@
 ;; * Dired
 (add-hook 'dired-mode-hook 'dired-hide-details-mode)
 
-;; * Dirvish + Strata — Miller columns, multi-view, split pane, terminal & rich previews.
+;; * Enhanced Dirvish — Miller columns, multi-view, split pane, terminal & rich previews.
 (use-package dirvish
   :ensure t
   :demand t
   :init
   (dirvish-override-dired-mode)
   :bind
-  (("C-c d" . strata-dirvish-launch)
-   ("C-c D" . strata-sidebar-toggle)
+  (("C-c d" . enhanced-dirvish-launch)
+   ("C-c D" . enhanced-dirvish-sidebar-toggle)
    :map dirvish-mode-map
    ("a"        . dirvish-quick-access)
    ("f"        . dirvish-file-info-menu)
    ("y"        . dirvish-yank-menu)
    ("N"        . dirvish-narrow)
    ("h"        . dired-up-directory)
-   ("l"        . strata-tree-expand-or-open)
+   ("l"        . enhanced-dirvish-tree-expand-or-open)
    ("<left>"   . dired-up-directory)
-   ("<right>"  . strata-tree-expand-or-open)
+   ("<right>"  . enhanced-dirvish-tree-expand-or-open)
    ("TAB"      . dirvish-toggle-subtree)
    ("M-l"      . dirvish-ls-switches-menu)
    ("M-t"      . dirvish-layout-toggle))
   :config
-  (add-to-list 'load-path (expand-file-name "~/Projects/emacs/strata-dirvish"))
-  (require 'strata-dirvish)
-  (strata-dirvish-setup))
+  (add-to-list 'load-path (expand-file-name "~/Projects/emacs/enhanced-dirvish"))
+  (require 'enhanced-dirvish)
+  (enhanced-dirvish-setup))
 
 ;; Live refresh for Dired/Dirvish: watch dirs via inotify and re-read the
 ;; listing when the filesystem changes. Without this, dired-buffers (which
@@ -57,11 +57,11 @@
 (global-auto-revert-mode 1)
 
 ;; Built-in autorevert ignores in-place content changes in Dired buffers and
-;; non-Dired Strata views; `strata-dirvish-watch' installs kernel `filenotify'
+;; non-Dired Enhanced Dirvish views; `enhanced-dirvish-watch' installs kernel `filenotify'
 ;; watchers across Columns/List, Compact, Icons, Miller parent columns, hovered
 ;; subfolders, Trash/Recent, and preview cache invalidation.
-(when (fboundp 'strata-watch-install)
-  (strata-watch-install))
+(when (fboundp 'enhanced-dirvish-watch-install)
+  (enhanced-dirvish-watch-install))
 
 ;; Same arrow keys when Dirvish isn't overriding (plain Dired buffers).
 (with-eval-after-load 'dired

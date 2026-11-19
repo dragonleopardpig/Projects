@@ -1,10 +1,10 @@
-;;; strata-dirvish-views.el --- Browser views, sorting, tree, icons, compact, chrome -*- lexical-binding: t; -*-
+;;; enhanced-dirvish-views.el --- Browser views, sorting, tree, icons, compact, chrome -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Implements all four Strata browser views (Columns/Miller, List+Tree,
+;; Implements all four Enhanced Dirvish browser views (Columns/Miller, List+Tree,
 ;; Compact horizontal multi-column, Icons thumbnail grid), unified sorting &
 ;; grouping, per-folder LRU memory, custom folder colors/icons, Dirvish
-;; attributes, and Strata header breadcrumbs / footer mode-line.
+;; attributes, and Enhanced Dirvish header breadcrumbs / footer mode-line.
 
 ;;; Code:
 
@@ -19,140 +19,140 @@
 (require 'dirvish-collapse nil t)
 (require 'dirvish-emerge nil t)
 (require 'subr-x)
-(require 'strata-dirvish-prefs)
-(require 'strata-dirvish-devices)
+(require 'enhanced-dirvish-prefs)
+(require 'enhanced-dirvish-devices)
 
-(declare-function strata-open-location "strata-dirvish-panes" (loc &optional record-history))
-(declare-function strata-active-pane "strata-dirvish-panes" ())
-(declare-function strata-active-tab "strata-dirvish-panes" ())
-(declare-function strata-pane-active-p "strata-dirvish-panes" (&optional win))
-(declare-function strata-panes--pane-for-window "strata-dirvish-panes" (win))
-(declare-function strata-panes--sync-active-pane-from-window "strata-dirvish-panes" (&optional win))
-(declare-function strata-panes--valid-main-window-p "strata-dirvish-panes" (win))
-(declare-function strata-panes--main-window "strata-dirvish-panes" (&optional pane))
-(declare-function strata-panes--window-dir "strata-dirvish-panes" (&optional win))
-(declare-function strata-pane-state-id "strata-dirvish-panes" (cl-x))
-(declare-function strata-pane-state-buffer "strata-dirvish-panes" (cl-x))
-(declare-function strata-pane-state-history-back "strata-dirvish-panes" (cl-x))
-(declare-function strata-pane-state-history-fwd "strata-dirvish-panes" (cl-x))
-(declare-function strata-tab-state-pane1 "strata-dirvish-panes" (cl-x))
-(declare-function strata-tab-state-pane2 "strata-dirvish-panes" (cl-x))
-(declare-function strata-split-active-p "strata-dirvish-panes" ())
-(declare-function strata-dirvish--flatten-layout "strata-dirvish-panes" ())
-(declare-function strata-panes--set-active-view "strata-dirvish-panes" (buffer window))
-(declare-function strata-pane-clipboard-summary "strata-dirvish-ops" ())
-(declare-function strata--transfer-files "strata-dirvish-ops" (files dest-dir mode &optional keep-both-default replace-default))
-(declare-function strata-clear-all-marks "strata-dirvish-keys" ())
-(declare-function strata-preview-at-point "strata-dirvish-previews" ())
-(declare-function strata-preview-enter-at-point "strata-dirvish-previews" ())
-(declare-function strata-history-back "strata-dirvish-search" ())
-(declare-function strata-history-forward "strata-dirvish-search" ())
-(declare-function strata-preview-edit-file "strata-dirvish-previews" (file))
-(declare-function strata-preview--close-standalone "strata-dirvish-previews" ())
-(declare-function strata-open-or-edit-at-point "strata-dirvish-previews" ())
-(defvar strata-preview-standalone-window)
-(defvar strata-sidebar-window)
+(declare-function enhanced-dirvish-open-location "enhanced-dirvish-panes" (loc &optional record-history))
+(declare-function enhanced-dirvish-active-pane "enhanced-dirvish-panes" ())
+(declare-function enhanced-dirvish-active-tab "enhanced-dirvish-panes" ())
+(declare-function enhanced-dirvish-pane-active-p "enhanced-dirvish-panes" (&optional win))
+(declare-function enhanced-dirvish-panes--pane-for-window "enhanced-dirvish-panes" (win))
+(declare-function enhanced-dirvish-panes--sync-active-pane-from-window "enhanced-dirvish-panes" (&optional win))
+(declare-function enhanced-dirvish-panes--valid-main-window-p "enhanced-dirvish-panes" (win))
+(declare-function enhanced-dirvish-panes--main-window "enhanced-dirvish-panes" (&optional pane))
+(declare-function enhanced-dirvish-panes--window-dir "enhanced-dirvish-panes" (&optional win))
+(declare-function enhanced-dirvish-pane-state-id "enhanced-dirvish-panes" (cl-x))
+(declare-function enhanced-dirvish-pane-state-buffer "enhanced-dirvish-panes" (cl-x))
+(declare-function enhanced-dirvish-pane-state-history-back "enhanced-dirvish-panes" (cl-x))
+(declare-function enhanced-dirvish-pane-state-history-fwd "enhanced-dirvish-panes" (cl-x))
+(declare-function enhanced-dirvish-tab-state-pane1 "enhanced-dirvish-panes" (cl-x))
+(declare-function enhanced-dirvish-tab-state-pane2 "enhanced-dirvish-panes" (cl-x))
+(declare-function enhanced-dirvish-split-active-p "enhanced-dirvish-panes" ())
+(declare-function enhanced-dirvish--flatten-layout "enhanced-dirvish-panes" ())
+(declare-function enhanced-dirvish-panes--set-active-view "enhanced-dirvish-panes" (buffer window))
+(declare-function enhanced-dirvish-pane-clipboard-summary "enhanced-dirvish-ops" ())
+(declare-function enhanced-dirvish--transfer-files "enhanced-dirvish-ops" (files dest-dir mode &optional keep-both-default replace-default))
+(declare-function enhanced-dirvish-clear-all-marks "enhanced-dirvish-keys" ())
+(declare-function enhanced-dirvish-preview-at-point "enhanced-dirvish-previews" ())
+(declare-function enhanced-dirvish-preview-enter-at-point "enhanced-dirvish-previews" ())
+(declare-function enhanced-dirvish-history-back "enhanced-dirvish-search" ())
+(declare-function enhanced-dirvish-history-forward "enhanced-dirvish-search" ())
+(declare-function enhanced-dirvish-preview-edit-file "enhanced-dirvish-previews" (file))
+(declare-function enhanced-dirvish-preview--close-standalone "enhanced-dirvish-previews" ())
+(declare-function enhanced-dirvish-open-or-edit-at-point "enhanced-dirvish-previews" ())
+(defvar enhanced-dirvish-preview-standalone-window)
+(defvar enhanced-dirvish-sidebar-window)
 
-(defvar strata-active-chord nil
+(defvar enhanced-dirvish-active-chord nil
   "Current active multi-key chord label shown in footer (e.g. \"g _\").")
 
-(defvar strata-thumbnail-dir
-  (expand-file-name "thumbnails" strata-dirvish-state-dir)
+(defvar enhanced-dirvish-thumbnail-dir
+  (expand-file-name "thumbnails" enhanced-dirvish-state-dir)
   "Directory storing cached PNG thumbnails for Icons view.")
 
-(defvar strata-thumbnail-pending (make-hash-table :test #'equal)
+(defvar enhanced-dirvish-thumbnail-pending (make-hash-table :test #'equal)
   "Pending async thumbnail jobs keyed by path.")
 
-(defvar-local strata-local-view-mode nil
+(defvar-local enhanced-dirvish-local-view-mode nil
   "Buffer-local active view mode overriding/mirroring global preference.")
 
-(defvar-local strata-local-filter nil
+(defvar-local enhanced-dirvish-local-filter nil
   "Active filter string inside current pane buffer.")
 
-(defvar-local strata-visual-anchor nil
+(defvar-local enhanced-dirvish-visual-anchor nil
   "File path where 10xer visual selection started.")
 
 ;;;; File Selection & Cursor Introspection Across All 4 Views
 
-(defvar-local strata--empty-click-p nil
+(defvar-local enhanced-dirvish--empty-click-p nil
   "Non-nil while an empty-space click leaves the browser without a current item.")
 
-(defvar-local strata--empty-click-position nil
+(defvar-local enhanced-dirvish--empty-click-position nil
   "Visible cursor position used by Compact view after a blank-space click.")
 
-(defun strata-view--empty-selection-p ()
+(defun enhanced-dirvish-view--empty-selection-p ()
   "Whether point still represents an empty-space deselection."
-  (and strata--empty-click-p
-       (if strata--empty-click-position
-           (= (point) strata--empty-click-position)
+  (and enhanced-dirvish--empty-click-p
+       (if enhanced-dirvish--empty-click-position
+           (= (point) enhanced-dirvish--empty-click-position)
          (eobp))))
 
-(defun strata-view--dot-entry-p (path)
+(defun enhanced-dirvish-view--dot-entry-p (path)
   "Non-nil if PATH names a directory's own `.' or `..' listing line.
 Dired shows them under `-a' switches; they are not entries a browser
 can focus, select or act on, and `expand-file-name' would fold \"dir/.\"
-into \"dir\" so `strata-goto-file' could never land on them anyway."
+into \"dir\" so `enhanced-dirvish-goto-file' could never land on them anyway."
   (member (file-name-nondirectory path) '("." "..")))
 
-(defun strata-view--dired-entry-at-point ()
+(defun enhanced-dirvish-view--dired-entry-at-point ()
   "Return the Dired file on this line, unless it is `.' or `..'."
   (when-let ((f (ignore-errors (dired-get-filename nil t))))
-    (unless (strata-view--dot-entry-p f) f)))
+    (unless (enhanced-dirvish-view--dot-entry-p f) f)))
 
-(defun strata-current-file ()
-  "Return absolute path of entry under point in any Strata view buffer."
-  (unless (strata-view--empty-selection-p)
-    (or (get-text-property (point) 'strata-entry)
-        (get-text-property (line-beginning-position) 'strata-entry)
+(defun enhanced-dirvish-current-file ()
+  "Return absolute path of entry under point in any view buffer."
+  (unless (enhanced-dirvish-view--empty-selection-p)
+    (or (get-text-property (point) 'enhanced-dirvish-entry)
+        (get-text-property (line-beginning-position) 'enhanced-dirvish-entry)
         (and (derived-mode-p 'dired-mode)
-             (strata-view--dired-entry-at-point))
-        (when-let ((tr (get-text-property (line-beginning-position) 'strata-trash-item)))
+             (enhanced-dirvish-view--dired-entry-at-point))
+        (when-let ((tr (get-text-property (line-beginning-position) 'enhanced-dirvish-trash-item)))
           (plist-get tr :file))
-        (get-text-property (line-beginning-position) 'strata-recent-path))))
+        (get-text-property (line-beginning-position) 'enhanced-dirvish-recent-path))))
 
-(defvar-local strata--selection-anchor-entry nil
+(defvar-local enhanced-dirvish--selection-anchor-entry nil
   "Anchor path for Shift-click and Shift-arrow range multi-selection.")
 
-(defvar-local strata--selection-range-active nil
+(defvar-local enhanced-dirvish--selection-range-active nil
   "Non-nil while extending the current keyboard or click range.")
 
-(defvar-local strata--selection-base-keys nil
+(defvar-local enhanced-dirvish--selection-base-keys nil
   "Marks preserved outside an additive Ctrl+Shift range.")
 
-(defvar-local strata--selection-range-additive nil
+(defvar-local enhanced-dirvish--selection-range-additive nil
   "Whether the active range preserves marks outside its bounds.")
 
-(defun strata-view--reset-selection-range (&optional anchor)
+(defun enhanced-dirvish-view--reset-selection-range (&optional anchor)
   "Finish the active range and use ANCHOR for the next range."
-  (setq strata--selection-anchor-entry anchor
-        strata--selection-range-active nil
-        strata--selection-base-keys nil
-        strata--selection-range-additive nil))
+  (setq enhanced-dirvish--selection-anchor-entry anchor
+        enhanced-dirvish--selection-range-active nil
+        enhanced-dirvish--selection-base-keys nil
+        enhanced-dirvish--selection-range-additive nil))
 
-(defun strata-view--selection-post-command ()
+(defun enhanced-dirvish-view--selection-post-command ()
   "Start the next range at point after ordinary navigation or file commands."
-  (unless (strata-view--empty-selection-p)
-    (setq strata--empty-click-p nil strata--empty-click-position nil))
+  (unless (enhanced-dirvish-view--empty-selection-p)
+    (setq enhanced-dirvish--empty-click-p nil enhanced-dirvish--empty-click-position nil))
   (unless (or (null this-command)
-              (bound-and-true-p strata-mouse--drag-state)
+              (bound-and-true-p enhanced-dirvish-mouse--drag-state)
               (memq this-command
-                    '(strata-shift-select-next strata-shift-select-prev
-                      strata-shift-select-right strata-shift-select-left
-                      strata-shift-select-first strata-shift-select-last
-                      strata-mouse-range-select strata-mouse-add-range-select
-                      strata-visual-toggle)))
-    (strata-view--reset-selection-range (strata-current-file))))
+                    '(enhanced-dirvish-shift-select-next enhanced-dirvish-shift-select-prev
+                      enhanced-dirvish-shift-select-right enhanced-dirvish-shift-select-left
+                      enhanced-dirvish-shift-select-first enhanced-dirvish-shift-select-last
+                      enhanced-dirvish-mouse-range-select enhanced-dirvish-mouse-add-range-select
+                      enhanced-dirvish-visual-toggle)))
+    (enhanced-dirvish-view--reset-selection-range (enhanced-dirvish-current-file))))
 
-(defun strata-view--dirvish-post-command (original)
+(defun enhanced-dirvish-view--dirvish-post-command (original)
   "Run ORIGINAL without moving an empty-space selection onto the last file."
-  (unless (and strata--empty-click-p (eobp))
+  (unless (and enhanced-dirvish--empty-click-p (eobp))
     (funcall original)))
 
-(defun strata--path-key (path)
+(defun enhanced-dirvish--path-key (path)
   "Normalize PATH into a canonical comparison key."
   (and path (directory-file-name (expand-file-name path))))
 
-(defun strata-marked-files-only ()
+(defun enhanced-dirvish-marked-files-only ()
   "Return explicitly marked paths in the current browser buffer, or nil."
   (cond
    ((derived-mode-p 'dired-mode)
@@ -164,33 +164,33 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
                (goto-char (point-min))
                (re-search-forward dired-re-mark nil t)))
         marked))))
-   ((derived-mode-p 'strata-compact-mode 'strata-icons-mode)
-    (when-let ((m (bound-and-true-p strata-marked-entries)))
+   ((derived-mode-p 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
+    (when-let ((m (bound-and-true-p enhanced-dirvish-marked-entries)))
       (cl-remove-if-not #'file-exists-p (reverse m))))))
 
-(defun strata-selected-files ()
-  "Return marked file paths in current Strata view, or file at point."
-  (or (strata-marked-files-only)
-      (when-let ((cur (strata-current-file)))
+(defun enhanced-dirvish-selected-files ()
+  "Return marked file paths in current Enhanced Dirvish view, or file at point."
+  (or (enhanced-dirvish-marked-files-only)
+      (when-let ((cur (enhanced-dirvish-current-file)))
         (list cur))))
 
-(defvar-local strata--selection-overlays nil
+(defvar-local enhanced-dirvish--selection-overlays nil
   "Buffer-local selection overlays highlighting the active file or folder name.")
 
-(defun strata--clear-selection-highlight ()
+(defun enhanced-dirvish--clear-selection-highlight ()
   "Remove active selection highlight overlays from the current buffer."
-  (mapc #'delete-overlay strata--selection-overlays)
-  (setq-local strata--selection-overlays nil))
+  (mapc #'delete-overlay enhanced-dirvish--selection-overlays)
+  (setq-local enhanced-dirvish--selection-overlays nil))
 
-(defun strata--add-selection-overlay (beg end)
-  "Highlight BEG..END with `strata-entry-selected' in current buffer."
+(defun enhanced-dirvish--add-selection-overlay (beg end)
+  "Highlight BEG..END with `enhanced-dirvish-entry-selected' in current buffer."
   (when (and beg end (< beg end))
     (let ((ov (make-overlay beg end nil t nil)))
-      (overlay-put ov 'face 'strata-entry-selected)
+      (overlay-put ov 'face 'enhanced-dirvish-entry-selected)
       (overlay-put ov 'priority 60)
-      (push ov strata--selection-overlays))))
+      (push ov enhanced-dirvish--selection-overlays))))
 
-(defun strata--prop-span-at (pos prop &optional limit-beg limit-end)
+(defun enhanced-dirvish--prop-span-at (pos prop &optional limit-beg limit-end)
   "Return (BEG . END) bounds of continuous non-nil PROP run containing POS."
   (let* ((lb (or limit-beg (point-min)))
          (le (or limit-end (point-max)))
@@ -203,7 +203,7 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
              (end (or (next-single-property-change pos prop nil le) le)))
         (cons beg end)))))
 
-(defun strata--highlight-marked-dired (cur-beg cur-end)
+(defun enhanced-dirvish--highlight-marked-dired (cur-beg cur-end)
   "Overlay marked filenames in Dired excluding CUR-BEG..CUR-END."
   (when (derived-mode-p 'dired-mode)
     (save-excursion
@@ -216,28 +216,28 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
             (when-let* ((beg (dired-move-to-filename))
                         (end (dired-move-to-end-of-filename t)))
               (unless (and cur-beg cur-end (= beg cur-beg) (= end cur-end))
-                (strata--add-selection-overlay beg end)))))))))
+                (enhanced-dirvish--add-selection-overlay beg end)))))))))
 
-(defun strata--highlight-marked-spans (prop marked-keys &optional cur-span)
-  "Overlay spans carrying PROP whose `strata-entry' is in MARKED-KEYS."
+(defun enhanced-dirvish--highlight-marked-spans (prop marked-keys &optional cur-span)
+  "Overlay spans carrying PROP whose `enhanced-dirvish-entry' is in MARKED-KEYS."
   (when marked-keys
     (let ((pos (point-min)))
       (while (< pos (point-max))
         (let ((next (or (next-single-property-change pos prop) (point-max))))
           (when (get-text-property pos prop)
-            (when-let ((key (strata--path-key (get-text-property pos 'strata-entry))))
+            (when-let ((key (enhanced-dirvish--path-key (get-text-property pos 'enhanced-dirvish-entry))))
               (when (and (member key marked-keys)
                          (not (and cur-span (= pos (car cur-span)) (= next (cdr cur-span)))))
-                (strata--add-selection-overlay pos next))))
+                (enhanced-dirvish--add-selection-overlay pos next))))
           (setq pos next))))))
 
-(defun strata-view--update-selection-highlight ()
+(defun enhanced-dirvish-view--update-selection-highlight ()
   "Highlight the active and multi-marked file or directory names across all views."
-  (when (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
-    (strata--clear-selection-highlight)
-    (let ((marked-keys (mapcar #'strata--path-key (bound-and-true-p strata-marked-entries))))
+  (when (derived-mode-p 'dired-mode 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
+    (enhanced-dirvish--clear-selection-highlight)
+    (let ((marked-keys (mapcar #'enhanced-dirvish--path-key (bound-and-true-p enhanced-dirvish-marked-entries))))
       (cond
-       ((strata-view--empty-selection-p))
+       ((enhanced-dirvish-view--empty-selection-p))
        ((derived-mode-p 'dired-mode)
         (let (cur-beg cur-end)
           (ignore-errors
@@ -245,35 +245,35 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
               (when-let* ((beg (dired-move-to-filename))
                           (end (dired-move-to-end-of-filename t)))
                 (setq cur-beg beg cur-end end)
-                (strata--add-selection-overlay beg end))))
-          (strata--highlight-marked-dired cur-beg cur-end)))
-       ((derived-mode-p 'strata-compact-mode)
+                (enhanced-dirvish--add-selection-overlay beg end))))
+          (enhanced-dirvish--highlight-marked-dired cur-beg cur-end)))
+       ((derived-mode-p 'enhanced-dirvish-compact-mode)
         (let* ((p (point))
                (lb (line-beginning-position))
                (le (line-end-position))
-               (span (or (strata--prop-span-at p 'strata-entry-label lb le)
-                         (when-let ((cur-entry (get-text-property p 'strata-entry)))
-                           (let ((cand (next-single-property-change p 'strata-entry-label nil le)))
+               (span (or (enhanced-dirvish--prop-span-at p 'enhanced-dirvish-entry-label lb le)
+                         (when-let ((cur-entry (get-text-property p 'enhanced-dirvish-entry)))
+                           (let ((cand (next-single-property-change p 'enhanced-dirvish-entry-label nil le)))
                              (when (and cand (< cand le)
-                                        (equal (get-text-property cand 'strata-entry) cur-entry))
-                               (strata--prop-span-at cand 'strata-entry-label lb le)))))))
+                                        (equal (get-text-property cand 'enhanced-dirvish-entry) cur-entry))
+                               (enhanced-dirvish--prop-span-at cand 'enhanced-dirvish-entry-label lb le)))))))
           (when span
-            (strata--add-selection-overlay (car span) (cdr span)))
-          (strata--highlight-marked-spans 'strata-entry-label marked-keys span)))
-       ((derived-mode-p 'strata-icons-mode)
+            (enhanced-dirvish--add-selection-overlay (car span) (cdr span)))
+          (enhanced-dirvish--highlight-marked-spans 'enhanced-dirvish-entry-label marked-keys span)))
+       ((derived-mode-p 'enhanced-dirvish-icons-mode)
         (let* ((p (point))
-               (idx (and (< p (point-max)) (get-text-property p 'strata-grid-idx)))
+               (idx (and (< p (point-max)) (get-text-property p 'enhanced-dirvish-grid-idx)))
                (lb (line-beginning-position))
                (le (line-end-position))
                (span1 (and idx
-                           (or (strata--prop-span-at p 'strata-grid-label lb le)
-                               (when-let ((cand (next-single-property-change p 'strata-grid-label nil le)))
+                           (or (enhanced-dirvish--prop-span-at p 'enhanced-dirvish-grid-label lb le)
+                               (when-let ((cand (next-single-property-change p 'enhanced-dirvish-grid-label nil le)))
                                  (when (and (< cand le)
-                                            (eql (get-text-property cand 'strata-grid-idx) idx))
-                                   (strata--prop-span-at cand 'strata-grid-label lb le))))))
+                                            (eql (get-text-property cand 'enhanced-dirvish-grid-idx) idx))
+                                   (enhanced-dirvish--prop-span-at cand 'enhanced-dirvish-grid-label lb le))))))
                (span2 nil))
           (when span1
-            (strata--add-selection-overlay (car span1) (cdr span1))
+            (enhanced-dirvish--add-selection-overlay (car span1) (cdr span1))
             (save-excursion
               (goto-char (car span1))
               (when (= (forward-line 1) 0)
@@ -281,39 +281,39 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
                       (qe (line-end-position))
                       (found2 nil))
                   (while (and (< q qe) (not found2))
-                    (let ((nxt (or (next-single-property-change q 'strata-grid-label-cont nil qe) qe)))
-                      (when (and (get-text-property q 'strata-grid-label-cont)
-                                 (eql (get-text-property q 'strata-grid-idx) idx))
+                    (let ((nxt (or (next-single-property-change q 'enhanced-dirvish-grid-label-cont nil qe) qe)))
+                      (when (and (get-text-property q 'enhanced-dirvish-grid-label-cont)
+                                 (eql (get-text-property q 'enhanced-dirvish-grid-idx) idx))
                         (setq span2 (cons q nxt))
-                        (strata--add-selection-overlay q nxt)
+                        (enhanced-dirvish--add-selection-overlay q nxt)
                         (setq found2 t))
                       (setq q nxt)))))))
-          (strata--highlight-marked-spans 'strata-grid-label marked-keys span1)
-          (strata--highlight-marked-spans 'strata-grid-label-cont marked-keys span2)))))))
+          (enhanced-dirvish--highlight-marked-spans 'enhanced-dirvish-grid-label marked-keys span1)
+          (enhanced-dirvish--highlight-marked-spans 'enhanced-dirvish-grid-label-cont marked-keys span2)))))))
 
-(defun strata-goto-file (path)
-  "Move point to entry matching PATH in current Strata buffer."
+(defun enhanced-dirvish-goto-file (path)
+  "Move point to entry matching PATH in current Enhanced Dirvish buffer."
   (when path
     (let ((target (directory-file-name (expand-file-name path))))
       (cond
        ((derived-mode-p 'dired-mode)
         (let ((moved (or (ignore-errors (dired-goto-file target))
                          (ignore-errors (dired-goto-file (concat target "/"))))))
-          (when moved (setq strata--empty-click-p nil strata--empty-click-position nil))
-          (strata-view--update-selection-highlight)
+          (when moved (setq enhanced-dirvish--empty-click-p nil enhanced-dirvish--empty-click-position nil))
+          (enhanced-dirvish-view--update-selection-highlight)
           moved))
-       ((or (derived-mode-p 'strata-compact-mode)
-            (derived-mode-p 'strata-icons-mode))
+       ((or (derived-mode-p 'enhanced-dirvish-compact-mode)
+            (derived-mode-p 'enhanced-dirvish-icons-mode))
         (let ((pos (point-min))
-              (icons-p (derived-mode-p 'strata-icons-mode))
-              (lbl-prop (if (derived-mode-p 'strata-icons-mode)
-                            'strata-grid-label
-                          'strata-entry-label))
+              (icons-p (derived-mode-p 'enhanced-dirvish-icons-mode))
+              (lbl-prop (if (derived-mode-p 'enhanced-dirvish-icons-mode)
+                            'enhanced-dirvish-grid-label
+                          'enhanced-dirvish-entry-label))
               (first-match nil)
               (label-match nil))
           (while (and (< pos (point-max)) (not label-match))
-            (let* ((next (or (next-single-property-change pos 'strata-entry) (point-max)))
-                   (val (get-text-property pos 'strata-entry)))
+            (let* ((next (or (next-single-property-change pos 'enhanced-dirvish-entry) (point-max)))
+                   (val (get-text-property pos 'enhanced-dirvish-entry)))
               (when (and val (string= (directory-file-name (expand-file-name val)) target))
                 (unless first-match (setq first-match pos))
                 (let ((lbl (if (get-text-property pos lbl-prop)
@@ -327,39 +327,39 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
           (ignore icons-p)
           (when-let ((dest (or label-match first-match)))
             (goto-char dest)
-            (setq strata--empty-click-p nil strata--empty-click-position nil)
-            (strata-view--update-selection-highlight)
+            (setq enhanced-dirvish--empty-click-p nil enhanced-dirvish--empty-click-position nil)
+            (enhanced-dirvish-view--update-selection-highlight)
             dest)))))))
 
 ;;;; Folder Colors & Custom Icons
 
-(defun strata-folder-color-set (dir color-name)
+(defun enhanced-dirvish-folder-color-set (dir color-name)
   "Assign COLOR-NAME badge to DIR (`nil' or empty removes customization)."
-  (let* ((p (strata-prefs))
+  (let* ((p (enhanced-dirvish-prefs))
          (key (directory-file-name (expand-file-name dir)))
-         (tbl (assoc-delete-all key (strata-prefs-folder-colors p))))
+         (tbl (assoc-delete-all key (enhanced-dirvish-prefs-folder-colors p))))
     (when (and color-name (not (string-empty-p color-name)))
       (push (cons key color-name) tbl))
-    (setf (strata-prefs-folder-colors p) tbl)
-    (strata-prefs-save)))
+    (setf (enhanced-dirvish-prefs-folder-colors p) tbl)
+    (enhanced-dirvish-prefs-save)))
 
-(defun strata-custom-icon-set (path icon-str)
+(defun enhanced-dirvish-custom-icon-set (path icon-str)
   "Assign custom ICON-STR badge to PATH (`nil' or empty clears it)."
-  (let* ((p (strata-prefs))
+  (let* ((p (enhanced-dirvish-prefs))
          (key (directory-file-name (expand-file-name path)))
-         (tbl (assoc-delete-all key (strata-prefs-custom-icons p))))
+         (tbl (assoc-delete-all key (enhanced-dirvish-prefs-custom-icons p))))
     (when (and icon-str (not (string-empty-p icon-str)))
       (push (cons key icon-str) tbl))
-    (setf (strata-prefs-custom-icons p) tbl)
-    (strata-prefs-save)))
+    (setf (enhanced-dirvish-prefs-custom-icons p) tbl)
+    (enhanced-dirvish-prefs-save)))
 
-(defun strata-file--badge-face (path)
+(defun enhanced-dirvish-file--badge-face (path)
   "Return custom face for folder PATH if customized."
   (when-let* ((key (and path (directory-file-name (expand-file-name path))))
-              (color (cdr (assoc key (strata-prefs-folder-colors (strata-prefs))))))
-    (cdr (assoc (downcase color) strata-folder-color-alist))))
+              (color (cdr (assoc key (enhanced-dirvish-prefs-folder-colors (enhanced-dirvish-prefs))))))
+    (cdr (assoc (downcase color) enhanced-dirvish-folder-color-alist))))
 
-(defconst strata-file--ext-icon-map
+(defconst enhanced-dirvish-file--ext-icon-map
   '(("el"       elisp      . font-lock-keyword-face)
     ("elc"      elisp      . shadow)
     ("org"      org        . success)
@@ -440,37 +440,37 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
     ("log"      file-text  . shadow))
   "Extension -> (ICON-KIND . FACE) lookup for verified Nerd Font file icons.")
 
-(defun strata-file--glyph (path &optional dir-p)
+(defun enhanced-dirvish-file--glyph (path &optional dir-p)
   "Return crisp verified Nerd Font icon glyph for PATH honoring custom icons."
   (let* ((key (and path (directory-file-name (expand-file-name path))))
-         (custom (cdr (assoc key (strata-prefs-custom-icons (strata-prefs)))))
-         (cface (strata-file--badge-face path))
+         (custom (cdr (assoc key (enhanced-dirvish-prefs-custom-icons (enhanced-dirvish-prefs)))))
+         (cface (enhanced-dirvish-file--badge-face path))
          (fname (downcase (file-name-nondirectory (or path ""))))
          (ext (downcase (or (file-name-extension fname) ""))))
     (cond
      (custom (propertize custom 'face (or cface 'dired-directory)))
      (dir-p
-      (let* ((mkind (strata-path-mount-kind path))
+      (let* ((mkind (enhanced-dirvish-path-mount-kind path))
              (kind (cond
                     ((eq mkind 'cloud) 'cloud)
                     ((eq mkind 'network) 'network)
                     ((file-symlink-p path) 'folder-open)
-                    ((strata-path-unsafe-probe-p path) 'folder)
+                    ((enhanced-dirvish-path-unsafe-probe-p path) 'folder)
                     ((file-exists-p (expand-file-name ".git" path)) 'folder-git)
                     (t 'folder))))
-        (strata-icon-glyph kind (or cface 'dired-directory)
+        (enhanced-dirvish-icon-glyph kind (or cface 'dired-directory)
                            (unless (memq kind '(cloud network)) "▸"))))
      ((string-prefix-p ".git" fname)
-      (strata-icon-glyph 'git 'warning "·"))
+      (enhanced-dirvish-icon-glyph 'git 'warning "·"))
      ((file-symlink-p path)
-      (strata-icon-glyph 'symlink 'font-lock-type-face "→"))
+      (enhanced-dirvish-icon-glyph 'symlink 'font-lock-type-face "→"))
      (t
-      (let ((hit (cdr (assoc ext strata-file--ext-icon-map))))
-        (strata-icon-glyph (or (car hit) 'file) (or (cdr hit) 'default) "·"))))))
+      (let ((hit (cdr (assoc ext enhanced-dirvish-file--ext-icon-map))))
+        (enhanced-dirvish-icon-glyph (or (car hit) 'file) (or (cdr hit) 'default) "·"))))))
 
 ;;;; Sorting, Natural Order & Type Classification Engine
 
-(defun strata-natural-compare (a b &optional case-sensitive)
+(defun enhanced-dirvish-natural-compare (a b &optional case-sensitive)
   "Compare strings A and B naturally so file2 < file10."
   (let ((sa (if case-sensitive a (downcase a)))
         (sb (if case-sensitive b (downcase b)))
@@ -499,8 +499,8 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
             ((> (- la i) (- lb j)) (setq cmp 1))))
     cmp))
 
-(defun strata-file-type-group (path &optional dir-p)
-  "Classify PATH into a Strata type group symbol."
+(defun enhanced-dirvish-file-type-group (path &optional dir-p)
+  "Classify PATH into an Enhanced Dirvish type group symbol."
   (if (or dir-p (file-directory-p path))
       'folders
     (let ((ext (downcase (or (file-name-extension path) ""))))
@@ -513,7 +513,7 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
        ((member ext '("el" "rs" "py" "nix" "js" "ts" "tsx" "c" "cpp" "h" "go" "sh" "toml" "json" "yaml" "yml" "css")) 'code)
        (t 'other)))))
 
-(defun strata-file-group-label (grp)
+(defun enhanced-dirvish-file-group-label (grp)
   "Human heading label for group symbol GRP."
   (pcase grp
     ('folders "Folders")
@@ -525,24 +525,24 @@ into \"dir\" so `strata-goto-file' could never land on them anyway."
     ('code "Code & Config")
     (_ "Other Files")))
 
-(defun strata-list-directory-entries (dir &optional prefs)
+(defun enhanced-dirvish-list-directory-entries (dir &optional prefs)
   "Return sorted entry plists for DIR honoring PREFS & active filter.
 Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
-  (let* ((p (or prefs (strata-prefs)))
-         (show-hidden (strata-prefs-show-hidden p))
-         (sort-key (strata-prefs-sort-key p))
-         (sort-dir (strata-prefs-sort-direction p))
-         (folders-first (strata-prefs-folders-first p))
-         (natural (strata-prefs-natural-sort p))
-         (case-sens (strata-prefs-case-sensitive-sort p))
-         (group-type (strata-prefs-group-by-type p))
+  (let* ((p (or prefs (enhanced-dirvish-prefs)))
+         (show-hidden (enhanced-dirvish-prefs-show-hidden p))
+         (sort-key (enhanced-dirvish-prefs-sort-key p))
+         (sort-dir (enhanced-dirvish-prefs-sort-direction p))
+         (folders-first (enhanced-dirvish-prefs-folders-first p))
+         (natural (enhanced-dirvish-prefs-natural-sort p))
+         (case-sens (enhanced-dirvish-prefs-case-sensitive-sort p))
+         (group-type (enhanced-dirvish-prefs-group-by-type p))
          (dir (file-name-as-directory (expand-file-name dir)))
          (names (when (file-directory-p dir)
                   (condition-case nil
                       (directory-files dir nil "\\`[^.]\\|\\`.[^.]" t)
                     (error nil))))
-         (flt (when (and strata-local-filter (not (string-empty-p strata-local-filter)))
-                strata-local-filter))
+         (flt (when (and enhanced-dirvish-local-filter (not (string-empty-p enhanced-dirvish-local-filter)))
+                enhanced-dirvish-local-filter))
          entries)
     (dolist (n names)
       (when (and (or show-hidden (not (string-prefix-p "." n)))
@@ -555,7 +555,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                (mtime (file-attribute-modification-time attrs))
                (ctime (file-attribute-status-change-time attrs))
                (ext (downcase (or (file-name-extension n) "")))
-               (grp (strata-file-type-group path dir-p)))
+               (grp (enhanced-dirvish-file-type-group path dir-p)))
           (push (list :name n :path path :dir-p dir-p :size size
                       :mtime mtime :ctime ctime :ext ext :group grp)
                 entries))))
@@ -598,7 +598,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                                    (_ 0))))
                             (when (= cmp 0)
                               (setq cmp (if natural
-                                            (strata-natural-compare (plist-get a :name)
+                                            (enhanced-dirvish-natural-compare (plist-get a :name)
                                                                     (plist-get b :name)
                                                                     case-sens)
                                           (let ((na (if case-sens (plist-get a :name) (downcase (plist-get a :name))))
@@ -607,21 +607,21 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                             (if desc (> cmp 0) (< cmp 0)))))))))))
     entries))
 
-(defun strata-compute-dired-switches (&optional prefs)
+(defun enhanced-dirvish-compute-dired-switches (&optional prefs)
   "Compute `dired-listing-switches' string matching PREFS."
-  (let* ((p (or prefs (strata-prefs)))
+  (let* ((p (or prefs (enhanced-dirvish-prefs)))
          (flags (list "-lh"))
-         (sk (strata-prefs-sort-key p)))
-    (if (strata-prefs-show-hidden p)
+         (sk (enhanced-dirvish-prefs-sort-key p)))
+    (if (enhanced-dirvish-prefs-show-hidden p)
         (push "-A" flags)
       (setq flags (delete "-a" flags)))
-    (when (strata-prefs-folders-first p)
+    (when (enhanced-dirvish-prefs-folders-first p)
       (push "--group-directories-first" flags))
-    ;; GNU ls defaults to largest/newest first for these keys.  Strata's
+    ;; GNU ls defaults to largest/newest first for these keys.  Enhanced Dirvish's
     ;; ascending order means smallest/oldest first in every layout.
     (when (if (memq sk '(size modified created))
-              (eq (strata-prefs-sort-direction p) 'asc)
-            (eq (strata-prefs-sort-direction p) 'desc))
+              (eq (enhanced-dirvish-prefs-sort-direction p) 'asc)
+            (eq (enhanced-dirvish-prefs-sort-direction p) 'desc))
       (push "-r" flags))
     (pcase sk
       ('modified (push "-t" flags))
@@ -629,73 +629,73 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       ('size (push "-S" flags))
       ('extension (push "-X" flags))
       ('unsorted (push "-U" flags))
-      (_ (when (strata-prefs-natural-sort p)
+      (_ (when (enhanced-dirvish-prefs-natural-sort p)
            (push "-v" flags))))
     (string-join (nreverse flags) " ")))
 
-(defun strata-apply-sort-to-dired ()
-  "Apply Strata sort & hidden settings directly to active Dired/Dirvish buffer."
+(defun enhanced-dirvish-apply-sort-to-dired ()
+  "Apply sort & hidden settings directly to active Dired/Dirvish buffer."
   (when (derived-mode-p 'dired-mode)
-    (let ((sw (strata-compute-dired-switches)))
+    (let ((sw (enhanced-dirvish-compute-dired-switches)))
       (setq-local dired-actual-switches sw)
       (setq dired-listing-switches sw)
       (revert-buffer))))
 
 ;;;; Per-Folder View Memory (LRU 128)
 
-(defun strata-folder-view-remember (dir &optional prefs)
+(defun enhanced-dirvish-folder-view-remember (dir &optional prefs)
   "Save current view/sort/cursor preferences for DIR into LRU (max 128)."
-  (let ((p (or prefs (strata-prefs))))
-    (when (and (strata-prefs-remember-folder-views p)
+  (let ((p (or prefs (enhanced-dirvish-prefs))))
+    (when (and (enhanced-dirvish-prefs-remember-folder-views p)
                dir
-               (not (strata-location-virtual-p dir))
+               (not (enhanced-dirvish-location-virtual-p dir))
                (file-directory-p dir))
       (let* ((key (directory-file-name (expand-file-name dir)))
-             (snapshot (list :mode (strata-prefs-browser-mode p)
-                             :sort-key (strata-prefs-sort-key p)
-                             :sort-dir (strata-prefs-sort-direction p)
-                             :folders-first (strata-prefs-folders-first p)
-                             :natural-sort (strata-prefs-natural-sort p)
-                             :group-by-type (strata-prefs-group-by-type p)
-                             :show-hidden (strata-prefs-show-hidden p)
-                             :compact-full-names (strata-prefs-compact-full-names p)
-                             :cursor (strata-current-file))))
-        (setq strata-folder-view-lru
+             (snapshot (list :mode (enhanced-dirvish-prefs-browser-mode p)
+                             :sort-key (enhanced-dirvish-prefs-sort-key p)
+                             :sort-dir (enhanced-dirvish-prefs-sort-direction p)
+                             :folders-first (enhanced-dirvish-prefs-folders-first p)
+                             :natural-sort (enhanced-dirvish-prefs-natural-sort p)
+                             :group-by-type (enhanced-dirvish-prefs-group-by-type p)
+                             :show-hidden (enhanced-dirvish-prefs-show-hidden p)
+                             :compact-full-names (enhanced-dirvish-prefs-compact-full-names p)
+                             :cursor (enhanced-dirvish-current-file))))
+        (setq enhanced-dirvish-folder-view-lru
               (cons (cons key snapshot)
-                    (assoc-delete-all key strata-folder-view-lru)))
-        (when (> (length strata-folder-view-lru) strata-folder-view-lru-limit)
-          (setcdr (nthcdr (1- strata-folder-view-lru-limit) strata-folder-view-lru) nil))))))
+                    (assoc-delete-all key enhanced-dirvish-folder-view-lru)))
+        (when (> (length enhanced-dirvish-folder-view-lru) enhanced-dirvish-folder-view-lru-limit)
+          (setcdr (nthcdr (1- enhanced-dirvish-folder-view-lru-limit) enhanced-dirvish-folder-view-lru) nil))))))
 
-(defun strata-folder-view-restore (dir &optional prefs)
+(defun enhanced-dirvish-folder-view-restore (dir &optional prefs)
   "Restore remembered view/sort preferences for DIR if available and return snapshot."
-  (let ((p (or prefs (strata-prefs))))
-    (when (and (strata-prefs-remember-folder-views p)
+  (let ((p (or prefs (enhanced-dirvish-prefs))))
+    (when (and (enhanced-dirvish-prefs-remember-folder-views p)
                dir
-               (not (strata-location-virtual-p dir)))
+               (not (enhanced-dirvish-location-virtual-p dir)))
       (let* ((key (directory-file-name (expand-file-name dir)))
-             (entry (cdr (assoc key strata-folder-view-lru))))
+             (entry (cdr (assoc key enhanced-dirvish-folder-view-lru))))
         (when entry
-          (setf (strata-prefs-browser-mode p) (or (plist-get entry :mode) 'columns))
-          (setf (strata-prefs-sort-key p) (or (plist-get entry :sort-key) 'name))
-          (setf (strata-prefs-sort-direction p) (or (plist-get entry :sort-dir) 'asc))
-          (setf (strata-prefs-folders-first p) (plist-get entry :folders-first))
-          (setf (strata-prefs-natural-sort p) (plist-get entry :natural-sort))
-          (setf (strata-prefs-group-by-type p) (plist-get entry :group-by-type))
-          (setf (strata-prefs-show-hidden p) (plist-get entry :show-hidden))
-          (setf (strata-prefs-compact-full-names p) (plist-get entry :compact-full-names)))
+          (setf (enhanced-dirvish-prefs-browser-mode p) (or (plist-get entry :mode) 'columns))
+          (setf (enhanced-dirvish-prefs-sort-key p) (or (plist-get entry :sort-key) 'name))
+          (setf (enhanced-dirvish-prefs-sort-direction p) (or (plist-get entry :sort-dir) 'asc))
+          (setf (enhanced-dirvish-prefs-folders-first p) (plist-get entry :folders-first))
+          (setf (enhanced-dirvish-prefs-natural-sort p) (plist-get entry :natural-sort))
+          (setf (enhanced-dirvish-prefs-group-by-type p) (plist-get entry :group-by-type))
+          (setf (enhanced-dirvish-prefs-show-hidden p) (plist-get entry :show-hidden))
+          (setf (enhanced-dirvish-prefs-compact-full-names p) (plist-get entry :compact-full-names)))
         entry))))
 
 ;;;; Dirvish Custom Attributes & Formatters
 
-(dirvish-define-attribute strata-icon
-  "Render verified Strata Nerd Font folder/file glyph before filenames."
+(dirvish-define-attribute enhanced-dirvish-icon
+  "Render verified Enhanced Dirvish Nerd Font folder/file glyph before filenames."
   :width 3
   (let* ((dir-p (eq (car f-type) 'dir))
-         (g (strata-file--glyph f-name dir-p))
+         (g (enhanced-dirvish-file--glyph f-name dir-p))
          (icon-str (concat g " "))
          (ov (make-overlay (max (point-min) (1- f-beg)) f-beg)))
     (when hl-face
-      (setq icon-str (strata-icon-tint icon-str hl-face t)))
+      (setq icon-str (enhanced-dirvish-icon-tint icon-str hl-face t)))
     (when dir-p
       (add-text-properties 0 (length icon-str)
                            (list 'mouse-face 'highlight
@@ -705,7 +705,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
     (overlay-put ov 'after-string icon-str)
     `(ov . ,ov)))
 
-(dirvish-define-attribute strata-dir-mouse
+(dirvish-define-attribute enhanced-dirvish-dir-mouse
   "Make directories highlight and show a hand cursor on mouse hover."
   :width 0
   (when (eq (car f-type) 'dir)
@@ -715,11 +715,11 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       (overlay-put ov 'help-echo (format "Open folder %s" (abbreviate-file-name f-name)))
       `(ov . ,ov))))
 
-(defun strata-dired-decorate-dirs ()
+(defun enhanced-dirvish-dired-decorate-dirs ()
   "Ensure plain Dired buffers (e.g., split pane 2) mark directories as clickable."
   (when (and (derived-mode-p 'dired-mode)
              (not (and (fboundp 'dirvish-curr) (dirvish-curr)
-                       (assq 'strata-dir-mouse (dirvish-prop :attrs)))))
+                       (assq 'enhanced-dirvish-dir-mouse (dirvish-prop :attrs)))))
     (save-excursion
       (goto-char (point-min))
       (while (not (eobp))
@@ -734,84 +734,84 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                                          'help-echo (format "Open folder %s" (abbreviate-file-name f)))))))
         (forward-line 1)))))
 
-(add-hook 'dired-after-readin-hook #'strata-dired-decorate-dirs)
+(add-hook 'dired-after-readin-hook #'enhanced-dirvish-dired-decorate-dirs)
 
-(dirvish-define-attribute strata-color
-  "Apply Strata custom folder color faces to tagged directory names."
+(dirvish-define-attribute enhanced-dirvish-color
+  "Apply Enhanced Dirvish custom folder color faces to tagged directory names."
   :width 0
-  (let ((badge (strata-file--badge-face f-name)))
+  (let ((badge (enhanced-dirvish-file--badge-face f-name)))
     (when badge
       (let ((ov (make-overlay f-beg f-end)))
         (overlay-put ov 'face badge)
         `(ov . ,ov)))))
 
-(dirvish-define-attribute strata-size
+(dirvish-define-attribute enhanced-dirvish-size
   "Format file size honoring Metric (1000) / Binary (1024) and `columns-show-sizes'."
   :right 9
-  :when (and (strata-prefs-columns-show-sizes (strata-prefs))
+  :when (and (enhanced-dirvish-prefs-columns-show-sizes (enhanced-dirvish-prefs))
              (>= win-width 20))
   (let* ((dir-p (eq (car f-type) 'dir))
          (sz (and f-attrs (file-attribute-size f-attrs)))
          (str (cond
                (dir-p "")
-               ((numberp sz) (strata-format-bytes sz))
+               ((numberp sz) (enhanced-dirvish-format-bytes sz))
                (t "")))
          (out (format "%8s " str)))
     (add-face-text-property 0 (length out) (or hl-face 'dirvish-file-size) t out)
     `(right . ,out)))
 
-(dirvish-define-attribute strata-time
-  "Format modification time using Strata relative or ISO date preference."
+(dirvish-define-attribute enhanced-dirvish-time
+  "Format modification time using relative or ISO date preference."
   :right 17
   :when (>= win-width 38)
   (let* ((tm (and f-attrs (file-attribute-modification-time f-attrs)))
-         (str (or (strata-format-time tm) ""))
+         (str (or (enhanced-dirvish-format-time tm) ""))
          (out (format " %-15s" str)))
     (add-face-text-property 0 (length out) (or hl-face 'dirvish-file-time) t out)
     `(right . ,out)))
 
-;;;; Dirvish Header Breadcrumbs & Strata Footer Mode-Line
+;;;; Dirvish Header Breadcrumbs & Enhanced Dirvish Footer Mode-Line
 
-(defvar strata-sort-header-map
+(defvar enhanced-dirvish-sort-header-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [header-line mouse-1] #'strata-sort-menu)
-    (define-key map [header-line mouse-2] #'strata-sort-menu)
-    (define-key map [mode-line mouse-1] #'strata-sort-menu)
-    (define-key map [mode-line mouse-2] #'strata-sort-menu)
+    (define-key map [header-line mouse-1] #'enhanced-dirvish-sort-menu)
+    (define-key map [header-line mouse-2] #'enhanced-dirvish-sort-menu)
+    (define-key map [mode-line mouse-1] #'enhanced-dirvish-sort-menu)
+    (define-key map [mode-line mouse-2] #'enhanced-dirvish-sort-menu)
     map)
   "Mouse bindings for the Sort By header control in every directory layout.")
 
-(defvar strata-view-header-map
+(defvar enhanced-dirvish-view-header-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [header-line mouse-1] #'strata-view-menu)
-    (define-key map [header-line mouse-2] #'strata-view-menu)
-    (define-key map [mode-line mouse-1] #'strata-view-menu)
-    (define-key map [mode-line mouse-2] #'strata-view-menu)
+    (define-key map [header-line mouse-1] #'enhanced-dirvish-view-menu)
+    (define-key map [header-line mouse-2] #'enhanced-dirvish-view-menu)
+    (define-key map [mode-line mouse-1] #'enhanced-dirvish-view-menu)
+    (define-key map [mode-line mouse-2] #'enhanced-dirvish-view-menu)
     map)
   "Mouse bindings for the View header control in every directory layout.")
 
-(defun strata-header--select-browser (event)
+(defun enhanced-dirvish-header--select-browser (event)
   "Select the browser owning header EVENT, or use the current browser."
   (when event
     (let* ((clicked (posn-window (event-start event)))
            (target
             (when (window-live-p clicked)
               (with-current-buffer (window-buffer clicked)
-                (if (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
+                (if (derived-mode-p 'dired-mode 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
                     clicked
                   ;; Columns puts its header in a separate Dirvish window.
                   (when-let ((dv (dirvish-curr))) (dv-root-window dv)))))))
       (when (window-live-p target)
         (select-window target)
-        (strata-panes--sync-active-pane-from-window target))))
-  (unless (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode)
+        (enhanced-dirvish-panes--sync-active-pane-from-window target))))
+  (unless (derived-mode-p 'dired-mode 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
     (user-error "Open a directory to use this menu")))
 
-(defun strata-view-current-mode ()
+(defun enhanced-dirvish-view-current-mode ()
   "Return the current browser's layout, preferring its buffer's setting."
-  (or strata-local-view-mode (strata-prefs-browser-mode (strata-prefs))))
+  (or enhanced-dirvish-local-view-mode (enhanced-dirvish-prefs-browser-mode (enhanced-dirvish-prefs))))
 
-(defun strata-crumb--make-segment (label target)
+(defun enhanced-dirvish-crumb--make-segment (label target)
   "Return clickable breadcrumb segment LABEL pointing to directory TARGET."
   (let ((km (make-sparse-keymap))
         (open-fn (lambda (ev)
@@ -820,45 +820,45 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                                   (posn-window (event-end ev)))))
                      (when (window-live-p win)
                        (select-window win)
-                       (when (fboundp 'strata-panes--sync-active-pane-from-window)
-                         (strata-panes--sync-active-pane-from-window win))))
-                   (strata-open-location target t))))
+                       (when (fboundp 'enhanced-dirvish-panes--sync-active-pane-from-window)
+                         (enhanced-dirvish-panes--sync-active-pane-from-window win))))
+                   (enhanced-dirvish-open-location target t))))
     (define-key km [header-line mouse-1] open-fn)
     (define-key km [header-line mouse-2] open-fn)
     (define-key km [mode-line mouse-1] open-fn)
     (define-key km [mode-line mouse-2] open-fn)
-    (let ((out (strata-icon-tint (copy-sequence label) 'strata-crumb-segment t)))
+    (let ((out (enhanced-dirvish-icon-tint (copy-sequence label) 'enhanced-dirvish-crumb-segment t)))
       (add-text-properties 0 (length out)
                            (list 'mouse-face 'highlight
                                  'pointer 'hand
                                  'local-map km
                                  'keymap km
-                                 'strata-crumb-path target
+                                 'enhanced-dirvish-crumb-path target
                                  'help-echo (format "Open folder %s" target))
                            out)
       out)))
 
-(dirvish-define-mode-line strata-breadcrumb
+(dirvish-define-mode-line enhanced-dirvish-breadcrumb
   "Interactive clickable breadcrumb header with active pane badge & view pill."
   (let* ((dir (abbreviate-file-name (or (dirvish-prop :root) default-directory "~/")))
          (clean (directory-file-name dir))
          (parts (split-string clean "/" t))
          (acc (if (string-prefix-p "~" clean) "~" "/"))
          (pane-badge
-          (when (and (fboundp 'strata-split-active-p) (strata-split-active-p))
-            (let* ((ap (and (fboundp 'strata-active-pane) (strata-active-pane)))
-                   (active-id (if ap (strata-pane-state-id ap) 1))
+          (when (and (fboundp 'enhanced-dirvish-split-active-p) (enhanced-dirvish-split-active-p))
+            (let* ((ap (and (fboundp 'enhanced-dirvish-active-pane) (enhanced-dirvish-active-pane)))
+                   (active-id (if ap (enhanced-dirvish-pane-state-id ap) 1))
                    (other-id (if (= active-id 1) 2 1))
                    (this-pane
                     (or (when (and (fboundp 'mode-line-window-selected-p)
-                                   (fboundp 'strata-panes--valid-main-window-p)
-                                   (strata-panes--valid-main-window-p (selected-window)))
+                                   (fboundp 'enhanced-dirvish-panes--valid-main-window-p)
+                                   (enhanced-dirvish-panes--valid-main-window-p (selected-window)))
                           (if (mode-line-window-selected-p) active-id other-id))
-                        (when-let* ((tab (and (fboundp 'strata-active-tab) (strata-active-tab)))
-                                    (p1 (strata-tab-state-pane1 tab))
-                                    (p2 (strata-tab-state-pane2 tab)))
-                          (let ((b1 (strata-pane-state-buffer p1))
-                                (b2 (strata-pane-state-buffer p2)))
+                        (when-let* ((tab (and (fboundp 'enhanced-dirvish-active-tab) (enhanced-dirvish-active-tab)))
+                                    (p1 (enhanced-dirvish-tab-state-pane1 tab))
+                                    (p2 (enhanced-dirvish-tab-state-pane2 tab)))
+                          (let ((b1 (enhanced-dirvish-pane-state-buffer p1))
+                                (b2 (enhanced-dirvish-pane-state-buffer p2)))
                             (cond
                              ((and (not (eq b1 b2)) (eq (current-buffer) b1)) 1)
                              ((and (not (eq b1 b2)) (eq (current-buffer) b2)) 2)
@@ -869,114 +869,114 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                               (format " [P%d ACTIVE] " this-pane)
                             (format " [P%d] " this-pane))
                           'face (if active-p
-                                    'strata-pane-active-badge
-                                  'strata-pane-inactive-badge)))))
+                                    'enhanced-dirvish-pane-active-badge
+                                  'enhanced-dirvish-pane-inactive-badge)))))
          (crumbs
           (if (string-prefix-p "~" clean)
               (let ((segs (cdr parts)))
                 (concat
-                 (strata-crumb--make-segment
+                 (enhanced-dirvish-crumb--make-segment
                   (if (display-graphic-p)
-                      (concat (strata-icon-glyph 'home 'strata-crumb-segment) " ~")
+                      (concat (enhanced-dirvish-icon-glyph 'home 'enhanced-dirvish-crumb-segment) " ~")
                     "~")
                   (expand-file-name "~/"))
                  (mapconcat
                   (lambda (seg)
                     (setq acc (concat acc "/" seg))
-                    (concat (propertize " › " 'face 'strata-crumb-separator)
-                            (strata-crumb--make-segment seg (expand-file-name acc))))
+                    (concat (propertize " › " 'face 'enhanced-dirvish-crumb-separator)
+                            (enhanced-dirvish-crumb--make-segment seg (expand-file-name acc))))
                   segs "")))
             (concat
-             (strata-crumb--make-segment "/" "/")
+             (enhanced-dirvish-crumb--make-segment "/" "/")
              (mapconcat
               (lambda (seg)
                 (setq acc (concat (if (string= acc "/") "" acc) "/" seg))
-                (concat (propertize " › " 'face 'strata-crumb-separator)
-                        (strata-crumb--make-segment seg acc)))
+                (concat (propertize " › " 'face 'enhanced-dirvish-crumb-separator)
+                        (enhanced-dirvish-crumb--make-segment seg acc)))
               parts ""))))
-         (filter-pill (when strata-local-filter
+         (filter-pill (when enhanced-dirvish-local-filter
                         (concat
-                         (propertize " " 'face 'strata-pill-filter)
-                         (strata-icon-glyph 'search 'strata-pill-filter "Filter:")
-                         (propertize (format " %s " strata-local-filter)
-                                     'face 'strata-pill-filter)))))
+                         (propertize " " 'face 'enhanced-dirvish-pill-filter)
+                         (enhanced-dirvish-icon-glyph 'search 'enhanced-dirvish-pill-filter "Filter:")
+                         (propertize (format " %s " enhanced-dirvish-local-filter)
+                                     'face 'enhanced-dirvish-pill-filter)))))
     (concat (or pane-badge "") " " crumbs (when filter-pill (concat "  " filter-pill)))))
 
-(dirvish-define-mode-line strata-view-info
+(dirvish-define-mode-line enhanced-dirvish-view-info
   "Clickable Sort By and View controls in the header."
-  (let* ((p (strata-prefs))
-         (vmode (strata-view-current-mode))
+  (let* ((p (enhanced-dirvish-prefs))
+         (vmode (enhanced-dirvish-view-current-mode))
          (view-lbl (pcase vmode
                      ('columns "Columns")
                      ('icons "Icons")
-                     ('list (if (strata-prefs-expandable-tree p) "Tree" "List"))
+                     ('list (if (enhanced-dirvish-prefs-expandable-tree p) "Tree" "List"))
                      ('compact "Compact")
                      (_ "Columns")))
-         (arrow (if (eq (strata-prefs-sort-direction p) 'desc) "↓" "↑"))
-         (sort-lbl (capitalize (symbol-name (strata-prefs-sort-key p))))
-         (tenx (when (strata-prefs-tenxer-mode p)
-                 (propertize " 10X " 'face 'strata-pill-10x))))
+         (arrow (if (eq (enhanced-dirvish-prefs-sort-direction p) 'desc) "↓" "↑"))
+         (sort-lbl (capitalize (symbol-name (enhanced-dirvish-prefs-sort-key p))))
+         (tenx (when (enhanced-dirvish-prefs-tenxer-mode p)
+                 (propertize " 10X " 'face 'enhanced-dirvish-pill-10x))))
     (concat
      (propertize (format " [Sort By… %s %s] " sort-lbl arrow)
-                 'face 'strata-header-accent
+                 'face 'enhanced-dirvish-header-accent
                  'mouse-face 'highlight 'pointer 'hand
                  'help-echo "Sort files by name, date, size or extension (C-c s)"
-                 'local-map strata-sort-header-map 'keymap strata-sort-header-map)
+                 'local-map enhanced-dirvish-sort-header-map 'keymap enhanced-dirvish-sort-header-map)
      ;; Adjacent equal mouse-face properties form one hover region even
      ;; when the buttons have different keymaps.  Keep a plain gap between.
      " "
      (propertize (format " [View… %s] " view-lbl)
-                 'face 'strata-header-accent
+                 'face 'enhanced-dirvish-header-accent
                  'mouse-face 'highlight 'pointer 'hand
                  'help-echo "Choose Columns, Icons, List/Tree or Compact (C-1 / C-2 / C-3 / C-4)"
-                 'local-map strata-view-header-map 'keymap strata-view-header-map)
+                 'local-map enhanced-dirvish-view-header-map 'keymap enhanced-dirvish-view-header-map)
      (or tenx ""))))
 
-(defun strata-view-header-line ()
+(defun enhanced-dirvish-view-header-line ()
   "Render breadcrumbs while reserving room for the Sort By and View controls."
-  (let* ((right (dirvish-strata-view-info-ml))
-         (left (dirvish-strata-breadcrumb-ml))
+  (let* ((right (dirvish-enhanced-dirvish-view-info-ml))
+         (left (dirvish-enhanced-dirvish-breadcrumb-ml))
          (room (max 0 (- (window-width) (string-width right) 1))))
     (concat (truncate-string-to-width left room nil nil "…")
             (propertize " " 'display
                         `(space :align-to (- right ,(string-width right))))
             right)))
 
-(dirvish-define-mode-line strata-footer
-  "Strata footer: selection summary, clipboard, chord indicator, and hints."
-  (let* ((p (strata-prefs))
-         (count (length (strata-marked-files-only)))
-         (clip (when (fboundp 'strata-pane-clipboard-summary)
-                 (strata-pane-clipboard-summary)))
-         (chord (when strata-active-chord
-                  (propertize (format " %s " strata-active-chord) 'face 'strata-pill-chord)))
-         (hints (when (and (strata-prefs-show-keybinding-hints p) (not chord))
-                  (if (strata-prefs-tenxer-mode p)
+(dirvish-define-mode-line enhanced-dirvish-footer
+  "Footer: selection summary, clipboard, chord indicator, and hints."
+  (let* ((p (enhanced-dirvish-prefs))
+         (count (length (enhanced-dirvish-marked-files-only)))
+         (clip (when (fboundp 'enhanced-dirvish-pane-clipboard-summary)
+                 (enhanced-dirvish-pane-clipboard-summary)))
+         (chord (when enhanced-dirvish-active-chord
+                  (propertize (format " %s " enhanced-dirvish-active-chord) 'face 'enhanced-dirvish-pill-chord)))
+         (hints (when (and (enhanced-dirvish-prefs-show-keybinding-hints p) (not chord))
+                  (if (enhanced-dirvish-prefs-tenxer-mode p)
                       " j/k Nav  g Go  , Sort  ; Act  t Tabs  i Peek  f Filter  ~ Keys"
                     " ←/→ Nav  C-1..4 View  C-c s Sort  F3 Split  C-k Search  C-, Prefs  ? Keys"))))
     (concat
      (if (> count 0)
-         (propertize (format " %d selected " count) 'face 'strata-header-accent)
+         (propertize (format " %d selected " count) 'face 'enhanced-dirvish-header-accent)
        "")
-     (when clip (propertize (format " %s " clip) 'face 'strata-hint-key))
+     (when clip (propertize (format " %s " clip) 'face 'enhanced-dirvish-hint-key))
      (or chord "")
-     (when hints (propertize hints 'face 'strata-hint-desc)))))
+     (when hints (propertize hints 'face 'enhanced-dirvish-hint-desc)))))
 
 ;;;; Async Thumbnail Generator (Icons View)
 
-(defun strata-thumbnail-path (file size)
+(defun enhanced-dirvish-thumbnail-path (file size)
   "Return cache PNG path for FILE at SIZE."
-  (make-directory strata-thumbnail-dir t)
-  (expand-file-name (format "%s-%d.png" (md5 file) size) strata-thumbnail-dir))
+  (make-directory enhanced-dirvish-thumbnail-dir t)
+  (expand-file-name (format "%s-%d.png" (md5 file) size) enhanced-dirvish-thumbnail-dir))
 
-(defun strata-thumbnail-maybe-generate (file size callback)
+(defun enhanced-dirvish-thumbnail-maybe-generate (file size callback)
   "Return cached thumbnail path if fresh, or generate asynchronously via CALLBACK."
-  (let ((out (strata-thumbnail-path file size))
+  (let ((out (enhanced-dirvish-thumbnail-path file size))
         (ext (downcase (or (file-name-extension file) ""))))
     (if (and (file-exists-p out)
              (file-newer-than-file-p out file))
         out
-      (unless (gethash out strata-thumbnail-pending)
+      (unless (gethash out enhanced-dirvish-thumbnail-pending)
         (let ((cmd
                (cond
                 ((and (member ext '("png" "jpg" "jpeg" "webp" "bmp" "tif" "tiff" "gif" "svg"))
@@ -989,146 +989,146 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                  (list "pdftoppm" "-png" "-singlefile" "-f" "1" "-scale-to"
                        (number-to-string size) file (file-name-sans-extension out))))))
           (when cmd
-            (puthash out t strata-thumbnail-pending)
+            (puthash out t enhanced-dirvish-thumbnail-pending)
             (make-process
-             :name (format "strata-thumb-%s" (file-name-nondirectory file))
+             :name (format "enhanced-dirvish-thumb-%s" (file-name-nondirectory file))
              :noquery t
              :command cmd
              :sentinel
              (lambda (proc _ev)
                (when (memq (process-status proc) '(exit signal))
-                 (remhash out strata-thumbnail-pending)
+                 (remhash out enhanced-dirvish-thumbnail-pending)
                  (when (and (= 0 (process-exit-status proc)) (file-exists-p out))
                    (funcall callback out))))))))
       nil)))
 
 ;;;; Compact View (Horizontal Multi-Column Flow + Sideways Scroll + Full-Names Toggle)
 
-(defvar-local strata-view-directory nil "Directory displayed in compact/icons view buffer.")
-(defvar-local strata-marked-entries nil "Marked file paths in compact/icons view buffer.")
-(defvar-local strata-compact-col-width 28 "Current column stride in Compact view.")
-(defvar-local strata-compact-rows 20 "Row count per vertical column in Compact view.")
+(defvar-local enhanced-dirvish-view-directory nil "Directory displayed in compact/icons view buffer.")
+(defvar-local enhanced-dirvish-marked-entries nil "Marked file paths in compact/icons view buffer.")
+(defvar-local enhanced-dirvish-compact-col-width 28 "Current column stride in Compact view.")
+(defvar-local enhanced-dirvish-compact-rows 20 "Row count per vertical column in Compact view.")
 
-(defvar strata-mouse--inhibit-preview nil
+(defvar enhanced-dirvish-mouse--inhibit-preview nil
   "Non-nil while tracking a live mouse drag selection to avoid preview churn.")
 
-(defvar strata-mouse--drag-state nil
+(defvar enhanced-dirvish-mouse--drag-state nil
   "Active drag-selection state plist while holding button-1.")
 
-(defvar strata-mouse--finished-drag-state nil
+(defvar enhanced-dirvish-mouse--finished-drag-state nil
   "Completed drag-selection state awaiting button-1 release command.")
 
-(defvar strata-mouse--suppress-mouse-3-once nil
+(defvar enhanced-dirvish-mouse--suppress-mouse-3-once nil
   "Non-nil after cancelling a drag with right button to drop trailing release.")
 
-(defvar strata-mouse--recent-dir-open nil
+(defvar enhanced-dirvish-mouse--recent-dir-open nil
   "Snapshot of last single-click directory navigation to guard double-clicks.")
 
-(defun strata-mouse--history (direction event)
+(defun enhanced-dirvish-mouse--history (direction event)
   "Navigate DIRECTION in the browser pane owning mouse EVENT."
   ;; `mouse-event-p' only recognizes the primary buttons on some Emacs builds.
   ;; Thumb buttons still carry the normal positional event structure.
   (let* ((clicked (and (consp event) (posn-window (event-start event))))
          (target (and (window-live-p clicked)
                       (with-current-buffer (window-buffer clicked)
-                        (if (and (strata-panes--valid-main-window-p clicked)
-                                 (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode
-                                                 'strata-computer-mode 'strata-trash-mode
-                                                 'strata-recent-mode 'strata-network-mode))
+                        (if (and (enhanced-dirvish-panes--valid-main-window-p clicked)
+                                 (derived-mode-p 'dired-mode 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode
+                                                 'enhanced-dirvish-computer-mode 'enhanced-dirvish-trash-mode
+                                                 'enhanced-dirvish-recent-mode 'enhanced-dirvish-network-mode))
                             clicked
                           (when-let ((dv (dirvish-curr))) (dv-root-window dv)))))))
-    (setq target (or (and (window-live-p target) target) (strata-panes--main-window)))
+    (setq target (or (and (window-live-p target) target) (enhanced-dirvish-panes--main-window)))
     (when (window-live-p target)
       (select-window target)
-      (strata-panes--sync-active-pane-from-window target)
-      (let ((pane (strata-active-pane)))
+      (enhanced-dirvish-panes--sync-active-pane-from-window target)
+      (let ((pane (enhanced-dirvish-active-pane)))
         ;; At either end of history the thumb button behaves like a disabled
         ;; Back or Forward control instead of interrupting mouse navigation.
         (if (eq direction 'back)
-            (when (strata-pane-state-history-back pane) (strata-history-back))
-          (when (strata-pane-state-history-fwd pane) (strata-history-forward)))))))
+            (when (enhanced-dirvish-pane-state-history-back pane) (enhanced-dirvish-history-back))
+          (when (enhanced-dirvish-pane-state-history-fwd pane) (enhanced-dirvish-history-forward)))))))
 
-(defun strata-mouse-history-back (&optional event)
+(defun enhanced-dirvish-mouse-history-back (&optional event)
   "Go back in the pane under mouse EVENT, or the active pane."
   (interactive (list (when (consp last-input-event) last-input-event)))
-  (strata-mouse--history 'back event))
+  (enhanced-dirvish-mouse--history 'back event))
 
-(defun strata-mouse-history-forward (&optional event)
+(defun enhanced-dirvish-mouse-history-forward (&optional event)
   "Go forward in the pane under mouse EVENT, or the active pane."
   (interactive (list (when (consp last-input-event) last-input-event)))
-  (strata-mouse--history 'forward event))
+  (enhanced-dirvish-mouse--history 'forward event))
 
-(defun strata-mouse-install-history-bindings (map)
+(defun enhanced-dirvish-mouse-install-history-bindings (map)
   "Install Back/Forward thumb buttons and hardware keys on browser MAP."
-  (dolist (pair '((8 . strata-mouse-history-back) (9 . strata-mouse-history-forward)))
+  (dolist (pair '((8 . enhanced-dirvish-mouse-history-back) (9 . enhanced-dirvish-mouse-history-forward)))
     (dolist (prefix '("mouse-" "double-mouse-" "triple-mouse-" "drag-mouse-"
                       "down-mouse-" "double-down-mouse-" "triple-down-mouse-"))
       (let ((event (intern (format "%s%d" prefix (car pair))))
             (command (if (string-match-p "down-" prefix) #'ignore (cdr pair))))
         (dolist (area '(nil header-line mode-line))
           (define-key map (if area (vector area event) (vector event)) command)))))
-  (define-key map [XF86Back] #'strata-mouse-history-back)
-  (define-key map [XF86Forward] #'strata-mouse-history-forward)
+  (define-key map [XF86Back] #'enhanced-dirvish-mouse-history-back)
+  (define-key map [XF86Forward] #'enhanced-dirvish-mouse-history-forward)
   map)
 
-(defun strata-mouse-install-keymap-bindings (map)
-  "Install shared Strata mouse click, drag-select, and drop bindings on MAP."
-  (define-key map (kbd "<down-mouse-1>") #'strata-mouse-down-entry)
-  (define-key map (kbd "<mouse-1>") #'strata-mouse-click-entry)
-  (define-key map (kbd "<drag-mouse-1>") #'strata-mouse-drag-drop)
-  (define-key map (kbd "<C-down-mouse-1>") #'strata-mouse-down-entry)
-  (define-key map (kbd "<C-mouse-1>") #'strata-mouse-toggle-select)
-  (define-key map (kbd "<C-drag-mouse-1>") #'strata-mouse-drag-copy)
-  (define-key map (kbd "<S-down-mouse-1>") #'strata-mouse-down-entry)
-  (define-key map (kbd "<S-mouse-1>") #'strata-mouse-range-select)
-  (define-key map (kbd "<S-drag-mouse-1>") #'strata-mouse-drag-move)
-  (define-key map (kbd "<C-S-down-mouse-1>") #'strata-mouse-down-entry)
-  (define-key map (kbd "<C-S-mouse-1>") #'strata-mouse-add-range-select)
-  (define-key map (kbd "<C-S-drag-mouse-1>") #'strata-mouse-drag-drop)
-  (define-key map (kbd "<double-drag-mouse-1>") #'strata-mouse-drag-drop)
-  (define-key map (kbd "<mouse-2>") #'strata-mouse-activate-at-event)
-  (define-key map (kbd "<double-mouse-1>") #'strata-mouse-activate-at-event)
-  (define-key map (kbd "<mouse-3>") #'strata-mouse-context-menu)
-  (strata-mouse-install-history-bindings map)
+(defun enhanced-dirvish-mouse-install-keymap-bindings (map)
+  "Install shared mouse click, drag-select, and drop bindings on MAP."
+  (define-key map (kbd "<down-mouse-1>") #'enhanced-dirvish-mouse-down-entry)
+  (define-key map (kbd "<mouse-1>") #'enhanced-dirvish-mouse-click-entry)
+  (define-key map (kbd "<drag-mouse-1>") #'enhanced-dirvish-mouse-drag-drop)
+  (define-key map (kbd "<C-down-mouse-1>") #'enhanced-dirvish-mouse-down-entry)
+  (define-key map (kbd "<C-mouse-1>") #'enhanced-dirvish-mouse-toggle-select)
+  (define-key map (kbd "<C-drag-mouse-1>") #'enhanced-dirvish-mouse-drag-copy)
+  (define-key map (kbd "<S-down-mouse-1>") #'enhanced-dirvish-mouse-down-entry)
+  (define-key map (kbd "<S-mouse-1>") #'enhanced-dirvish-mouse-range-select)
+  (define-key map (kbd "<S-drag-mouse-1>") #'enhanced-dirvish-mouse-drag-move)
+  (define-key map (kbd "<C-S-down-mouse-1>") #'enhanced-dirvish-mouse-down-entry)
+  (define-key map (kbd "<C-S-mouse-1>") #'enhanced-dirvish-mouse-add-range-select)
+  (define-key map (kbd "<C-S-drag-mouse-1>") #'enhanced-dirvish-mouse-drag-drop)
+  (define-key map (kbd "<double-drag-mouse-1>") #'enhanced-dirvish-mouse-drag-drop)
+  (define-key map (kbd "<mouse-2>") #'enhanced-dirvish-mouse-activate-at-event)
+  (define-key map (kbd "<double-mouse-1>") #'enhanced-dirvish-mouse-activate-at-event)
+  (define-key map (kbd "<mouse-3>") #'enhanced-dirvish-mouse-context-menu)
+  (enhanced-dirvish-mouse-install-history-bindings map)
   map)
 
-(defvar strata-compact-mode-map
+(defvar enhanced-dirvish-compact-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
-    (define-key map (kbd "j") #'strata-compact-next-item)
-    (define-key map (kbd "<down>") #'strata-compact-next-item)
-    (define-key map (kbd "k") #'strata-compact-prev-item)
-    (define-key map (kbd "<up>") #'strata-compact-prev-item)
-    (define-key map (kbd "l") #'strata-compact-next-col)
-    (define-key map (kbd "<right>") #'strata-compact-next-col)
-    (define-key map (kbd "h") #'strata-compact-prev-col)
-    (define-key map (kbd "<left>") #'strata-compact-prev-col)
+    (define-key map (kbd "j") #'enhanced-dirvish-compact-next-item)
+    (define-key map (kbd "<down>") #'enhanced-dirvish-compact-next-item)
+    (define-key map (kbd "k") #'enhanced-dirvish-compact-prev-item)
+    (define-key map (kbd "<up>") #'enhanced-dirvish-compact-prev-item)
+    (define-key map (kbd "l") #'enhanced-dirvish-compact-next-col)
+    (define-key map (kbd "<right>") #'enhanced-dirvish-compact-next-col)
+    (define-key map (kbd "h") #'enhanced-dirvish-compact-prev-col)
+    (define-key map (kbd "<left>") #'enhanced-dirvish-compact-prev-col)
     (define-key map (kbd "<wheel-up>") (lambda () (interactive) (scroll-right 6)))
     (define-key map (kbd "<wheel-down>") (lambda () (interactive) (scroll-left 6)))
     (define-key map (kbd "<wheel-left>") (lambda () (interactive) (scroll-right 6)))
     (define-key map (kbd "<wheel-right>") (lambda () (interactive) (scroll-left 6)))
-    (define-key map (kbd "RET") #'strata-open-or-edit-at-point)
-    (strata-mouse-install-keymap-bindings map)
-    (define-key map (kbd "SPC") #'strata-preview-at-point)
-    (define-key map (kbd "m") #'strata-view-toggle-mark)
-    (define-key map (kbd "<backspace>") #'strata-view-up-directory)
-    (define-key map (kbd "g") #'strata-compact-refresh)
-    (define-key map (kbd "<f5>") #'strata-compact-refresh)
+    (define-key map (kbd "RET") #'enhanced-dirvish-open-or-edit-at-point)
+    (enhanced-dirvish-mouse-install-keymap-bindings map)
+    (define-key map (kbd "SPC") #'enhanced-dirvish-preview-at-point)
+    (define-key map (kbd "m") #'enhanced-dirvish-view-toggle-mark)
+    (define-key map (kbd "<backspace>") #'enhanced-dirvish-view-up-directory)
+    (define-key map (kbd "g") #'enhanced-dirvish-compact-refresh)
+    (define-key map (kbd "<f5>") #'enhanced-dirvish-compact-refresh)
     map)
-  "Keymap for `strata-compact-mode'.")
+  "Keymap for `enhanced-dirvish-compact-mode'.")
 
-(declare-function strata-preview-update-standalone "strata-dirvish-previews" (file &optional window))
-(declare-function dirvish-strata-breadcrumb-ml "strata-dirvish-views" ())
-(declare-function dirvish-strata-view-info-ml "strata-dirvish-views" ())
-(declare-function dirvish-strata-footer-ml "strata-dirvish-views" ())
+(declare-function enhanced-dirvish-preview-update-standalone "enhanced-dirvish-previews" (file &optional window))
+(declare-function dirvish-enhanced-dirvish-breadcrumb-ml "enhanced-dirvish-views" ())
+(declare-function dirvish-enhanced-dirvish-view-info-ml "enhanced-dirvish-views" ())
+(declare-function dirvish-enhanced-dirvish-footer-ml "enhanced-dirvish-views" ())
 
-(defvar strata--enforcing-no-wrap nil
-  "Recursion guard while suppressing `visual-line-mode' in Strata views.")
+(defvar enhanced-dirvish--enforcing-no-wrap nil
+  "Recursion guard while suppressing `visual-line-mode' in views.")
 
-(defun strata--enforce-no-wrap ()
+(defun enhanced-dirvish--enforce-no-wrap ()
   "Disable `visual-line-mode' and enforce single-line truncation in Compact/Icons."
-  (unless strata--enforcing-no-wrap
-    (let ((strata--enforcing-no-wrap t))
+  (unless enhanced-dirvish--enforcing-no-wrap
+    (let ((enhanced-dirvish--enforcing-no-wrap t))
       (when (bound-and-true-p visual-line-mode)
         (visual-line-mode -1))
       (when (bound-and-true-p hl-line-mode)
@@ -1137,22 +1137,22 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                   word-wrap nil
                   truncate-partial-width-windows nil))))
 
-(define-derived-mode strata-compact-mode special-mode "Strata-Compact"
-  "Strata Compact view: vertical columns flowing left-to-right with sideways scroll."
-  (strata--enforce-no-wrap)
-  (add-hook 'visual-line-mode-hook #'strata--enforce-no-wrap nil t)
-  (add-hook 'after-change-major-mode-hook #'strata--enforce-no-wrap 90 t)
+(define-derived-mode enhanced-dirvish-compact-mode special-mode "Enhanced-Dirvish-Compact"
+  "Enhanced Dirvish Compact view: vertical columns flowing left-to-right with sideways scroll."
+  (enhanced-dirvish--enforce-no-wrap)
+  (add-hook 'visual-line-mode-hook #'enhanced-dirvish--enforce-no-wrap nil t)
+  (add-hook 'after-change-major-mode-hook #'enhanced-dirvish--enforce-no-wrap 90 t)
   (setq-local header-line-format
-              '(:eval (strata-view-header-line)))
+              '(:eval (enhanced-dirvish-view-header-line)))
   (setq-local mode-line-format
-              '(:eval (dirvish-strata-footer-ml)))
-  (add-hook 'post-command-hook #'strata-view--sync-preview-on-move nil t))
+              '(:eval (dirvish-enhanced-dirvish-footer-ml)))
+  (add-hook 'post-command-hook #'enhanced-dirvish-view--sync-preview-on-move nil t))
 
-(defun strata-view--sync-preview-on-move ()
+(defun enhanced-dirvish-view--sync-preview-on-move ()
   "Keep selection highlight and preview pane synced across Columns/List/Compact/Icons."
-  (strata-view--update-selection-highlight)
-  (unless (or strata-mouse--inhibit-preview strata-mouse--drag-state)
-    (when-let ((f (strata-current-file)))
+  (enhanced-dirvish-view--update-selection-highlight)
+  (unless (or enhanced-dirvish-mouse--inhibit-preview enhanced-dirvish-mouse--drag-state)
+    (when-let ((f (enhanced-dirvish-current-file)))
       (let ((dv (ignore-errors (dirvish-curr))))
         (cond
          ((and dv
@@ -1160,45 +1160,45 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                (not (eq (dv-preview-window dv) (selected-window))))
           (dirvish-prop :index f)
           (dirvish--preview-update dv f))
-         ((when-let ((pwin (or (and (boundp 'strata-preview-standalone-window)
-                                    (window-live-p strata-preview-standalone-window)
-                                    (eq (window-buffer strata-preview-standalone-window)
-                                        (get-buffer "*Strata Preview*"))
-                                    strata-preview-standalone-window)
-                               (get-buffer-window "*Strata Preview*"))))
+         ((when-let ((pwin (or (and (boundp 'enhanced-dirvish-preview-standalone-window)
+                                    (window-live-p enhanced-dirvish-preview-standalone-window)
+                                    (eq (window-buffer enhanced-dirvish-preview-standalone-window)
+                                        (get-buffer "*Enhanced Dirvish Preview*"))
+                                    enhanced-dirvish-preview-standalone-window)
+                               (get-buffer-window "*Enhanced Dirvish Preview*"))))
             (when (and (not (eq pwin (selected-window)))
-                       (fboundp 'strata-preview-update-standalone))
-              (strata-preview-update-standalone f pwin)))))))))
+                       (fboundp 'enhanced-dirvish-preview-update-standalone))
+              (enhanced-dirvish-preview-update-standalone f pwin)))))))))
 
-(defun strata-compact--fit-name (name maxw full-p)
+(defun enhanced-dirvish-compact--fit-name (name maxw full-p)
   "Fit NAME within MAXW display columns unless FULL-P is non-nil."
   (if full-p name (truncate-string-to-width name maxw nil nil "…")))
 
-(defun strata-compact-render (&optional dir)
+(defun enhanced-dirvish-compact-render (&optional dir)
   "Render DIR into vertical top-to-bottom, left-to-right columns."
-  (strata--enforce-no-wrap)
-  (let* ((d (or dir strata-view-directory default-directory))
-         (p (strata-prefs))
-         (full-p (strata-prefs-compact-full-names p))
-         (entries (strata-list-directory-entries d p))
+  (enhanced-dirvish--enforce-no-wrap)
+  (let* ((d (or dir enhanced-dirvish-view-directory default-directory))
+         (p (enhanced-dirvish-prefs))
+         (full-p (enhanced-dirvish-prefs-compact-full-names p))
+         (entries (enhanced-dirvish-list-directory-entries d p))
          (cells
           (mapcar
            (lambda (e)
              (let* ((path (plist-get e :path))
                     (dir-p (plist-get e :dir-p))
-                    (marked (member path strata-marked-entries))
+                    (marked (member path enhanced-dirvish-marked-entries))
                     (prefix (concat (propertize (if marked "*" " ") 'face 'dired-marked)
-                                    (strata-file--glyph path dir-p) " "))
-                    (shown (strata-compact--fit-name (plist-get e :name)
+                                    (enhanced-dirvish-file--glyph path dir-p) " "))
+                    (shown (enhanced-dirvish-compact--fit-name (plist-get e :name)
                                                     (- 26 (string-width prefix) 1) full-p))
                     (face (cond (marked 'dired-marked)
-                                ((strata-file--badge-face path))
+                                ((enhanced-dirvish-file--badge-face path))
                                 (dir-p 'dired-directory)
                                 (t 'default)))
-                    (cell (concat prefix (propertize shown 'face face 'strata-entry-label t))))
+                    (cell (concat prefix (propertize shown 'face face 'enhanced-dirvish-entry-label t))))
                (add-text-properties 0 (length cell)
-                                    (append (list 'strata-entry path
-                                                  'strata-entry-dir dir-p
+                                    (append (list 'enhanced-dirvish-entry path
+                                                  'enhanced-dirvish-entry-dir dir-p
                                                   'help-echo path)
                                             (when dir-p '(mouse-face highlight pointer hand)))
                                     cell)
@@ -1212,11 +1212,11 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                    26))
          (ncols (max 1 (ceiling (max 1 (length entries)) (float rows))))
          (inhibit-read-only t)
-         (cur (strata-current-file)))
-    (setq strata-view-directory d
+         (cur (enhanced-dirvish-current-file)))
+    (setq enhanced-dirvish-view-directory d
           default-directory (file-name-as-directory d)
-          strata-compact-col-width cell-w
-          strata-compact-rows rows)
+          enhanced-dirvish-compact-col-width cell-w
+          enhanced-dirvish-compact-rows rows)
     (erase-buffer)
     (dotimes (r rows)
       (dotimes (c ncols)
@@ -1229,103 +1229,103 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       (insert "\n"))
     (goto-char (point-min))
     (cond
-     ((and cur (strata-goto-file cur)))
-     (entries (strata-goto-file (plist-get (car entries) :path)))
-     (t (strata-view--update-selection-highlight)))
-    (when (fboundp 'strata-watch-sync)
-      (strata-watch-sync (current-buffer)))))
+     ((and cur (enhanced-dirvish-goto-file cur)))
+     (entries (enhanced-dirvish-goto-file (plist-get (car entries) :path)))
+     (t (enhanced-dirvish-view--update-selection-highlight)))
+    (when (fboundp 'enhanced-dirvish-watch-sync)
+      (enhanced-dirvish-watch-sync (current-buffer)))))
 
-(defun strata-compact-refresh ()
+(defun enhanced-dirvish-compact-refresh ()
   "Refresh Compact view buffer."
   (interactive)
-  (when (derived-mode-p 'strata-compact-mode)
-    (strata-compact-render strata-view-directory)))
+  (when (derived-mode-p 'enhanced-dirvish-compact-mode)
+    (enhanced-dirvish-compact-render enhanced-dirvish-view-directory)))
 
-(defun strata-compact--jump-offset (delta-items)
+(defun enhanced-dirvish-compact--jump-offset (delta-items)
   "Move cursor by DELTA-ITEMS across Compact column cells."
-  (when strata-view-directory
-    (let ((entries (strata-list-directory-entries strata-view-directory))
-          (cur (strata-current-file)))
+  (when enhanced-dirvish-view-directory
+    (let ((entries (enhanced-dirvish-list-directory-entries enhanced-dirvish-view-directory))
+          (cur (enhanced-dirvish-current-file)))
       (when entries
         (let* ((paths (mapcar (lambda (e) (plist-get e :path)) entries))
                (idx (or (cl-position cur paths :test #'equal) 0))
                (next (max 0 (min (1- (length paths)) (+ idx delta-items)))))
-          (strata-goto-file (nth next paths)))))))
+          (enhanced-dirvish-goto-file (nth next paths)))))))
 
-(defun strata-compact-next-item () (interactive) (strata-compact--jump-offset 1))
-(defun strata-compact-prev-item () (interactive) (strata-compact--jump-offset -1))
-(defun strata-compact-next-col ()
+(defun enhanced-dirvish-compact-next-item () (interactive) (enhanced-dirvish-compact--jump-offset 1))
+(defun enhanced-dirvish-compact-prev-item () (interactive) (enhanced-dirvish-compact--jump-offset -1))
+(defun enhanced-dirvish-compact-next-col ()
   "Jump right one Compact column or open directory if scoped right."
   (interactive)
-  (strata-compact--jump-offset strata-compact-rows))
-(defun strata-compact-prev-col ()
+  (enhanced-dirvish-compact--jump-offset enhanced-dirvish-compact-rows))
+(defun enhanced-dirvish-compact-prev-col ()
   "Jump left one Compact column."
   (interactive)
-  (strata-compact--jump-offset (- strata-compact-rows)))
+  (enhanced-dirvish-compact--jump-offset (- enhanced-dirvish-compact-rows)))
 
 ;;;; Icons Thumbnail Grid View
 
-(defvar-local strata-icons--ncols 4 "Current column count rendered in Icons view.")
-(defvar-local strata-icons--count 0 "Total entry count rendered in Icons view.")
-(defvar-local strata-icons--rendered-win-w nil "Window width captured at last Icons render.")
-(defvar-local strata-icons--refresh-timer nil "Coalescing timer for async thumbnail re-renders.")
+(defvar-local enhanced-dirvish-icons--ncols 4 "Current column count rendered in Icons view.")
+(defvar-local enhanced-dirvish-icons--count 0 "Total entry count rendered in Icons view.")
+(defvar-local enhanced-dirvish-icons--rendered-win-w nil "Window width captured at last Icons render.")
+(defvar-local enhanced-dirvish-icons--refresh-timer nil "Coalescing timer for async thumbnail re-renders.")
 
-(defvar strata-icons-mode-map
+(defvar enhanced-dirvish-icons-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
-    (define-key map (kbd "j") #'strata-icons-next-row)
-    (define-key map (kbd "<down>") #'strata-icons-next-row)
-    (define-key map (kbd "k") #'strata-icons-prev-row)
-    (define-key map (kbd "<up>") #'strata-icons-prev-row)
-    (define-key map (kbd "l") #'strata-icons-next-cell)
-    (define-key map (kbd "<right>") #'strata-icons-next-cell)
-    (define-key map (kbd "h") #'strata-icons-prev-cell)
-    (define-key map (kbd "<left>") #'strata-icons-prev-cell)
-    (define-key map (kbd "RET") #'strata-open-or-edit-at-point)
-    (strata-mouse-install-keymap-bindings map)
-    (define-key map (kbd "SPC") #'strata-preview-at-point)
-    (define-key map (kbd "m") #'strata-view-toggle-mark)
-    (define-key map (kbd "<backspace>") #'strata-view-up-directory)
-    (define-key map (kbd "g") #'strata-icons-refresh)
-    (define-key map (kbd "<f5>") #'strata-icons-refresh)
+    (define-key map (kbd "j") #'enhanced-dirvish-icons-next-row)
+    (define-key map (kbd "<down>") #'enhanced-dirvish-icons-next-row)
+    (define-key map (kbd "k") #'enhanced-dirvish-icons-prev-row)
+    (define-key map (kbd "<up>") #'enhanced-dirvish-icons-prev-row)
+    (define-key map (kbd "l") #'enhanced-dirvish-icons-next-cell)
+    (define-key map (kbd "<right>") #'enhanced-dirvish-icons-next-cell)
+    (define-key map (kbd "h") #'enhanced-dirvish-icons-prev-cell)
+    (define-key map (kbd "<left>") #'enhanced-dirvish-icons-prev-cell)
+    (define-key map (kbd "RET") #'enhanced-dirvish-open-or-edit-at-point)
+    (enhanced-dirvish-mouse-install-keymap-bindings map)
+    (define-key map (kbd "SPC") #'enhanced-dirvish-preview-at-point)
+    (define-key map (kbd "m") #'enhanced-dirvish-view-toggle-mark)
+    (define-key map (kbd "<backspace>") #'enhanced-dirvish-view-up-directory)
+    (define-key map (kbd "g") #'enhanced-dirvish-icons-refresh)
+    (define-key map (kbd "<f5>") #'enhanced-dirvish-icons-refresh)
     map)
-  "Keymap for `strata-icons-mode'.")
+  "Keymap for `enhanced-dirvish-icons-mode'.")
 
-(defun strata-icons--update-selection-highlight ()
+(defun enhanced-dirvish-icons--update-selection-highlight ()
   "Highlight the active card label cleanly in Icons view."
-  (strata-view--update-selection-highlight))
+  (enhanced-dirvish-view--update-selection-highlight))
 
-(defun strata-icons--post-command-hook ()
+(defun enhanced-dirvish-icons--post-command-hook ()
   "Keep selection highlight and preview pane synced after point motion in Icons view."
-  (strata-view--sync-preview-on-move))
+  (enhanced-dirvish-view--sync-preview-on-move))
 
-(defun strata-icons--on-window-size-change (&optional win-or-frame)
-  "Reflow visible `strata-icons-mode' buffers when their window width changes."
+(defun enhanced-dirvish-icons--on-window-size-change (&optional win-or-frame)
+  "Reflow visible `enhanced-dirvish-icons-mode' buffers on window resize."
   (dolist (win (if (windowp win-or-frame) (list win-or-frame) (window-list)))
     (when (window-live-p win)
       (with-current-buffer (window-buffer win)
         (let ((cur-w (window-body-width win (display-graphic-p))))
-          (when (and (derived-mode-p 'strata-icons-mode)
-                     strata-view-directory
-                     strata-icons--rendered-win-w
-                     (not (eql cur-w strata-icons--rendered-win-w)))
+          (when (and (derived-mode-p 'enhanced-dirvish-icons-mode)
+                     enhanced-dirvish-view-directory
+                     enhanced-dirvish-icons--rendered-win-w
+                     (not (eql cur-w enhanced-dirvish-icons--rendered-win-w)))
             (with-selected-window win
-              (strata-icons-render strata-view-directory))))))))
+              (enhanced-dirvish-icons-render enhanced-dirvish-view-directory))))))))
 
-(define-derived-mode strata-icons-mode special-mode "Strata-Icons"
-  "Strata Icons thumbnail grid view with live thumbnail caching."
-  (strata--enforce-no-wrap)
+(define-derived-mode enhanced-dirvish-icons-mode special-mode "Enhanced-Dirvish-Icons"
+  "Enhanced Dirvish Icons thumbnail grid view with live thumbnail caching."
+  (enhanced-dirvish--enforce-no-wrap)
   (setq-local line-spacing 3)
-  (add-hook 'visual-line-mode-hook #'strata--enforce-no-wrap nil t)
-  (add-hook 'after-change-major-mode-hook #'strata--enforce-no-wrap 90 t)
+  (add-hook 'visual-line-mode-hook #'enhanced-dirvish--enforce-no-wrap nil t)
+  (add-hook 'after-change-major-mode-hook #'enhanced-dirvish--enforce-no-wrap 90 t)
   (setq-local header-line-format
-              '(:eval (strata-view-header-line)))
+              '(:eval (enhanced-dirvish-view-header-line)))
   (setq-local mode-line-format
-              '(:eval (dirvish-strata-footer-ml)))
-  (add-hook 'post-command-hook #'strata-icons--post-command-hook nil t)
-  (add-hook 'window-size-change-functions #'strata-icons--on-window-size-change nil t))
+              '(:eval (dirvish-enhanced-dirvish-footer-ml)))
+  (add-hook 'post-command-hook #'enhanced-dirvish-icons--post-command-hook nil t)
+  (add-hook 'window-size-change-functions #'enhanced-dirvish-icons--on-window-size-change nil t))
 
-(defun strata-icons--scale-glyph (glyph thumb-px)
+(defun enhanced-dirvish-icons--scale-glyph (glyph thumb-px)
   "Scale GLYPH proportionally to THUMB-PX on GUI frames while preserving family and tint."
   (if (not (display-graphic-p))
       glyph
@@ -1335,7 +1335,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       (add-face-text-property 0 (length copy) (list :height scale) nil copy)
       copy)))
 
-(defun strata-icons--wrap-name (name max-cols)
+(defun enhanced-dirvish-icons--wrap-name (name max-cols)
   "Wrap filename NAME cleanly into 1 or 2 lines each <= MAX-COLS display width."
   (if (<= (string-width name) max-cols)
       (list name)
@@ -1360,7 +1360,7 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
             (list (truncate-string-to-width name max-cols nil nil "…"))
           (list l1 l2))))))
 
-(defun strata-icons--fit-gui-label (str max-px)
+(defun enhanced-dirvish-icons--fit-gui-label (str max-px)
   "Ensure GUI string STR does not exceed MAX-PX pixel width."
   (let ((s str))
     (while (and (> (length s) 3)
@@ -1369,34 +1369,34 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
       (setq s (concat (substring s 0 (max 2 (- (length s) 2))) "…")))
     s))
 
-(defun strata-icons--schedule-refresh (buf dir)
+(defun enhanced-dirvish-icons--schedule-refresh (buf dir)
   "Coalesce async thumbnail completions for BUF displaying DIR."
   (when (buffer-live-p buf)
     (with-current-buffer buf
-      (when (timerp strata-icons--refresh-timer)
-        (cancel-timer strata-icons--refresh-timer))
-      (setq-local strata-icons--refresh-timer
+      (when (timerp enhanced-dirvish-icons--refresh-timer)
+        (cancel-timer enhanced-dirvish-icons--refresh-timer))
+      (setq-local enhanced-dirvish-icons--refresh-timer
                   (run-with-timer
                    0.05 nil
                    (lambda (b d)
                      (when (buffer-live-p b)
                        (with-current-buffer b
-                         (setq-local strata-icons--refresh-timer nil)
-                         (when (and (derived-mode-p 'strata-icons-mode)
-                                    (equal strata-view-directory d))
+                         (setq-local enhanced-dirvish-icons--refresh-timer nil)
+                         (when (and (derived-mode-p 'enhanced-dirvish-icons-mode)
+                                    (equal enhanced-dirvish-view-directory d))
                            (if-let ((win (get-buffer-window b t)))
                                (with-selected-window win
-                                 (strata-icons-render d))
-                             (strata-icons-render d))))))
+                                 (enhanced-dirvish-icons-render d))
+                             (enhanced-dirvish-icons-render d))))))
                    buf dir)))))
 
-(defun strata-icons-render (&optional dir)
+(defun enhanced-dirvish-icons-render (&optional dir)
   "Render aligned, centered thumbnail/icon grid cards for DIR into current buffer."
-  (strata--enforce-no-wrap)
-  (let* ((d (or dir strata-view-directory default-directory))
-         (p (strata-prefs))
-         (entries (strata-list-directory-entries d p))
-         (thumb-px (max 32 (min 256 (or (strata-prefs-icons-thumbnail-size p) 64))))
+  (enhanced-dirvish--enforce-no-wrap)
+  (let* ((d (or dir enhanced-dirvish-view-directory default-directory))
+         (p (enhanced-dirvish-prefs))
+         (entries (enhanced-dirvish-list-directory-entries d p))
+         (thumb-px (max 32 (min 256 (or (enhanced-dirvish-prefs-icons-thumbnail-size p) 64))))
          (graphic-p (display-graphic-p))
          (win (selected-window))
          (char-w (max 6 (frame-char-width)))
@@ -1416,36 +1416,36 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                            (floor (+ (- avail-px left-px) gap-px) stride-px)
                          (floor (+ avail-cols gap-chars) stride-chars))))
          (inhibit-read-only t)
-         (cur (strata-current-file))
+         (cur (enhanced-dirvish-current-file))
          (buf (current-buffer))
          (cards nil)
          (idx 0))
-    (setq strata-view-directory d
+    (setq enhanced-dirvish-view-directory d
           default-directory (file-name-as-directory d)
-          strata-icons--ncols ncols
-          strata-icons--count (length entries)
-          strata-icons--rendered-win-w win-raw)
+          enhanced-dirvish-icons--ncols ncols
+          enhanced-dirvish-icons--count (length entries)
+          enhanced-dirvish-icons--rendered-win-w win-raw)
     (erase-buffer)
     (dolist (e entries)
       (let* ((path (plist-get e :path))
              (name (plist-get e :name))
              (dir-p (plist-get e :dir-p))
-             (marked (member path strata-marked-entries))
+             (marked (member path enhanced-dirvish-marked-entries))
              (thumb (when (and (not dir-p)
                                graphic-p
-                               (strata-prefs-show-thumbnails p))
-                      (or (strata-thumbnail-maybe-generate
+                               (enhanced-dirvish-prefs-show-thumbnails p))
+                      (or (enhanced-dirvish-thumbnail-maybe-generate
                            path thumb-px
                            (lambda (_out)
-                             (strata-icons--schedule-refresh buf d)))
-                          (let ((cand (strata-thumbnail-path path thumb-px)))
+                             (enhanced-dirvish-icons--schedule-refresh buf d)))
+                          (let ((cand (enhanced-dirvish-thumbnail-path path thumb-px)))
                             (when (file-exists-p cand) cand)))))
              (img (when (and thumb (image-type-available-p 'png))
                     (create-image thumb 'png nil
                                   :max-height thumb-px :max-width thumb-px :ascent 85)))
              (icon-str (if img
                            (propertize " " 'display img)
-                         (strata-icons--scale-glyph (strata-file--glyph path dir-p) thumb-px)))
+                         (enhanced-dirvish-icons--scale-glyph (enhanced-dirvish-file--glyph path dir-p) thumb-px)))
              (icon-w (if graphic-p
                          (if img
                              (round (or (car (ignore-errors (image-size img t))) thumb-px))
@@ -1454,23 +1454,23 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                                     (* 3 char-w))))
                        (string-width icon-str)))
              (face (cond (marked 'dired-marked)
-                         ((strata-file--badge-face path))
+                         ((enhanced-dirvish-file--badge-face path))
                          (dir-p 'dired-directory)
                          (t 'default)))
-             (wrapped (strata-icons--wrap-name name (if marked (- max-lbl-chars 2) max-lbl-chars)))
+             (wrapped (enhanced-dirvish-icons--wrap-name name (if marked (- max-lbl-chars 2) max-lbl-chars)))
              (l1-raw (concat (if marked "✓ " "") (car wrapped)))
              (l2-raw (cadr wrapped))
-             (props (append (list 'strata-entry path
-                                  'strata-entry-dir dir-p
-                                  'strata-grid-idx idx
+             (props (append (list 'enhanced-dirvish-entry path
+                                  'enhanced-dirvish-entry-dir dir-p
+                                  'enhanced-dirvish-grid-idx idx
                                   'help-echo path
                                   'mouse-face 'highlight)
                             (when dir-p '(pointer hand))))
              (icon-cell (apply #'propertize icon-str props))
              (l1-text (if graphic-p
-                          (strata-icons--fit-gui-label (propertize l1-raw 'face face) (- tile-px char-w))
+                          (enhanced-dirvish-icons--fit-gui-label (propertize l1-raw 'face face) (- tile-px char-w))
                         (propertize l1-raw 'face face)))
-             (l1-cell (apply #'propertize l1-text (append (list 'strata-grid-label t) props)))
+             (l1-cell (apply #'propertize l1-text (append (list 'enhanced-dirvish-grid-label t) props)))
              (l1-w (if graphic-p
                        (round (if (fboundp 'string-pixel-width)
                                   (string-pixel-width l1-cell)
@@ -1478,10 +1478,10 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                      (string-width l1-cell)))
              (l2-text (when l2-raw
                         (if graphic-p
-                            (strata-icons--fit-gui-label (propertize l2-raw 'face face) (- tile-px char-w))
+                            (enhanced-dirvish-icons--fit-gui-label (propertize l2-raw 'face face) (- tile-px char-w))
                           (propertize l2-raw 'face face))))
              (l2-cell (when l2-text
-                        (apply #'propertize l2-text (append (list 'strata-grid-label-cont t) props))))
+                        (apply #'propertize l2-text (append (list 'enhanced-dirvish-grid-label-cont t) props))))
              (l2-w (if l2-cell
                        (if graphic-p
                            (round (if (fboundp 'string-pixel-width)
@@ -1530,151 +1530,151 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
             (insert "\n")))))
     (goto-char (point-min))
     (cond
-     ((and cur (strata-goto-file cur)))
-     ((> strata-icons--count 0) (strata-icons--goto-index 0))
-     (t (strata-icons--update-selection-highlight)))
-    (when (fboundp 'strata-watch-sync)
-      (strata-watch-sync (current-buffer)))))
+     ((and cur (enhanced-dirvish-goto-file cur)))
+     ((> enhanced-dirvish-icons--count 0) (enhanced-dirvish-icons--goto-index 0))
+     (t (enhanced-dirvish-icons--update-selection-highlight)))
+    (when (fboundp 'enhanced-dirvish-watch-sync)
+      (enhanced-dirvish-watch-sync (current-buffer)))))
 
-(defun strata-icons-refresh ()
+(defun enhanced-dirvish-icons-refresh ()
   "Refresh Icons grid view."
   (interactive)
-  (when (derived-mode-p 'strata-icons-mode)
-    (strata-icons-render strata-view-directory)))
+  (when (derived-mode-p 'enhanced-dirvish-icons-mode)
+    (enhanced-dirvish-icons-render enhanced-dirvish-view-directory)))
 
-(defun strata-icons--current-index ()
+(defun enhanced-dirvish-icons--current-index ()
   "Return zero-based index of card at point in Icons view, or nil."
-  (or (get-text-property (point) 'strata-grid-idx)
-      (when-let ((cur (strata-current-file)))
+  (or (get-text-property (point) 'enhanced-dirvish-grid-idx)
+      (when-let ((cur (enhanced-dirvish-current-file)))
         (save-excursion
-          (strata-goto-file cur)
-          (get-text-property (point) 'strata-grid-idx)))))
+          (enhanced-dirvish-goto-file cur)
+          (get-text-property (point) 'enhanced-dirvish-grid-idx)))))
 
-(defun strata-icons--goto-index (target-idx)
+(defun enhanced-dirvish-icons--goto-index (target-idx)
   "Jump to the label start of grid card TARGET-IDX in Icons view."
-  (when (and (> strata-icons--count 0) (>= target-idx 0))
-    (let* ((idx (min (1- strata-icons--count) target-idx))
+  (when (and (> enhanced-dirvish-icons--count 0) (>= target-idx 0))
+    (let* ((idx (min (1- enhanced-dirvish-icons--count) target-idx))
            (pos (point-min))
            (best nil)
            (fallback nil))
       (while (and (< pos (point-max)) (not best))
-        (let ((next (or (next-single-property-change pos 'strata-grid-idx) (point-max)))
-              (v (get-text-property pos 'strata-grid-idx)))
+        (let ((next (or (next-single-property-change pos 'enhanced-dirvish-grid-idx) (point-max)))
+              (v (get-text-property pos 'enhanced-dirvish-grid-idx)))
           (when (eql v idx)
             (unless fallback (setq fallback pos))
-            (let ((lbl (if (get-text-property pos 'strata-grid-label)
+            (let ((lbl (if (get-text-property pos 'enhanced-dirvish-grid-label)
                            pos
-                         (let ((cand (next-single-property-change pos 'strata-grid-label nil next)))
+                         (let ((cand (next-single-property-change pos 'enhanced-dirvish-grid-label nil next)))
                            (when (and cand (< cand next)
-                                      (get-text-property cand 'strata-grid-label))
+                                      (get-text-property cand 'enhanced-dirvish-grid-label))
                              cand)))))
               (when lbl (setq best lbl))))
           (setq pos next)))
       (when-let ((dest (or best fallback)))
         (goto-char dest)
-        (strata-icons--update-selection-highlight)))))
+        (enhanced-dirvish-icons--update-selection-highlight)))))
 
-(defun strata-icons-next-cell ()
+(defun enhanced-dirvish-icons-next-cell ()
   "Move forward to next grid item in Icons view."
   (interactive)
-  (when (> strata-icons--count 0)
-    (let ((cur (or (strata-icons--current-index) -1)))
-      (strata-icons--goto-index (min (1- strata-icons--count) (1+ cur))))))
+  (when (> enhanced-dirvish-icons--count 0)
+    (let ((cur (or (enhanced-dirvish-icons--current-index) -1)))
+      (enhanced-dirvish-icons--goto-index (min (1- enhanced-dirvish-icons--count) (1+ cur))))))
 
-(defun strata-icons-prev-cell ()
+(defun enhanced-dirvish-icons-prev-cell ()
   "Move backward to previous grid item in Icons view."
   (interactive)
-  (when (> strata-icons--count 0)
-    (let ((cur (or (strata-icons--current-index) 1)))
-      (strata-icons--goto-index (max 0 (1- cur))))))
+  (when (> enhanced-dirvish-icons--count 0)
+    (let ((cur (or (enhanced-dirvish-icons--current-index) 1)))
+      (enhanced-dirvish-icons--goto-index (max 0 (1- cur))))))
 
-(defun strata-icons-next-row ()
+(defun enhanced-dirvish-icons-next-row ()
   "Move down one grid row in Icons view."
   (interactive)
-  (when (> strata-icons--count 0)
-    (let* ((ncols (max 1 strata-icons--ncols))
-           (cur (or (strata-icons--current-index) 0))
+  (when (> enhanced-dirvish-icons--count 0)
+    (let* ((ncols (max 1 enhanced-dirvish-icons--ncols))
+           (cur (or (enhanced-dirvish-icons--current-index) 0))
            (cur-row (/ cur ncols))
-           (last-row (/ (1- strata-icons--count) ncols)))
+           (last-row (/ (1- enhanced-dirvish-icons--count) ncols)))
       (when (< cur-row last-row)
-        (strata-icons--goto-index (min (1- strata-icons--count) (+ cur ncols)))))))
+        (enhanced-dirvish-icons--goto-index (min (1- enhanced-dirvish-icons--count) (+ cur ncols)))))))
 
-(defun strata-icons-prev-row ()
+(defun enhanced-dirvish-icons-prev-row ()
   "Move up one grid row in Icons view."
   (interactive)
-  (when (> strata-icons--count 0)
-    (let* ((ncols (max 1 strata-icons--ncols))
-           (cur (or (strata-icons--current-index) 0)))
+  (when (> enhanced-dirvish-icons--count 0)
+    (let* ((ncols (max 1 enhanced-dirvish-icons--ncols))
+           (cur (or (enhanced-dirvish-icons--current-index) 0)))
       (when (>= (- cur ncols) 0)
-        (strata-icons--goto-index (- cur ncols))))))
+        (enhanced-dirvish-icons--goto-index (- cur ncols))))))
 
-(defun strata-nav-next-line ()
+(defun enhanced-dirvish-nav-next-line ()
   "Move down one visual item/row across List, Columns, Compact, and Icons views."
   (interactive)
-  (cond ((derived-mode-p 'strata-icons-mode) (strata-icons-next-row))
-        ((derived-mode-p 'strata-compact-mode) (strata-compact-next-item))
+  (cond ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-next-row))
+        ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-next-item))
         ((derived-mode-p 'dired-mode) (dired-next-line 1))
         (t (call-interactively #'next-line))))
 
-(defun strata-nav-prev-line ()
+(defun enhanced-dirvish-nav-prev-line ()
   "Move up one visual item/row across List, Columns, Compact, and Icons views."
   (interactive)
-  (cond ((derived-mode-p 'strata-icons-mode) (strata-icons-prev-row))
-        ((derived-mode-p 'strata-compact-mode) (strata-compact-prev-item))
+  (cond ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-prev-row))
+        ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-prev-item))
         ((derived-mode-p 'dired-mode) (dired-previous-line 1))
         (t (call-interactively #'previous-line))))
 
-(defun strata-view--move-focus (move)
+(defun enhanced-dirvish-view--move-focus (move)
   "Run MOVE within file entries, preserving marks and stopping at boundaries."
-  (let ((current (strata-current-file)))
+  (let ((current (enhanced-dirvish-current-file)))
     (if current
         (progn
           (condition-case nil (funcall move)
             ((beginning-of-buffer end-of-buffer) nil))
-          (unless (strata-current-file) (strata-goto-file current)))
-      (strata-goto-file (car (strata-view--entry-order))))
+          (unless (enhanced-dirvish-current-file) (enhanced-dirvish-goto-file current)))
+      (enhanced-dirvish-goto-file (car (enhanced-dirvish-view--entry-order))))
     (deactivate-mark)
-    (strata-view--reset-selection-range (strata-current-file))
-    (strata-view--update-selection-highlight)))
+    (enhanced-dirvish-view--reset-selection-range (enhanced-dirvish-current-file))
+    (enhanced-dirvish-view--update-selection-highlight)))
 
-(defun strata-view--focus-down ()
+(defun enhanced-dirvish-view--focus-down ()
   "Move focus down one entry or grid row, keeping explicit selections."
   (interactive)
-  (strata-view--move-focus #'strata-nav-next-line))
+  (enhanced-dirvish-view--move-focus #'enhanced-dirvish-nav-next-line))
 
-(defun strata-view--focus-up ()
+(defun enhanced-dirvish-view--focus-up ()
   "Move focus up one entry or grid row, keeping explicit selections."
   (interactive)
-  (strata-view--move-focus #'strata-nav-prev-line))
+  (enhanced-dirvish-view--move-focus #'enhanced-dirvish-nav-prev-line))
 
-(defun strata-view--focus-horizontal (direction)
+(defun enhanced-dirvish-view--focus-horizontal (direction)
   "Move focus DIRECTION columns or entries without opening folders."
-  (strata-view--move-focus
+  (enhanced-dirvish-view--move-focus
    (lambda ()
      (cond
-      ((derived-mode-p 'strata-icons-mode)
-       (if (> direction 0) (strata-icons-next-cell) (strata-icons-prev-cell)))
-      ((derived-mode-p 'strata-compact-mode)
-       (let* ((order (strata-view--entry-order))
-              (index (cl-position (strata-current-file) order :test #'equal))
-              (rows (max 1 strata-compact-rows))
+      ((derived-mode-p 'enhanced-dirvish-icons-mode)
+       (if (> direction 0) (enhanced-dirvish-icons-next-cell) (enhanced-dirvish-icons-prev-cell)))
+      ((derived-mode-p 'enhanced-dirvish-compact-mode)
+       (let* ((order (enhanced-dirvish-view--entry-order))
+              (index (cl-position (enhanced-dirvish-current-file) order :test #'equal))
+              (rows (max 1 enhanced-dirvish-compact-rows))
               (column (and index (+ (/ index rows) direction))))
          (when (and column (>= column 0) (< (* column rows) (length order)))
-           (strata-goto-file (nth (min (1- (length order)) (+ index (* direction rows))) order)))))
-      ((> direction 0) (strata-nav-next-line))
-      (t (strata-nav-prev-line))))))
+           (enhanced-dirvish-goto-file (nth (min (1- (length order)) (+ index (* direction rows))) order)))))
+      ((> direction 0) (enhanced-dirvish-nav-next-line))
+      (t (enhanced-dirvish-nav-prev-line))))))
 
-(defun strata-view--focus-right ()
+(defun enhanced-dirvish-view--focus-right ()
   "Move focus right one entry or column, preserving explicit selections."
   (interactive)
-  (strata-view--focus-horizontal 1))
+  (enhanced-dirvish-view--focus-horizontal 1))
 
-(defun strata-view--focus-left ()
+(defun enhanced-dirvish-view--focus-left ()
   "Move focus left one entry or column, preserving explicit selections."
   (interactive)
-  (strata-view--focus-horizontal -1))
+  (enhanced-dirvish-view--focus-horizontal -1))
 
-(defun strata-view--entry-order ()
+(defun enhanced-dirvish-view--entry-order ()
   "Return ordered list of entry paths visible in the current browser buffer."
   (cond
    ((derived-mode-p 'dired-mode)
@@ -1683,20 +1683,20 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
         (goto-char (point-min))
         (while (not (eobp))
           (unless (invisible-p (line-beginning-position))
-            (when-let ((f (strata-view--dired-entry-at-point)))
+            (when-let ((f (enhanced-dirvish-view--dired-entry-at-point)))
               (push f out)))
           (forward-line 1)))
       (nreverse out)))
-   ((derived-mode-p 'strata-compact-mode 'strata-icons-mode)
+   ((derived-mode-p 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
     (mapcar (lambda (e) (plist-get e :path))
-            (strata-list-directory-entries
-             (or strata-view-directory default-directory)
-             (strata-prefs))))))
+            (enhanced-dirvish-list-directory-entries
+             (or enhanced-dirvish-view-directory default-directory)
+             (enhanced-dirvish-prefs))))))
 
-(defun strata-view--set-entry-mark (path mark-p &optional no-refresh)
-  "Mark or unmark PATH according to MARK-P across all Strata views."
+(defun enhanced-dirvish-view--set-entry-mark (path mark-p &optional no-refresh)
+  "Mark or unmark PATH according to MARK-P across all Enhanced Dirvish views."
   (when path
-    (let ((key (strata--path-key path)))
+    (let ((key (enhanced-dirvish--path-key path)))
       (cond
        ((derived-mode-p 'dired-mode)
         (save-excursion
@@ -1708,109 +1708,109 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
               (cond
                ((and mark-p (not marked)) (dired-mark 1))
                ((and (not mark-p) marked) (dired-unmark 1)))))))
-       ((derived-mode-p 'strata-compact-mode 'strata-icons-mode)
-        (setq strata-marked-entries
-              (cl-remove-if (lambda (e) (equal (strata--path-key e) key))
-                            strata-marked-entries))
+       ((derived-mode-p 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
+        (setq enhanced-dirvish-marked-entries
+              (cl-remove-if (lambda (e) (equal (enhanced-dirvish--path-key e) key))
+                            enhanced-dirvish-marked-entries))
         (when mark-p
-          (push path strata-marked-entries))))
+          (push path enhanced-dirvish-marked-entries))))
       (unless no-refresh
-        (strata-view--refresh-after-mark)))))
+        (enhanced-dirvish-view--refresh-after-mark)))))
 
-(defun strata-view--refresh-after-mark ()
+(defun enhanced-dirvish-view--refresh-after-mark ()
   "Refresh visual marks, selection overlays, and footer count."
   (cond
-   ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-   ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
-  (strata-view--update-selection-highlight)
+   ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-refresh))
+   ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-refresh)))
+  (enhanced-dirvish-view--update-selection-highlight)
   (force-mode-line-update t))
 
-(defun strata-view--mark-range (anchor-path target-path &optional additive)
+(defun enhanced-dirvish-view--mark-range (anchor-path target-path &optional additive)
   "Select ANCHOR-PATH through TARGET-PATH, shrinking on reversal.
 With ADDITIVE, retain marks that preceded this range."
-  (let ((order (strata-view--entry-order)))
-    (unless (and strata--selection-range-active
-                 (eq (not (null additive)) strata--selection-range-additive)
-                 (equal anchor-path strata--selection-anchor-entry))
-      (setq strata--selection-base-keys
-            (when additive (mapcar #'strata--path-key (strata-marked-files-only)))))
-    (setq strata--selection-anchor-entry anchor-path
-          strata--selection-range-active t
-          strata--selection-range-additive (not (null additive)))
-    (strata-mouse--apply-selection-keys
+  (let ((order (enhanced-dirvish-view--entry-order)))
+    (unless (and enhanced-dirvish--selection-range-active
+                 (eq (not (null additive)) enhanced-dirvish--selection-range-additive)
+                 (equal anchor-path enhanced-dirvish--selection-anchor-entry))
+      (setq enhanced-dirvish--selection-base-keys
+            (when additive (mapcar #'enhanced-dirvish--path-key (enhanced-dirvish-marked-files-only)))))
+    (setq enhanced-dirvish--selection-anchor-entry anchor-path
+          enhanced-dirvish--selection-range-active t
+          enhanced-dirvish--selection-range-additive (not (null additive)))
+    (enhanced-dirvish-mouse--apply-selection-keys
      order (delete-dups
-            (append (copy-sequence strata--selection-base-keys)
-                    (mapcar #'strata--path-key
-                            (strata-mouse--range-entries order anchor-path target-path)))) t)))
+            (append (copy-sequence enhanced-dirvish--selection-base-keys)
+                    (mapcar #'enhanced-dirvish--path-key
+                            (enhanced-dirvish-mouse--range-entries order anchor-path target-path)))) t)))
 
-(defun strata-shift-select-move (move-fn &optional additive)
+(defun enhanced-dirvish-shift-select-move (move-fn &optional additive)
   "Extend a contiguous range via MOVE-FN, preserving old marks if ADDITIVE."
-  (let* ((cur (strata-current-file))
-         (anchor (or strata--selection-anchor-entry cur)))
+  (let* ((cur (enhanced-dirvish-current-file))
+         (anchor (or enhanced-dirvish--selection-anchor-entry cur)))
     (when anchor
       (condition-case nil (funcall move-fn)
         ((beginning-of-buffer end-of-buffer) nil))
-      (unless (strata-current-file) (strata-goto-file cur))
-      (strata-view--mark-range anchor (or (strata-current-file) cur) additive))))
+      (unless (enhanced-dirvish-current-file) (enhanced-dirvish-goto-file cur))
+      (enhanced-dirvish-view--mark-range anchor (or (enhanced-dirvish-current-file) cur) additive))))
 
-(defun strata-shift-select-next (&optional additive)
+(defun enhanced-dirvish-shift-select-next (&optional additive)
   "Extend selection to the next entry row (`S-<down>')."
   (interactive (list (memq 'control (event-modifiers last-command-event))))
-  (strata-shift-select-move #'strata-nav-next-line additive))
+  (enhanced-dirvish-shift-select-move #'enhanced-dirvish-nav-next-line additive))
 
-(defun strata-shift-select-prev (&optional additive)
+(defun enhanced-dirvish-shift-select-prev (&optional additive)
   "Extend selection to the previous entry row (`S-<up>')."
   (interactive (list (memq 'control (event-modifiers last-command-event))))
-  (strata-shift-select-move #'strata-nav-prev-line additive))
+  (enhanced-dirvish-shift-select-move #'enhanced-dirvish-nav-prev-line additive))
 
-(defun strata-shift-select-right (&optional additive)
+(defun enhanced-dirvish-shift-select-right (&optional additive)
   "Extend selection right in grid/compact views or down in list (`S-<right>')."
   (interactive (list (memq 'control (event-modifiers last-command-event))))
-  (strata-shift-select-move
-   (cond ((derived-mode-p 'strata-icons-mode) #'strata-icons-next-cell)
-         ((derived-mode-p 'strata-compact-mode) #'strata-compact-next-col)
-         (t #'strata-nav-next-line)) additive))
+  (enhanced-dirvish-shift-select-move
+   (cond ((derived-mode-p 'enhanced-dirvish-icons-mode) #'enhanced-dirvish-icons-next-cell)
+         ((derived-mode-p 'enhanced-dirvish-compact-mode) #'enhanced-dirvish-compact-next-col)
+         (t #'enhanced-dirvish-nav-next-line)) additive))
 
-(defun strata-shift-select-left (&optional additive)
+(defun enhanced-dirvish-shift-select-left (&optional additive)
   "Extend selection left in grid/compact views or up in list (`S-<left>')."
   (interactive (list (memq 'control (event-modifiers last-command-event))))
-  (strata-shift-select-move
-   (cond ((derived-mode-p 'strata-icons-mode) #'strata-icons-prev-cell)
-         ((derived-mode-p 'strata-compact-mode) #'strata-compact-prev-col)
-         (t #'strata-nav-prev-line)) additive))
+  (enhanced-dirvish-shift-select-move
+   (cond ((derived-mode-p 'enhanced-dirvish-icons-mode) #'enhanced-dirvish-icons-prev-cell)
+         ((derived-mode-p 'enhanced-dirvish-compact-mode) #'enhanced-dirvish-compact-prev-col)
+         (t #'enhanced-dirvish-nav-prev-line)) additive))
 
-(defun strata-shift-select-first (&optional additive)
+(defun enhanced-dirvish-shift-select-first (&optional additive)
   "Select through the first visible entry, keeping old marks if ADDITIVE."
   (interactive (list (memq 'control (event-modifiers last-command-event))))
-  (strata-shift-select-move
-   (lambda () (strata-goto-file (car (strata-view--entry-order)))) additive))
+  (enhanced-dirvish-shift-select-move
+   (lambda () (enhanced-dirvish-goto-file (car (enhanced-dirvish-view--entry-order)))) additive))
 
-(defun strata-shift-select-last (&optional additive)
+(defun enhanced-dirvish-shift-select-last (&optional additive)
   "Select through the last visible entry, keeping old marks if ADDITIVE."
   (interactive (list (memq 'control (event-modifiers last-command-event))))
-  (strata-shift-select-move
-   (lambda () (strata-goto-file (car (last (strata-view--entry-order))))) additive))
+  (enhanced-dirvish-shift-select-move
+   (lambda () (enhanced-dirvish-goto-file (car (last (enhanced-dirvish-view--entry-order))))) additive))
 
-(defun strata-view-toggle-mark ()
+(defun enhanced-dirvish-view-toggle-mark ()
   "Toggle selection mark on item at point across Compact/Icons/Dired views."
   (interactive)
-  (when-let ((f (strata-current-file)))
-    (let* ((key (strata--path-key f))
-           (present (cl-some (lambda (e) (equal (strata--path-key e) key))
-                             (strata-marked-files-only))))
-      (strata-view--reset-selection-range f)
-      (strata-view--set-entry-mark f (not present) nil))))
+  (when-let ((f (enhanced-dirvish-current-file)))
+    (let* ((key (enhanced-dirvish--path-key f))
+           (present (cl-some (lambda (e) (equal (enhanced-dirvish--path-key e) key))
+                             (enhanced-dirvish-marked-files-only))))
+      (enhanced-dirvish-view--reset-selection-range f)
+      (enhanced-dirvish-view--set-entry-mark f (not present) nil))))
 
-(defun strata-view-unmark ()
+(defun enhanced-dirvish-view-unmark ()
   "Unmark the current item without moving point."
   (interactive)
-  (when-let ((f (strata-current-file)))
-    (strata-view--reset-selection-range f)
-    (strata-view--set-entry-mark f nil)))
+  (when-let ((f (enhanced-dirvish-current-file)))
+    (enhanced-dirvish-view--reset-selection-range f)
+    (enhanced-dirvish-view--set-entry-mark f nil)))
 
-(defun strata-mouse--entry-at-point ()
+(defun enhanced-dirvish-mouse--entry-at-point ()
   "Resolve clicked entry path in Dired, Dirvish DIRview, Compact, or Icons."
-  (or (get-text-property (point) 'strata-entry)
+  (or (get-text-property (point) 'enhanced-dirvish-entry)
       (when (derived-mode-p 'dired-mode)
         (or (ignore-errors (dired-get-filename nil t))
             (save-excursion
@@ -1834,16 +1834,16 @@ With ADDITIVE, retain marks that preceded this range."
                (not (member name '("." "..")))
                (expand-file-name name base-dir))))))
 
-(defun strata-mouse--edit-or-open-file (path)
+(defun enhanced-dirvish-mouse--edit-or-open-file (path)
   "Direct-edit regular file PATH in preview pane, or fall back to `find-file'."
-  (if (fboundp 'strata-preview-edit-file)
-      (strata-preview-edit-file path)
-    (when (fboundp 'strata-dirvish--flatten-layout)
-      (strata-dirvish--flatten-layout))
+  (if (fboundp 'enhanced-dirvish-preview-edit-file)
+      (enhanced-dirvish-preview-edit-file path)
+    (when (fboundp 'enhanced-dirvish--flatten-layout)
+      (enhanced-dirvish--flatten-layout))
     (find-file path)))
 
-(defun strata-mouse--open-path (path dir-only-p)
-  "Open PATH in the appropriate Strata pane; when DIR-ONLY-P, only navigate dirs."
+(defun enhanced-dirvish-mouse--open-path (path dir-only-p)
+  "Open PATH in the appropriate pane; when DIR-ONLY-P, only navigate dirs."
   (when (and path (not (string-empty-p path)))
     (let ((is-dir (file-directory-p path)))
       (when (derived-mode-p 'dirvish-directory-view-mode)
@@ -1852,31 +1852,31 @@ With ADDITIVE, retain marks that preceded this range."
                                  (gethash (dirvish-prop :dv) dirvish--sessions))))
                     (root-win (or (let ((rw (dv-root-window dv)))
                                     (and (window-live-p rw) rw))
-                                  (and (fboundp 'strata-panes--main-window)
-                                       (strata-panes--main-window)))))
+                                  (and (fboundp 'enhanced-dirvish-panes--main-window)
+                                       (enhanced-dirvish-panes--main-window)))))
           (when (window-live-p root-win)
             (select-window root-win))))
       (cond
        (is-dir
-        (strata-open-location path t))
+        (enhanced-dirvish-open-location path t))
        ((not dir-only-p)
-        (strata-mouse--edit-or-open-file path))))))
+        (enhanced-dirvish-mouse--edit-or-open-file path))))))
 
-(defun strata-mouse--sync-event (event)
+(defun enhanced-dirvish-mouse--sync-event (event)
   "Move window selection & point to EVENT and sync active split pane."
   (mouse-set-point event)
-  (when (fboundp 'strata-panes--sync-active-pane-from-window)
-    (strata-panes--sync-active-pane-from-window (selected-window))))
+  (when (fboundp 'enhanced-dirvish-panes--sync-active-pane-from-window)
+    (enhanced-dirvish-panes--sync-active-pane-from-window (selected-window))))
 
-(defun strata-mouse--compact-position (posn)
+(defun enhanced-dirvish-mouse--compact-position (posn)
   "Capture the visible Compact viewport before moving point to mouse POSN."
   (when-let ((win (and (consp posn) (posn-window posn))))
     (when (and (window-live-p win)
-               (with-current-buffer (window-buffer win) (derived-mode-p 'strata-compact-mode)))
+               (with-current-buffer (window-buffer win) (derived-mode-p 'enhanced-dirvish-compact-mode)))
       (list (window-point win) (window-start win)
             (window-hscroll win) (window-vscroll win t)))))
 
-(defun strata-mouse--clear-focus (&optional compact-position)
+(defun enhanced-dirvish-mouse--clear-focus (&optional compact-position)
   "Deselect without scrolling Compact view away from COMPACT-POSITION."
   (if compact-position
       (progn
@@ -1886,18 +1886,18 @@ With ADDITIVE, retain marks that preceded this range."
         (set-window-start nil (min (nth 1 compact-position) (point-max)) t)
         (set-window-hscroll nil (nth 2 compact-position))
         (set-window-vscroll nil (nth 3 compact-position) t)
-        (setq strata--empty-click-position (point)))
+        (setq enhanced-dirvish--empty-click-position (point)))
     (goto-char (point-max))
-    (setq strata--empty-click-position nil))
-  (setq strata--empty-click-p t)
-  (strata-view--reset-selection-range)
-  (strata-view--update-selection-highlight))
+    (setq enhanced-dirvish--empty-click-position nil))
+  (setq enhanced-dirvish--empty-click-p t)
+  (enhanced-dirvish-view--reset-selection-range)
+  (enhanced-dirvish-view--update-selection-highlight))
 
-(defun strata-mouse--dired-entry-at-pt (pt)
+(defun enhanced-dirvish-mouse--dired-entry-at-pt (pt)
   "Resolve nearest Dired entry path around buffer position PT."
   (save-excursion
     (goto-char (min (max (point-min) pt) (point-max)))
-    (or (strata-mouse--entry-at-point)
+    (or (enhanced-dirvish-mouse--entry-at-point)
         (save-excursion
           (let (found)
             (while (and (not found) (= (forward-line -1) 0))
@@ -1909,19 +1909,19 @@ With ADDITIVE, retain marks that preceded this range."
               (setq found (ignore-errors (dired-get-filename nil t))))
             found)))))
 
-(defun strata-mouse--compact-entry-at-pt (pt)
+(defun enhanced-dirvish-mouse--compact-entry-at-pt (pt)
   "Resolve nearest Compact cell path around buffer position PT."
   (save-excursion
     (goto-char (min (max (point-min) pt) (point-max)))
-    (or (get-text-property (point) 'strata-entry)
+    (or (get-text-property (point) 'enhanced-dirvish-entry)
         (let ((find-on-line
                (lambda (ref)
                  (let ((le (line-end-position))
                        (pos (line-beginning-position))
                        (spans nil))
                    (while (< pos le)
-                     (let ((nxt (or (next-single-property-change pos 'strata-entry nil le) le))
-                           (val (get-text-property pos 'strata-entry)))
+                     (let ((nxt (or (next-single-property-change pos 'enhanced-dirvish-entry nil le) le))
+                           (val (get-text-property pos 'enhanced-dirvish-entry)))
                        (when val
                          (push (list pos nxt val) spans))
                        (setq pos nxt)))
@@ -1942,19 +1942,19 @@ With ADDITIVE, retain marks that preceded this range."
                     (setq found (funcall find-on-line (point))))
                   found)))))))
 
-(defun strata-mouse--icons-entry-at-posn (win pt xy)
+(defun enhanced-dirvish-mouse--icons-entry-at-posn (win pt xy)
   "Resolve nearest Icons tile path around WIN position PT / pixel XY."
   (save-excursion
     (goto-char (min (max (point-min) pt) (point-max)))
-    (or (get-text-property (point) 'strata-entry)
+    (or (get-text-property (point) 'enhanced-dirvish-entry)
         (let ((line-spans
                (lambda ()
                  (let ((pos (line-beginning-position))
                        (le (line-end-position))
                        (out nil))
                    (while (< pos le)
-                     (let ((nxt (or (next-single-property-change pos 'strata-entry nil le) le))
-                           (val (get-text-property pos 'strata-entry)))
+                     (let ((nxt (or (next-single-property-change pos 'enhanced-dirvish-entry nil le) le))
+                           (val (get-text-property pos 'enhanced-dirvish-entry)))
                        (when (and val (not (equal val (car (car out)))))
                          (push (list val pos nxt) out))
                        (setq pos nxt)))
@@ -1996,7 +1996,7 @@ With ADDITIVE, retain marks that preceded this range."
                             best (car sp)))))
                 best)))))))
 
-(defun strata-mouse--posn-fallback-pt (win posn)
+(defun enhanced-dirvish-mouse--posn-fallback-pt (win posn)
   "Estimate buffer point inside WIN when POSN lacks an integer point."
   (let* ((area (and (consp posn) (posn-area posn)))
          (xy (and (consp posn) (posn-x-y posn)))
@@ -2019,7 +2019,7 @@ With ADDITIVE, retain marks that preceded this range."
         (point)))
      (t (point)))))
 
-(defun strata-mouse--entry-at-posn (posn &optional nearest-p)
+(defun enhanced-dirvish-mouse--entry-at-posn (posn &optional nearest-p)
   "Resolve entry path at mouse POSN; with NEAREST-P snap across padding/gaps."
   (let* ((win (and (consp posn) (posn-window posn)))
          (area (and (consp posn) (posn-area posn)))
@@ -2036,24 +2036,24 @@ With ADDITIVE, retain marks that preceded this range."
           (save-excursion
             (or (when pt
                   (goto-char (min pt (point-max)))
-                  (strata-mouse--entry-at-point))
+                  (enhanced-dirvish-mouse--entry-at-point))
                 (when nearest-p
-                  (let ((p (or pt (strata-mouse--posn-fallback-pt win posn))))
+                  (let ((p (or pt (enhanced-dirvish-mouse--posn-fallback-pt win posn))))
                     (cond
-                     ((derived-mode-p 'dired-mode) (strata-mouse--dired-entry-at-pt p))
-                     ((derived-mode-p 'strata-compact-mode) (strata-mouse--compact-entry-at-pt p))
-                     ((derived-mode-p 'strata-icons-mode) (strata-mouse--icons-entry-at-posn win p xy))))))))))))
+                     ((derived-mode-p 'dired-mode) (enhanced-dirvish-mouse--dired-entry-at-pt p))
+                     ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-mouse--compact-entry-at-pt p))
+                     ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-mouse--icons-entry-at-posn win p xy))))))))))))
 
-(defun strata-mouse--range-entries (order anchor target &optional rect-p)
+(defun enhanced-dirvish-mouse--range-entries (order anchor target &optional rect-p)
   "Return ordered entry paths between ANCHOR and TARGET in ORDER.
 When RECT-P is non-nil in Icons/Compact multi-column views, use the 2D box."
-  (let* ((keys (mapcar #'strata--path-key order))
-         (i1 (and anchor (cl-position (strata--path-key anchor) keys :test #'equal)))
-         (i2 (and target (cl-position (strata--path-key target) keys :test #'equal)))
+  (let* ((keys (mapcar #'enhanced-dirvish--path-key order))
+         (i1 (and anchor (cl-position (enhanced-dirvish--path-key anchor) keys :test #'equal)))
+         (i2 (and target (cl-position (enhanced-dirvish--path-key target) keys :test #'equal)))
          (n (length order)))
     (cond
-     ((and i1 i2 rect-p (derived-mode-p 'strata-icons-mode) (> (or strata-icons--ncols 1) 1))
-      (let* ((ncols (max 1 strata-icons--ncols))
+     ((and i1 i2 rect-p (derived-mode-p 'enhanced-dirvish-icons-mode) (> (or enhanced-dirvish-icons--ncols 1) 1))
+      (let* ((ncols (max 1 enhanced-dirvish-icons--ncols))
              (r1 (/ i1 ncols)) (c1 (mod i1 ncols))
              (r2 (/ i2 ncols)) (c2 (mod i2 ncols))
              (out nil))
@@ -2063,9 +2063,9 @@ When RECT-P is non-nil in Icons/Compact multi-column views, use the 2D box."
                           when (< idx n)
                           do (push (nth idx order) out)))
         (nreverse out)))
-     ((and i1 i2 rect-p (derived-mode-p 'strata-compact-mode)
-           (> n (max 1 (or strata-compact-rows 1))))
-      (let* ((rows (max 1 strata-compact-rows))
+     ((and i1 i2 rect-p (derived-mode-p 'enhanced-dirvish-compact-mode)
+           (> n (max 1 (or enhanced-dirvish-compact-rows 1))))
+      (let* ((rows (max 1 enhanced-dirvish-compact-rows))
              (c1 (/ i1 rows)) (r1 (mod i1 rows))
              (c2 (/ i2 rows)) (r2 (mod i2 rows))
              (out nil))
@@ -2080,7 +2080,7 @@ When RECT-P is non-nil in Icons/Compact multi-column views, use the 2D box."
                collect (nth i order)))
      (target (list target)))))
 
-(defun strata-mouse--apply-selection-keys (order target-keys &optional final-p)
+(defun enhanced-dirvish-mouse--apply-selection-keys (order target-keys &optional final-p)
   "Sync current buffer marks to exact set of TARGET-KEYS efficiently.
 When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
   (let ((want (make-hash-table :test #'equal)))
@@ -2088,50 +2088,50 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
       (when k (puthash k t want)))
     (cond
      ((derived-mode-p 'dired-mode)
-      (let* ((cur (strata-marked-files-only))
+      (let* ((cur (enhanced-dirvish-marked-files-only))
              (have (make-hash-table :test #'equal)))
         (dolist (f cur)
-          (puthash (strata--path-key f) t have))
+          (puthash (enhanced-dirvish--path-key f) t have))
         (save-excursion
           (dolist (f cur)
-            (unless (gethash (strata--path-key f) want)
+            (unless (gethash (enhanced-dirvish--path-key f) want)
               (when (or (ignore-errors (dired-goto-file f))
                         (ignore-errors (dired-goto-file (concat (directory-file-name f) "/"))))
                 (dired-unmark 1))))
           (let ((dired-marker-char ?*))
             (dolist (f order)
-              (let ((k (strata--path-key f)))
+              (let ((k (enhanced-dirvish--path-key f)))
                 (when (and (gethash k want) (not (gethash k have)))
                   (when (or (ignore-errors (dired-goto-file f))
                             (ignore-errors (dired-goto-file (concat (directory-file-name f) "/"))))
                     (dired-mark 1)))))))
-        (strata-view--update-selection-highlight)
+        (enhanced-dirvish-view--update-selection-highlight)
         (force-mode-line-update t)))
-     ((derived-mode-p 'strata-compact-mode 'strata-icons-mode)
-      ;; Store reversed so `strata-marked-files-only' yields directory order.
+     ((derived-mode-p 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
+      ;; Store reversed so `enhanced-dirvish-marked-files-only' yields directory order.
       ;; Filtering can share ORDER's tail; leave the active drag's cached
       ;; directory order intact when a selection includes the final files.
-      (setq strata-marked-entries
-            (reverse (cl-remove-if-not (lambda (f) (gethash (strata--path-key f) want)) order)))
+      (setq enhanced-dirvish-marked-entries
+            (reverse (cl-remove-if-not (lambda (f) (gethash (enhanced-dirvish--path-key f) want)) order)))
       (if final-p
-          (strata-view--refresh-after-mark)
-        (strata-view--update-selection-highlight)
+          (enhanced-dirvish-view--refresh-after-mark)
+        (enhanced-dirvish-view--update-selection-highlight)
         (force-mode-line-update t))))))
 
-(defun strata-mouse--drag-files (entry marked)
+(defun enhanced-dirvish-mouse--drag-files (entry marked)
   "Return the original drag payload for ENTRY and pre-drag MARKED files."
   (if (and marked (or (not entry)
-                      (member (strata--path-key entry)
-                              (mapcar #'strata--path-key marked))))
+                      (member (enhanced-dirvish--path-key entry)
+                              (mapcar #'enhanced-dirvish--path-key marked))))
       marked
     (when entry (list entry))))
 
-(defun strata-mouse--drag-exceeded-p (start-xy end-xy start-win end-win exact-start cur-entry)
+(defun enhanced-dirvish-mouse--drag-exceeded-p (start-xy end-xy start-win end-win exact-start cur-entry)
   "Return non-nil once drag movement crosses click threshold or changes entry."
   (or (not (eq start-win end-win))
       (and cur-entry exact-start
-           (not (equal (strata--path-key cur-entry)
-                       (strata--path-key exact-start))))
+           (not (equal (enhanced-dirvish--path-key cur-entry)
+                       (enhanced-dirvish--path-key exact-start))))
       (and (consp start-xy) (consp end-xy)
            (integerp (car start-xy)) (integerp (cdr start-xy))
            (integerp (car end-xy)) (integerp (cdr end-xy))
@@ -2139,20 +2139,20 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
                  (dy (- (cdr end-xy) (cdr start-xy))))
              (> (+ (* dx dx) (* dy dy)) 36)))))
 
-(defun strata-mouse--sync-drag-range (order base-keys anchor hover rect-p last-keys-cell last-hover-cell &optional final-p)
+(defun enhanced-dirvish-mouse--sync-drag-range (order base-keys anchor hover rect-p last-keys-cell last-hover-cell &optional final-p)
   "Update swept marks from ANCHOR to HOVER inside ORDER when changed."
   (when (and anchor hover)
-    (let* ((range (strata-mouse--range-entries order anchor hover rect-p))
+    (let* ((range (enhanced-dirvish-mouse--range-entries order anchor hover rect-p))
            (keys (delete-dups (append (copy-sequence base-keys)
-                                      (mapcar #'strata--path-key range)))))
+                                      (mapcar #'enhanced-dirvish--path-key range)))))
       (setcar last-hover-cell hover)
       (when (or final-p (not (equal keys (car last-keys-cell))))
         (setcar last-keys-cell keys)
         ;; Let the command loop redisplay.  Forced redisplay here can run
         ;; timers and reenter selection updates while processing motion.
-        (strata-mouse--apply-selection-keys order keys final-p)))))
+        (enhanced-dirvish-mouse--apply-selection-keys order keys final-p)))))
 
-(defun strata-mouse--edge-scroll-step (win mcol mrow order base-keys anchor rect-p last-keys-cell last-hover-cell)
+(defun enhanced-dirvish-mouse--edge-scroll-step (win mcol mrow order base-keys anchor rect-p last-keys-cell last-hover-cell)
   "Scroll WIN one line when dragging above/below its viewport and extend marks."
   (when (and (window-live-p win) (integerp mcol) (integerp mrow))
     (let* ((edges (window-inside-edges win))
@@ -2172,21 +2172,21 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
                                (window-start win)
                              (max (point-min) (1- (window-end win t)))))
                  (edge-posn (list win probe-pt '(0 . 0) 0))
-                 (hover (strata-mouse--entry-at-posn edge-posn t)))
-            (strata-mouse--sync-drag-range
+                 (hover (enhanced-dirvish-mouse--entry-at-posn edge-posn t)))
+            (enhanced-dirvish-mouse--sync-drag-range
              order base-keys anchor hover rect-p last-keys-cell last-hover-cell nil)
             (when hover
-              (strata-goto-file hover)))))
+              (enhanced-dirvish-goto-file hover)))))
       (or dir 0))))
 
-(defun strata-mouse--stop-timer-field (st field)
+(defun enhanced-dirvish-mouse--stop-timer-field (st field)
   "Cancel timer stored in ST under FIELD and clear it."
   (let ((tm (plist-get st field)))
     (when (timerp tm)
       (cancel-timer tm))
     (plist-put st field nil)))
 
-(defun strata-mouse--hide-drag-feedback (st)
+(defun enhanced-dirvish-mouse--hide-drag-feedback (st)
   "Remove ST's floating file badge and restore ordinary help tooltips."
   (when (plist-get st :feedback-visible-p)
     (plist-put st :feedback-visible-p nil)
@@ -2198,7 +2198,7 @@ When FINAL-P is non-nil in Compact/Icons, re-render mark badges cleanly."
     (setq show-help-function (plist-get st :feedback-show-help)))
   (plist-put st :feedback-last-time nil))
 
-(defun strata-mouse--drag-feedback-text (files action destination)
+(defun enhanced-dirvish-mouse--drag-feedback-text (files action destination)
   "Describe FILES, ACTION and DESTINATION for the floating drag badge.
 Use only the cached filenames; do not probe files while handling motion."
   (let ((count (length files)))
@@ -2208,7 +2208,7 @@ Use only the cached filenames; do not probe files while handling motion."
      "\n"
      (mapconcat
       (lambda (path)
-        (concat (strata-icon-glyph 'file nil "▤") "  "
+        (concat (enhanced-dirvish-icon-glyph 'file nil "▤") "  "
                 (truncate-string-to-width
                  (replace-regexp-in-string "[\n\r\t]" " "
                                            (file-name-nondirectory (directory-file-name path)))
@@ -2217,7 +2217,7 @@ Use only the cached filenames; do not probe files while handling motion."
      (when (> count 3) (format "\n… and %d more" (- count 3)))
      "\n" (truncate-string-to-width destination 52 nil nil "…"))))
 
-(defun strata-mouse--show-drag-feedback (st event files drop-dir)
+(defun enhanced-dirvish-mouse--show-drag-feedback (st event files drop-dir)
   "Show a file badge beside the pointer for ST, throttled to 25 updates/sec."
   (when (and files (display-graphic-p (window-frame (plist-get st :src-win)))
              (fboundp 'x-show-tip) (not (plist-get st :feedback-disabled-p)))
@@ -2246,7 +2246,7 @@ Use only the cached filenames; do not probe files while handling motion."
               (unless (equal key (plist-get st :feedback-key))
                 (plist-put st :feedback-key key)
                 (plist-put st :feedback-text
-                           (strata-mouse--drag-feedback-text files action destination)))
+                           (enhanced-dirvish-mouse--drag-feedback-text files action destination)))
               (plist-put st :feedback-last-time now)
               (plist-put st :feedback-visible-p t)
               (setq mouse-fine-grained-tracking t)
@@ -2267,13 +2267,13 @@ Use only the cached filenames; do not probe files while handling motion."
           (error
            ;; Feedback is optional; a display failure must never break a
            ;; transfer or leave mouse tracking and tooltip settings altered.
-           (strata-mouse--hide-drag-feedback st)
+           (enhanced-dirvish-mouse--hide-drag-feedback st)
            (plist-put st :feedback-disabled-p t)))))))
 
-(defun strata-mouse--restore-drag-vars (st)
+(defun enhanced-dirvish-mouse--restore-drag-vars (st)
   "Restore global mouse tracking and scrolling variables captured in ST."
   (when (and st (not (plist-get st :restored-p)))
-    (strata-mouse--hide-drag-feedback st)
+    (enhanced-dirvish-mouse--hide-drag-feedback st)
     (plist-put st :restored-p t)
     (when (plist-member st :saved-fine-tracking)
       (setq mouse-fine-grained-tracking (plist-get st :saved-fine-tracking)))
@@ -2281,50 +2281,50 @@ Use only the cached filenames; do not probe files while handling motion."
           auto-hscroll-mode (plist-get st :saved-hscroll)
           scroll-margin (plist-get st :saved-margin))))
 
-(defun strata-mouse--abort-drag (st)
+(defun enhanced-dirvish-mouse--abort-drag (st)
   "Release all tracking for failed ST and suppress its pending mouse release."
   (when st
     (dolist (field '(:scroll-timer :cleanup-timer :watchdog-timer))
-      (strata-mouse--stop-timer-field st field))
+      (enhanced-dirvish-mouse--stop-timer-field st field))
     (plist-put st :cancelled-p t)
-    (strata-mouse--restore-drag-vars st)
+    (enhanced-dirvish-mouse--restore-drag-vars st)
     (unwind-protect
         (when-let ((exit-fn (plist-get st :exit-fn))) (funcall exit-fn))
-      (setq strata-mouse--drag-state nil
-            strata-mouse--finished-drag-state st))))
+      (setq enhanced-dirvish-mouse--drag-state nil
+            enhanced-dirvish-mouse--finished-drag-state st))))
 
-(defun strata-mouse--scroll-tick (st)
+(defun enhanced-dirvish-mouse--scroll-tick (st)
   "Advance auto-scroll selection by one tick for active drag state ST."
   (condition-case err
-      (strata-mouse--scroll-tick-1 st)
+      (enhanced-dirvish-mouse--scroll-tick-1 st)
     ((error quit)
-     (strata-mouse--abort-drag st)
+     (enhanced-dirvish-mouse--abort-drag st)
      (message "Drag selection cancelled: %s" (error-message-string err)))))
 
-(defun strata-mouse--scroll-tick-1 (st)
+(defun enhanced-dirvish-mouse--scroll-tick-1 (st)
   "Process one auto-scroll tick for ST without leaving failed timers active."
-  (if (not (eq st strata-mouse--drag-state))
-      (strata-mouse--stop-timer-field st :scroll-timer)
+  (if (not (eq st enhanced-dirvish-mouse--drag-state))
+      (enhanced-dirvish-mouse--stop-timer-field st :scroll-timer)
     (let ((src-win (plist-get st :src-win))
           (src-buf (plist-get st :src-buf)))
       (if (or (not (window-live-p src-win))
               (not (buffer-live-p src-buf))
               (not (eq (window-buffer src-win) src-buf))
               (plist-get st :carry-marked-p))
-          (strata-mouse--stop-timer-field st :scroll-timer)
-        (let* ((strata-mouse--inhibit-preview t)
+          (enhanced-dirvish-mouse--stop-timer-field st :scroll-timer)
+        (let* ((enhanced-dirvish-mouse--inhibit-preview t)
                (old-start (window-start src-win))
                (mp (cdr (mouse-position)))
-               (dir (strata-mouse--edge-scroll-step
+               (dir (enhanced-dirvish-mouse--edge-scroll-step
                      src-win (car-safe mp) (cdr-safe mp)
                      (plist-get st :order) (plist-get st :base-keys)
                      (plist-get st :anchor) (plist-get st :rect-p)
                      (plist-get st :last-keys-cell) (plist-get st :last-hover-cell))))
           (when (or (null dir) (zerop dir)
                     (= old-start (window-start src-win)))
-            (strata-mouse--stop-timer-field st :scroll-timer)))))))
+            (enhanced-dirvish-mouse--stop-timer-field st :scroll-timer)))))))
 
-(defun strata-mouse--update-scroll-timer (st)
+(defun enhanced-dirvish-mouse--update-scroll-timer (st)
   "Start or stop viewport edge auto-scroll timer for active drag state ST."
   (let* ((src-win (plist-get st :src-win))
          (mp (and (window-live-p src-win)
@@ -2338,14 +2338,14 @@ Use only the cached filenames; do not probe files while handling motion."
                       (or (< mrow (nth 1 edges)) (>= mrow (nth 3 edges))))))
     (if need-p
         (unless (timerp (plist-get st :scroll-timer))
-          (plist-put st :scroll-timer (run-at-time 0.12 0.12 #'strata-mouse--scroll-tick st)))
-      (strata-mouse--stop-timer-field st :scroll-timer))))
+          (plist-put st :scroll-timer (run-at-time 0.12 0.12 #'enhanced-dirvish-mouse--scroll-tick st)))
+      (enhanced-dirvish-mouse--stop-timer-field st :scroll-timer))))
 
-(defun strata-mouse--cleanup-abandoned-drag (st)
+(defun enhanced-dirvish-mouse--cleanup-abandoned-drag (st)
   "Finalize drag ST on idle if no button-1 release command consumed it."
-  (when (eq strata-mouse--finished-drag-state st)
-    (setq strata-mouse--finished-drag-state nil)
-    (strata-mouse--stop-timer-field st :cleanup-timer)
+  (when (eq enhanced-dirvish-mouse--finished-drag-state st)
+    (setq enhanced-dirvish-mouse--finished-drag-state nil)
+    (enhanced-dirvish-mouse--stop-timer-field st :cleanup-timer)
     (let ((src-win (plist-get st :src-win))
           (src-buf (plist-get st :src-buf)))
       (when (and (not (plist-get st :cancelled-p))
@@ -2354,72 +2354,72 @@ Use only the cached filenames; do not probe files while handling motion."
                  (buffer-live-p src-buf)
                  (eq (window-buffer src-win) src-buf))
         (with-selected-window src-win
-          (let ((strata-mouse--inhibit-preview t)
+          (let ((enhanced-dirvish-mouse--inhibit-preview t)
                 (anchor (plist-get st :anchor))
                 (hover (car (plist-get st :last-hover-cell))))
             (when (and anchor hover (not (plist-get st :carry-marked-p)))
-              (setq-local strata--selection-anchor-entry anchor)
-              (strata-mouse--sync-drag-range
+              (setq-local enhanced-dirvish--selection-anchor-entry anchor)
+              (enhanced-dirvish-mouse--sync-drag-range
                (plist-get st :order) (plist-get st :base-keys) anchor hover
                (plist-get st :rect-p) (plist-get st :last-keys-cell)
                (plist-get st :last-hover-cell) t)))
-          (strata-view--sync-preview-on-move))))))
+          (enhanced-dirvish-view--sync-preview-on-move))))))
 
-(defun strata-mouse--on-drag-exit ()
+(defun enhanced-dirvish-mouse--on-drag-exit ()
   "Tear down active transient drag state and hand off to button-1 release."
-  (let ((st strata-mouse--drag-state))
+  (let ((st enhanced-dirvish-mouse--drag-state))
     (when st
-      (strata-mouse--stop-timer-field st :scroll-timer)
-      (strata-mouse--stop-timer-field st :watchdog-timer)
-      (strata-mouse--restore-drag-vars st)
-      (setq strata-mouse--drag-state nil
-            strata-mouse--finished-drag-state st)
+      (enhanced-dirvish-mouse--stop-timer-field st :scroll-timer)
+      (enhanced-dirvish-mouse--stop-timer-field st :watchdog-timer)
+      (enhanced-dirvish-mouse--restore-drag-vars st)
+      (setq enhanced-dirvish-mouse--drag-state nil
+            enhanced-dirvish-mouse--finished-drag-state st)
       (unless (plist-get st :cancelled-p)
-        (strata-mouse--stop-timer-field st :cleanup-timer)
+        (enhanced-dirvish-mouse--stop-timer-field st :cleanup-timer)
         (plist-put st :cleanup-timer
-                   (run-at-time 0 nil #'strata-mouse--cleanup-abandoned-drag st))))))
+                   (run-at-time 0 nil #'enhanced-dirvish-mouse--cleanup-abandoned-drag st))))))
 
-(defun strata-mouse--take-finished-drag (&optional start-posn)
+(defun enhanced-dirvish-mouse--take-finished-drag (&optional start-posn)
   "Consume and return completed drag state matching START-POSN, if any."
-  (let ((st strata-mouse--finished-drag-state)
+  (let ((st enhanced-dirvish-mouse--finished-drag-state)
         (win (and (consp start-posn) (posn-window start-posn))))
     (when (and st (or (null win) (eq win (plist-get st :src-win))))
-      (strata-mouse--stop-timer-field st :cleanup-timer)
-      (setq strata-mouse--finished-drag-state nil)
+      (enhanced-dirvish-mouse--stop-timer-field st :cleanup-timer)
+      (setq enhanced-dirvish-mouse--finished-drag-state nil)
       st)))
 
-(defun strata-mouse--drag-keep-p ()
+(defun enhanced-dirvish-mouse--drag-keep-p ()
   "Keep transient drag keymap active only for movement and cancel commands."
-  (memq this-command '(strata-mouse--drag-move strata-mouse--drag-cancel ignore)))
+  (memq this-command '(enhanced-dirvish-mouse--drag-move enhanced-dirvish-mouse--drag-cancel ignore)))
 
-(defun strata-mouse--drag-keymap ()
+(defun enhanced-dirvish-mouse--drag-keymap ()
   "Build transient keymap handling live mouse motion, cancel, and area releases."
-  (let ((bindings '(([mouse-movement] . strata-mouse--drag-move)
-                    ([C-mouse-movement] . strata-mouse--drag-move)
-                    ([S-mouse-movement] . strata-mouse--drag-move)
-                    ([C-S-mouse-movement] . strata-mouse--drag-move)
-                    ([M-mouse-movement] . strata-mouse--drag-move)
-                    ([escape] . strata-mouse--drag-cancel)
-                    ([7] . strata-mouse--drag-cancel)
-                    ([down-mouse-3] . strata-mouse--drag-cancel)
-                    ([mouse-3] . strata-mouse--drag-cancel)
-                    ([drag-mouse-3] . strata-mouse--drag-cancel)
-                    ([switch-frame] . strata-mouse--drag-cancel)
-                    ([select-window] . strata-mouse--drag-cancel)
+  (let ((bindings '(([mouse-movement] . enhanced-dirvish-mouse--drag-move)
+                    ([C-mouse-movement] . enhanced-dirvish-mouse--drag-move)
+                    ([S-mouse-movement] . enhanced-dirvish-mouse--drag-move)
+                    ([C-S-mouse-movement] . enhanced-dirvish-mouse--drag-move)
+                    ([M-mouse-movement] . enhanced-dirvish-mouse--drag-move)
+                    ([escape] . enhanced-dirvish-mouse--drag-cancel)
+                    ([7] . enhanced-dirvish-mouse--drag-cancel)
+                    ([down-mouse-3] . enhanced-dirvish-mouse--drag-cancel)
+                    ([mouse-3] . enhanced-dirvish-mouse--drag-cancel)
+                    ([drag-mouse-3] . enhanced-dirvish-mouse--drag-cancel)
+                    ([switch-frame] . enhanced-dirvish-mouse--drag-cancel)
+                    ([select-window] . enhanced-dirvish-mouse--drag-cancel)
                     ([scroll-bar-movement] . ignore)))
-        (area-releases '(([drag-mouse-1] . strata-mouse-drag-drop)
-                         ([C-drag-mouse-1] . strata-mouse-drag-copy)
-                         ([S-drag-mouse-1] . strata-mouse-drag-move)
-                         ([C-S-drag-mouse-1] . strata-mouse-drag-drop)
-                         ([double-drag-mouse-1] . strata-mouse-drag-drop)
-                         ([mouse-1] . strata-mouse-click-entry)
-                         ([C-mouse-1] . strata-mouse-toggle-select)
-                         ([C-S-mouse-1] . strata-mouse-add-range-select)
-                         ([S-mouse-1] . strata-mouse-range-select)))
+        (area-releases '(([drag-mouse-1] . enhanced-dirvish-mouse-drag-drop)
+                         ([C-drag-mouse-1] . enhanced-dirvish-mouse-drag-copy)
+                         ([S-drag-mouse-1] . enhanced-dirvish-mouse-drag-move)
+                         ([C-S-drag-mouse-1] . enhanced-dirvish-mouse-drag-drop)
+                         ([double-drag-mouse-1] . enhanced-dirvish-mouse-drag-drop)
+                         ([mouse-1] . enhanced-dirvish-mouse-click-entry)
+                         ([C-mouse-1] . enhanced-dirvish-mouse-toggle-select)
+                         ([C-S-mouse-1] . enhanced-dirvish-mouse-add-range-select)
+                         ([S-mouse-1] . enhanced-dirvish-mouse-range-select)))
         (map (make-sparse-keymap)))
     (dolist (pair bindings)
       (define-key map (car pair) (cdr pair)))
-    (define-key map (kbd "ESC") #'strata-mouse--drag-cancel)
+    (define-key map (kbd "ESC") #'enhanced-dirvish-mouse--drag-cancel)
     (dolist (area '(mode-line header-line vertical-line right-divider bottom-divider
                     left-margin right-margin left-fringe right-fringe
                     tab-bar tool-bar vertical-scroll-bar horizontal-scroll-bar))
@@ -2431,21 +2431,21 @@ Use only the cached filenames; do not probe files while handling motion."
         (define-key map (vector area) sub)))
     map))
 
-(defun strata-mouse--drag-cancel (&optional ev)
+(defun enhanced-dirvish-mouse--drag-cancel (&optional ev)
   "Cancel active drag selection and restore original marks cleanly."
   (interactive (list (and (mouse-event-p last-input-event) last-input-event)))
-  (let ((st (or strata-mouse--drag-state strata-mouse--finished-drag-state)))
+  (let ((st (or enhanced-dirvish-mouse--drag-state enhanced-dirvish-mouse--finished-drag-state)))
     (when st
-      (strata-mouse--stop-timer-field st :scroll-timer)
-      (strata-mouse--stop-timer-field st :cleanup-timer)
-      (strata-mouse--stop-timer-field st :watchdog-timer)
+      (enhanced-dirvish-mouse--stop-timer-field st :scroll-timer)
+      (enhanced-dirvish-mouse--stop-timer-field st :cleanup-timer)
+      (enhanced-dirvish-mouse--stop-timer-field st :watchdog-timer)
       (plist-put st :cancelled-p t)
       ;; Release global tracking and the transient map even if refreshing
       ;; the old selection signals an error or quit.
-      (strata-mouse--restore-drag-vars st)
+      (enhanced-dirvish-mouse--restore-drag-vars st)
       (when-let ((exit-fn (plist-get st :exit-fn))) (funcall exit-fn))
       (when (and ev (memq (event-basic-type ev) '(mouse-3 down-mouse-3 drag-mouse-3)))
-        (setq strata-mouse--suppress-mouse-3-once t))
+        (setq enhanced-dirvish-mouse--suppress-mouse-3-once t))
       (let ((src-win (plist-get st :src-win))
             (src-buf (plist-get st :src-buf))
             (pre-keys (plist-get st :pre-keys))
@@ -2455,45 +2455,45 @@ Use only the cached filenames; do not probe files while handling motion."
                    (eq (window-buffer src-win) src-buf)
                    (not (equal (car last-keys-cell) pre-keys)))
           (with-selected-window src-win
-            (let ((strata-mouse--inhibit-preview t))
-              (strata-mouse--apply-selection-keys (plist-get st :order) pre-keys t)))))
-      (setq strata-mouse--drag-state nil
-            strata-mouse--finished-drag-state st)
+            (let ((enhanced-dirvish-mouse--inhibit-preview t))
+              (enhanced-dirvish-mouse--apply-selection-keys (plist-get st :order) pre-keys t)))))
+      (setq enhanced-dirvish-mouse--drag-state nil
+            enhanced-dirvish-mouse--finished-drag-state st)
       (message "Drag selection cancelled"))))
 
-(defun strata-mouse--drag-watchdog (st)
+(defun enhanced-dirvish-mouse--drag-watchdog (st)
   "Release abandoned drag ST after five idle seconds without mouse input."
-  (when (eq st strata-mouse--drag-state)
-    (strata-mouse--drag-cancel nil)))
+  (when (eq st enhanced-dirvish-mouse--drag-state)
+    (enhanced-dirvish-mouse--drag-cancel nil)))
 
-(defun strata-mouse--drag-move (ev)
+(defun enhanced-dirvish-mouse--drag-move (ev)
   "Update live drag highlight or cross-pane drop cue for motion event EV."
   (interactive "e")
   ;; Never drain input here.  GTK may report pending input while read-event
   ;; returns nil, causing an infinite busy loop; consuming events here also
   ;; steals releases and C-g from Emacs's native command loop.
   (condition-case err
-      (strata-mouse--drag-move-1 ev)
+      (enhanced-dirvish-mouse--drag-move-1 ev)
     ((error quit)
-     (strata-mouse--abort-drag strata-mouse--drag-state)
+     (enhanced-dirvish-mouse--abort-drag enhanced-dirvish-mouse--drag-state)
      (signal (car err) (cdr err)))))
 
-(defun strata-mouse--drag-move-1 (ev)
+(defun enhanced-dirvish-mouse--drag-move-1 (ev)
   "Update one motion event EV without reading or waiting for further input."
-  (let* ((st strata-mouse--drag-state)
+  (let* ((st enhanced-dirvish-mouse--drag-state)
          (src-win (plist-get st :src-win))
          (src-buf (plist-get st :src-buf)))
     (when st
       (if (not (and (window-live-p src-win)
                     (buffer-live-p src-buf)
                     (eq (window-buffer src-win) src-buf)))
-          (strata-mouse--drag-cancel nil)
+          (enhanced-dirvish-mouse--drag-cancel nil)
         (with-selected-window src-win
-          (let* ((strata-mouse--inhibit-preview t)
+          (let* ((enhanced-dirvish-mouse--inhibit-preview t)
                  (end (event-end ev))
                  (dst-win (posn-window end))
                  (cur (when (eq dst-win src-win)
-                        (strata-mouse--entry-at-posn end t)))
+                        (enhanced-dirvish-mouse--entry-at-posn end t)))
                  (exact-start (plist-get st :exact-start))
                  (order (plist-get st :order))
                  (pre-marked (plist-get st :pre-marked))
@@ -2501,75 +2501,75 @@ Use only the cached filenames; do not probe files while handling motion."
                  (last-keys-cell (plist-get st :last-keys-cell))
                  (last-hover-cell (plist-get st :last-hover-cell))
                  (carry-marked-p (plist-get st :carry-marked-p))
-                 (drop-marked (if exact-start pre-marked (strata-marked-files-only))))
+                 (drop-marked (if exact-start pre-marked (enhanced-dirvish-marked-files-only))))
             (unless (plist-get st :dragged-p)
-              (when (strata-mouse--drag-exceeded-p
+              (when (enhanced-dirvish-mouse--drag-exceeded-p
                      (plist-get st :start-xy) (posn-x-y end)
                      src-win dst-win exact-start cur)
                 (plist-put st :dragged-p t)))
             (when (plist-get st :dragged-p)
-              (let ((drop-dir (strata-mouse--drop-dir
+              (let ((drop-dir (enhanced-dirvish-mouse--drop-dir
                                src-win dst-win end exact-start drop-marked)))
                 (cond
                  (drop-dir
-                  (strata-mouse--stop-timer-field st :scroll-timer)
+                  (enhanced-dirvish-mouse--stop-timer-field st :scroll-timer)
                   (when (and carry-marked-p (not (equal (car last-keys-cell) pre-keys)))
                     (setcar last-keys-cell pre-keys)
-                    (strata-mouse--apply-selection-keys order pre-keys nil))
-                  (let ((n (length (strata-mouse--drag-files exact-start drop-marked))))
+                    (enhanced-dirvish-mouse--apply-selection-keys order pre-keys nil))
+                  (let ((n (length (enhanced-dirvish-mouse--drag-files exact-start drop-marked))))
                     (message "Drop %d item(s) into %s to copy/move"
                              n (abbreviate-file-name drop-dir))))
                  ((or (eq dst-win src-win) (null dst-win))
                   (when (and cur (eq dst-win src-win) (not carry-marked-p))
-                    (strata-mouse--sync-drag-range
+                    (enhanced-dirvish-mouse--sync-drag-range
                      order (plist-get st :base-keys) (plist-get st :anchor) cur
                      (plist-get st :rect-p) last-keys-cell last-hover-cell nil))
-                  (strata-mouse--update-scroll-timer st))
+                  (enhanced-dirvish-mouse--update-scroll-timer st))
                  (t
-                  (strata-mouse--stop-timer-field st :scroll-timer)))
+                  (enhanced-dirvish-mouse--stop-timer-field st :scroll-timer)))
                 (if (or carry-marked-p drop-dir)
-                    (strata-mouse--show-drag-feedback
-                     st ev (strata-mouse--drag-files exact-start drop-marked)
+                    (enhanced-dirvish-mouse--show-drag-feedback
+                     st ev (enhanced-dirvish-mouse--drag-files exact-start drop-marked)
                      drop-dir)
-                  (strata-mouse--hide-drag-feedback st))))))))))
+                  (enhanced-dirvish-mouse--hide-drag-feedback st))))))))))
 
-(defun strata-mouse-down-entry (event)
+(defun enhanced-dirvish-mouse-down-entry (event)
   "Start native live drag-selection tracking on button-1 press in a pane."
   (interactive "e")
-  (setq strata-mouse--suppress-mouse-3-once nil)
-  (when strata-mouse--drag-state
-    (if-let ((exit-fn (plist-get strata-mouse--drag-state :exit-fn)))
+  (setq enhanced-dirvish-mouse--suppress-mouse-3-once nil)
+  (when enhanced-dirvish-mouse--drag-state
+    (if-let ((exit-fn (plist-get enhanced-dirvish-mouse--drag-state :exit-fn)))
         (funcall exit-fn)
-      (strata-mouse--on-drag-exit)))
-  (when strata-mouse--finished-drag-state
-    (strata-mouse--stop-timer-field strata-mouse--finished-drag-state :cleanup-timer)
-    (setq strata-mouse--finished-drag-state nil))
+      (enhanced-dirvish-mouse--on-drag-exit)))
+  (when enhanced-dirvish-mouse--finished-drag-state
+    (enhanced-dirvish-mouse--stop-timer-field enhanced-dirvish-mouse--finished-drag-state :cleanup-timer)
+    (setq enhanced-dirvish-mouse--finished-drag-state nil))
   (let* ((start (event-start event))
          (src-win (posn-window start)))
     (unless (or (posn-area start)
                 (not (window-live-p src-win))
                 (not (with-current-buffer (window-buffer src-win)
-                       (derived-mode-p 'dired-mode 'strata-compact-mode 'strata-icons-mode))))
+                       (derived-mode-p 'dired-mode 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode))))
       (select-window src-win)
-      (when (fboundp 'strata-panes--sync-active-pane-from-window)
-        (strata-panes--sync-active-pane-from-window src-win))
+      (when (fboundp 'enhanced-dirvish-panes--sync-active-pane-from-window)
+        (enhanced-dirvish-panes--sync-active-pane-from-window src-win))
       (let* ((mods (event-modifiers event))
              (ctrl-p (memq 'control mods))
              (shift-p (memq 'shift mods))
              (start-xy (posn-x-y start))
-             (order (strata-view--entry-order))
-             (exact-start (strata-mouse--entry-at-posn start nil))
-             (near-start (or exact-start (strata-mouse--entry-at-posn start t)))
-             (pre-marked (strata-marked-files-only))
-             (pre-keys (mapcar #'strata--path-key pre-marked))
+             (order (enhanced-dirvish-view--entry-order))
+             (exact-start (enhanced-dirvish-mouse--entry-at-posn start nil))
+             (near-start (or exact-start (enhanced-dirvish-mouse--entry-at-posn start t)))
+             (pre-marked (enhanced-dirvish-marked-files-only))
+             (pre-keys (mapcar #'enhanced-dirvish--path-key pre-marked))
              (started-on-marked-p
-              (and exact-start (member (strata--path-key exact-start) pre-keys)))
+              (and exact-start (member (enhanced-dirvish--path-key exact-start) pre-keys)))
              (carry-marked-p
               (and started-on-marked-p
                    (not ctrl-p)))
-             (rect-p (derived-mode-p 'strata-compact-mode 'strata-icons-mode))
+             (rect-p (derived-mode-p 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode))
              (anchor (if shift-p
-                         (or strata--selection-anchor-entry near-start)
+                         (or enhanced-dirvish--selection-anchor-entry near-start)
                        near-start))
              (base-keys (when (or ctrl-p shift-p) pre-keys)))
         (when order
@@ -2609,21 +2609,21 @@ Use only the cached filenames; do not probe files while handling motion."
                           :exit-fn nil)))
             ;; Set `track-mouse' directly instead of using `(track-mouse ...)' so
             ;; emacs bug#51794 does not cancel motion over `header-line-format'.
-            (setq strata-mouse--drag-state st
+            (setq enhanced-dirvish-mouse--drag-state st
                   auto-hscroll-mode nil
                   scroll-margin 0
                   track-mouse 'drag-tracking)
             (plist-put st :exit-fn
                        (set-transient-map
-                        (strata-mouse--drag-keymap)
-                        #'strata-mouse--drag-keep-p
-                        #'strata-mouse--on-drag-exit))
+                        (enhanced-dirvish-mouse--drag-keymap)
+                        #'enhanced-dirvish-mouse--drag-keep-p
+                        #'enhanced-dirvish-mouse--on-drag-exit))
             (plist-put st :watchdog-timer
-                       (run-with-idle-timer 5 nil #'strata-mouse--drag-watchdog st))))))))
+                       (run-with-idle-timer 5 nil #'enhanced-dirvish-mouse--drag-watchdog st))))))))
 
-(defun strata-mouse--suppress-dir-double-click-p (event)
+(defun enhanced-dirvish-mouse--suppress-dir-double-click-p (event)
   "Return non-nil if EVENT is the trailing double-click after entering a folder."
-  (when-let ((info strata-mouse--recent-dir-open))
+  (when-let ((info enhanced-dirvish-mouse--recent-dir-open))
     (let* ((end (event-end event))
            (win (or (and (consp end) (posn-window end)) (selected-window)))
            (ts (or (and (consp end) (posn-timestamp end)) 0))
@@ -2638,68 +2638,68 @@ Use only the cached filenames; do not probe files while handling motion."
                         (/ (float limit-ms) 1000.0)))))
       (and (eq win (plist-get info :window)) ts-ok))))
 
-(defun strata-mouse--run-click-action (event)
+(defun enhanced-dirvish-mouse--run-click-action (event)
   "Execute single click for EVENT: open clicked dir, preview file, or clear."
   ;; Resolve the actual hit before mouse-set-point can clamp empty space
   ;; below the listing onto its final row.  Nearest-entry lookup is for
   ;; sweeping a drag range, never for an ordinary click.
   (let* ((end (event-end event))
-         (compact-position (strata-mouse--compact-position end))
-         (p (strata-mouse--entry-at-posn end)))
-    (strata-mouse--sync-event event)
+         (compact-position (enhanced-dirvish-mouse--compact-position end))
+         (p (enhanced-dirvish-mouse--entry-at-posn end)))
+    (enhanced-dirvish-mouse--sync-event event)
     (if p
         (progn
-          (setq strata--empty-click-p nil strata--empty-click-position nil)
-          (strata-clear-all-marks)
-          (strata-view--reset-selection-range p)
+          (setq enhanced-dirvish--empty-click-p nil enhanced-dirvish--empty-click-position nil)
+          (enhanced-dirvish-clear-all-marks)
+          (enhanced-dirvish-view--reset-selection-range p)
           (if (file-directory-p p)
               (progn
-                (setq strata-mouse--recent-dir-open
+                (setq enhanced-dirvish-mouse--recent-dir-open
                       (list :window (selected-window)
                             :ts (or (and (consp end) (posn-timestamp end)) 0)
                             :wall (float-time)))
-                (strata-mouse--open-path p t))
-            (setq strata-mouse--recent-dir-open nil)
-            (when (derived-mode-p 'strata-icons-mode)
-              (strata-goto-file p))
-            (strata-view--sync-preview-on-move)))
-      (setq strata-mouse--recent-dir-open nil)
-      (strata-clear-all-marks)
-      (strata-mouse--clear-focus compact-position))))
+                (enhanced-dirvish-mouse--open-path p t))
+            (setq enhanced-dirvish-mouse--recent-dir-open nil)
+            (when (derived-mode-p 'enhanced-dirvish-icons-mode)
+              (enhanced-dirvish-goto-file p))
+            (enhanced-dirvish-view--sync-preview-on-move)))
+      (setq enhanced-dirvish-mouse--recent-dir-open nil)
+      (enhanced-dirvish-clear-all-marks)
+      (enhanced-dirvish-mouse--clear-focus compact-position))))
 
-(defun strata-mouse--run-toggle-action (event)
+(defun enhanced-dirvish-mouse--run-toggle-action (event)
   "Execute control-click for EVENT: toggle mark on clicked entry."
-  (strata-mouse--sync-event event)
-  (when-let ((p (strata-mouse--entry-at-point)))
-    (let* ((key (strata--path-key p))
-           (marked (cl-some (lambda (e) (equal (strata--path-key e) key))
-                            (strata-marked-files-only))))
-      (strata-view--reset-selection-range p)
-      (strata-view--set-entry-mark p (not marked) nil))))
+  (enhanced-dirvish-mouse--sync-event event)
+  (when-let ((p (enhanced-dirvish-mouse--entry-at-point)))
+    (let* ((key (enhanced-dirvish--path-key p))
+           (marked (cl-some (lambda (e) (equal (enhanced-dirvish--path-key e) key))
+                            (enhanced-dirvish-marked-files-only))))
+      (enhanced-dirvish-view--reset-selection-range p)
+      (enhanced-dirvish-view--set-entry-mark p (not marked) nil))))
 
-(defun strata-mouse--run-range-action (event &optional additive)
+(defun enhanced-dirvish-mouse--run-range-action (event &optional additive)
   "Execute shift-click for EVENT: select contiguous range from anchor."
   (let* ((ev-win (or (posn-window (event-start event)) (selected-window)))
          (prev-anchor (when (window-live-p ev-win)
                         (with-current-buffer (window-buffer ev-win)
-                          (or strata--selection-anchor-entry
-                              (strata-current-file))))))
-    (strata-mouse--sync-event event)
-    (when-let ((target (strata-mouse--entry-at-point)))
+                          (or enhanced-dirvish--selection-anchor-entry
+                              (enhanced-dirvish-current-file))))))
+    (enhanced-dirvish-mouse--sync-event event)
+    (when-let ((target (enhanced-dirvish-mouse--entry-at-point)))
       (let ((anchor (or prev-anchor target)))
-        (strata-view--mark-range anchor target additive)))))
+        (enhanced-dirvish-view--mark-range anchor target additive)))))
 
-(defun strata-mouse--run-activate-action (event)
+(defun enhanced-dirvish-mouse--run-activate-action (event)
   "Execute activation click for EVENT: open directory or edit file."
   (if (and (memq 'double (event-modifiers event))
-           (strata-mouse--suppress-dir-double-click-p event))
-      (setq strata-mouse--recent-dir-open nil)
-    (setq strata-mouse--recent-dir-open nil)
-    (strata-mouse--sync-event event)
-    (when-let ((p (strata-mouse--entry-at-point)))
-      (strata-mouse--open-path p nil))))
+           (enhanced-dirvish-mouse--suppress-dir-double-click-p event))
+      (setq enhanced-dirvish-mouse--recent-dir-open nil)
+    (setq enhanced-dirvish-mouse--recent-dir-open nil)
+    (enhanced-dirvish-mouse--sync-event event)
+    (when-let ((p (enhanced-dirvish-mouse--entry-at-point)))
+      (enhanced-dirvish-mouse--open-path p nil))))
 
-(defun strata-mouse--finish-drag (st event &optional forced-mode)
+(defun enhanced-dirvish-mouse--finish-drag (st event &optional forced-mode)
   "Finalize drag ST on release EVENT, performing selection, drop, or click."
   (unless (plist-get st :cancelled-p)
     (let* ((src-win (plist-get st :src-win))
@@ -2708,33 +2708,33 @@ Use only the cached filenames; do not probe files while handling motion."
            (dst-win (or (posn-window end) src-win))
            (end-mods (event-modifiers event))
            (cur (when (and (window-live-p src-win) (eq dst-win src-win))
-                  (strata-mouse--entry-at-posn end t))))
+                  (enhanced-dirvish-mouse--entry-at-posn end t))))
       (when (and (window-live-p src-win)
                  (buffer-live-p src-buf)
                  (eq (window-buffer src-win) src-buf))
         (unless (plist-get st :dragged-p)
-          (when (strata-mouse--drag-exceeded-p
+          (when (enhanced-dirvish-mouse--drag-exceeded-p
                  (plist-get st :start-xy) (posn-x-y end)
                  src-win dst-win (plist-get st :exact-start) cur)
             (plist-put st :dragged-p t)))
         (if (not (plist-get st :dragged-p))
             (cond
-             ((memq 'double end-mods) (strata-mouse--run-activate-action event))
+             ((memq 'double end-mods) (enhanced-dirvish-mouse--run-activate-action event))
              ((and (or (memq 'control end-mods) (plist-get st :ctrl-p))
                    (or (memq 'shift end-mods) (plist-get st :shift-p)))
-              (strata-mouse--run-range-action event t))
+              (enhanced-dirvish-mouse--run-range-action event t))
              ((or (memq 'control end-mods) (plist-get st :ctrl-p))
-              (strata-mouse--run-toggle-action event))
+              (enhanced-dirvish-mouse--run-toggle-action event))
              ((or (memq 'shift end-mods) (plist-get st :shift-p))
-              (strata-mouse--run-range-action event))
-             (t (strata-mouse--run-click-action event)))
+              (enhanced-dirvish-mouse--run-range-action event))
+             (t (enhanced-dirvish-mouse--run-click-action event)))
           (select-window src-win)
-          (when (fboundp 'strata-panes--sync-active-pane-from-window)
-            (strata-panes--sync-active-pane-from-window src-win))
+          (when (fboundp 'enhanced-dirvish-panes--sync-active-pane-from-window)
+            (enhanced-dirvish-panes--sync-active-pane-from-window src-win))
           (let* ((drop-marked (if (plist-get st :exact-start)
                                   (plist-get st :pre-marked)
-                                (strata-marked-files-only)))
-                 (drop-dir (strata-mouse--drop-dir
+                                (enhanced-dirvish-marked-files-only)))
+                 (drop-dir (enhanced-dirvish-mouse--drop-dir
                             src-win dst-win end (plist-get st :exact-start)
                             drop-marked))
                  (effective-mode
@@ -2750,8 +2750,8 @@ Use only the cached filenames; do not probe files while handling motion."
                 (progn
                   (when (and carry-marked-p
                              (not (equal (car (plist-get st :last-keys-cell)) pre-keys)))
-                    (strata-mouse--apply-selection-keys (plist-get st :order) pre-keys nil))
-                  (strata-mouse--drag-drop-now
+                    (enhanced-dirvish-mouse--apply-selection-keys (plist-get st :order) pre-keys nil))
+                  (enhanced-dirvish-mouse--drag-drop-now
                    src-win dst-win (plist-get st :start) end
                    (plist-get st :exact-start)
                    drop-marked
@@ -2759,78 +2759,78 @@ Use only the cached filenames; do not probe files while handling motion."
               (let ((anchor (plist-get st :anchor))
                     (hover (or cur (car (plist-get st :last-hover-cell)))))
                 (when (and anchor hover (not carry-marked-p))
-                  (setq-local strata--selection-anchor-entry anchor)
-                  (strata-mouse--sync-drag-range
+                  (setq-local enhanced-dirvish--selection-anchor-entry anchor)
+                  (enhanced-dirvish-mouse--sync-drag-range
                    (plist-get st :order) (plist-get st :base-keys) anchor hover
                    (plist-get st :rect-p) (plist-get st :last-keys-cell)
                    (plist-get st :last-hover-cell) t)
-                  (strata-goto-file hover)
-                  (message "Selected %d item(s)" (length (strata-marked-files-only))))
-                (strata-view--sync-preview-on-move)))))))))
+                  (enhanced-dirvish-goto-file hover)
+                  (message "Selected %d item(s)" (length (enhanced-dirvish-marked-files-only))))
+                (enhanced-dirvish-view--sync-preview-on-move)))))))))
 
-(defun strata-mouse-toggle-select (event)
+(defun enhanced-dirvish-mouse-toggle-select (event)
   "Toggle multi-selection mark on clicked entry (`C-<mouse-1>')."
   (interactive "e")
-  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
-      (strata-mouse--finish-drag st event)
-    (strata-mouse--run-toggle-action event)))
+  (if-let ((st (enhanced-dirvish-mouse--take-finished-drag (event-start event))))
+      (enhanced-dirvish-mouse--finish-drag st event)
+    (enhanced-dirvish-mouse--run-toggle-action event)))
 
-(defun strata-mouse-range-select (event)
+(defun enhanced-dirvish-mouse-range-select (event)
   "Select contiguous range of entries from anchor to EVENT (`S-<mouse-1>')."
   (interactive "e")
-  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
-      (strata-mouse--finish-drag st event)
-    (strata-mouse--run-range-action event)))
+  (if-let ((st (enhanced-dirvish-mouse--take-finished-drag (event-start event))))
+      (enhanced-dirvish-mouse--finish-drag st event)
+    (enhanced-dirvish-mouse--run-range-action event)))
 
-(defun strata-mouse-add-range-select (event)
+(defun enhanced-dirvish-mouse-add-range-select (event)
   "Add the range to EVENT to the current selection (`C-S-<mouse-1>')."
   (interactive "e")
-  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
-      (strata-mouse--finish-drag st event)
-    (strata-mouse--run-range-action event t)))
+  (if-let ((st (enhanced-dirvish-mouse--take-finished-drag (event-start event))))
+      (enhanced-dirvish-mouse--finish-drag st event)
+    (enhanced-dirvish-mouse--run-range-action event t)))
 
-(defun strata-mouse--drag-target-dir (dst-win end-posn &optional folder-only)
+(defun enhanced-dirvish-mouse--drag-target-dir (dst-win end-posn &optional folder-only)
   "Resolve a drop folder in DST-WIN at END-POSN.
 FOLDER-ONLY requires an actual folder entry rather than the pane background."
   (when (window-live-p dst-win)
     (cond
-     ((eq dst-win (bound-and-true-p strata-sidebar-window))
+     ((eq dst-win (bound-and-true-p enhanced-dirvish-sidebar-window))
       (with-current-buffer (window-buffer dst-win)
         (let* ((pt (or (and (integerp (posn-point end-posn)) (posn-point end-posn))
                        (point)))
-               (loc (or (get-text-property pt 'strata-sidebar-loc)
+               (loc (or (get-text-property pt 'enhanced-dirvish-sidebar-loc)
                         (save-excursion
                           (goto-char (min pt (point-max)))
-                          (get-text-property (line-beginning-position) 'strata-sidebar-loc)))))
+                          (get-text-property (line-beginning-position) 'enhanced-dirvish-sidebar-loc)))))
           (when (and (stringp loc) (file-directory-p loc))
             loc))))
-     ((and (fboundp 'strata-panes--valid-main-window-p)
-           (strata-panes--valid-main-window-p dst-win)
-           (fboundp 'strata-panes--window-dir))
-      (let ((entry (strata-mouse--entry-at-posn end-posn)))
+     ((and (fboundp 'enhanced-dirvish-panes--valid-main-window-p)
+           (enhanced-dirvish-panes--valid-main-window-p dst-win)
+           (fboundp 'enhanced-dirvish-panes--window-dir))
+      (let ((entry (enhanced-dirvish-mouse--entry-at-posn end-posn)))
         (if (and entry (file-directory-p entry))
             entry
-          (unless folder-only (strata-panes--window-dir dst-win))))))))
+          (unless folder-only (enhanced-dirvish-panes--window-dir dst-win))))))))
 
-(defun strata-mouse--drop-dir (src-win dst-win end entry marked)
+(defun enhanced-dirvish-mouse--drop-dir (src-win dst-win end entry marked)
   "Resolve END as a folder drop for the original ENTRY/MARKED payload.
 Inside the source pane, blank-space drags keep selecting and a selected
 folder cannot itself become the drop target."
   (let* ((same-pane (eq src-win dst-win))
-         (files (strata-mouse--drag-files entry marked))
+         (files (enhanced-dirvish-mouse--drag-files entry marked))
          (dir (and (or (not same-pane) entry)
-                   (strata-mouse--drag-target-dir dst-win end same-pane))))
+                   (enhanced-dirvish-mouse--drag-target-dir dst-win end same-pane))))
     (when (and dir
-               (not (member (strata--path-key dir)
-                            (mapcar #'strata--path-key files))))
+               (not (member (enhanced-dirvish--path-key dir)
+                            (mapcar #'enhanced-dirvish--path-key files))))
       dir)))
 
-(defun strata-mouse--drag-drop-now (src-win dst-win _start end src-entry marked &optional forced-mode)
+(defun enhanced-dirvish-mouse--drag-drop-now (src-win dst-win _start end src-entry marked &optional forced-mode)
   "Copy or move MARKED/SRC-ENTRY dragged from SRC-WIN into DST-WIN."
-  (let* ((files (strata-mouse--drag-files src-entry marked))
-         (dest-dir (strata-mouse--drop-dir src-win dst-win end src-entry marked))
-         (src-dir (and (fboundp 'strata-panes--window-dir)
-                       (strata-panes--window-dir src-win))))
+  (let* ((files (enhanced-dirvish-mouse--drag-files src-entry marked))
+         (dest-dir (enhanced-dirvish-mouse--drop-dir src-win dst-win end src-entry marked))
+         (src-dir (and (fboundp 'enhanced-dirvish-panes--window-dir)
+                       (enhanced-dirvish-panes--window-dir src-win))))
     (unless files
       (user-error "No file or folder selected to drag"))
     (unless (and dest-dir (file-directory-p dest-dir))
@@ -2839,10 +2839,10 @@ folder cannot itself become the drop target."
                (equal (file-truename src-dir) (file-truename dest-dir)))
       (user-error "Source and destination folders are identical"))
     ;; Check the whole batch before transferring any item.
-    (dolist (file files) (strata--guard-not-self-contained file dest-dir))
+    (dolist (file files) (enhanced-dirvish--guard-not-self-contained file dest-dir))
     (let* ((mode (or forced-mode
-                    (if (strata-ui-mouse-p)
-                        (strata-ui-choice
+                    (if (enhanced-dirvish-ui-mouse-p)
+                        (enhanced-dirvish-ui-choice
                          (format "Drop %d item(s) into %s"
                                  (length files) (abbreviate-file-name dest-dir))
                          '(("Copy" . copy) ("Move" . cut) ("Cancel" . nil)))
@@ -2855,149 +2855,149 @@ folder cannot itself become the drop target."
                        (_ nil))))))
       (when mode
         (with-selected-window src-win
-          (strata--transfer-files files dest-dir mode)
+          (enhanced-dirvish--transfer-files files dest-dir mode)
           (when (eq mode 'cut)
             (when (derived-mode-p 'dired-mode)
               (dired-unmark-all-marks))
-            (when (boundp 'strata-marked-entries)
-              (setq strata-marked-entries nil))
-            (strata-view--refresh-after-mark)))))))
+            (when (boundp 'enhanced-dirvish-marked-entries)
+              (setq enhanced-dirvish-marked-entries nil))
+            (enhanced-dirvish-view--refresh-after-mark)))))))
 
-(defun strata-mouse-drag-drop (event &optional forced-mode)
+(defun enhanced-dirvish-mouse-drag-drop (event &optional forced-mode)
   "Drag to select files, or drop files onto a folder or pane to copy/move."
   (interactive "e")
-  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
-      (strata-mouse--finish-drag st event forced-mode)
+  (if-let ((st (enhanced-dirvish-mouse--take-finished-drag (event-start event))))
+      (enhanced-dirvish-mouse--finish-drag st event forced-mode)
     (let* ((start (event-start event))
            (end (event-end event))
            (src-win (posn-window start))
            (dst-win (or (posn-window end) src-win)))
       (when (window-live-p src-win)
         (select-window src-win)
-        (when (fboundp 'strata-panes--sync-active-pane-from-window)
-          (strata-panes--sync-active-pane-from-window src-win))
-        (let* ((src-entry (strata-mouse--entry-at-posn start t))
-               (marked (strata-marked-files-only)))
+        (when (fboundp 'enhanced-dirvish-panes--sync-active-pane-from-window)
+          (enhanced-dirvish-panes--sync-active-pane-from-window src-win))
+        (let* ((src-entry (enhanced-dirvish-mouse--entry-at-posn start t))
+               (marked (enhanced-dirvish-marked-files-only)))
           (cond
-           ((strata-mouse--drop-dir src-win dst-win end src-entry marked)
-            (strata-mouse--drag-drop-now
+           ((enhanced-dirvish-mouse--drop-dir src-win dst-win end src-entry marked)
+            (enhanced-dirvish-mouse--drag-drop-now
              src-win dst-win start end src-entry marked
              (or forced-mode
                  (cond ((memq 'control (event-modifiers event)) 'copy)
                        ((memq 'shift (event-modifiers event)) 'cut)))))
            ((eq src-win dst-win)
-            (let ((end-entry (strata-mouse--entry-at-posn end t)))
+            (let ((end-entry (enhanced-dirvish-mouse--entry-at-posn end t)))
               (cond
                ((and src-entry end-entry
-                     (not (equal (strata--path-key src-entry)
-                                 (strata--path-key end-entry))))
-                (let* ((order (strata-view--entry-order))
-                       (rect-p (derived-mode-p 'strata-compact-mode 'strata-icons-mode))
+                     (not (equal (enhanced-dirvish--path-key src-entry)
+                                 (enhanced-dirvish--path-key end-entry))))
+                (let* ((order (enhanced-dirvish-view--entry-order))
+                       (rect-p (derived-mode-p 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode))
                        (mods (event-modifiers event))
                        (base-keys (when (or (memq 'control mods) (memq 'shift mods))
-                                    (mapcar #'strata--path-key marked)))
-                       (range (strata-mouse--range-entries order src-entry end-entry rect-p))
+                                    (mapcar #'enhanced-dirvish--path-key marked)))
+                       (range (enhanced-dirvish-mouse--range-entries order src-entry end-entry rect-p))
                        (keys (delete-dups (append (copy-sequence base-keys)
-                                                  (mapcar #'strata--path-key range)))))
-                  (setq-local strata--selection-anchor-entry src-entry)
-                  (strata-mouse--apply-selection-keys order keys t)
-                  (strata-goto-file end-entry)))
+                                                  (mapcar #'enhanced-dirvish--path-key range)))))
+                  (setq-local enhanced-dirvish--selection-anchor-entry src-entry)
+                  (enhanced-dirvish-mouse--apply-selection-keys order keys t)
+                  (enhanced-dirvish-goto-file end-entry)))
                (src-entry
-                (setq-local strata--selection-anchor-entry src-entry)
+                (setq-local enhanced-dirvish--selection-anchor-entry src-entry)
                 (if (file-directory-p src-entry)
-                    (strata-mouse--open-path src-entry t)
-                  (when (derived-mode-p 'strata-icons-mode)
-                    (strata-goto-file src-entry))
-                  (strata-view--sync-preview-on-move))))))
+                    (enhanced-dirvish-mouse--open-path src-entry t)
+                  (when (derived-mode-p 'enhanced-dirvish-icons-mode)
+                    (enhanced-dirvish-goto-file src-entry))
+                  (enhanced-dirvish-view--sync-preview-on-move))))))
            (t
-            (strata-mouse--drag-drop-now
+            (enhanced-dirvish-mouse--drag-drop-now
              src-win dst-win start end src-entry marked
              (or forced-mode
                  (cond ((memq 'control (event-modifiers event)) 'copy)
                        ((memq 'shift (event-modifiers event)) 'cut)))))))))))
 
-(defun strata-mouse-drag-copy (event)
+(defun enhanced-dirvish-mouse-drag-copy (event)
   "Drag files into a folder or pane and copy (`C-<drag-mouse-1>')."
   (interactive "e")
-  (strata-mouse-drag-drop event 'copy))
+  (enhanced-dirvish-mouse-drag-drop event 'copy))
 
-(defun strata-mouse-drag-move (event)
+(defun enhanced-dirvish-mouse-drag-move (event)
   "Drag files into a folder or pane and move (`S-<drag-mouse-1>')."
   (interactive "e")
-  (strata-mouse-drag-drop event 'cut))
+  (enhanced-dirvish-mouse-drag-drop event 'cut))
 
-(defun strata-mouse-click-entry (event)
+(defun enhanced-dirvish-mouse-click-entry (event)
   "Handle single `<mouse-1>' click: open clicked directory or preview file."
   (interactive "e")
-  (if-let ((st (strata-mouse--take-finished-drag (event-start event))))
-      (strata-mouse--finish-drag st event)
-    (strata-mouse--run-click-action event)))
+  (if-let ((st (enhanced-dirvish-mouse--take-finished-drag (event-start event))))
+      (enhanced-dirvish-mouse--finish-drag st event)
+    (enhanced-dirvish-mouse--run-click-action event)))
 
-(defun strata-mouse-activate-at-event (event)
+(defun enhanced-dirvish-mouse-activate-at-event (event)
   "Handle `<mouse-2>' or `<double-mouse-1>' click: open directory or file."
   (interactive "e")
   (if-let ((st (and (not (eq (event-basic-type event) 'mouse-2))
-                    (strata-mouse--take-finished-drag (event-start event)))))
-      (strata-mouse--finish-drag st event)
-    (strata-mouse--run-activate-action event)))
+                    (enhanced-dirvish-mouse--take-finished-drag (event-start event)))))
+      (enhanced-dirvish-mouse--finish-drag st event)
+    (enhanced-dirvish-mouse--run-activate-action event)))
 
-(defun strata-view-activate-at-point ()
+(defun enhanced-dirvish-view-activate-at-point ()
   "Open directory in browser pane or edit file in preview pane."
   (interactive)
-  (if (fboundp 'strata-open-or-edit-at-point)
-      (strata-open-or-edit-at-point)
-    (when-let ((f (strata-current-file)))
+  (if (fboundp 'enhanced-dirvish-open-or-edit-at-point)
+      (enhanced-dirvish-open-or-edit-at-point)
+    (when-let ((f (enhanced-dirvish-current-file)))
       (if (file-directory-p f)
-          (strata-open-location f)
+          (enhanced-dirvish-open-location f)
         (find-file f)))))
 
-(defun strata-view-up-directory ()
+(defun enhanced-dirvish-view-up-directory ()
   "Navigate to parent directory from Compact or Icons view."
   (interactive)
   (let ((parent (file-name-directory (directory-file-name default-directory))))
-    (when parent (strata-open-location parent))))
+    (when parent (enhanced-dirvish-open-location parent))))
 
 ;;;; View Mode Switcher & Appearance Toggles
 
-(defun strata-view--menu ()
+(defun enhanced-dirvish-view--menu ()
   "Build the clickable layout menu with the current view checked."
   (easy-menu-create-menu
    "View…"
-   '(["Columns" (strata-view-menu-select 'columns)
-      :style radio :selected (eq (strata-view-current-mode) 'columns)]
-     ["Icons" (strata-view-menu-select 'icons)
-      :style radio :selected (eq (strata-view-current-mode) 'icons)]
-     ["List / Tree" (strata-view-menu-select 'list)
-      :style radio :selected (eq (strata-view-current-mode) 'list)]
-     ["Compact" (strata-view-menu-select 'compact)
-      :style radio :selected (eq (strata-view-current-mode) 'compact)])))
+   '(["Columns" (enhanced-dirvish-view-menu-select 'columns)
+      :style radio :selected (eq (enhanced-dirvish-view-current-mode) 'columns)]
+     ["Icons" (enhanced-dirvish-view-menu-select 'icons)
+      :style radio :selected (eq (enhanced-dirvish-view-current-mode) 'icons)]
+     ["List / Tree" (enhanced-dirvish-view-menu-select 'list)
+      :style radio :selected (eq (enhanced-dirvish-view-current-mode) 'list)]
+     ["Compact" (enhanced-dirvish-view-menu-select 'compact)
+      :style radio :selected (eq (enhanced-dirvish-view-current-mode) 'compact)])))
 
-(defun strata-view-menu (&optional event)
+(defun enhanced-dirvish-view-menu (&optional event)
   "Show the clickable View menu for the directory at EVENT."
   (interactive (list (when (mouse-event-p last-input-event) last-input-event)))
-  (strata-header--select-browser event)
-  (popup-menu (strata-view--menu) event))
+  (enhanced-dirvish-header--select-browser event)
+  (popup-menu (enhanced-dirvish-view--menu) event))
 
-(defun strata-view-menu-select (mode)
+(defun enhanced-dirvish-view-menu-select (mode)
   "Switch to MODE from the View menu unless it is already displayed."
-  (unless (eq (strata-view-current-mode) mode)
-    (strata-switch-view-mode mode)))
+  (unless (eq (enhanced-dirvish-view-current-mode) mode)
+    (enhanced-dirvish-switch-view-mode mode)))
 
-(defun strata-switch-view-mode (mode)
-  "Switch active browser pane to Strata view MODE (`columns', `icons', `list', `compact')."
+(defun enhanced-dirvish-switch-view-mode (mode)
+  "Switch active browser pane to view MODE (`columns', `icons', `list', `compact')."
   (interactive
-   (list (intern (strata-ui-completing-read "View mode: " '("columns" "icons" "list" "compact") nil t))))
-  (let* ((p (strata-prefs))
-         (dir (or (bound-and-true-p strata-view-directory)
+   (list (intern (enhanced-dirvish-ui-completing-read "View mode: " '("columns" "icons" "list" "compact") nil t))))
+  (let* ((p (enhanced-dirvish-prefs))
+         (dir (or (bound-and-true-p enhanced-dirvish-view-directory)
                   (dirvish-prop :root)
                   default-directory))
-         (cur (strata-current-file)))
-    (setf (strata-prefs-browser-mode p) mode)
-    (strata-prefs-save)
+         (cur (enhanced-dirvish-current-file)))
+    (setf (enhanced-dirvish-prefs-browser-mode p) mode)
+    (enhanced-dirvish-prefs-save)
     (pcase mode
       ('columns
-       (when (fboundp 'strata-preview--close-standalone)
-         (strata-preview--close-standalone))
+       (when (fboundp 'enhanced-dirvish-preview--close-standalone)
+         (enhanced-dirvish-preview--close-standalone))
        (unless (and (derived-mode-p 'dired-mode) (dirvish-curr))
          (dirvish dir)
          (set-buffer (window-buffer (selected-window))))
@@ -3009,244 +3009,244 @@ folder cannot itself become the drop target."
                (dirvish--build-layout dv))
            (dirvish-layout-toggle))
          (set-buffer (window-buffer (selected-window))))
-       (when (fboundp 'strata-sidebar-ensure)
-         (strata-sidebar-ensure))
+       (when (fboundp 'enhanced-dirvish-sidebar-ensure)
+         (enhanced-dirvish-sidebar-ensure))
        (when (derived-mode-p 'dired-mode)
          (dired-hide-details-mode 1)))
       ('list
-       (when (fboundp 'strata-preview--close-standalone)
-         (strata-preview--close-standalone))
+       (when (fboundp 'enhanced-dirvish-preview--close-standalone)
+         (enhanced-dirvish-preview--close-standalone))
        (unless (derived-mode-p 'dired-mode)
          (dirvish dir)
          (set-buffer (window-buffer (selected-window))))
-       (when (fboundp 'strata-dirvish--flatten-layout)
-         (strata-dirvish--flatten-layout))
+       (when (fboundp 'enhanced-dirvish--flatten-layout)
+         (enhanced-dirvish--flatten-layout))
        (set-buffer (window-buffer (selected-window)))
-       (when (fboundp 'strata-sidebar-ensure)
-         (strata-sidebar-ensure))
+       (when (fboundp 'enhanced-dirvish-sidebar-ensure)
+         (enhanced-dirvish-sidebar-ensure))
        (when (derived-mode-p 'dired-mode)
          (dired-hide-details-mode -1)))
       ('compact
-       (when (fboundp 'strata-dirvish--flatten-layout)
-         (strata-dirvish--flatten-layout))
-       (when (fboundp 'strata-sidebar-ensure)
-         (strata-sidebar-ensure))
-       (let ((buf (get-buffer-create (format "*Strata Compact: %s*"
+       (when (fboundp 'enhanced-dirvish--flatten-layout)
+         (enhanced-dirvish--flatten-layout))
+       (when (fboundp 'enhanced-dirvish-sidebar-ensure)
+         (enhanced-dirvish-sidebar-ensure))
+       (let ((buf (get-buffer-create (format "*Enhanced Dirvish Compact: %s*"
                                              (file-name-nondirectory (directory-file-name dir))))))
          (switch-to-buffer buf)
-         (strata-compact-mode)
-         (setq-local strata-local-view-mode 'compact)
-         (strata-compact-render dir)))
+         (enhanced-dirvish-compact-mode)
+         (setq-local enhanced-dirvish-local-view-mode 'compact)
+         (enhanced-dirvish-compact-render dir)))
       ('icons
-       (when (fboundp 'strata-dirvish--flatten-layout)
-         (strata-dirvish--flatten-layout))
-       (when (fboundp 'strata-sidebar-ensure)
-         (strata-sidebar-ensure))
-       (let ((buf (get-buffer-create (format "*Strata Icons: %s*"
+       (when (fboundp 'enhanced-dirvish--flatten-layout)
+         (enhanced-dirvish--flatten-layout))
+       (when (fboundp 'enhanced-dirvish-sidebar-ensure)
+         (enhanced-dirvish-sidebar-ensure))
+       (let ((buf (get-buffer-create (format "*Enhanced Dirvish Icons: %s*"
                                              (file-name-nondirectory (directory-file-name dir))))))
          (switch-to-buffer buf)
-         (strata-icons-mode)
-         (setq-local strata-local-view-mode 'icons)
-         (strata-icons-render dir))))
+         (enhanced-dirvish-icons-mode)
+         (setq-local enhanced-dirvish-local-view-mode 'icons)
+         (enhanced-dirvish-icons-render dir))))
     ;; Set this on the displayed buffer after switching.  Setting it on the
     ;; source buffer leaves stale labels when Dired is reused from another view.
-    (setq-local strata-local-view-mode mode)
-    (when (fboundp 'strata-panes--set-active-view)
-      (strata-panes--set-active-view (current-buffer) (selected-window)))
+    (setq-local enhanced-dirvish-local-view-mode mode)
+    (when (fboundp 'enhanced-dirvish-panes--set-active-view)
+      (enhanced-dirvish-panes--set-active-view (current-buffer) (selected-window)))
     (force-mode-line-update t)
-    (when cur (strata-goto-file cur))
-    (strata-folder-view-remember dir p)))
+    (when cur (enhanced-dirvish-goto-file cur))
+    (enhanced-dirvish-folder-view-remember dir p)))
 
-(defun strata-view-columns () (interactive) (strata-switch-view-mode 'columns))
-(defun strata-view-icons () (interactive) (strata-switch-view-mode 'icons))
-(defun strata-view-list () (interactive) (strata-switch-view-mode 'list))
-(defun strata-view-compact () (interactive) (strata-switch-view-mode 'compact))
+(defun enhanced-dirvish-view-columns () (interactive) (enhanced-dirvish-switch-view-mode 'columns))
+(defun enhanced-dirvish-view-icons () (interactive) (enhanced-dirvish-switch-view-mode 'icons))
+(defun enhanced-dirvish-view-list () (interactive) (enhanced-dirvish-switch-view-mode 'list))
+(defun enhanced-dirvish-view-compact () (interactive) (enhanced-dirvish-switch-view-mode 'compact))
 
-(defun strata-toggle-hidden-files ()
-  "Toggle visibility of hidden dot-files across Strata views."
+(defun enhanced-dirvish-toggle-hidden-files ()
+  "Toggle visibility of hidden dot-files across Enhanced Dirvish views."
   (interactive)
-  (let ((p (strata-prefs)))
-    (setf (strata-prefs-show-hidden p) (not (strata-prefs-show-hidden p)))
-    (strata-prefs-save)
-    (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
-          ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
-    (message "Hidden files %s" (if (strata-prefs-show-hidden p) "shown" "hidden"))))
+  (let ((p (enhanced-dirvish-prefs)))
+    (setf (enhanced-dirvish-prefs-show-hidden p) (not (enhanced-dirvish-prefs-show-hidden p)))
+    (enhanced-dirvish-prefs-save)
+    (cond ((derived-mode-p 'dired-mode) (enhanced-dirvish-apply-sort-to-dired))
+          ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-refresh))
+          ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-refresh)))
+    (message "Hidden files %s" (if (enhanced-dirvish-prefs-show-hidden p) "shown" "hidden"))))
 
-(defun strata-toggle-compact-full-names ()
+(defun enhanced-dirvish-toggle-compact-full-names ()
   "Toggle full filename display vs truncated columns in Compact view."
   (interactive)
-  (let ((p (strata-prefs)))
-    (setf (strata-prefs-compact-full-names p) (not (strata-prefs-compact-full-names p)))
-    (strata-prefs-save)
-    (when (derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-    (message "Compact full names %s" (if (strata-prefs-compact-full-names p) "ON" "OFF"))))
+  (let ((p (enhanced-dirvish-prefs)))
+    (setf (enhanced-dirvish-prefs-compact-full-names p) (not (enhanced-dirvish-prefs-compact-full-names p)))
+    (enhanced-dirvish-prefs-save)
+    (when (derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-refresh))
+    (message "Compact full names %s" (if (enhanced-dirvish-prefs-compact-full-names p) "ON" "OFF"))))
 
-(defun strata-toggle-expandable-tree ()
+(defun enhanced-dirvish-toggle-expandable-tree ()
   "Toggle expandable folders (`dirvish-subtree') in List view."
   (interactive)
-  (let ((p (strata-prefs)))
-    (setf (strata-prefs-expandable-tree p) (not (strata-prefs-expandable-tree p)))
-    (strata-prefs-save)
+  (let ((p (enhanced-dirvish-prefs)))
+    (setf (enhanced-dirvish-prefs-expandable-tree p) (not (enhanced-dirvish-prefs-expandable-tree p)))
+    (enhanced-dirvish-prefs-save)
     (message "Expandable folders in List view: %s"
-             (if (strata-prefs-expandable-tree p) "ON" "OFF"))))
+             (if (enhanced-dirvish-prefs-expandable-tree p) "ON" "OFF"))))
 
-(defun strata-tree-expand-or-open ()
+(defun enhanced-dirvish-tree-expand-or-open ()
   "Toggle Tree List subtree, move in Icons grid, or read preview (`<right>')."
   (interactive)
-  (let ((p (strata-prefs))
-        (f (strata-current-file)))
+  (let ((p (enhanced-dirvish-prefs))
+        (f (enhanced-dirvish-current-file)))
     (cond
-     ((derived-mode-p 'strata-icons-mode)
-      (strata-icons-next-cell))
-     ((derived-mode-p 'strata-computer-mode)
-      (call-interactively #'strata-computer-open-at-point))
+     ((derived-mode-p 'enhanced-dirvish-icons-mode)
+      (enhanced-dirvish-icons-next-cell))
+     ((derived-mode-p 'enhanced-dirvish-computer-mode)
+      (call-interactively #'enhanced-dirvish-computer-open-at-point))
      ((and (derived-mode-p 'dired-mode)
-           (eq (strata-prefs-browser-mode p) 'list)
-           (strata-prefs-expandable-tree p)
+           (eq (enhanced-dirvish-prefs-browser-mode p) 'list)
+           (enhanced-dirvish-prefs-expandable-tree p)
            f
            (file-directory-p f))
       (dirvish-subtree-toggle))
      ((and f (file-directory-p f))
-      (if (fboundp 'strata-open-or-edit-at-point)
-          (strata-open-or-edit-at-point)
+      (if (fboundp 'enhanced-dirvish-open-or-edit-at-point)
+          (enhanced-dirvish-open-or-edit-at-point)
         (if (derived-mode-p 'dired-mode)
             (dired-find-file)
-          (strata-open-location f t))))
+          (enhanced-dirvish-open-location f t))))
      (f
-      (if (fboundp 'strata-preview-enter-at-point)
-          (strata-preview-enter-at-point)
-        (if (fboundp 'strata-preview-at-point)
-            (strata-preview-at-point)
+      (if (fboundp 'enhanced-dirvish-preview-enter-at-point)
+          (enhanced-dirvish-preview-enter-at-point)
+        (if (fboundp 'enhanced-dirvish-preview-at-point)
+            (enhanced-dirvish-preview-at-point)
           (user-error "Preview unavailable for %s" f))))
      (t
       (user-error "No entry at point")))))
 
-(defun strata-tree-collapse-or-up ()
+(defun enhanced-dirvish-tree-collapse-or-up ()
   "Move left in Icons grid, collapse subtree in List view, or navigate up."
   (interactive)
   (cond
-   ((derived-mode-p 'strata-icons-mode)
-    (strata-icons-prev-cell))
+   ((derived-mode-p 'enhanced-dirvish-icons-mode)
+    (enhanced-dirvish-icons-prev-cell))
    ((and (derived-mode-p 'dired-mode)
-         (eq (strata-prefs-browser-mode (strata-prefs)) 'list)
-         (strata-prefs-expandable-tree (strata-prefs))
+         (eq (enhanced-dirvish-prefs-browser-mode (enhanced-dirvish-prefs)) 'list)
+         (enhanced-dirvish-prefs-expandable-tree (enhanced-dirvish-prefs))
          (dirvish-subtree--expanded-p))
     (dirvish-subtree-remove))
    ((derived-mode-p 'dired-mode)
     (dired-up-directory))
    (t
-    (strata-view-up-directory))))
+    (enhanced-dirvish-view-up-directory))))
 
-(defun strata-sort--menu ()
+(defun enhanced-dirvish-sort--menu ()
   "Build the clickable sort menu with current choices marked."
   (easy-menu-create-menu
    "Sort By…"
-   '(["Name" (strata-sort-set 'name (strata-prefs-sort-direction (strata-prefs)))
-      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'name)]
-     ["Modification date" (strata-sort-set 'modified (strata-prefs-sort-direction (strata-prefs)))
-      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'modified)]
-     ["Size" (strata-sort-set 'size (strata-prefs-sort-direction (strata-prefs)))
-      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'size)]
-     ["Type / extension" (strata-sort-set 'extension (strata-prefs-sort-direction (strata-prefs)))
-      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'extension)]
-     ["Unsorted (directory order)" (strata-sort-set 'unsorted 'asc)
-      :style radio :selected (eq (strata-prefs-sort-key (strata-prefs)) 'unsorted)]
+   '(["Name" (enhanced-dirvish-sort-set 'name (enhanced-dirvish-prefs-sort-direction (enhanced-dirvish-prefs)))
+      :style radio :selected (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'name)]
+     ["Modification date" (enhanced-dirvish-sort-set 'modified (enhanced-dirvish-prefs-sort-direction (enhanced-dirvish-prefs)))
+      :style radio :selected (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'modified)]
+     ["Size" (enhanced-dirvish-sort-set 'size (enhanced-dirvish-prefs-sort-direction (enhanced-dirvish-prefs)))
+      :style radio :selected (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'size)]
+     ["Type / extension" (enhanced-dirvish-sort-set 'extension (enhanced-dirvish-prefs-sort-direction (enhanced-dirvish-prefs)))
+      :style radio :selected (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'extension)]
+     ["Unsorted (directory order)" (enhanced-dirvish-sort-set 'unsorted 'asc)
+      :style radio :selected (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'unsorted)]
      "--"
-     ["Ascending (A–Z, smallest, oldest)" strata-sort-ascending
-      :style radio :selected (eq (strata-prefs-sort-direction (strata-prefs)) 'asc)
-      :enable (not (eq (strata-prefs-sort-key (strata-prefs)) 'unsorted))]
-     ["Descending (Z–A, largest, newest)" strata-sort-descending
-      :style radio :selected (eq (strata-prefs-sort-direction (strata-prefs)) 'desc)
-      :enable (not (eq (strata-prefs-sort-key (strata-prefs)) 'unsorted))]
+     ["Ascending (A–Z, smallest, oldest)" enhanced-dirvish-sort-ascending
+      :style radio :selected (eq (enhanced-dirvish-prefs-sort-direction (enhanced-dirvish-prefs)) 'asc)
+      :enable (not (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'unsorted))]
+     ["Descending (Z–A, largest, newest)" enhanced-dirvish-sort-descending
+      :style radio :selected (eq (enhanced-dirvish-prefs-sort-direction (enhanced-dirvish-prefs)) 'desc)
+      :enable (not (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'unsorted))]
      "--"
-     ["Folders first" strata-sort-toggle-folders-first
-      :style toggle :selected (strata-prefs-folders-first (strata-prefs))
-      :enable (not (eq (strata-prefs-sort-key (strata-prefs)) 'unsorted))]
-     ["Natural names (file2 before file10)" strata-sort-toggle-natural
-      :style toggle :selected (strata-prefs-natural-sort (strata-prefs))
-      :enable (eq (strata-prefs-sort-key (strata-prefs)) 'name)])))
+     ["Folders first" enhanced-dirvish-sort-toggle-folders-first
+      :style toggle :selected (enhanced-dirvish-prefs-folders-first (enhanced-dirvish-prefs))
+      :enable (not (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'unsorted))]
+     ["Natural names (file2 before file10)" enhanced-dirvish-sort-toggle-natural
+      :style toggle :selected (enhanced-dirvish-prefs-natural-sort (enhanced-dirvish-prefs))
+      :enable (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'name)])))
 
-(defun strata-sort-menu (&optional event)
+(defun enhanced-dirvish-sort-menu (&optional event)
   "Show the clickable Sort By menu for the directory at EVENT (`C-c s')."
   (interactive (list (when (mouse-event-p last-input-event) last-input-event)))
-  (strata-header--select-browser event)
-  (popup-menu (strata-sort--menu) event))
+  (enhanced-dirvish-header--select-browser event)
+  (popup-menu (enhanced-dirvish-sort--menu) event))
 
-(defun strata-sort-ascending ()
+(defun enhanced-dirvish-sort-ascending ()
   "Sort the current directory in ascending order."
   (interactive)
-  (strata-sort-set (strata-prefs-sort-key (strata-prefs)) 'asc))
+  (enhanced-dirvish-sort-set (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'asc))
 
-(defun strata-sort-descending ()
+(defun enhanced-dirvish-sort-descending ()
   "Sort the current directory in descending order."
   (interactive)
-  (strata-sort-set (strata-prefs-sort-key (strata-prefs)) 'desc))
+  (enhanced-dirvish-sort-set (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'desc))
 
-(defun strata-sort-set (key &optional direction)
+(defun enhanced-dirvish-sort-set (key &optional direction)
   "Sort active browser by KEY (`name', `modified', `size', `type', `extension', `created', `unsorted').
 With DIRECTION, set that order explicitly; otherwise selecting the already
 active sort key toggles ascending/descending (the 10xer sort chord)."
   (interactive
-   (list (intern (strata-ui-completing-read "Sort by: "
+   (list (intern (enhanced-dirvish-ui-completing-read "Sort by: "
                                   '("name" "modified" "size" "type" "extension" "created" "unsorted")
                                   nil t))))
-  (let ((p (strata-prefs)))
+  (let ((p (enhanced-dirvish-prefs)))
     (if direction
-        (setf (strata-prefs-sort-key p) key
-              (strata-prefs-sort-direction p) direction)
-      (if (eq (strata-prefs-sort-key p) key)
-          (setf (strata-prefs-sort-direction p)
-                (if (eq (strata-prefs-sort-direction p) 'asc) 'desc 'asc))
-        (setf (strata-prefs-sort-key p) key
-              (strata-prefs-sort-direction p) 'asc)))
-    (strata-prefs-save)
-    (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
-          ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
+        (setf (enhanced-dirvish-prefs-sort-key p) key
+              (enhanced-dirvish-prefs-sort-direction p) direction)
+      (if (eq (enhanced-dirvish-prefs-sort-key p) key)
+          (setf (enhanced-dirvish-prefs-sort-direction p)
+                (if (eq (enhanced-dirvish-prefs-sort-direction p) 'asc) 'desc 'asc))
+        (setf (enhanced-dirvish-prefs-sort-key p) key
+              (enhanced-dirvish-prefs-sort-direction p) 'asc)))
+    (enhanced-dirvish-prefs-save)
+    (cond ((derived-mode-p 'dired-mode) (enhanced-dirvish-apply-sort-to-dired))
+          ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-refresh))
+          ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-refresh)))
     (force-mode-line-update t)
-    (message "Sorted by %s (%s)" key (strata-prefs-sort-direction p))))
+    (message "Sorted by %s (%s)" key (enhanced-dirvish-prefs-sort-direction p))))
 
-(defun strata-sort-toggle-folders-first ()
+(defun enhanced-dirvish-sort-toggle-folders-first ()
   "Toggle Folders First sorting while keeping sort key and direction."
   (interactive)
-  (unless (strata-location-virtual-p (dirvish-prop :root))
-    (let ((p (strata-prefs)))
-      (setf (strata-prefs-folders-first p) (not (strata-prefs-folders-first p)))
-      (strata-prefs-save)
-      (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
-            ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-            ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
-      (message "Folders first: %s" (if (strata-prefs-folders-first p) "ON" "OFF")))))
+  (unless (enhanced-dirvish-location-virtual-p (dirvish-prop :root))
+    (let ((p (enhanced-dirvish-prefs)))
+      (setf (enhanced-dirvish-prefs-folders-first p) (not (enhanced-dirvish-prefs-folders-first p)))
+      (enhanced-dirvish-prefs-save)
+      (cond ((derived-mode-p 'dired-mode) (enhanced-dirvish-apply-sort-to-dired))
+            ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-refresh))
+            ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-refresh)))
+      (message "Folders first: %s" (if (enhanced-dirvish-prefs-folders-first p) "ON" "OFF")))))
 
-(defun strata-sort-toggle-natural ()
+(defun enhanced-dirvish-sort-toggle-natural ()
   "Toggle Natural numeric sorting."
   (interactive)
-  (let ((p (strata-prefs)))
-    (setf (strata-prefs-natural-sort p) (not (strata-prefs-natural-sort p)))
-    (strata-prefs-save)
-    (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
-          ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
-    (message "Natural sort: %s" (if (strata-prefs-natural-sort p) "ON" "OFF"))))
+  (let ((p (enhanced-dirvish-prefs)))
+    (setf (enhanced-dirvish-prefs-natural-sort p) (not (enhanced-dirvish-prefs-natural-sort p)))
+    (enhanced-dirvish-prefs-save)
+    (cond ((derived-mode-p 'dired-mode) (enhanced-dirvish-apply-sort-to-dired))
+          ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-refresh))
+          ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-refresh)))
+    (message "Natural sort: %s" (if (enhanced-dirvish-prefs-natural-sort p) "ON" "OFF"))))
 
-(defun strata-sort-toggle-direction ()
+(defun enhanced-dirvish-sort-toggle-direction ()
   "Toggle ascending / descending sort order."
   (interactive)
-  (let ((p (strata-prefs)))
-    (setf (strata-prefs-sort-direction p)
-          (if (eq (strata-prefs-sort-direction p) 'asc) 'desc 'asc))
-    (strata-prefs-save)
-    (cond ((derived-mode-p 'dired-mode) (strata-apply-sort-to-dired))
-          ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))))
+  (let ((p (enhanced-dirvish-prefs)))
+    (setf (enhanced-dirvish-prefs-sort-direction p)
+          (if (eq (enhanced-dirvish-prefs-sort-direction p) 'asc) 'desc 'asc))
+    (enhanced-dirvish-prefs-save)
+    (cond ((derived-mode-p 'dired-mode) (enhanced-dirvish-apply-sort-to-dired))
+          ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-refresh))
+          ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-refresh)))))
 
-(defun strata-toggle-group-by-type ()
+(defun enhanced-dirvish-toggle-group-by-type ()
   "Toggle Group by Type section grouping."
   (interactive)
-  (let ((p (strata-prefs)))
-    (setf (strata-prefs-group-by-type p) (not (strata-prefs-group-by-type p)))
-    (strata-prefs-save)
+  (let ((p (enhanced-dirvish-prefs)))
+    (setf (enhanced-dirvish-prefs-group-by-type p) (not (enhanced-dirvish-prefs-group-by-type p)))
+    (enhanced-dirvish-prefs-save)
     (when (require 'dirvish-emerge nil t)
       (setq-local dirvish-emerge-groups
                   '(("Folders" (predicate . directories))
@@ -3255,32 +3255,32 @@ active sort key toggles ascending/descending (the 10xer sort chord)."
                     ("Video" (extensions "mp4" "mkv" "mov" "webm" "avi" "m4v"))
                     ("Documents" (extensions "pdf" "md" "org" "txt" "docx" "odt" "rtf" "csv" "xlsx"))
                     ("Archives" (extensions "zip" "7z" "tar" "gz" "tgz" "zst" "xz" "iso"))))
-      (dirvish-emerge-mode (if (strata-prefs-group-by-type p) 1 -1)))
-    (cond ((derived-mode-p 'strata-compact-mode) (strata-compact-refresh))
-          ((derived-mode-p 'strata-icons-mode) (strata-icons-refresh)))
-    (message "Group by type: %s" (if (strata-prefs-group-by-type p) "ON" "OFF"))))
+      (dirvish-emerge-mode (if (enhanced-dirvish-prefs-group-by-type p) 1 -1)))
+    (cond ((derived-mode-p 'enhanced-dirvish-compact-mode) (enhanced-dirvish-compact-refresh))
+          ((derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-refresh)))
+    (message "Group by type: %s" (if (enhanced-dirvish-prefs-group-by-type p) "ON" "OFF"))))
 
-(defun strata-thumbnails-scale (&optional delta)
+(defun enhanced-dirvish-thumbnails-scale (&optional delta)
   "Adjust Icons view thumbnail size by DELTA px (0 or nil resets to 64px)."
   (interactive "P")
-  (let* ((p (strata-prefs))
+  (let* ((p (enhanced-dirvish-prefs))
          (step (cond ((null delta) 0)
                      ((numberp delta) delta)
                      (t (prefix-numeric-value delta))))
-         (cur (strata-prefs-icons-thumbnail-size p))
+         (cur (enhanced-dirvish-prefs-icons-thumbnail-size p))
          (next (if (= step 0) 64 (max 32 (min 256 (+ cur step))))))
-    (setf (strata-prefs-icons-thumbnail-size p) next)
-    (strata-prefs-save)
-    (when (derived-mode-p 'strata-icons-mode) (strata-icons-refresh))
+    (setf (enhanced-dirvish-prefs-icons-thumbnail-size p) next)
+    (enhanced-dirvish-prefs-save)
+    (when (derived-mode-p 'enhanced-dirvish-icons-mode) (enhanced-dirvish-icons-refresh))
     (message "Icon thumbnail size: %dpx" next)))
 
-(defun strata-make-first-column ()
+(defun enhanced-dirvish-make-first-column ()
   "Alt+Down (`columns'): descend or focus current folder as primary view."
   (interactive)
-  (when-let ((f (strata-current-file)))
+  (when-let ((f (enhanced-dirvish-current-file)))
     (if (file-directory-p f)
-        (strata-open-location f)
-      (strata-switch-view-mode 'list))))
+        (enhanced-dirvish-open-location f)
+      (enhanced-dirvish-switch-view-mode 'list))))
 
-(provide 'strata-dirvish-views)
-;;; strata-dirvish-views.el ends here
+(provide 'enhanced-dirvish-views)
+;;; enhanced-dirvish-views.el ends here
