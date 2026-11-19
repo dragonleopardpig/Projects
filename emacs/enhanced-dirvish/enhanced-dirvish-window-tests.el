@@ -53,7 +53,9 @@
          (when (and (buffer-live-p buffer)
                     (or (string-prefix-p "*Enhanced Dirvish Window Test" (buffer-name buffer))
                    (with-current-buffer buffer
-                      (and default-directory (string-prefix-p directory default-directory)))))
+                      ;; Dired keeps folders under HOME as `~/...'.
+                      (and default-directory
+                           (string-prefix-p directory (expand-file-name default-directory))))))
            (let ((kill-buffer-query-functions nil))
              (when-let ((process (get-buffer-process buffer)))
                (delete-process process))

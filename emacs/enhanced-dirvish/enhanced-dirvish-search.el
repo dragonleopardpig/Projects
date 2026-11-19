@@ -211,7 +211,7 @@
            (derived-mode-p 'dired-mode)
            (fboundp 'dirvish-narrow))
       (call-interactively #'dirvish-narrow)
-    (let* ((dir default-directory)
+    (let* ((dir (expand-file-name default-directory)) ; fd does not expand `~/'
            (q (enhanced-dirvish-ui-read-string (if include-subfolders "Filter incl. subfolders: " "Filter folder: ")))
            (subp (or include-subfolders (enhanced-dirvish-prefs-filter-include-subfolders (enhanced-dirvish-prefs)))))
       (if (string-empty-p (string-trim q))

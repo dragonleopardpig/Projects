@@ -1849,7 +1849,8 @@ tabs shows each tab's own split."
                   (mapcar (lambda (w)
                             (with-current-buffer (window-buffer w)
                               (directory-file-name
-                               (or enhanced-dirvish-view-directory default-directory))))
+                               (expand-file-name
+                                (or enhanced-dirvish-view-directory default-directory)))))
                           (cl-remove-if-not #'enhanced-dirvish-panes--valid-main-window-p
                                             (window-list nil 'nomini (frame-first-window))))))
          (press (lambda (key)
@@ -1951,7 +1952,8 @@ after the folder, so the second pane must not reuse the first one's."
          (dired-mode-hook (list #'enhanced-dirvish--enable-in-browser))
          (enhanced-dirvish-compact-mode-hook (list #'enhanced-dirvish--enable-in-browser))
          (enhanced-dirvish-icons-mode-hook (list #'enhanced-dirvish--enable-in-browser))
-         (same (lambda (a b) (equal (directory-file-name a) (directory-file-name b))))
+         (same (lambda (a b) (equal (directory-file-name (expand-file-name a))
+                                    (directory-file-name (expand-file-name b)))))
          (shown (lambda (w)
                   (with-current-buffer (window-buffer w)
                     (or enhanced-dirvish-view-directory default-directory)))))
@@ -3699,6 +3701,22 @@ after the folder, so the second pane must not reuse the first one's."
                       ((symbol-function 'enhanced-dirvish-goto-file) #'ignore))
               (enhanced-dirvish-filter-pane t)
               (should (equal (directory-file-name picked-loc) (directory-file-name sub))))
+            (kill-buffer dbuf))
+          ;; Under HOME, Dired keeps the folder as `~/...', which fd does not
+          ;; expand ("fd exited with status 1").
+          (let* ((process-environment (cons (concat "HOME=" tmp) process-environment))
+                 (abbreviated-home-dir nil)
+                 (dbuf (dired-noselect (abbreviate-file-name tmp))))
+            (with-current-buffer dbuf
+              (should (string-prefix-p "~" default-directory))
+              (setq picked-loc nil)
+              (cl-letf (((symbol-function 'enhanced-dirvish-ui-read-string) (lambda (&rest _) "-dash"))
+                        ((symbol-function 'enhanced-dirvish-ui-completing-read) (lambda (_p cands &rest _) (car cands)))
+                        ((symbol-function 'enhanced-dirvish-open-location) (lambda (d &rest _) (setq picked-loc d)))
+                        ((symbol-function 'enhanced-dirvish-goto-file) #'ignore))
+                (enhanced-dirvish-filter-pane t)
+                (should (equal (directory-file-name (expand-file-name picked-loc))
+                               (directory-file-name sub)))))
             (kill-buffer dbuf))
           ;; Search result open-folder strips trailing slash on directories
           (with-temp-buffer
