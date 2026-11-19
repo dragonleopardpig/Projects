@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-windows.el --- Contain browser layouts in Emacs windows -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; A browser is an atomic window subtree: ordinary Emacs splits operate beside
 ;; the whole browser.  Dirvish's internal splits and rebuilds stay inside it.
@@ -451,9 +457,9 @@ Emacs may retain an older clone-of parameter after restoring a configuration."
   (dolist (command '(enhanced-dirvish-open-location enhanced-dirvish-switch-view-mode enhanced-dirvish-preview--split-standalone-window))
     (when (fboundp command) (advice-add command :after #'enhanced-dirvish-windows--register)))
   (add-hook 'window-state-change-functions #'enhanced-dirvish-windows--reconcile)
-  (with-eval-after-load 'transpose-frame
-    (advice-add 'transpose-frame-get-arrangement :around #'enhanced-dirvish-windows--transpose-get)
-    (advice-add 'transpose-frame-set-arrangement :around #'enhanced-dirvish-windows--transpose-set)))
+  ;; Advice applies once the optional transpose-frame package is loaded.
+  (advice-add 'transpose-frame-get-arrangement :around #'enhanced-dirvish-windows--transpose-get)
+  (advice-add 'transpose-frame-set-arrangement :around #'enhanced-dirvish-windows--transpose-set))
 
 (provide 'enhanced-dirvish-windows)
 ;;; enhanced-dirvish-windows.el ends here

@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-prefs.el --- Preferences, TOML sync, and Noctalia theming -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Core state, preferences, formatting helpers, and theme-reactive faces for
 ;; Enhanced Dirvish inside Emacs.  Defaults may be seeded from
@@ -45,6 +51,9 @@ everywhere; copy/cut/paste remain bound cleanly to `C-c c', `C-c x', `C-c v',
 
 ;;;; Preferences Struct & Defaults
 
+;; Emacs 29 warns that its generated accessor docstrings ("Access slot ...")
+;; are wider than 80 columns for the longer slot names; Emacs 30 does not.
+(with-no-warnings
 (cl-defstruct (enhanced-dirvish-prefs (:constructor enhanced-dirvish-prefs--create))
   (browser-mode 'columns)          ; columns | icons | list | compact
   (expandable-tree t)              ; expandable folders in list view
@@ -119,7 +128,7 @@ everywhere; copy/cut/paste remain bound cleanly to `C-c c', `C-c x', `C-c v',
   (custom-icons nil)               ; alist ((PATH . ICON-STR) ...)
   (device-labels nil)              ; alist ((DEVICE-KEY . LABEL) ...)
   (send-to-recent-destinations nil) ; alist ((SRC-KEY . (DEST1 DEST2 ...)) ...)
-  (marks nil))                     ; alist ((?a . PATH) ...)
+  (marks nil)))                     ; alist ((?a . PATH) ...)
 
 (defvar enhanced-dirvish-prefs-current nil
   "Active `enhanced-dirvish-prefs' instance for Enhanced Dirvish.")
@@ -625,11 +634,6 @@ to avoid rounding free space up to the drive's full capacity."
                                         surface-hi sel-bg)
                         :foreground (or sel-fg 'unspecified)
                         :weight 'bold)))
-
-(with-eval-after-load 'emacs
-  (enhanced-dirvish-sync-theme-faces))
-(add-hook 'enable-theme-functions #'enhanced-dirvish-sync-theme-faces)
-(enhanced-dirvish-sync-theme-faces)
 
 ;;;; Verified Nerd Font Icon Engine
 

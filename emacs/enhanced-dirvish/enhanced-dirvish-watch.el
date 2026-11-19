@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-watch.el --- Live filesystem watchers across all Enhanced Dirvish views & previews -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Extends kernel-backed `filenotify' live updates uniformly across all local
 ;; Enhanced Dirvish browser views (Columns/List `dired-mode', `enhanced-dirvish-compact-mode',
@@ -43,8 +49,6 @@
 ;;;; State & Compatibility Aliases
 
 ;; Legacy compatibility aliases expected by user config and ERT tests.
-(defvaralias 'my/dired-fn-debug 'enhanced-dirvish-watch-debug)
-(defvaralias 'my/dired-fn-table 'enhanced-dirvish-watch--table)
 
 (defvar enhanced-dirvish-watch-debug nil
   "Non-nil logs watch events handled by `enhanced-dirvish-watch--handler'.")
@@ -184,8 +188,6 @@
                      (cl-some #'display-graphic-p (frame-list))))
         (ignore-errors (clear-image-cache))))))
 
-(defalias 'my/dired-fn--invalidate-thumb #'enhanced-dirvish-watch--invalidate-file-caches)
-
 ;;;; Desired Watch Target Discovery
 
 (defun enhanced-dirvish-watch--has-live-preview-p (buf)
@@ -289,8 +291,6 @@
           (enhanced-dirvish-watch--remove-entry (car pair) (cdr pair)))
         (setq enhanced-dirvish-watch--entries nil)))))
 
-(defalias 'my/dired-fn-teardown #'enhanced-dirvish-watch-teardown)
-
 (defun enhanced-dirvish-watch-sync (&optional buf)
   "Synchronize `file-notify' watches on BUF (default current) with desired targets."
   (let ((target (or buf (current-buffer))))
@@ -327,8 +327,6 @@
     (enhanced-dirvish--sync-auto-revert))
   (enhanced-dirvish-watch-sync (current-buffer)))
 
-(defalias 'my/dired-fn-setup #'enhanced-dirvish-watch-setup)
-
 (defun enhanced-dirvish-watch--post-command-sync ()
   "Keep hovered-subdir and subtree watches synced after cursor motion or toggle."
   (when (derived-mode-p 'dired-mode 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
@@ -342,7 +340,7 @@
 ;;;; Refresh Execution (Views, Parent Columns, Previews, Virtual Buffers)
 
 (defun enhanced-dirvish-watch--refresh-standalone-preview (file &optional buf-files subdir-only-p)
-  "Refresh `*Enhanced Dirvish Preview*' when visible and displaying FILE or its directory."
+  "Refresh `*Enhanced Dirvish Preview*' when it shows FILE or its directory."
   (let* ((swin (or (and (boundp 'enhanced-dirvish-preview-standalone-window)
                         (window-live-p enhanced-dirvish-preview-standalone-window)
                         (eq (window-buffer enhanced-dirvish-preview-standalone-window)
@@ -588,7 +586,7 @@
          ((derived-mode-p 'enhanced-dirvish-trash-mode 'enhanced-dirvish-recent-mode 'enhanced-dirvish-sidebar-mode)
           (enhanced-dirvish-watch--refresh-virtual-or-sidebar buf)))))))
 
-(defun my/dired-fn--do-revert (buf)
+(defun enhanced-dirvish-watch--do-revert (buf)
   "Compatibility entrypoint refreshing browser buffer BUF safely."
   (enhanced-dirvish-watch--do-refresh buf))
 
@@ -643,8 +641,6 @@
         ;; Short trailing debounce coalesces bulk copies into one crisp refresh.
         (setq enhanced-dirvish-watch--timer
               (run-with-timer 0.1 nil #'enhanced-dirvish-watch--do-refresh target)))))))
-
-(defalias 'my/dired-fn-handler #'enhanced-dirvish-watch--handler)
 
 (defun enhanced-dirvish-watch--on-window-buffer-change (&optional frame)
   "Re-render any Compact/Icons buffer in FRAME that changed while hidden."

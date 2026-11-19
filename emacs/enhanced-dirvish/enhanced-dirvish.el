@@ -1,12 +1,56 @@
 ;;; enhanced-dirvish.el --- A full file manager built on Dirvish -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+
+;; Author: dragonleopardpig
+;; Maintainer: dragonleopardpig
+;; URL: https://github.com/dragonleopardpig/enhanced-dirvish
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "29.1") (dirvish "2.0"))
+;; Keywords: files, convenience
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 ;;; Commentary:
-;; Entry point wiring all Enhanced Dirvish modules into Dirvish, Dashboard,
-;; Noctalia/active Emacs themes, and Dired live file watching.
+
+;; Enhanced Dirvish builds a full file manager on Dirvish: Columns,
+;; Icons, List and Compact views; a Places sidebar with devices and
+;; bookmarks; tabs; a Nemo-style split pane; rich previews that can be
+;; edited in place; search and filters; trash with undo; archives; and
+;; live refresh through file notifications.
+;;
+;; Quick start:
+;;
+;;   (use-package enhanced-dirvish
+;;     :after dirvish
+;;     :config (enhanced-dirvish-setup))
+;;
+;; then M-x enhanced-dirvish-launch, or bind it to a key of your own.
+;; `enhanced-dirvish-setup' installs the package's hooks and Dirvish
+;; settings; loading the package alone changes nothing.
+;;
+;; Emacs leaves F5-F9 and C-c followed by a letter to users.  Set
+;; `enhanced-dirvish-file-manager-keys' to t for Explorer/Nemo-style
+;; F5 (refresh), F6 (switch pane), F9 (terminal) and C-c s/t/c/x/v
+;; (sort, terminal, copy, cut, paste).
+;;
+;; Settings are kept in $XDG_CONFIG_HOME/enhanced-dirvish/settings.toml.
 
 ;;; Code:
-
-(add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
 
 (require 'cl-lib)
 (require 'dired)
@@ -22,6 +66,9 @@
 (require 'enhanced-dirvish-watch)
 (require 'enhanced-dirvish-menu)
 (require 'enhanced-dirvish-windows)
+
+(declare-function dashboard-insert-navigator "dashboard")
+(declare-function dashboard-insert-items "dashboard")
 
 (defun enhanced-dirvish--sync-auto-revert ()
   "Disable Dired auto-revert and notify watches on FUSE/cloud/remote mounts."
@@ -246,7 +293,19 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
           (enhanced-dirvish-sidebar-refresh))))))
 
 (defun enhanced-dirvish-setup ()
-  "Configure Dirvish, hooks, theme blending, and Dashboard integration."
+  "Configure Dirvish, hooks, theme blending, and Dashboard integration.
+Loading the package changes nothing; this installs its global hooks,
+advice and Dirvish settings, and the keys of
+`enhanced-dirvish-file-manager-keys' when that option is on."
+  (enhanced-dirvish-apply-file-manager-keys)
+  (add-hook 'window-selection-change-functions #'enhanced-dirvish-panes--on-window-selection-change)
+  (add-hook 'window-selection-change-functions #'enhanced-dirvish-preview--on-window-selection-change)
+  (add-hook 'enable-theme-functions #'enhanced-dirvish-sync-theme-faces)
+  (add-hook 'dired-after-readin-hook #'enhanced-dirvish-dired-decorate-dirs)
+  (add-hook 'dirvish-preview-setup-hook #'enhanced-dirvish-preview--setup-dirvish-fontlock-h)
+  (enhanced-dirvish-preview--ensure-common-auto-modes)
+  (when (fboundp 'dirvish--preview-update)
+    (advice-add 'dirvish--preview-update :around #'enhanced-dirvish-preview--guard-dirvish-update))
   (enhanced-dirvish-ui-install-mouse-routing)
   (enhanced-dirvish-menu-install)
   (enhanced-dirvish-windows-install)
@@ -283,8 +342,8 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
       (advice-add 'dirvish--try-reuse :after #'enhanced-dirvish--after-build-layout))
     (when (fboundp 'dirvish-quit)
       (advice-add 'dirvish-quit :around #'enhanced-dirvish--around-quit))
-    (with-eval-after-load 'dirvish-collapse
-      (advice-add 'dirvish-collapse--cache :around #'enhanced-dirvish--collapse-guard))
+    ;; Advice applies once the optional extension defines the function.
+    (advice-add 'dirvish-collapse--cache :around #'enhanced-dirvish--collapse-guard)
     (dolist (hook '(dired-mode-hook
                     enhanced-dirvish-compact-mode-hook
                     enhanced-dirvish-icons-mode-hook

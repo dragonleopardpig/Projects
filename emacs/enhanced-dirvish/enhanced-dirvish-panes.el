@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-panes.el --- Sidebar, split extra pane, vterm drawer, and workspace tabs -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Implements the collapsible/rail Enhanced Dirvish Sidebar (Places, GTK Bookmarks/Pins,
 ;; Devices), Nemo-style Split Extra Pane (F3/F6) with active pane tracking,
@@ -24,6 +30,7 @@
 (declare-function enhanced-dirvish-windows-display-terminal "enhanced-dirvish-windows" (main height pane))
 (declare-function enhanced-dirvish-windows--delete "enhanced-dirvish-windows" (window))
 (declare-function enhanced-dirvish-windows--reconcile "enhanced-dirvish-windows" (&optional frame))
+(declare-function enhanced-dirvish-file-manager-keys-for "enhanced-dirvish-keys" (command))
 
 ;;;; Workspace, Tab & Dual-Pane State
 
@@ -171,8 +178,6 @@
   "Track which split pane owns focus when selection moves in FRAME."
   (enhanced-dirvish-panes--sync-active-pane-from-window (frame-selected-window frame)))
 
-(add-hook 'window-selection-change-functions #'enhanced-dirvish-panes--on-window-selection-change)
-
 (defun enhanced-dirvish-panes--window-dir (&optional win)
   "Return directory path displayed inside browser window WIN."
   (let ((w (or win (selected-window))))
@@ -263,7 +268,8 @@
       (set-buffer (window-buffer (selected-window))))))
 
 (defun enhanced-dirvish-panes--valid-main-window-p (win)
-  "Return non-nil if WIN is a usable main browser window (not sidebar, preview, or aux)."
+  "Return non-nil if WIN is a usable main browser window.
+Sidebars, previews and auxiliary windows are not."
   (and (window-live-p win)
        (not (window-parameter win 'window-side))
        (not (window-minibuffer-p win))
@@ -545,10 +551,11 @@ Closing the extra pane while focused promotes its location & view into Pane 1."
               (enhanced-dirvish-tab-state-pane2 tab) p2)
         (enhanced-dirvish-panes--open-extra tab)
         (force-mode-line-update t)
-        (message "Opened Extra Pane (F6 switches pane, C-S-c/C-S-x copies/moves across panes)")))))
+        (message "%s" (substitute-command-keys
+                       "Opened Extra Pane (\\[enhanced-dirvish-switch-other-pane] switches pane, \\[enhanced-dirvish-copy-to-other-pane]/\\[enhanced-dirvish-move-to-other-pane] copy/move across panes)"))))))
 
 (defun enhanced-dirvish-switch-other-pane ()
-  "Switch keyboard & visual focus between Primary and Extra split panes (`F6')."
+  "Switch keyboard & visual focus between Primary and Extra split panes."
   (interactive)
   (let ((tab (enhanced-dirvish-active-tab)))
     (if (not (enhanced-dirvish-tab-state-split-p tab))
@@ -590,7 +597,9 @@ Closing the extra pane while focused promotes its location & view into Pane 1."
       (with-current-buffer buf
         (let ((lm (copy-keymap (or (current-local-map) (make-sparse-keymap)))))
           (define-key lm (kbd "C-`") #'enhanced-dirvish-toggle-pane-terminal)
-          (define-key lm (kbd "<f9>") #'enhanced-dirvish-toggle-pane-terminal)
+          (dolist (key (enhanced-dirvish-file-manager-keys-for
+                        #'enhanced-dirvish-toggle-pane-terminal))
+            (define-key lm (kbd key) #'enhanced-dirvish-toggle-pane-terminal))
           (use-local-map lm))))
     buf))
 

@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-menu.el --- Context-aware Enhanced Dirvish menu bar -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; The complete file-manager menu remains available throughout Emacs.  Only
 ;; relevant commands are enabled.  Menu context uses buffer state and cached
@@ -335,7 +341,8 @@
      ["10xer Keyboard Mode" enhanced-dirvish-toggle-tenxer-mode always nil (pref enhanced-dirvish-prefs-tenxer-mode)]
      ["Settings & Diagnostics" enhanced-dirvish-open-settings always]
      ["Shortcut Reference" enhanced-dirvish-open-shortcut-reference always]))
-  "Complete user-facing actions.  Vectors hold label, command, capability, args and checked state.")
+  "Complete user-facing actions.
+Vectors hold label, command, capability, args and checked state.")
 
 (defun enhanced-dirvish-menu--build-items (items)
   "Convert command catalog ITEMS into an Easy Menu specification."

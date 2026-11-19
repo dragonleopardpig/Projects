@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-tests.el --- ERT tests for Enhanced Dirvish features -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Offline ERT unit & integration test suite verifying Enhanced Dirvish
 ;; features built on Dirvish: TOML config parsing, synthetic 1 PiB FUSE filter, accurate
@@ -16,6 +22,19 @@
 
 (add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
 (require 'enhanced-dirvish)
+
+;; Special even when Dashboard (optional) is not installed.
+(defvar dashboard-navigator-buttons)
+
+(defmacro enhanced-dirvish-test--with-file-manager-keys (on &rest body)
+  "Run BODY with `enhanced-dirvish-file-manager-keys' ON and applied."
+  (declare (indent 1) (debug t))
+  `(let ((enhanced-dirvish-file-manager-keys ,on))
+     (enhanced-dirvish-apply-file-manager-keys)
+     (unwind-protect (progn ,@body)
+       (let ((enhanced-dirvish-file-manager-keys
+              (default-toplevel-value 'enhanced-dirvish-file-manager-keys)))
+         (enhanced-dirvish-apply-file-manager-keys)))))
 
 (ert-deftest enhanced-dirvish-test-toml-parsing-and-prefs ()
   (let ((tmp (make-temp-file "enhanced-dirvish-toml-")))
@@ -408,8 +427,9 @@
       (should-not (eq (key-binding (kbd "<f1>")) #'enhanced-dirvish-open-shortcut-reference))
       (should (eq (key-binding (kbd "C-c ?")) #'enhanced-dirvish-open-shortcut-reference))))
   (should (eq (lookup-key enhanced-dirvish-default-keymap (kbd "C-`")) #'enhanced-dirvish-toggle-pane-terminal))
-  (should (eq (lookup-key enhanced-dirvish-default-keymap (kbd "<f9>")) #'enhanced-dirvish-toggle-pane-terminal))
-  (should (eq (lookup-key enhanced-dirvish-default-keymap (kbd "C-c t")) #'enhanced-dirvish-toggle-pane-terminal))
+  (enhanced-dirvish-test--with-file-manager-keys t
+    (should (eq (lookup-key enhanced-dirvish-default-keymap (kbd "<f9>")) #'enhanced-dirvish-toggle-pane-terminal))
+    (should (eq (lookup-key enhanced-dirvish-default-keymap (kbd "C-c t")) #'enhanced-dirvish-toggle-pane-terminal)))
   (dolist (km (list enhanced-dirvish-default-keymap enhanced-dirvish-10xer-keymap))
     (should (eq (lookup-key km (kbd "<mouse-1>")) #'enhanced-dirvish-mouse-click-entry))
     (should (eq (lookup-key km (kbd "<mouse-2>")) #'enhanced-dirvish-mouse-activate-at-event))
@@ -717,9 +737,11 @@
       (delete-directory tmp t))))
 
 (ert-deftest enhanced-dirvish-test-noctalia-not-auto-enabled ()
+  "The author's Emacs config (outside the package) keeps Noctalia opt-in."
   (let ((after-init-hook nil)
         (custom-enabled-themes '(ef-spring))
         (init-file (expand-file-name "~/Projects/emacs/noctalia.el")))
+    (skip-unless (file-readable-p init-file))
     (load init-file nil t)
     (should-not (memq 'my/noctalia-initialize after-init-hook))
     (should (equal custom-enabled-themes '(ef-spring)))
@@ -806,9 +828,9 @@
                           (should-not buffer-read-only)
                           (should enhanced-dirvish-preview-edit-mode)
                           (should (eq (key-binding (kbd "C-<left>")) #'enhanced-dirvish-preview-edit-leave))
-                          (should (eq (key-binding (kbd "C-c q")) #'enhanced-dirvish-preview-edit-exit))
+                          (should (eq (key-binding (kbd "C-c C-c")) #'enhanced-dirvish-preview-edit-exit))
                           (should (eq (key-binding (kbd "C-<escape>")) #'enhanced-dirvish-preview-edit-exit))
-                          (should (eq (key-binding (kbd "C-c k")) #'enhanced-dirvish-preview-edit-abort))
+                          (should (eq (key-binding (kbd "C-c C-k")) #'enhanced-dirvish-preview-edit-abort))
                           ;; Edit buffer, seed stale preview hash, cancel save-prompt with quit -> stays in edit mode.
                           (puthash fpath "STALE PREVIEW" (dv-preview-hash dv))
                           (goto-char (point-max))
@@ -1194,7 +1216,7 @@
 
 (ert-deftest enhanced-dirvish-test-dashboard-visible-dirvish-shortcut ()
   "Dashboard renders one navigator and its Dirvish button launches the browser."
-  (require 'dashboard)
+  (skip-unless (require 'dashboard nil t))
   (let ((dashboard-navigator-buttons nil)
         (dashboard-startupify-list '(dashboard-insert-banner-title dashboard-insert-items))
         (launched nil))
@@ -1344,24 +1366,6 @@
         (setq pos (next-single-property-change pos 'face nil (point-max))))
       found)))
 
-(ert-deftest enhanced-dirvish-test-nix-grammars-load-despite-site-start-path ()
-  "The Nix grammar bundle is added even when site-start pre-filled the path."
-  (skip-unless (and (fboundp 'treesit-available-p) (treesit-available-p)))
-  (let ((file (make-temp-file "enhanced-dirvish-nix-ts-" nil ".el"
-                              "(add-to-list 'treesit-extra-load-path \"/enhanced-dirvish-test/grammars/lib\")\n"))
-        ;; What NixOS's site-start.el leaves behind before any user config.
-        (treesit-extra-load-path '("/nix/store/enhanced-dirvish-test-emacs-packages-deps/lib/")))
-    (unwind-protect
-        (progn
-          (enhanced-dirvish-preview--load-nix-grammars file)
-          (should (member "/enhanced-dirvish-test/grammars/lib" treesit-extra-load-path))
-          (should (member "/nix/store/enhanced-dirvish-test-emacs-packages-deps/lib/"
-                          treesit-extra-load-path))
-          ;; preload.el may have loaded it already: a second load adds nothing.
-          (enhanced-dirvish-preview--load-nix-grammars file)
-          (should (= (length treesit-extra-load-path) 2)))
-      (delete-file file))))
-
 (ert-deftest enhanced-dirvish-test-dired-dot-entries-are-not-browser-entries ()
   "`.' and `..' lines shown by -a switches are neither entries nor the current file."
   (let* ((dir (make-temp-file "enhanced-dirvish-dots-" t))
@@ -1403,7 +1407,29 @@
             ("Cargo.toml"     . "[package]\nname = \"demo\"\n")
             ("main.c"         . "#include <stdio.h>\nint main(void) { return 0; }\n")
             ("CMakeLists.txt" . "cmake_minimum_required(VERSION 3.20)\nproject(Demo)\n")
-            ("README.md"      . "# Title\n\n```python\ndef bar():\n    return \"hi\"\n```\n"))))
+            ("README.md"      . "# Title\n\n```python\ndef bar():\n    return \"hi\"\n```\n")))
+         ;; `enhanced-dirvish-setup' adds these file associations, for
+         ;; the grammars installed (the user's preload.el loads Nix's).
+         (auto-mode-alist (copy-sequence auto-mode-alist))
+         (treesit-extra-load-path (copy-sequence (bound-and-true-p treesit-extra-load-path)))
+         ;; The preview must highlight what Emacs itself highlights in the
+         ;; file's mode; a tree-sitter mode without its grammar cannot.
+         (highlightable
+          (lambda (file text)
+            (let ((mode (assoc-default file auto-mode-alist #'string-match-p)))
+              (when (consp mode) (setq mode (car mode)))
+              (and mode (fboundp mode) (not (memq mode '(fundamental-mode text-mode)))
+                   (with-temp-buffer
+                     (insert text)
+                     (let ((inhibit-message t) (warning-minimum-level :error))
+                       (ignore-errors
+                         (delay-mode-hooks (funcall mode))
+                         (font-lock-ensure)))
+                     (enhanced-dirvish-test--buffer-has-face-p (current-buffer))))))))
+    (let ((nix-ts (locate-user-emacs-file "nix-tree-sitter.el")))
+      (when (file-readable-p nix-ts)
+        (load nix-ts t t)))
+    (enhanced-dirvish-preview--ensure-common-auto-modes)
     (unwind-protect
         (progn
           (dolist (pair samples)
@@ -1411,7 +1437,10 @@
               (with-temp-file fpath
                 (insert (cdr pair)))
               (enhanced-dirvish-preview-update-standalone fpath)
-              (should (enhanced-dirvish-test--buffer-has-face-p pbuf))))
+              (setq pbuf (get-buffer "*Enhanced Dirvish Preview*"))
+              ;; Files with no syntax mode on this machine have nothing to show.
+              (when (funcall highlightable fpath (cdr pair))
+                (should (enhanced-dirvish-test--buffer-has-face-p pbuf)))))
           ;; Rendered Markdown fenced code preserves Python faces beyond plain `enhanced-dirvish-preview-code'.
           (with-current-buffer pbuf
             (goto-char (point-min))
@@ -1496,7 +1525,7 @@
                 (font-lock-ensure)
                 (should enhanced-dirvish-preview-edit-mode)
                 (should (enhanced-dirvish-test--buffer-has-face-p edit-buf)))
-              ;; Dirvish auto-revert (`my/dired-fn--do-revert') must not replace active edit buffer.
+              ;; Dirvish auto-revert (`enhanced-dirvish-watch--do-revert') must not replace active edit buffer.
               (setq dv (dirvish--new :curr-layout '(1 0.14 0.48)))
               (setf (dv-preview-window dv) win-right)
               (let ((revert-preview-called nil))
@@ -1504,7 +1533,7 @@
                           ((symbol-function 'dirvish--preview-update)
                            (lambda (&rest _) (setq revert-preview-called t))))
                   (with-current-buffer dir-buf
-                    (my/dired-fn--do-revert dir-buf)))
+                    (enhanced-dirvish-watch--do-revert dir-buf)))
                 (should-not revert-preview-called)
                 (should (eq (window-buffer win-right) edit-buf))))))
       (when (buffer-live-p edit-buf)
@@ -1724,7 +1753,76 @@
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory enhanced-dirvish-state-dir t)))))
 
-(defvar dashboard-navigator-buttons)
+(ert-deftest enhanced-dirvish-test-file-manager-keys-are-opt-in ()
+  "F5-F9 and C-c followed by a letter are Emacs's user keys: opt-in only.
+`enhanced-dirvish-file-manager-keys' binds the Explorer/Nemo-style ones;
+off, their commands keep keys that follow the conventions."
+  (enhanced-dirvish-test--with-file-manager-keys nil
+    (pcase-dolist (`(,map . ,bindings) enhanced-dirvish--file-manager-bindings)
+      (pcase-dolist (`(,key . ,_command) bindings)
+        (should-not (lookup-key (symbol-value map) (kbd key)))))
+    (should-not (enhanced-dirvish-file-manager-keys-for #'enhanced-dirvish-toggle-pane-terminal))
+    (should (eq (lookup-key enhanced-dirvish-compact-mode-map (kbd "g")) #'enhanced-dirvish-compact-refresh))
+    (should (eq (lookup-key enhanced-dirvish-default-keymap (kbd "C-`")) #'enhanced-dirvish-toggle-pane-terminal))
+    (should (eq (lookup-key enhanced-dirvish-preview-read-mode-map (kbd "q")) #'enhanced-dirvish-preview-read-leave))
+    (should (eq (lookup-key enhanced-dirvish-preview-edit-mode-map (kbd "C-c C-c"))
+                #'enhanced-dirvish-preview-edit-exit))
+    (should (eq (lookup-key enhanced-dirvish-preview-edit-mode-map (kbd "C-c C-k"))
+                #'enhanced-dirvish-preview-edit-abort)))
+  (enhanced-dirvish-test--with-file-manager-keys t
+    (pcase-dolist (`(,map . ,bindings) enhanced-dirvish--file-manager-bindings)
+      (pcase-dolist (`(,key . ,command) bindings)
+        (should (eq (lookup-key (symbol-value map) (kbd key)) command))))
+    (should (equal (enhanced-dirvish-file-manager-keys-for #'enhanced-dirvish-toggle-pane-terminal)
+                   '("<f9>" "C-c t"))))
+  ;; Customize applies a change at once.
+  (let ((enhanced-dirvish-file-manager-keys nil)
+        (set (get 'enhanced-dirvish-file-manager-keys 'custom-set)))
+    (unwind-protect
+        (progn
+          (funcall set 'enhanced-dirvish-file-manager-keys t)
+          (should (eq (lookup-key enhanced-dirvish-default-keymap (kbd "<f6>"))
+                      #'enhanced-dirvish-switch-other-pane))
+          (funcall set 'enhanced-dirvish-file-manager-keys nil)
+          (should-not (lookup-key enhanced-dirvish-default-keymap (kbd "<f6>"))))
+      (let ((enhanced-dirvish-file-manager-keys
+             (default-toplevel-value 'enhanced-dirvish-file-manager-keys)))
+        (enhanced-dirvish-apply-file-manager-keys)))))
+
+(ert-deftest enhanced-dirvish-test-loading-changes-nothing ()
+  "Requiring the package adds no hooks, advice or file associations.
+Only `enhanced-dirvish-setup' changes Emacs (MELPA's rule for packages)."
+  (let* ((dir (file-name-directory (locate-library "enhanced-dirvish")))
+         (probe
+          `(progn
+             (require 'package)
+             (setq package-user-dir ,package-user-dir)
+             (package-initialize)
+             (dolist (feature '(dirvish dirvish-subtree dirvish-vc dirvish-emerge dirvish-narrow
+                                dirvish-collapse dirvish-widgets transient filenotify face-remap
+                                shr tooltip easymenu json))
+               (require feature nil t))
+             (let* ((hooks '(window-selection-change-functions dired-after-readin-hook
+                             enable-theme-functions dirvish-preview-setup-hook dired-mode-hook
+                             kill-emacs-hook after-make-frame-functions))
+                    (before (mapcar (lambda (h) (copy-sequence (and (boundp h) (symbol-value h))))
+                                    hooks))
+                    (modes (copy-sequence auto-mode-alist)))
+               (add-to-list 'load-path ,dir)
+               (require 'enhanced-dirvish)
+               (princ (format "%S"
+                              (list (cl-loop for h in hooks for b in before
+                                             unless (equal (and (boundp h) (symbol-value h)) b)
+                                             collect h)
+                                    (equal modes auto-mode-alist)
+                                    (and (fboundp 'dirvish--preview-update)
+                                         (advice-member-p #'enhanced-dirvish-preview--guard-dirvish-update
+                                                          'dirvish--preview-update)))))))))
+    (with-temp-buffer
+      (should (zerop (call-process (expand-file-name invocation-name invocation-directory)
+                                   nil (list t nil) nil
+                                   "-Q" "--batch" "--eval" (prin1-to-string probe))))
+      (should (equal (string-trim (buffer-string)) "(nil t nil)")))))
 
 (ert-deftest enhanced-dirvish-test-launch-starts-with-one-pane-and-f3-opens-split ()
   "The browser always starts with one pane, so the first F3 opens the split.
@@ -1795,8 +1893,10 @@ tabs shows each tab's own split."
               (should (string-prefix-p "Opened Extra Pane" (car said)))
               (should (equal (funcall shown) (list one two)))
               ;; F6 back to pane 1: closing from pane 2 keeps pane 2's folder.
-              (should (eq (key-binding (kbd "<f6>")) #'enhanced-dirvish-switch-other-pane))
-              (funcall press "<f6>")
+              ;; F6 is an opt-in key; the user's config turns them on.
+              (enhanced-dirvish-test--with-file-manager-keys t
+                (should (eq (key-binding (kbd "<f6>")) #'enhanced-dirvish-switch-other-pane))
+                (funcall press "<f6>"))
               (funcall press "<f3>")
               (should (equal (car said) "Closed split pane"))
               (should (equal (funcall shown) (list one)))
@@ -2666,7 +2766,13 @@ after the folder, so the second pane must not reuse the first one's."
         (should (string-match-p "reverse direction to shrink" (buffer-string)))
         (should (string-match-p "During drag: cancel" (buffer-string)))
         (should (string-match-p "Click View…" (buffer-string)))
-        (should (string-match-p "C-c s / Click Sort By…" (buffer-string)))
+        (should (string-match-p "^   Click Sort By…" (buffer-string)))
+        (should-not (string-match-p "C-c s" (buffer-string)))
+        (enhanced-dirvish-test--with-file-manager-keys t
+          (enhanced-dirvish-open-shortcut-reference)
+          (should (string-match-p "C-c s / Click Sort By…" (buffer-string)))
+          (should (string-match-p "F3 / F6" (buffer-string))))
+        (enhanced-dirvish-open-shortcut-reference)
         (should (string-match-p "Ascending / Descending; Folders first" (buffer-string)))
         (should-not (string-match-p "^   V / W.*Toggle Rendered" (buffer-string)))
         (when tenxer
@@ -2923,10 +3029,11 @@ after the folder, so the second pane must not reuse the first one's."
                  ('list "List / Tree") ('compact "Compact"))))
         (should (eq (current-buffer) before))
         (should (equal (enhanced-dirvish-test--selection-names) '("a.txt"))))
-      (dolist (tenx '(nil t))
-        (setf (enhanced-dirvish-prefs-tenxer-mode enhanced-dirvish-prefs-current) tenx)
-        (enhanced-dirvish--apply-active-keymap)
-        (should (eq (key-binding (kbd "C-c s")) #'enhanced-dirvish-sort-menu))))))
+      (enhanced-dirvish-test--with-file-manager-keys t
+        (dolist (tenx '(nil t))
+          (setf (enhanced-dirvish-prefs-tenxer-mode enhanced-dirvish-prefs-current) tenx)
+          (enhanced-dirvish--apply-active-keymap)
+          (should (eq (key-binding (kbd "C-c s")) #'enhanced-dirvish-sort-menu)))))))
 
 (ert-deftest enhanced-dirvish-test-sort-header-targets-clicked-pane ()
   "Clicking an inactive pane's header opens the menu in that directory."

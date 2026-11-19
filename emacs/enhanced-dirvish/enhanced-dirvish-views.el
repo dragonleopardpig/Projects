@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-views.el --- Browser views, sorting, tree, icons, compact, chrome -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Implements all four Enhanced Dirvish browser views (Columns/Miller, List+Tree,
 ;; Compact horizontal multi-column, Icons thumbnail grid), unified sorting &
@@ -21,6 +27,10 @@
 (require 'subr-x)
 (require 'enhanced-dirvish-prefs)
 (require 'enhanced-dirvish-devices)
+
+;; Graphical builds only (image support for `image-size').
+(declare-function x-hide-tip "xfns.c" ())
+(declare-function image-size "image.c" (spec &optional pixels frame))
 
 (declare-function enhanced-dirvish-open-location "enhanced-dirvish-panes" (loc &optional record-history))
 (declare-function enhanced-dirvish-active-pane "enhanced-dirvish-panes" ())
@@ -667,7 +677,8 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
           (setcdr (nthcdr (1- enhanced-dirvish-folder-view-lru-limit) enhanced-dirvish-folder-view-lru) nil))))))
 
 (defun enhanced-dirvish-folder-view-restore (dir &optional prefs)
-  "Restore remembered view/sort preferences for DIR if available and return snapshot."
+  "Restore remembered view and sort preferences for DIR.
+Return the snapshot, if any."
   (let ((p (or prefs (enhanced-dirvish-prefs))))
     (when (and (enhanced-dirvish-prefs-remember-folder-views p)
                dir
@@ -733,8 +744,6 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                                          'pointer 'hand
                                          'help-echo (format "Open folder %s" (abbreviate-file-name f)))))))
         (forward-line 1)))))
-
-(add-hook 'dired-after-readin-hook #'enhanced-dirvish-dired-decorate-dirs)
 
 (dirvish-define-attribute enhanced-dirvish-color
   "Apply Enhanced Dirvish custom folder color faces to tagged directory names."
@@ -920,7 +929,8 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
      (propertize (format " [Sort By… %s %s] " sort-lbl arrow)
                  'face 'enhanced-dirvish-header-accent
                  'mouse-face 'highlight 'pointer 'hand
-                 'help-echo "Sort files by name, date, size or extension (C-c s)"
+                 'help-echo (concat "Sort files by name, date, size or extension"
+                                    (and (bound-and-true-p enhanced-dirvish-file-manager-keys) " (C-c s)"))
                  'local-map enhanced-dirvish-sort-header-map 'keymap enhanced-dirvish-sort-header-map)
      ;; Adjacent equal mouse-face properties form one hover region even
      ;; when the buttons have different keymaps.  Keep a plain gap between.
@@ -953,7 +963,9 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
          (hints (when (and (enhanced-dirvish-prefs-show-keybinding-hints p) (not chord))
                   (if (enhanced-dirvish-prefs-tenxer-mode p)
                       " j/k Nav  g Go  , Sort  ; Act  t Tabs  i Peek  f Filter  ~ Keys"
-                    " ←/→ Nav  C-1..4 View  C-c s Sort  F3 Split  C-k Search  C-, Prefs  ? Keys"))))
+                    (concat " ←/→ Nav  C-1..4 View  "
+                            (and (bound-and-true-p enhanced-dirvish-file-manager-keys) "C-c s Sort  ")
+                            "F3 Split  C-k Search  C-, Prefs  ? Keys")))))
     (concat
      (if (> count 0)
          (propertize (format " %d selected " count) 'face 'enhanced-dirvish-header-accent)
@@ -1131,7 +1143,6 @@ move that window too, as with a folder holding a same-named subfolder."
     (define-key map (kbd "m") #'enhanced-dirvish-view-toggle-mark)
     (define-key map (kbd "<backspace>") #'enhanced-dirvish-view-up-directory)
     (define-key map (kbd "g") #'enhanced-dirvish-compact-refresh)
-    (define-key map (kbd "<f5>") #'enhanced-dirvish-compact-refresh)
     map)
   "Keymap for `enhanced-dirvish-compact-mode'.")
 
@@ -1156,7 +1167,8 @@ move that window too, as with a folder holding a same-named subfolder."
                   truncate-partial-width-windows nil))))
 
 (define-derived-mode enhanced-dirvish-compact-mode special-mode "Enhanced-Dirvish-Compact"
-  "Enhanced Dirvish Compact view: vertical columns flowing left-to-right with sideways scroll."
+  "Enhanced Dirvish Compact view: entries in columns, read top to bottom.
+Columns run left to right and scroll sideways."
   (enhanced-dirvish--enforce-no-wrap)
   (add-hook 'visual-line-mode-hook #'enhanced-dirvish--enforce-no-wrap nil t)
   (add-hook 'after-change-major-mode-hook #'enhanced-dirvish--enforce-no-wrap 90 t)
@@ -1167,7 +1179,8 @@ move that window too, as with a folder holding a same-named subfolder."
   (add-hook 'post-command-hook #'enhanced-dirvish-view--sync-preview-on-move nil t))
 
 (defun enhanced-dirvish-view--sync-preview-on-move ()
-  "Keep selection highlight and preview pane synced across Columns/List/Compact/Icons."
+  "Keep selection highlight and preview pane synced on point motion.
+In Columns, List, Compact and Icons views."
   (enhanced-dirvish-view--update-selection-highlight)
   (unless (or enhanced-dirvish-mouse--inhibit-preview enhanced-dirvish-mouse--drag-state)
     (when-let ((f (enhanced-dirvish-current-file)))
@@ -1305,7 +1318,6 @@ move that window too, as with a folder holding a same-named subfolder."
     (define-key map (kbd "m") #'enhanced-dirvish-view-toggle-mark)
     (define-key map (kbd "<backspace>") #'enhanced-dirvish-view-up-directory)
     (define-key map (kbd "g") #'enhanced-dirvish-icons-refresh)
-    (define-key map (kbd "<f5>") #'enhanced-dirvish-icons-refresh)
     map)
   "Keymap for `enhanced-dirvish-icons-mode'.")
 
@@ -1314,7 +1326,7 @@ move that window too, as with a folder holding a same-named subfolder."
   (enhanced-dirvish-view--update-selection-highlight))
 
 (defun enhanced-dirvish-icons--post-command-hook ()
-  "Keep selection highlight and preview pane synced after point motion in Icons view."
+  "Keep selection highlight and preview synced after motion in Icons view."
   (enhanced-dirvish-view--sync-preview-on-move))
 
 (defun enhanced-dirvish-icons--on-window-size-change (&optional win-or-frame)
@@ -1344,7 +1356,8 @@ move that window too, as with a folder holding a same-named subfolder."
   (add-hook 'window-size-change-functions #'enhanced-dirvish-icons--on-window-size-change nil t))
 
 (defun enhanced-dirvish-icons--scale-glyph (glyph thumb-px)
-  "Scale GLYPH proportionally to THUMB-PX on GUI frames while preserving family and tint."
+  "Scale GLYPH proportionally to THUMB-PX on GUI frames.
+Its font family and tint are kept."
   (if (not (display-graphic-p))
       glyph
     (let* ((ch (max 12 (frame-char-height)))
@@ -2437,7 +2450,7 @@ Use only the cached filenames; do not probe files while handling motion."
         (map (make-sparse-keymap)))
     (dolist (pair bindings)
       (define-key map (car pair) (cdr pair)))
-    (define-key map (kbd "ESC") #'enhanced-dirvish-mouse--drag-cancel)
+    (define-key map [escape] #'enhanced-dirvish-mouse--drag-cancel)
     (dolist (area '(mode-line header-line vertical-line right-divider bottom-divider
                     left-margin right-margin left-fringe right-fringe
                     tab-bar tool-bar vertical-scroll-bar horizontal-scroll-bar))
@@ -3184,7 +3197,7 @@ folder cannot itself become the drop target."
       :enable (eq (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'name)])))
 
 (defun enhanced-dirvish-sort-menu (&optional event)
-  "Show the clickable Sort By menu for the directory at EVENT (`C-c s')."
+  "Show the clickable Sort By menu for the directory at EVENT."
   (interactive (list (when (mouse-event-p last-input-event) last-input-event)))
   (enhanced-dirvish-header--select-browser event)
   (popup-menu (enhanced-dirvish-sort--menu) event))
@@ -3200,7 +3213,9 @@ folder cannot itself become the drop target."
   (enhanced-dirvish-sort-set (enhanced-dirvish-prefs-sort-key (enhanced-dirvish-prefs)) 'desc))
 
 (defun enhanced-dirvish-sort-set (key &optional direction)
-  "Sort active browser by KEY (`name', `modified', `size', `type', `extension', `created', `unsorted').
+  "Sort the active browser by KEY.
+KEY is `name', `modified', `size', `type', `extension', `created' or
+`unsorted'.
 With DIRECTION, set that order explicitly; otherwise selecting the already
 active sort key toggles ascending/descending (the 10xer sort chord)."
   (interactive

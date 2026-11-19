@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-previews.el --- Rich previews, per-type zoom, media IPC, docs, 3D/GPX -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Implements Enhanced Dirvish's preview ecosystem inside Dirvish:
 ;; - Independent per-type zoom (text / image / pdf) via C-+/C--/C-0
@@ -232,24 +238,6 @@ previews."
       (funcall orig-fn dv index)
       (when-let ((nbuf (and (window-live-p pwin) (window-buffer pwin))))
         (enhanced-dirvish-preview--sync-read-buffer pwin nbuf ctx)))))
-
-(defun enhanced-dirvish-preview--load-nix-grammars (&optional file)
-  "Load the home-manager generated grammar FILE, ~/.emacs.d/nix-tree-sitter.el.
-Loaded whatever `treesit-extra-load-path' holds: NixOS's site-start.el
-already puts emacs-packages-deps' lib/ there, so a non-empty path is no
-sign the grammar bundle is on it.  The file only `add-to-list's, so a
-second load after preload.el's is harmless."
-  (when (and (fboundp 'treesit-available-p) (treesit-available-p))
-    (let ((nix-ts (or file (expand-file-name "nix-tree-sitter.el" user-emacs-directory))))
-      (when (file-readable-p nix-ts)
-        (load nix-ts t t)))))
-
-(enhanced-dirvish-preview--load-nix-grammars)
-
-(enhanced-dirvish-preview--ensure-common-auto-modes)
-(add-hook 'dirvish-preview-setup-hook #'enhanced-dirvish-preview--setup-dirvish-fontlock-h)
-(when (fboundp 'dirvish--preview-update)
-  (advice-add 'dirvish--preview-update :around #'enhanced-dirvish-preview--guard-dirvish-update))
 
 ;;;; Independent Per-Type Zoom Controls (Text / Image / PDF)
 
@@ -839,8 +827,6 @@ browser (`SPC')."
             (enhanced-dirvish-preview--sync-read-buffer
              win buf enhanced-dirvish-preview--last-browser-context))))))))
 
-(add-hook 'window-selection-change-functions #'enhanced-dirvish-preview--on-window-selection-change)
-
 (defun enhanced-dirvish-preview-read-scroll-down ()
   "Scroll read-only preview buffer forward (`SPC')."
   (interactive)
@@ -867,7 +853,6 @@ browser (`SPC')."
 (defvar enhanced-dirvish-preview-read-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-<left>") #'enhanced-dirvish-preview-read-leave)
-    (define-key map (kbd "C-c q") #'enhanced-dirvish-preview-read-leave)
     (define-key map (kbd "C-<escape>") #'enhanced-dirvish-preview-read-leave)
     (define-key map (kbd "q") #'enhanced-dirvish-preview-read-leave)
     (define-key map (kbd "SPC") #'enhanced-dirvish-preview-read-scroll-down)
@@ -903,9 +888,9 @@ Keeps the buffer strictly read-only, enables keyboard scrolling, and binds
 (defvar enhanced-dirvish-preview-edit-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-<left>") #'enhanced-dirvish-preview-edit-leave)
-    (define-key map (kbd "C-c q") #'enhanced-dirvish-preview-edit-exit)
+    (define-key map (kbd "C-c C-c") #'enhanced-dirvish-preview-edit-exit)
     (define-key map (kbd "C-<escape>") #'enhanced-dirvish-preview-edit-exit)
-    (define-key map (kbd "C-c k") #'enhanced-dirvish-preview-edit-abort)
+    (define-key map (kbd "C-c C-k") #'enhanced-dirvish-preview-edit-abort)
     map)
   "Keymap active while direct-editing a file in Enhanced Dirvish's preview pane.")
 
@@ -1163,7 +1148,7 @@ MODE may be:
             (set-window-dedicated-p pwin nil)
             (set-window-buffer pwin buf)
             (select-window pwin)
-            (message "Preview Edit: C-x C-s save · C-<left> leave (prompt save) · C-c q back · C-c k abort")
+            (message "%s" (substitute-command-keys "Preview Edit: \\[save-buffer] save · \\[enhanced-dirvish-preview-edit-leave] leave (prompt save) · \\[enhanced-dirvish-preview-edit-exit] back · \\[enhanced-dirvish-preview-edit-abort] abort"))
             buf)
         (pop-to-buffer-same-window buf)))))
 

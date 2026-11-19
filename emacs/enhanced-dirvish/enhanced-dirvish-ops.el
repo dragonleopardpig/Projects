@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-ops.el --- File operations, trash, undo, archives, props, actions -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Implements Enhanced Dirvish file operations cleanly inside Emacs:
 ;; clipboard copy/cut/paste with conflict resolution (Replace / Keep Both / Merge),
@@ -112,7 +118,7 @@
 ;;;; Clipboard: Copy / Cut / Paste (Keep Both / Replace / Merge) / Unyank
 
 (defun enhanced-dirvish-copy-selection ()
-  "Copy selected item(s) to Enhanced Dirvish clipboard (`y' / `C-c c')."
+  "Copy selected item(s) to Enhanced Dirvish clipboard (`y' in 10xer mode)."
   (interactive)
   (let* ((dir (ignore-errors (enhanced-dirvish-pane-state-dir (enhanced-dirvish-active-pane))))
          (_ (when (enhanced-dirvish-computer-location-p dir)
@@ -125,7 +131,7 @@
     (message "Copied %d item(s)" (length files))))
 
 (defun enhanced-dirvish-cut-selection ()
-  "Cut selected item(s) to Enhanced Dirvish clipboard (`x' / `C-c x')."
+  "Cut selected item(s) to Enhanced Dirvish clipboard (`x' in 10xer mode)."
   (interactive)
   (let* ((dir (ignore-errors (enhanced-dirvish-pane-state-dir (enhanced-dirvish-active-pane))))
          (_ (enhanced-dirvish-guard-writable-location dir "Cut"))
@@ -258,7 +264,7 @@ when set."
              (if (eq mode 'cut) "Moved" "Copied") moved (abbreviate-file-name dest-dir))))
 
 (defun enhanced-dirvish-paste-keep-both ()
-  "Paste clipboard items keeping both on conflicts (`p' / `C-c v')."
+  "Paste clipboard items keeping both on conflicts (`p' in 10xer mode)."
   (interactive)
   (let ((files (plist-get enhanced-dirvish-clipboard :files))
         (mode (or (plist-get enhanced-dirvish-clipboard :mode) 'copy)))
@@ -385,7 +391,8 @@ when set."
       (enhanced-dirvish-goto-file target))))
 
 (defun enhanced-dirvish-rename (&optional new-name)
-  "Rename entry at point, creating parent dirs when NEW-NAME contains slashes (`F2' / `r')."
+  "Rename entry at point (`F2' / `r').
+Parent directories are created when NEW-NAME contains slashes."
   (interactive)
   (enhanced-dirvish--ensure-writable-target default-directory "Rename")
   (let ((src (or (enhanced-dirvish-current-file) (user-error "No item at point"))))
@@ -406,7 +413,8 @@ when set."
       (message "Renamed -> %s" input))))
 
 (defun enhanced-dirvish-paste-content-drop ()
-  "Save system clipboard image (`wl-paste`) or text directly as a new file in folder."
+  "Save the system clipboard image or text as a new file in the folder.
+Images are read with `wl-paste'."
   (interactive)
   (let ((dir (enhanced-dirvish--ensure-writable-target default-directory "Save clipboard")))
     (cond
@@ -510,7 +518,8 @@ Prefer the next surviving entry, then the previous one, in the displayed order."
         tpath)))))
 
 (defun enhanced-dirvish-move-to-trash ()
-  "Move selected items to Trash (`DEL' / `d'), with permanent delete fallback when Trash is unsupported."
+  "Move selected items to Trash (`DEL' / `d').
+Where Trash is unsupported, offer to delete them permanently."
   (interactive)
   (if (derived-mode-p 'enhanced-dirvish-trash-mode)
       (call-interactively #'enhanced-dirvish-trash-delete-at-point)
@@ -892,11 +901,16 @@ wrapping folder named after the archive so parent folders stay uncluttered."
 
 (defun enhanced-dirvish-desktop-apps ()
   "Discover desktop applications across NixOS & XDG application dirs."
-  (let ((dirs '("/run/current-system/sw/share/applications"
-                "/etc/profiles/per-user/thinky/share/applications"
-                "~/.nix-profile/share/applications"
-                "~/.local/share/applications"
-                "/usr/share/applications"))
+  (let ((dirs (delete-dups
+               (append
+                (list "/run/current-system/sw/share/applications"
+                      (format "/etc/profiles/per-user/%s/share/applications" (user-login-name))
+                      "~/.nix-profile/share/applications"
+                      (expand-file-name "applications"
+                                        (or (getenv "XDG_DATA_HOME") "~/.local/share"))
+                      "/usr/share/applications")
+                (mapcar (lambda (d) (expand-file-name "applications" d))
+                        (split-string (or (getenv "XDG_DATA_DIRS") "") ":" t)))))
         apps)
     (dolist (d dirs)
       (let ((exp (expand-file-name d)))
@@ -1034,7 +1048,8 @@ Call ON-DONE only after a successful exit."
     (unless no-switch (pop-to-buffer buf))))
 
 (defun enhanced-dirvish-run-custom-action (&optional index focused-folder-only)
-  "Run custom action (by 1-based INDEX, or prompt) on selection or FOCUSED-FOLDER-ONLY (`; .`)."
+  "Run a custom action on the selection or FOCUSED-FOLDER-ONLY (`; .').
+INDEX is 1-based; without it, prompt for the action."
   (interactive)
   (let* ((targets (if focused-folder-only
                       (let ((f (enhanced-dirvish-current-file)))

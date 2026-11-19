@@ -44,6 +44,9 @@
   :config
   (add-to-list 'load-path (expand-file-name "~/Projects/emacs/enhanced-dirvish"))
   (require 'enhanced-dirvish)
+  ;; F5 refresh, F6 switch pane, F9 terminal, C-c s/t/c/x/v: keys Emacs
+  ;; reserves for users, so the package binds them only on request.
+  (setq enhanced-dirvish-file-manager-keys t)
   (enhanced-dirvish-setup))
 
 ;; Live refresh for Dired/Dirvish: watch dirs via inotify and re-read the

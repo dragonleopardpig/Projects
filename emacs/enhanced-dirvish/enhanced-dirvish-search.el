@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-search.el --- Search, pane filters, history, frecency & letter marks -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Implements Enhanced Dirvish search, live pane filtering (with subfolder depth &
 ;; Compact-mode preservation), global recursive `fd' search (C-k) with
@@ -197,7 +203,8 @@
   (message "Filter cleared"))
 
 (defun enhanced-dirvish-filter-pane (&optional include-subfolders)
-  "Filter current folder (via `dirvish-narrow' or live match; optional subfolders with `s')."
+  "Filter the current folder via `dirvish-narrow' or a live match.
+`s' includes subfolders."
   (interactive "P")
   (if (and (not include-subfolders)
            (not (enhanced-dirvish-ui-mouse-p))
@@ -294,7 +301,8 @@
     (delete-dups roots)))
 
 (defun enhanced-dirvish-search-activate-at-point ()
-  "Open searched file/folder at point (or containing folder per `search-open-files-directly')."
+  "Open the searched file or folder at point.
+Or its folder, as `search-open-files-directly' chooses."
   (interactive)
   (let ((p (or (get-text-property (line-beginning-position) 'enhanced-dirvish-search-path)
                (user-error "No search result on this line"))))

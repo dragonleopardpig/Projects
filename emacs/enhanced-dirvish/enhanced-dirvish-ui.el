@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-ui.el --- Mouse dialogs and keyboard prompts -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; File actions retain their input method through all follow-up questions.
 ;; Mouse actions use native menus, file choosers and GTK text/password dialogs;
@@ -9,6 +15,10 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+
+;; Graphical builds only; callers check `display-graphic-p' first.
+(declare-function x-file-dialog "xfns.c"
+                  (prompt dir &optional default-filename mustmatch only-dir-p))
 
 (defvar enhanced-dirvish-ui-input-method nil
   "Input method for the active action: `mouse', `keyboard', or nil to detect.

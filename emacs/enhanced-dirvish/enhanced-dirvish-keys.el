@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-keys.el --- Keymaps, chords, Settings, Diagnostics, Help & Menus -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Dual keymap engine (Default Desktop Mode + 10xer Modal/Chord Mode),
 ;; chord indicator UI, dynamic Transient Context Menu, interactive Settings &
@@ -20,10 +26,66 @@
 (require 'enhanced-dirvish-search)
 (require 'enhanced-dirvish-ops)
 
+;;;; Explorer/Nemo-Style Keys Reserved for Users (opt-in)
+
+(defconst enhanced-dirvish--file-manager-bindings
+  '((enhanced-dirvish-default-keymap
+     ("<f5>" . enhanced-dirvish-refresh-active-view)
+     ("<f6>" . enhanced-dirvish-switch-other-pane)
+     ("<f9>" . enhanced-dirvish-toggle-pane-terminal)
+     ("C-c s" . enhanced-dirvish-sort-menu)
+     ("C-c t" . enhanced-dirvish-toggle-pane-terminal)
+     ("C-c c" . enhanced-dirvish-copy-selection)
+     ("C-c x" . enhanced-dirvish-cut-selection)
+     ("C-c v" . enhanced-dirvish-paste-keep-both))
+    (enhanced-dirvish-compact-mode-map ("<f5>" . enhanced-dirvish-compact-refresh))
+    (enhanced-dirvish-icons-mode-map ("<f5>" . enhanced-dirvish-icons-refresh))
+    (enhanced-dirvish-computer-mode-map ("<f5>" . enhanced-dirvish-computer-refresh))
+    (enhanced-dirvish-trash-mode-map ("<f5>" . enhanced-dirvish-trash-refresh))
+    (enhanced-dirvish-recent-mode-map ("<f5>" . enhanced-dirvish-recent-refresh))
+    (enhanced-dirvish-preview-read-mode-map ("C-c q" . enhanced-dirvish-preview-read-leave))
+    (enhanced-dirvish-preview-edit-mode-map
+     ("C-c q" . enhanced-dirvish-preview-edit-exit)
+     ("C-c k" . enhanced-dirvish-preview-edit-abort)))
+  "Keys bound when `enhanced-dirvish-file-manager-keys' is on, by keymap.")
+
+(defun enhanced-dirvish-apply-file-manager-keys ()
+  "Bind or unbind the keys of `enhanced-dirvish-file-manager-keys'."
+  (pcase-dolist (`(,map . ,bindings) enhanced-dirvish--file-manager-bindings)
+    (when (and (boundp map) (keymapp (symbol-value map)))
+      (pcase-dolist (`(,key . ,command) bindings)
+        (define-key (symbol-value map) (kbd key)
+                    (and enhanced-dirvish-file-manager-keys command))))))
+
+(defcustom enhanced-dirvish-file-manager-keys nil
+  "Non-nil binds Explorer/Nemo-style keys that Emacs leaves to users.
+These are F5 (refresh), F6 (switch split pane), F9 (pane terminal) and
+\\`C-c s', \\`C-c t', \\`C-c c', \\`C-c x' and \\`C-c v' (sort menu, pane
+terminal, copy, cut, paste) in browser buffers, and \\`C-c q' and \\`C-c k'
+\(leave, abort) in the preview reader and editor.  Emacs reserves F5-F9
+and \\`C-c' followed by a letter for users, so these are off by default;
+the same commands have other keys and menu entries.  Customize applies
+a change at once; set it with `setq' before `enhanced-dirvish-setup'."
+  :type 'boolean
+  :group 'enhanced-dirvish
+  :initialize #'custom-initialize-default
+  :set (lambda (symbol value)
+         (set-default symbol value)
+         (enhanced-dirvish-apply-file-manager-keys)))
+
+(defun enhanced-dirvish-file-manager-keys-for (command)
+  "Return the opt-in keys (strings) of COMMAND, or nil while they are off."
+  (when enhanced-dirvish-file-manager-keys
+    (delete-dups
+     (cl-loop for (_map . bindings) in enhanced-dirvish--file-manager-bindings
+              append (cl-loop for (key . cmd) in bindings
+                              when (eq cmd command) collect key)))))
+
 ;;;; Active Chord Hint Engine
 
 (defun enhanced-dirvish-chord--with-hint (label table &optional handler)
-  "Display interactive chord hint LABEL, read key, dispatch in TABLE alist or HANDLER."
+  "Show chord hint LABEL, read a key and dispatch it.
+The key is looked up in the alist TABLE or passed to HANDLER."
   (let ((enhanced-dirvish-active-chord label))
     (force-mode-line-update t)
     (unwind-protect
@@ -114,7 +176,8 @@
     (enhanced-dirvish-chord--with-hint "; . _" (reverse table))))
 
 (defun enhanced-dirvish-chord-actions ()
-  "Execute `;` Actions chord (`t` terminal, `c` compress, `e`/`E` extract, `1..9`, `.`)."
+  "Execute the `;' Actions chord.
+Keys: `t' terminal, `c' compress, `e'/`E' extract, `1'..`9', `.'."
   (interactive)
   (let ((acts (enhanced-dirvish-actions-load))
         (table `((?t "Terminal" . ,#'enhanced-dirvish-open-external-terminal)
@@ -359,7 +422,7 @@ Shift-F10."
     ("2" "Icons Grid View" enhanced-dirvish-view-icons)
     ("3" "List / Tree View" enhanced-dirvish-view-list)
     ("4" "Compact View" enhanced-dirvish-view-compact)
-    ("S" "Sort By… (C-c s)" enhanced-dirvish-sort-menu)]
+    ("S" "Sort By…" enhanced-dirvish-sort-menu)]
    ["File Operations"
     ("y" "Copy" enhanced-dirvish-copy-selection)
     ("x" "Cut" enhanced-dirvish-cut-selection)
@@ -385,7 +448,7 @@ Shift-F10."
     ("s" "Split Extra Pane (F3)" enhanced-dirvish-toggle-extra-pane)
     (">" "Copy to Other Pane" enhanced-dirvish-copy-to-other-pane)
     ("<" "Move to Other Pane" enhanced-dirvish-move-to-other-pane)
-    ("t" "Pane Terminal (C-` / F9)" enhanced-dirvish-toggle-pane-terminal)
+    ("t" "Pane Terminal (C-`)" enhanced-dirvish-toggle-pane-terminal)
     ("C" "Customize Folder Color/Icon" enhanced-dirvish-customize-folder)
     ("i" "Properties (M-RET)" enhanced-dirvish-show-properties-for-path)
     ("a" "Run Custom Action…" enhanced-dirvish-run-custom-action)
@@ -552,7 +615,8 @@ Shift-F10."
                     (,(if tenx "H / L / M-← / M-→" "M-← / M-→") "Pane History Back / Forward")
                     ("M-↑ / M-↓" "Parent folder / Make First Column")
                     ("RET / Double-Click" "Open Folder / Direct-Edit File in Preview Pane")
-                    ("C-← / C-c q / C-c k" "Leave Preview or Edit (Save Prompt) / Exit Left / Abort Edits")
+                    (,(if enhanced-dirvish-file-manager-keys "C-← / C-c C-c or C-c q / C-c C-k or C-c k" "C-← / C-c C-c / C-c C-k")
+                     "Leave Preview or Edit (Save Prompt) / Exit Left / Abort Edits")
                     (,(if tenx "SPC / i / M-i" "SPC / M-i") "Preview File (Keep Focus) / Toggle Peek Drawer")
                     ("C-RET / S-RET" "Open in New Tab / New Frame")
                     ("C-l / g SPC" "Edit Location (~/, computer:///, trash:///, recent:///, sftp://, admin:///)")
@@ -595,7 +659,8 @@ Shift-F10."
                     ("Menu bar → Enhanced Dirvish" "All file-manager commands; irrelevant actions are greyed out")
                     ("C-1 / C-2 / C-3 / C-4" "Columns / Icons Grid / List (Tree) / Compact View")
                     ("Click View…" "Choose a layout from the header menu; the current view is checked")
-                    ("C-c s / Click Sort By…" "Sort menu in every directory layout; also S-F10 then S")
+                    (,(if enhanced-dirvish-file-manager-keys "C-c s / Click Sort By…" "Click Sort By…")
+                     "Sort menu in every directory layout; also S-F10 then S")
                     ("Sort By… options" "Name / Modification date / Size / Type or extension / Unsorted")
                     ("Sort order" "Ascending / Descending; Folders first; Natural names (file2 before file10)")
                     ("TAB" "Expand / Collapse folder subtree (List/Tree view)")
@@ -605,19 +670,20 @@ Shift-F10."
                     ("C-M-+ / C-M-- / C-M-0" "Icons Grid Thumbnail Size")
                     ("10xer: J / K" "Scroll Preview Window Down / Up"))
                    ("PANES, TERMINAL & TABS"
-                    ("F3 / F6" "Toggle Extra Split Pane / Switch Active Pane")
+                    (,(if enhanced-dirvish-file-manager-keys "F3 / F6" "F3 / C-x o") "Toggle Extra Split Pane / Switch Active Pane")
                     ("C-x 3 / C-x 2" "Split an Emacs window beside / below the whole browser")
                     ("C-x o / C-x 0 / C-x 1" "Other window / Close window group / Keep window group")
                     ("M-x transpose-frame" "Transpose browser, editor and terminal groups")
                     ("C-S-c / C-S-x" "Copy / Move selection to Other Pane (or Drag across panes)")
-                    ("C-` / F9 / C-M-t" "Toggle Pane Embedded Terminal / External Terminal")
+                    (,(if enhanced-dirvish-file-manager-keys "C-` / F9 / C-M-t" "C-` / C-M-t") "Toggle Pane Embedded Terminal / External Terminal")
                     (,(if tenx "C-n / C-S-b" "C-b / C-S-b") "Toggle / Focus Left Sidebar (c inside Sidebar: Rail mode)")
                     ("C-t / C-w / C-S-t" "New Tab / Close Tab / Reopen Closed Tab")
                     ("C-TAB / C-S-TAB" "Next / Previous Tab"))
                    ("FILES, SEARCH & ACTIONS"
                     (,(if tenx "C-k / f / s" "C-k / C-f") "Global Recursive Search / Filter Folder (10xer s: Include Subfolders)")
                     ("10xer: / / M-? / n / N" "Incremental Find / Backward Find / Repeat Forward / Backward")
-                    ("y / x / p / P" "Copy / Cut / Paste Keep Both / Paste Replace (10xer; Default: C-c c/x/v)")
+                    ("y / x / p / P" ,(concat "Copy / Cut / Paste Keep Both / Paste Replace (10xer; Default: "
+                                              (if enhanced-dirvish-file-manager-keys "C-c c/x/v" "context menu") ")"))
                     ("a / C-S-n / C-M-n" "Create Entry / New Folder / New Folder with Selection")
                     ("F2 / r / DEL / S-DEL" "Rename (supports sub/path) / Trash / Permanent Delete")
                     ("C-z / C-S-z" "Undo / Redo File Operation")
@@ -672,7 +738,6 @@ Shift-F10."
     (define-key map (kbd "C-2") #'enhanced-dirvish-view-icons)
     (define-key map (kbd "C-3") #'enhanced-dirvish-view-list)
     (define-key map (kbd "C-4") #'enhanced-dirvish-view-compact)
-    (define-key map (kbd "C-c s") #'enhanced-dirvish-sort-menu)
     (define-key map (kbd "C-=") #'enhanced-dirvish-preview-zoom-in)
     (define-key map (kbd "C-+") #'enhanced-dirvish-preview-zoom-in)
     (define-key map (kbd "C--") #'enhanced-dirvish-preview-zoom-out)
@@ -687,10 +752,6 @@ Shift-F10."
     ;; Split Pane / Terminal / Sidebar / Tabs
     (define-key map (kbd "<f3>") #'enhanced-dirvish-toggle-extra-pane)
     (define-key map (kbd "C-`") #'enhanced-dirvish-toggle-pane-terminal)
-    (define-key map (kbd "<f9>") #'enhanced-dirvish-toggle-pane-terminal)
-    (define-key map (kbd "C-c t") #'enhanced-dirvish-toggle-pane-terminal)
-    (define-key map (kbd "<f5>") #'enhanced-dirvish-refresh-active-view)
-    (define-key map (kbd "<f6>") #'enhanced-dirvish-switch-other-pane)
     (define-key map (kbd "C-S-c") #'enhanced-dirvish-copy-to-other-pane)
     (define-key map (kbd "C-S-x") #'enhanced-dirvish-move-to-other-pane)
     (define-key map (kbd "C-M-t") #'enhanced-dirvish-open-external-terminal)
@@ -717,9 +778,6 @@ Shift-F10."
     (define-key map (kbd "C-S-<next>") (lambda () (interactive) (enhanced-dirvish-tab-move 1)))
 
     ;; File Operations, Search & Mouse Click Navigation
-    (define-key map (kbd "C-c c") #'enhanced-dirvish-copy-selection)
-    (define-key map (kbd "C-c x") #'enhanced-dirvish-cut-selection)
-    (define-key map (kbd "C-c v") #'enhanced-dirvish-paste-keep-both)
     (define-key map (kbd "C-S-v") #'enhanced-dirvish-paste-content-drop)
     (define-key map (kbd "C-d") #'enhanced-dirvish-duplicate)
     (define-key map (kbd "C-S-n") #'enhanced-dirvish-new-folder)

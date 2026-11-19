@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-window-tests.el --- Window integration regression tests -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 (require 'ert)
 (require 'term)
 (require 'hl-line)

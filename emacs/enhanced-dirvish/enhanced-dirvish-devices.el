@@ -1,5 +1,11 @@
 ;;; enhanced-dirvish-devices.el --- Async devices, capacity bars, cloud/GVfs, and virtual locations -*- lexical-binding: t; -*-
 
+;; Copyright (C) 2026 dragonleopardpig
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;; This file is not part of GNU Emacs.  It is part of Enhanced Dirvish;
+;; see enhanced-dirvish.el for the full license notice.
+
 ;;; Commentary:
 ;; Device discovery, async non-blocking FUSE/cloud capacity probing,
 ;; synthetic placeholder capacity filtering (>= 1 PiB), custom per-drive
@@ -209,7 +215,8 @@ Returns nil when TOTAL <= 0 or TOTAL >=
         out))))
 
 (defun enhanced-dirvish-path-mount-kind (path)
-  "Return mount kind symbol for PATH (`cloud', `network', `removable', `remote', `local').
+  "Return the mount kind of PATH as a symbol.
+One of `cloud', `network', `removable', `remote' or `local'.
 Reads only cached /proc/mounts entries cleanly with zero blocking I/O."
   (cond
    ((not (and (stringp path) (not (string-empty-p path)))) 'local)
@@ -231,7 +238,8 @@ Reads only cached /proc/mounts entries cleanly with zero blocking I/O."
       best-kind))))
 
 (defun enhanced-dirvish-path-unsafe-probe-p (path)
-  "Return non-nil if probing inside PATH could hang on FUSE/network/removable mounts."
+  "Return non-nil if probing inside PATH could hang.
+That is the case on FUSE, network and removable mounts."
   (when (and (stringp path) (not (string-empty-p path)))
     (or (file-remote-p path)
         (memq (enhanced-dirvish-path-mount-kind path) '(cloud network remote removable))
@@ -254,7 +262,8 @@ Reads only cached /proc/mounts entries cleanly with zero blocking I/O."
         (downcase (directory-file-name path)))))
 
 (defun enhanced-dirvish-mount--fuse-or-remote-p (dev mp fstype)
-  "Return non-nil if mount requires non-blocking async probe instead of sync statvfs."
+  "Return non-nil if the mount needs a non-blocking async probe.
+A synchronous statvfs could hang on it."
   (or (string-prefix-p "fuse." fstype)
       (member fstype '("fuse" "cifs" "smbfs" "nfs" "nfs4" "sshfs" "davfs" "9p"))
       (string-search ":" dev)
@@ -608,7 +617,8 @@ PROBE-FUSE is non-nil."
 ;;;; Device Actions (Mount / Unmount / Eject / Unlock / Lock with GVfs Fallback)
 
 (defun enhanced-dirvish-device--run-async (label cmd on-done &optional stdin-text env-extra)
-  "Run external device command CMD asynchronously with optional STDIN-TEXT & ENV-EXTRA."
+  "Run external device command CMD asynchronously.
+Optional STDIN-TEXT and ENV-EXTRA are passed on to it."
   (let* ((process-environment (if env-extra
                                   (append env-extra process-environment)
                                 process-environment))
@@ -765,7 +775,8 @@ PROBE-FUSE is non-nil."
                 (or op-name "This action") loc)))
 
 (defun enhanced-dirvish-resolve-location-uri (uri)
-  "Translate URI (`~', `admin:///', `sftp://', `smb://', virtual URIs) to an open target."
+  "Translate URI to a target that can be opened.
+URI may be `~', `admin:///', `sftp://', `smb://' or a virtual URI."
   (let ((u (string-trim (or uri ""))))
     (cond
      ((member u '("computer://" "computer:///")) "computer:///")
@@ -820,7 +831,6 @@ PROBE-FUSE is non-nil."
     (define-key map (kbd "<mouse-1>") #'enhanced-dirvish-computer-mouse-open)
     (define-key map (kbd "<mouse-2>") #'enhanced-dirvish-computer-mouse-open)
     (define-key map (kbd "<double-mouse-1>") #'enhanced-dirvish-computer-mouse-open)
-    (define-key map (kbd "<f5>") #'enhanced-dirvish-computer-refresh)
     (define-key map (kbd "g") #'enhanced-dirvish-computer-refresh)
     map)
   "Keymap for `computer:///' buffer.")
@@ -1031,7 +1041,6 @@ PROBE-FUSE is non-nil."
     (define-key map (kbd "<mouse-2>") #'enhanced-dirvish-trash-mouse-restore)
     (define-key map (kbd "<double-mouse-1>") #'enhanced-dirvish-trash-mouse-restore)
     (define-key map (kbd "g") #'enhanced-dirvish-trash-refresh)
-    (define-key map (kbd "<f5>") #'enhanced-dirvish-trash-refresh)
     map))
 
 (defun enhanced-dirvish-trash-mouse-select (event)
@@ -1094,7 +1103,7 @@ PROBE-FUSE is non-nil."
       (user-error "No trashed item on this line")))
 
 (defun enhanced-dirvish-trash-restore-item (item)
-  "Restore trashed ITEM back to its original path (preserving non-overwrite safety)."
+  "Restore trashed ITEM to its original path, asking before replacing a file."
   (let* ((src (plist-get item :file))
          (info (plist-get item :info))
          (dest (plist-get item :orig))
@@ -1157,7 +1166,8 @@ PROBE-FUSE is non-nil."
 ;;;; Virtual Buffer: recent:///
 
 (defun enhanced-dirvish-recent-files ()
-  "Collect recent existing local files from `recently-used.xbel' and `recentf-list'."
+  "Collect recent existing local files.
+They come from `recently-used.xbel' and `recentf-list'."
   (let ((seen (make-hash-table :test #'equal))
         out
         (xbel (expand-file-name "recently-used.xbel"
@@ -1190,7 +1200,6 @@ PROBE-FUSE is non-nil."
     (define-key map (kbd "<mouse-2>") #'enhanced-dirvish-recent-mouse-activate)
     (define-key map (kbd "<double-mouse-1>") #'enhanced-dirvish-recent-mouse-activate)
     (define-key map (kbd "g") #'enhanced-dirvish-recent-refresh)
-    (define-key map (kbd "<f5>") #'enhanced-dirvish-recent-refresh)
     map))
 
 (defun enhanced-dirvish-recent-mouse-click (event)
@@ -1282,7 +1291,8 @@ PROBE-FUSE is non-nil."
 ;;;; Network View: network:///
 
 (defun enhanced-dirvish-connect-server (&optional uri)
-  "Prompt for a network or admin URI (`sftp://', `smb://', `ssh://', `admin:///') and open it."
+  "Prompt for a network or admin URI and open it.
+The URI is `sftp://', `smb://', `ssh://' or `admin:///'."
   (interactive)
   (let ((raw (or uri (enhanced-dirvish-ui-read-string "Connect to server (sftp://, smb://, ssh://, admin:///): "
                                   "sftp://"))))
