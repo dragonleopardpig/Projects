@@ -7,18 +7,20 @@
 ;; see enhanced-dirvish.el for the full license notice.
 
 ;;; Commentary:
-;; Extends kernel-backed `filenotify' live updates uniformly across all local
-;; Enhanced Dirvish browser views (Columns/List `dired-mode', `enhanced-dirvish-compact-mode',
-;; `enhanced-dirvish-icons-mode'), Miller parent columns (`dirvish-directory-view-mode'),
-;; expanded subtrees (`dirvish-subtree'), hovered subfolder previews, virtual
-;; Trash/Recent views (`enhanced-dirvish-trash-mode', `enhanced-dirvish-recent-mode'), and
-;; `*Enhanced Dirvish Sidebar*' (`Trash (N)' / Pinned Bookmarks).
+;; Extends kernel-backed `filenotify' live updates across all local
+;; Enhanced Dirvish browser views: Columns/List (`dired-mode'),
+;; `enhanced-dirvish-compact-mode' and `enhanced-dirvish-icons-mode',
+;; Miller parent columns (`dirvish-directory-view-mode'), expanded
+;; subtrees (`dirvish-subtree'), hovered subfolder previews, the virtual
+;; Trash and Recent views, and `*Enhanced Dirvish Sidebar*' (`Trash (N)'
+;; and Pinned Bookmarks).
 ;;
-;; Skips TRAMP remote paths and mounts flagged by `enhanced-dirvish-path-unsafe-probe-p'
-;; (cloud/FUSE/network/removable) to avoid blocking I/O or UI stalls, and always
-;; invalidates thumbnail + fallback text-preview caches while preserving
-;; `enhanced-dirvish-preview-edit-mode' buffers and `enhanced-dirvish-preview-read-mode' reading
-;; position.
+;; Skips TRAMP remote paths and mounts flagged by
+;; `enhanced-dirvish-path-unsafe-probe-p' (cloud, FUSE, network,
+;; removable) to avoid blocking I/O, and always invalidates thumbnail
+;; and fallback text-preview caches while preserving buffers in
+;; `enhanced-dirvish-preview-edit-mode' and the reading position in
+;; `enhanced-dirvish-preview-read-mode'.
 
 ;;; Code:
 
@@ -38,12 +40,12 @@
 (declare-function dirvish--preview-update "dirvish")
 (declare-function dirvish-preview-dispatch "dirvish")
 (declare-function dirvish--render-attrs "dirvish")
-(declare-function dv-preview-window "dirvish")
-(declare-function dv-preview-hash "dirvish")
-(declare-function dv-parent-hash "dirvish")
-(declare-function dv-index "dirvish")
-(declare-function dv-timestamp "dirvish")
-(declare-function dv-preview-buffers "dirvish")
+(declare-function dv-preview-window "dirvish" (cl-x) t)
+(declare-function dv-preview-hash "dirvish" (cl-x) t)
+(declare-function dv-parent-hash "dirvish" (cl-x) t)
+(declare-function dv-index "dirvish" (cl-x) t)
+(declare-function dv-timestamp "dirvish" (cl-x) t)
+(declare-function dv-preview-buffers "dirvish" (cl-x) t)
 (declare-function enhanced-dirvish--parent-buffer-filter "enhanced-dirvish")
 
 ;;;; State & Compatibility Aliases

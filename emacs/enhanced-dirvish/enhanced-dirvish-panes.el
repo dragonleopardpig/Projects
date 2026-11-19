@@ -22,9 +22,9 @@
 (require 'enhanced-dirvish-devices)
 (require 'enhanced-dirvish-views)
 
-(declare-function vterm "vterm" (&optional buffer-name))
-(declare-function vterm-send-string "vterm" (string &optional paste-p))
-(declare-function vterm-copy-mode "vterm" (&optional arg))
+(declare-function vterm "ext:vterm" (&optional buffer-name))
+(declare-function vterm-send-string "ext:vterm" (string &optional paste-p))
+(declare-function vterm-copy-mode "ext:vterm" (&optional arg))
 (declare-function enhanced-dirvish-record-history "enhanced-dirvish-search" (pane dir))
 (declare-function enhanced-dirvish-windows-display-sidebar "enhanced-dirvish-windows" (buffer width))
 (declare-function enhanced-dirvish-windows-display-terminal "enhanced-dirvish-windows" (main height pane))

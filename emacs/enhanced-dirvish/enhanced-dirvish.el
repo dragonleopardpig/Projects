@@ -2,8 +2,9 @@
 
 ;; Copyright (C) 2026 dragonleopardpig
 
-;; Author: dragonleopardpig
-;; Maintainer: dragonleopardpig
+;; Author: dragonleopardpig <https://github.com/dragonleopardpig>
+;; Assisted-by: Claude:claude-opus-5-5
+;; Maintainer: dragonleopardpig <https://github.com/dragonleopardpig>
 ;; URL: https://github.com/dragonleopardpig/enhanced-dirvish
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "29.1") (dirvish "2.0"))
@@ -67,8 +68,8 @@
 (require 'enhanced-dirvish-menu)
 (require 'enhanced-dirvish-windows)
 
-(declare-function dashboard-insert-navigator "dashboard")
-(declare-function dashboard-insert-items "dashboard")
+(declare-function dashboard-insert-navigator "ext:dashboard-widgets")
+(declare-function dashboard-insert-items "ext:dashboard")
 
 (defun enhanced-dirvish--sync-auto-revert ()
   "Disable Dired auto-revert and notify watches on FUSE/cloud/remote mounts."

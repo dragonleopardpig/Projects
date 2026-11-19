@@ -810,7 +810,7 @@ URI may be `~', `admin:///', `sftp://', `smb://' or a virtual URI."
 
 ;;;; Virtual Buffer Modes: computer:///, trash:///, recent:///, network:///
 
-(declare-function enhanced-dirvish-open-location "enhanced-dirvish-panes" (loc))
+(declare-function enhanced-dirvish-open-location "enhanced-dirvish-panes" (loc &optional record-history))
 (declare-function enhanced-dirvish-show-properties-for-path "enhanced-dirvish-ops" (path &optional device))
 
 (defvar enhanced-dirvish-computer-mode-map
