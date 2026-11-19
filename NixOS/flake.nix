@@ -52,10 +52,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
-    hyprfm = {
-      url = "github:dragonleopardpig/hyprfm";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # No nixpkgs follows: modules/hyprfm.nix builds HyprFM through its overlay
+    # against OUR nixpkgs (same Qt as the desktop); hyprfm's own nixpkgs pin is
+    # only where its overlay takes zig_0_17 (build-time, for the built-in
+    # terminal) while our nixpkgs has none.
+    hyprfm.url = "github:dragonleopardpig/hyprfm";
   };
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:

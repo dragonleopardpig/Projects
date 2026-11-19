@@ -1,7 +1,13 @@
 { inputs, pkgs, lib, ... }:
 {
+  # hyprfm's overlay builds pkgs.hyprfm against this system's nixpkgs, so it
+  # shares the desktop's Qt. Its built-in terminal needs zig_0_17 at build
+  # time; while our nixpkgs lacks it the overlay takes zig from hyprfm's own
+  # nixpkgs pin (flake.nix: no follows), and the terminal is built in.
+  nixpkgs.overlays = [ inputs.hyprfm.overlays.default ];
+
   environment.systemPackages = [
-    inputs.hyprfm.packages.${pkgs.stdenv.hostPlatform.system}.default
+    pkgs.hyprfm
     pkgs.gvfs
     pkgs.exiftool
     pkgs.ntfs3g
