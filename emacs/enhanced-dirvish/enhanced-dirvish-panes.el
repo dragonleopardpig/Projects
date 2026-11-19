@@ -382,16 +382,14 @@ Return non-nil if the sidebar was newly opened and rendered."
         (pcase mode
           ('compact
            (enhanced-dirvish--flatten-layout)
-           (let ((buf (get-buffer-create (format "*Enhanced Dirvish Compact: %s*"
-                                                 (file-name-nondirectory (directory-file-name resolved))))))
+           (let ((buf (enhanced-dirvish-view--buffer "Compact" resolved)))
              (switch-to-buffer buf)
              (enhanced-dirvish-compact-mode)
              (setq-local enhanced-dirvish-local-view-mode 'compact)
              (enhanced-dirvish-compact-render resolved)))
           ('icons
            (enhanced-dirvish--flatten-layout)
-           (let ((buf (get-buffer-create (format "*Enhanced Dirvish Icons: %s*"
-                                                 (file-name-nondirectory (directory-file-name resolved))))))
+           (let ((buf (enhanced-dirvish-view--buffer "Icons" resolved)))
              (switch-to-buffer buf)
              (enhanced-dirvish-icons-mode)
              (setq-local enhanced-dirvish-local-view-mode 'icons)

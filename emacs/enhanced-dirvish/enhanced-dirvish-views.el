@@ -1009,6 +1009,24 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
 (defvar-local enhanced-dirvish-compact-col-width 28 "Current column stride in Compact view.")
 (defvar-local enhanced-dirvish-compact-rows 20 "Row count per vertical column in Compact view.")
 
+(defun enhanced-dirvish-view--buffer (label dir)
+  "Return the LABEL (\"Compact\" or \"Icons\") view buffer for DIR.
+The buffer is for the selected window.  A view buffer is named after its
+folder alone, so one shown in another window (the other split pane, or
+another frame) is never taken: rendering a different folder into it would
+move that window too, as with a folder holding a same-named subfolder."
+  (let* ((key (directory-file-name (expand-file-name dir)))
+         (nm (file-name-nondirectory key))
+         (base (format "*Enhanced Dirvish %s: %s" label (if (string-empty-p nm) "/" nm)))
+         (name (concat base "*"))
+         (n 1)
+         (win (selected-window)))
+    (while (when-let ((buf (get-buffer name)))
+             (cl-some (lambda (w) (not (eq w win)))
+                      (get-buffer-window-list buf nil t)))
+      (setq name (format "%s<%d>*" base (cl-incf n))))
+    (get-buffer-create name)))
+
 (defvar enhanced-dirvish-mouse--inhibit-preview nil
   "Non-nil while tracking a live mouse drag selection to avoid preview churn.")
 
@@ -3031,8 +3049,7 @@ folder cannot itself become the drop target."
          (enhanced-dirvish--flatten-layout))
        (when (fboundp 'enhanced-dirvish-sidebar-ensure)
          (enhanced-dirvish-sidebar-ensure))
-       (let ((buf (get-buffer-create (format "*Enhanced Dirvish Compact: %s*"
-                                             (file-name-nondirectory (directory-file-name dir))))))
+       (let ((buf (enhanced-dirvish-view--buffer "Compact" dir)))
          (switch-to-buffer buf)
          (enhanced-dirvish-compact-mode)
          (setq-local enhanced-dirvish-local-view-mode 'compact)
@@ -3042,8 +3059,7 @@ folder cannot itself become the drop target."
          (enhanced-dirvish--flatten-layout))
        (when (fboundp 'enhanced-dirvish-sidebar-ensure)
          (enhanced-dirvish-sidebar-ensure))
-       (let ((buf (get-buffer-create (format "*Enhanced Dirvish Icons: %s*"
-                                             (file-name-nondirectory (directory-file-name dir))))))
+       (let ((buf (enhanced-dirvish-view--buffer "Icons" dir)))
          (switch-to-buffer buf)
          (enhanced-dirvish-icons-mode)
          (setq-local enhanced-dirvish-local-view-mode 'icons)

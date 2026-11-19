@@ -1724,6 +1724,86 @@
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory enhanced-dirvish-state-dir t)))))
 
+(ert-deftest enhanced-dirvish-test-split-panes-same-named-folders-stay-apart ()
+  "Entering a folder in one split pane never moves the other pane.
+The user's steps: F3, both panes in an unzipped B90120A-1/, then Enter on
+its B90120A-1/ subfolder in one pane.  Compact and Icons buffers are named
+after the folder, so the second pane must not reuse the first one's."
+  (let* ((tmp (make-temp-file "enhanced-dirvish-split-same-" t))
+         (outer (expand-file-name "B90120A-1" tmp))
+         (inner (expand-file-name "B90120A-1" outer))
+         (src-a (expand-file-name "a/src" tmp))
+         (src-b (expand-file-name "b/src" tmp))
+         (enhanced-dirvish-state-dir (make-temp-file "enhanced-dirvish-split-st-" t))
+         (enhanced-dirvish-state-file (expand-file-name "prefs.eld" enhanced-dirvish-state-dir))
+         (enhanced-dirvish-tabs-state-file (expand-file-name "tabs.eld" enhanced-dirvish-state-dir))
+         (enhanced-dirvish-history-file (expand-file-name "history.eld" enhanced-dirvish-state-dir))
+         (enhanced-dirvish-sidebar-window nil)
+         ;; As `enhanced-dirvish-setup' does, so F3 and RET are the real keys.
+         (dired-mode-hook (list #'enhanced-dirvish--enable-in-browser))
+         (enhanced-dirvish-compact-mode-hook (list #'enhanced-dirvish--enable-in-browser))
+         (enhanced-dirvish-icons-mode-hook (list #'enhanced-dirvish--enable-in-browser))
+         (same (lambda (a b) (equal (directory-file-name a) (directory-file-name b))))
+         (shown (lambda (w)
+                  (with-current-buffer (window-buffer w)
+                    (or enhanced-dirvish-view-directory default-directory)))))
+    (dolist (d (list inner src-a src-b))
+      (make-directory d t))
+    (with-temp-file (expand-file-name "part.step" inner) (insert "x"))
+    (unwind-protect
+        (dolist (mode '(compact icons))
+          (let ((enhanced-dirvish-prefs-current
+                 (enhanced-dirvish-prefs--create :browser-mode mode :restore-tabs nil
+                                                 :sidebar-expanded nil))
+                (enhanced-dirvish-workspace-tabs nil)
+                (enhanced-dirvish-closed-tabs nil)
+                (enhanced-dirvish-active-tab-index 0))
+            (save-window-excursion
+              (delete-other-windows)
+              (enhanced-dirvish-open-location outer)
+              (should (eq (key-binding (kbd "<f3>")) #'enhanced-dirvish-toggle-extra-pane))
+              (call-interactively (key-binding (kbd "<f3>")))
+              (enhanced-dirvish-open-location outer t)
+              (let* ((tab (enhanced-dirvish-active-tab))
+                     (w1 (enhanced-dirvish-pane-state-window (enhanced-dirvish-tab-state-pane1 tab)))
+                     (w2 (enhanced-dirvish-pane-state-window (enhanced-dirvish-tab-state-pane2 tab))))
+                (should (funcall same (funcall shown w1) outer))
+                (should (funcall same (funcall shown w2) outer))
+                (should-not (eq (window-buffer w1) (window-buffer w2)))
+                ;; Enter on the same-named subfolder, in either pane.
+                (dolist (pair (list (cons w1 w2) (cons w2 w1)))
+                  (dolist (w (list (cdr pair) (car pair)))
+                    (select-window w)
+                    (enhanced-dirvish-panes--on-window-selection-change)
+                    (enhanced-dirvish-open-location outer t))
+                  (enhanced-dirvish-goto-file inner)
+                  (should (funcall same (enhanced-dirvish-current-file) inner))
+                  (call-interactively (key-binding (kbd "RET")))
+                  (should (funcall same (funcall shown (car pair)) inner))
+                  (should (funcall same (funcall shown (cdr pair)) outer)))
+                ;; Same-named folders in different places stay apart too.
+                (select-window w1)
+                (enhanced-dirvish-panes--on-window-selection-change)
+                (enhanced-dirvish-open-location src-a t)
+                (select-window w2)
+                (enhanced-dirvish-panes--on-window-selection-change)
+                (enhanced-dirvish-open-location src-b t)
+                (should (funcall same (funcall shown w1) src-a))
+                (should (funcall same (funcall shown w2) src-b))))))
+      (when (window-live-p enhanced-dirvish-sidebar-window)
+        (ignore-errors (delete-window enhanced-dirvish-sidebar-window))
+        (setq enhanced-dirvish-sidebar-window nil))
+      (when-let ((sb (get-buffer "*Enhanced Dirvish Sidebar*")))
+        (kill-buffer sb))
+      (dolist (b (buffer-list))
+        (when (buffer-live-p b)
+          (with-current-buffer b
+            (when (and default-directory
+                       (string-prefix-p (file-truename tmp) (file-truename default-directory)))
+              (kill-buffer b)))))
+      (ignore-errors (delete-directory tmp t))
+      (ignore-errors (delete-directory enhanced-dirvish-state-dir t)))))
+
 (ert-deftest enhanced-dirvish-test-multi-select-highlight-drag-and-context-copy ()
   "Multi-selection highlights across views and drags/right-clicks to copy or move across panes."
   (let* ((tmp (make-temp-file "enhanced-dirvish-multi-" t))
