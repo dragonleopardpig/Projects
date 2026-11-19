@@ -127,6 +127,31 @@ release_mounts() { # release_mounts <device>
 
 need_root() { [ "$(id -u)" = 0 ] || die "run as root (sudo $0 $PHASE)"; }
 
+# What an empty FAT partition still holds after Windows and a desktop saw it:
+# the indexer's state, an empty Recycle Bin, empty trash folders.  Anything
+# put in the bin or the trash is not a placeholder.
+placeholder() { # placeholder <find %y type> <path relative to the partition>
+  local kind=$1 rel=$2 top=${2%%/*} rest
+  rest=${rel#"$top"}
+  rest=${rest#/}
+  case "$top" in
+    'System Volume Information') return 0 ;;
+    "\$RECYCLE.BIN")
+      case "$rest" in
+        '') [ "$kind" = d ] ;;
+        desktop.ini | S-*/desktop.ini) [ "$kind" = f ] ;;
+        S-*) [ "$kind" = d ] && [[ $rest != */* ]] ;;
+        *) return 1 ;;
+      esac ;;
+    .Trash-*)
+      case "$rest" in
+        '' | info | files | expunged) [ "$kind" = d ] ;;
+        *) return 1 ;;
+      esac ;;
+    *) return 1 ;;
+  esac
+}
+
 # ---------------------------------------------------------------- devices --
 
 LUKS_PART="" DISK="" ESP_PART="" DATA_PART="" DATA_STATE=""
@@ -265,7 +290,8 @@ phase_stage() {
   say "Checking the data partition $DATA_PART is empty"
   local probe=$MNT/data-probe entries
   mnt_real "$probe" -o ro "$DATA_PART"
-  entries=$(find "$probe" -mindepth 1 -maxdepth 3 ! -path '*/System Volume Information*' 2>/dev/null | head -20 || true)
+  entries=$(find "$probe" -mindepth 1 -maxdepth 3 -printf '%y %P\n' 2>/dev/null |
+    while read -r kind rel; do placeholder "$kind" "$rel" || echo "$rel"; done | head -20 || true)
   umount "$probe"
   unset 'MOUNTS[${#MOUNTS[@]}-1]'
   [ -z "$entries" ] || die "$DATA_PART ($DATA_LABEL) is not empty; move these first:

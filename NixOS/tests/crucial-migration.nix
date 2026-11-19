@@ -93,10 +93,27 @@ pkgs.testers.runNixOSTest {
         assert "[dry-run] mkfs.ext4" in out, out
         machine.succeed("test \"$(blkid -s LABEL -o value /dev/vdb3)\" = CRUCIALDATA")
 
-    with subtest("stage refuses a non-empty CRUCIALDATA, and copy before stage"):
-        machine.succeed("mkdir -p /mnt/d && mount /dev/vdb3 /mnt/d && touch /mnt/d/photo.jpg && umount /mnt/d")
-        assert "not empty" in migrate_fails("stage")
-        machine.succeed("mount /dev/vdb3 /mnt/d && rm /mnt/d/photo.jpg && umount /mnt/d")
+    with subtest("stage refuses a non-empty CRUCIALDATA (bin and trash too), and copy before stage"):
+        # What Windows and a desktop leave on an empty partition, as on the
+        # real CRUCIALDATA; these stay for the stage below.
+        machine.succeed(
+            "mkdir -p /mnt/d && mount /dev/vdb3 /mnt/d",
+            "mkdir -p '/mnt/d/System Volume Information' '/mnt/d/$RECYCLE.BIN/S-1-5-21-7'"
+            " /mnt/d/.Trash-1000/info /mnt/d/.Trash-1000/files",
+            "touch '/mnt/d/System Volume Information/WPSettings.dat' '/mnt/d/$RECYCLE.BIN/desktop.ini'"
+            " '/mnt/d/$RECYCLE.BIN/S-1-5-21-7/desktop.ini'",
+            "touch /mnt/d/photo.jpg /mnt/d/.Trash-1000/files/old.jpg '/mnt/d/$RECYCLE.BIN/S-1-5-21-7/$RAB12.jpg'",
+            "umount /mnt/d",
+        )
+        out = migrate_fails("stage")
+        for listed in ["photo.jpg", ".Trash-1000/files/old.jpg", "S-1-5-21-7/$RAB12.jpg"]:
+            assert listed in out, out
+        assert "not empty" in out and "desktop.ini" not in out and "WPSettings" not in out, out
+        machine.succeed(
+            "mount /dev/vdb3 /mnt/d",
+            "rm /mnt/d/photo.jpg /mnt/d/.Trash-1000/files/old.jpg '/mnt/d/$RECYCLE.BIN/S-1-5-21-7/$RAB12.jpg'",
+            "umount /mnt/d",
+        )
         assert "has not run" in migrate_fails("copy")
 
     with subtest("stage: exact image + LUKS header on CRUCIAL-STAGE"):
