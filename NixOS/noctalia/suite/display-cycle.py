@@ -29,125 +29,36 @@ def is_lid_closed(lid_glob: str = "/proc/acpi/button/lid/*/state") -> bool:
     return False
 
 
-def _primary_drm_card(wlr_drm_devices: str | None = None) -> str:
-    if wlr_drm_devices is None:
-        wlr_drm_devices = os.environ.get("WLR_DRM_DEVICES", "")
-    first_entry = next((part.strip() for part in wlr_drm_devices.split(":") if part.strip()), "")
-    return os.path.basename(first_entry) if first_entry else ""
-
-
-def _connected_cards_for_output(output_name: str, drm_sysfs: str = "/sys/class/drm") -> list[str]:
-    cards: list[str] = []
-    if not output_name:
-        return cards
-    pattern = os.path.join(drm_sysfs, f"card*-{output_name}", "status")
-    for status_path in sorted(glob.glob(pattern)):
-        try:
-            with open(status_path, "r", encoding="utf-8") as f:
-                if f.read().strip() == "connected":
-                    conn_dir = os.path.basename(os.path.dirname(status_path))
-                    cards.append(conn_dir.split("-", 1)[0])
-        except Exception:
-            pass
-    return cards
-
-
-def is_output_on_secondary_gpu(
-    output_name: str,
-    drm_sysfs: str = "/sys/class/drm",
-    wlr_drm_devices: str | None = None,
-) -> bool:
-    primary_card = _primary_drm_card(wlr_drm_devices)
-    if not primary_card or not output_name:
-        return False
-    connected_cards = _connected_cards_for_output(output_name, drm_sysfs=drm_sysfs)
-    return bool(connected_cards) and primary_card not in connected_cards
-
-
 def is_internal_on_secondary_gpu(
     internal_name: str,
     drm_sysfs: str = "/sys/class/drm",
     wlr_drm_devices: str | None = None,
 ) -> bool:
-    return is_output_on_secondary_gpu(internal_name, drm_sysfs=drm_sysfs, wlr_drm_devices=wlr_drm_devices)
-
-
-def secondary_external_vendor(
-    external_names: list[str],
-    drm_sysfs: str = "/sys/class/drm",
-    wlr_drm_devices: str | None = None,
-) -> str:
-    primary_card = _primary_drm_card(wlr_drm_devices)
+    if not internal_name:
+        return False
+    if wlr_drm_devices is None:
+        wlr_drm_devices = os.environ.get("WLR_DRM_DEVICES", "")
+    first_entry = next((part.strip() for part in wlr_drm_devices.split(":") if part.strip()), "")
+    if not first_entry:
+        return False
+    primary_card = os.path.basename(first_entry)
     if not primary_card:
-        return ""
-    vendor_names = {"nvidia": "NVIDIA", "amdgpu": "AMD", "i915": "Intel", "xe": "Intel"}
-    for name in external_names:
-        for card in _connected_cards_for_output(name, drm_sysfs=drm_sysfs):
-            if card != primary_card:
-                uevent_path = os.path.join(drm_sysfs, card, "device", "uevent")
-                try:
-                    with open(uevent_path, "r", encoding="utf-8") as f:
-                        for line in f:
-                            if line.startswith("DRIVER="):
-                                drv = line.split("=", 1)[1].strip().lower()
-                                return vendor_names.get(drv, "external")
-                except Exception:
-                    pass
-                return "external"
-    return ""
+        return False
 
+    connected_cards: list[str] = []
+    pattern = os.path.join(drm_sysfs, f"card*-{internal_name}", "status")
+    for status_path in glob.glob(pattern):
+        try:
+            with open(status_path, "r", encoding="utf-8") as f:
+                if f.read().strip() == "connected":
+                    conn_dir = os.path.basename(os.path.dirname(status_path))
+                    connected_cards.append(conn_dir.split("-", 1)[0])
+        except Exception:
+            pass
 
-def get_boot_id(boot_id_path: str = "/proc/sys/kernel/random/boot_id") -> str:
-    try:
-        with open(boot_id_path, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except Exception:
-        return ""
-
-
-def get_next_mode_path() -> str:
-    state_home = os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
-    return os.path.join(state_home, "noctalia-suite", "next-display-mode")
-
-
-def read_staged_mode(path: str, boot_id_path: str = "/proc/sys/kernel/random/boot_id") -> str:
-    if not path or not os.path.exists(path):
-        return ""
-    try:
-        current_boot_id = get_boot_id(boot_id_path)
-        with open(path, "r", encoding="utf-8") as f:
-            parts = f.read().split()
-        if len(parts) != 2 or not current_boot_id or parts[0] != current_boot_id:
-            return ""
-        val = parts[1].strip().lower()
-        return "laptop" if val == "internal" else val
-    except Exception:
-        return ""
-
-
-def write_staged_mode(path: str, mode: str, boot_id_path: str = "/proc/sys/kernel/random/boot_id") -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    boot_id = get_boot_id(boot_id_path)
-    payload = f"{boot_id} {mode}\n" if boot_id else f"{mode}\n"
-    with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(path), suffix=".tmp", delete=False) as f:
-        f.write(payload)
-        tmp_name = f.name
-    os.replace(tmp_name, path)
-
-
-def clear_staged_mode(path: str) -> None:
-    try:
-        if path and os.path.exists(path):
-            os.remove(path)
-    except Exception:
-        pass
-
-
-def _notify(summary: str, body: str = "") -> None:
-    cmd = ["notify-send", "-a", "Displays", "-i", "video-display", summary]
-    if body:
-        cmd.append(body)
-    subprocess.run(cmd, check=False)
+    if not connected_cards or primary_card in connected_cards:
+        return False
+    return True
 
 
 def get_outputs() -> list[dict]:
@@ -251,7 +162,6 @@ def calculate_next_state(
     existing_sections: dict[str, dict],
     requested_mode: str = "",
     internal_on_secondary_gpu: bool = False,
-    staged_mode: str = "",
 ) -> tuple[str, dict[str, dict], str]:
     """Calculate the action, new sections dict, and user-facing message."""
     if not outputs:
@@ -281,29 +191,16 @@ def calculate_next_state(
     external_on = any(bool(o.get("enabled", False)) for o in externals)
 
     forced_message: str | None = None
-    if lid_closed:
+    if lid_closed or internal_on_secondary_gpu:
+        reason = "Laptop lid is closed" if lid_closed else "Re-login with lid open to use built-in display"
+        warning_action = "lid_closed_warning" if lid_closed else "gpu_locked_warning"
         if internal_on or not external_on:
             target_mode = "external"
-            forced_message = "External display only (Laptop lid is closed)"
+            forced_message = f"External display only ({reason})"
         elif requested_mode == "relayout":
             return "none", {}, ""
         else:
-            return "lid_closed_warning", {}, "External display only (Laptop lid is closed)"
-    elif internal_on_secondary_gpu:
-        if internal_on or not external_on:
-            target_mode = "external"
-            forced_message = "External display only (Re-login with lid open to use built-in display)"
-        elif requested_mode == "relayout":
-            return "none", {}, ""
-        elif requested_mode == "external":
-            if staged_mode:
-                return "unstage_intel", {}, "Staying on External display only"
-            return "gpu_locked_warning", {}, "External display only (Re-login with lid open to use built-in display)"
-        else:
-            if staged_mode and requested_mode == "":
-                return "unstage_intel", {}, "Staying on External display only"
-            staged_target = "laptop" if requested_mode in ("laptop", "internal") else "extend"
-            return "stage_intel", {}, staged_target
+            return warning_action, {}, f"External display only ({reason})"
     else:
         if internal_on and external_on:
             current_mode = "extend"
@@ -315,9 +212,7 @@ def calculate_next_state(
             current_mode = "unknown"
 
         if requested_mode == "relayout":
-            if staged_mode in ("extend", "laptop"):
-                target_mode = staged_mode
-            elif not internal_on and not external_on:
+            if not internal_on and not external_on:
                 target_mode = "extend"
             else:
                 return "none", {}, ""
@@ -419,14 +314,11 @@ def main() -> None:
     outputs = get_outputs()
     lid_closed = is_lid_closed()
     internal = next((o for o in outputs if re.match(r"^(eDP|LVDS|DSI)-", o.get("name", ""))), None)
-    externals = [o.get("name", "") for o in outputs if not re.match(r"^(eDP|LVDS|DSI)-", o.get("name", ""))]
     internal_secondary = is_internal_on_secondary_gpu(internal["name"]) if internal else False
 
     config_home = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
     outputs_path = os.path.join(config_home, "umbriel", "outputs.toml")
     existing_sections = read_outputs_toml(outputs_path)
-    next_mode_path = get_next_mode_path()
-    staged_mode = read_staged_mode(next_mode_path)
 
     action, new_sections, message = calculate_next_state(
         outputs,
@@ -434,7 +326,6 @@ def main() -> None:
         existing_sections,
         requested_mode=arg,
         internal_on_secondary_gpu=internal_secondary,
-        staged_mode=staged_mode,
     )
 
     if action == "input":
@@ -447,30 +338,17 @@ def main() -> None:
         sys.exit(0)
 
     if action == "lid_closed_warning":
-        _notify("External display only", "Laptop lid is closed")
+        subprocess.run([
+            "notify-send", "-a", "Displays", "-i", "video-display",
+            "External display only", "Laptop lid is closed"
+        ], check=False)
         sys.exit(0)
 
     if action == "gpu_locked_warning":
-        _notify("External display only", "Re-login with lid open to use built-in display")
-        sys.exit(0)
-
-    if action == "stage_intel":
-        write_staged_mode(next_mode_path, message)
-        label = "Laptop" if message == "laptop" else "Extend"
-        _notify(
-            f"Queued Intel ({label}) for next login",
-            "HDMI stays on NVIDIA right now. Super+Escape to apply, or F7 again to cancel",
-        )
-        sys.exit(0)
-
-    if action == "unstage_intel":
-        clear_staged_mode(next_mode_path)
-        _notify("Canceled Intel switch", "Staying on direct NVIDIA External only")
-        sys.exit(0)
-
-    if action == "none":
-        if arg == "relayout":
-            clear_staged_mode(next_mode_path)
+        subprocess.run([
+            "notify-send", "-a", "Displays", "-i", "video-display",
+            "External display only", "Re-login with lid open to use built-in display"
+        ], check=False)
         sys.exit(0)
 
     if action == "apply":
@@ -488,14 +366,8 @@ def main() -> None:
             sys.exit(1)
 
         os.replace(tmp_name, outputs_path)
-        clear_staged_mode(next_mode_path)
         subprocess.run(["umbriel", "msg", "config-reload"], check=False)
-        body = ""
-        if message == "External displays":
-            vendor = secondary_external_vendor(externals)
-            if vendor:
-                body = f"Re-login (Super+Escape) for direct {vendor} GPU"
-        _notify(message, body)
+        subprocess.run(["notify-send", "-a", "Displays", "-i", "video-display", message], check=False)
         sys.exit(0)
 
 
