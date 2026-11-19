@@ -131,6 +131,7 @@ These settings in `default.nix` make it boot on any machine:
 - `boot.loader.grub.efiInstallAsRemovable = true` — installs GRUB to the UEFI fallback path so no firmware entries are needed
 - `boot.loader.efi.canTouchEfiVariables = lib.mkForce false` — won't modify host machine's EFI firmware
 - `boot.initrd.kernelModules = lib.mkForce []` — no NVIDIA in initrd (would fail on non-NVIDIA machines)
+- NVIDIA open driver from `../X299-SSD/nvidia.nix`, as on CRUCIAL-SSD (Turing or newer; inert without an NVIDIA GPU): the Predator's and Lenovo's HDMI ports are on the dGPU, so F7's external modes need it
 - `boot.plymouth.enable = lib.mkForce false` — disabled for GPU driver compatibility
 - Broad `initrd.availableKernelModules` — covers USB, AHCI, NVMe, SD card controllers
 - Both `kvm-intel` and `kvm-amd` included

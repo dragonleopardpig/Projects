@@ -8,6 +8,12 @@
     ./hardware-configuration.nix
     ./disko.nix
     ../universal-boot.nix
+    # The same NVIDIA setup as CRUCIAL-SSD, so F7's display modes and the
+    # NVIDIA-first GPU choice for external screens work here too: on the
+    # Predator (RTX 5070 Ti) and the Lenovo (RTX 4050) HDMI is wired to the
+    # dGPU, which nouveau cannot drive properly.  No PCI bus IDs (unlike
+    # M90aPro's nvidia-prime.nix); on machines without NVIDIA it never binds.
+    ../X299-SSD/nvidia.nix
   ];
 
   # Noctalia Greeter in place of SDDM (defaults to Noctalia Suite, keeping
