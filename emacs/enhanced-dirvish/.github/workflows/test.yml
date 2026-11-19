@@ -14,7 +14,7 @@ jobs:
       matrix:
         emacs: ['29.4', '30.1']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: purcell/setup-emacs@master
         with:
           version: ${{ matrix.emacs }}
@@ -27,13 +27,15 @@ jobs:
             (package-refresh-contents)
             (dolist (p '(dirvish transpose-frame dashboard package-lint))
               (package-install p)))"
-      - name: Byte-compile (warnings are errors)
+      - name: Byte-compile each file in its own Emacs (warnings are errors)
         run: |
-          emacs -Q --batch --eval "(progn
-            (require 'package) (package-initialize)
-            (add-to-list 'load-path default-directory)
-            (setq byte-compile-error-on-warn t))" \
-            -f batch-byte-compile $(ls enhanced-dirvish*.el | grep -v tests)
+          for f in $(ls enhanced-dirvish*.el | grep -v tests); do
+            emacs -Q --batch --eval "(progn
+              (require 'package) (package-initialize)
+              (add-to-list 'load-path default-directory)
+              (setq byte-compile-error-on-warn t))" -f batch-byte-compile "$f"
+            rm -f *.elc
+          done
       - name: package-lint
         run: |
           emacs -Q --batch --eval "(progn

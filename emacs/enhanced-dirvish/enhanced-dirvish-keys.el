@@ -49,14 +49,6 @@
      ("C-c k" . enhanced-dirvish-preview-edit-abort)))
   "Keys bound when `enhanced-dirvish-file-manager-keys' is on, by keymap.")
 
-(defun enhanced-dirvish-apply-file-manager-keys ()
-  "Bind or unbind the keys of `enhanced-dirvish-file-manager-keys'."
-  (pcase-dolist (`(,map . ,bindings) enhanced-dirvish--file-manager-bindings)
-    (when (and (boundp map) (keymapp (symbol-value map)))
-      (pcase-dolist (`(,key . ,command) bindings)
-        (define-key (symbol-value map) (kbd key)
-                    (and enhanced-dirvish-file-manager-keys command))))))
-
 (defcustom enhanced-dirvish-file-manager-keys nil
   "Non-nil binds Explorer/Nemo-style keys that Emacs leaves to users.
 These are F5 (refresh), F6 (switch split pane), F9 (pane terminal) and
@@ -72,6 +64,14 @@ a change at once; set it with `setq' before `enhanced-dirvish-setup'."
   :set (lambda (symbol value)
          (set-default symbol value)
          (enhanced-dirvish-apply-file-manager-keys)))
+
+(defun enhanced-dirvish-apply-file-manager-keys ()
+  "Bind or unbind the keys of `enhanced-dirvish-file-manager-keys'."
+  (pcase-dolist (`(,map . ,bindings) enhanced-dirvish--file-manager-bindings)
+    (when (and (boundp map) (keymapp (symbol-value map)))
+      (pcase-dolist (`(,key . ,command) bindings)
+        (define-key (symbol-value map) (kbd key)
+                    (and enhanced-dirvish-file-manager-keys command))))))
 
 (defun enhanced-dirvish-file-manager-keys-for (command)
   "Return the opt-in keys (strings) of COMMAND, or nil while they are off."

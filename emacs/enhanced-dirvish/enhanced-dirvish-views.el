@@ -33,6 +33,8 @@
 (declare-function image-size "image.c" (spec &optional pixels frame))
 
 (declare-function enhanced-dirvish-open-location "enhanced-dirvish-panes" (loc &optional record-history))
+(declare-function enhanced-dirvish--guard-not-self-contained "enhanced-dirvish-ops" (src dest-dir))
+(declare-function enhanced-dirvish-mouse-context-menu "enhanced-dirvish-keys" (event))
 (declare-function enhanced-dirvish-active-pane "enhanced-dirvish-panes" ())
 (declare-function enhanced-dirvish-active-tab "enhanced-dirvish-panes" ())
 (declare-function enhanced-dirvish-pane-active-p "enhanced-dirvish-panes" (&optional win))
