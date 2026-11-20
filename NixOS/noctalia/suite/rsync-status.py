@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect, stream, and trigger sync-projects rsync status for Noctalia Suite."""
+"""Inspect, configure, run, stream, and control rsync targets for Noctalia Suite."""
 
 from __future__ import annotations
 
@@ -14,28 +14,125 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
-TARGETS: tuple[tuple[str, str, str, str], ...] = (
-    ("projects", "Projects", "Projects", "Projects"),
-    ("scramble-public", "Scramble Public", "Documents/Scramble Public", "Documents/Scramble Public"),
-    ("scramble-references", "Scramble References", "Documents/Scramble References", "Documents/Scramble References"),
-    (
-        "trident-optics-attachment",
-        "trident-optics-attachment",
-        "Scramble Private/trident-optics-attachment",
-        "Scramble Private/trident-optics-attachment",
-    ),
-)
+DEFAULT_EXCLUDES: list[str] = [
+    ".devenv/",
+    ".direnv/",
+    "node_modules/",
+    ".venv/",
+    "__pycache__/",
+    ".pytest_cache/",
+    ".ruff_cache/",
+    ".mypy_cache/",
+    "/*/target/",
+    ".filen.trash.local/",
+    "cad_cache/",
+    "/Kraken-Optical-Simulator/attachment/References/",
+]
 
 _DONE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) done \(rsync status (\d+)\)\s*$")
 _START_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) start( \(dry run\))?\s*$")
 _SKIP_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (skipped|refused): (.+)\s*$")
 _TARGET_DONE_RE = re.compile(
-    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) target \[([a-z0-9-]+)\]: done \(status (\d+), (\d+)s(, dry run)?\)\s*$"
+    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) target \[([a-z0-9_-]+)\]: done \(status (\d+), (\d+)s(, dry run)?\)\s*$"
 )
 _TARGET_LINE_RE = re.compile(r'^TARGET="([^"]+)"')
+
+
+def _default_target_root(home: Path, script_path: Path | None = None) -> str:
+    user = os.environ.get("USER") or getpass.getuser()
+    default_target = f"/run/media/{user}/nixos/home/{user}"
+    if script_path and script_path.is_file():
+        try:
+            for line in script_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                m = _TARGET_LINE_RE.match(line.strip())
+                if m:
+                    raw = (
+                        m.group(1)
+                        .replace("${USER_NAME}", user)
+                        .replace("${USER:-thinky}", user)
+                        .replace("${USER}", user)
+                    )
+                    if "$" not in raw:
+                        return raw
+        except OSError:
+            pass
+    return default_target
+
+
+def default_targets(home: Path) -> list[dict[str, Any]]:
+    """Return the built-in sync-projects targets."""
+    return [
+        {
+            "id": "projects",
+            "name": "Projects",
+            "source": str(home / "Projects"),
+            "dest": "Projects",
+            "enabled": True,
+            "delete": True,
+            "excludes": [],
+        },
+        {
+            "id": "scramble-public",
+            "name": "Scramble Public",
+            "source": str(home / "Documents/Scramble Public"),
+            "dest": "Documents/Scramble Public",
+            "enabled": True,
+            "delete": True,
+            "excludes": [],
+        },
+        {
+            "id": "scramble-references",
+            "name": "Scramble References",
+            "source": str(home / "Documents/Scramble References"),
+            "dest": "Documents/Scramble References",
+            "enabled": True,
+            "delete": True,
+            "excludes": [],
+        },
+        {
+            "id": "trident-optics-attachment",
+            "name": "trident-optics-attachment",
+            "source": str(home / "Scramble Private/trident-optics-attachment"),
+            "dest": "Scramble Private/trident-optics-attachment",
+            "enabled": True,
+            "delete": True,
+            "excludes": [],
+        },
+    ]
+
+
+def default_config(home: Path, script_path: Path | None = None) -> dict[str, Any]:
+    return {
+        "version": 1,
+        "target_root": _default_target_root(home, script_path),
+        "excludes": list(DEFAULT_EXCLUDES),
+        "targets": default_targets(home),
+    }
+
+
+def _slugify(value: str, fallback: str = "target") -> str:
+    slug = re.sub(r"[^a-z0-9_-]+", "-", value.lower()).strip("-")
+    return slug or fallback
+
+
+def _atomic_write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as stream:
+            tmp = Path(stream.name)
+            json.dump(data, stream, indent=2)
+            stream.write("\n")
+        tmp.replace(path)
+    finally:
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -44,6 +141,143 @@ def _read_json(path: Path) -> dict[str, Any] | None:
         return data if isinstance(data, dict) else None
     except (OSError, ValueError, TypeError):
         return None
+
+
+def _normalize_config(raw: dict[str, Any], home: Path, script_path: Path | None = None) -> dict[str, Any]:
+    base = default_config(home, script_path)
+    target_root = str(raw.get("target_root") or base["target_root"]).strip()
+    excludes_raw = raw.get("excludes")
+    excludes = [str(x).strip() for x in excludes_raw if str(x).strip()] if isinstance(excludes_raw, list) else base["excludes"]
+
+    targets: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    raw_targets = raw.get("targets")
+    if isinstance(raw_targets, list):
+        for item in raw_targets:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            source = str(item.get("source") or "").strip()
+            dest = str(item.get("dest") or "").strip()
+            if not name and source:
+                name = Path(source).name or source
+            if not name or not source or not dest:
+                continue
+            tid = _slugify(str(item.get("id") or name))
+            while tid in seen_ids:
+                tid = f"{tid}-2"
+            seen_ids.add(tid)
+            item_excludes_raw = item.get("excludes")
+            item_excludes = (
+                [str(x).strip() for x in item_excludes_raw if str(x).strip()]
+                if isinstance(item_excludes_raw, list)
+                else []
+            )
+            targets.append({
+                "id": tid,
+                "name": name,
+                "source": source,
+                "dest": dest,
+                "enabled": bool(item.get("enabled", True)),
+                "delete": bool(item.get("delete", True)),
+                "excludes": item_excludes,
+            })
+    return {
+        "version": 1,
+        "target_root": target_root,
+        "excludes": excludes,
+        "targets": targets,
+    }
+
+
+def _resolve_paths(
+    home: Path | None = None,
+    config_dir: Path | None = None,
+    state_dir: Path | None = None,
+    cache_dir: Path | None = None,
+    runtime_dir: Path | None = None,
+    script_path: Path | None = None,
+) -> dict[str, Path]:
+    home_dir = home or Path.home()
+    xdg_config = Path(os.environ.get("XDG_CONFIG_HOME") or (home_dir / ".config"))
+    xdg_state = Path(os.environ.get("XDG_STATE_HOME") or (home_dir / ".local/state"))
+    xdg_cache = Path(os.environ.get("XDG_CACHE_HOME") or (home_dir / ".cache"))
+    xdg_runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp")
+
+    resolved_config = config_dir or (xdg_config / "sync-projects")
+    resolved_state = state_dir or (xdg_state / "sync-projects")
+    resolved_cache = cache_dir or xdg_cache
+    resolved_runtime = runtime_dir or xdg_runtime
+    if script_path is not None:
+        resolved_script = script_path
+    else:
+        override = os.environ.get("SYNC_PROJECTS_BIN")
+        local_bin = home_dir / ".local/bin/sync-projects"
+        found = shutil.which("sync-projects")
+        resolved_script = Path(override) if override else (local_bin if local_bin.exists() else (Path(found) if found else local_bin))
+
+    return {
+        "home": home_dir,
+        "config_file": resolved_config / "config.json",
+        "state_dir": resolved_state,
+        "targets_dir": resolved_state / "targets",
+        "run_file": resolved_state / "run.json",
+        "log_file": resolved_cache / "sync-projects.log",
+        "lock_file": resolved_runtime / "sync-projects.lock",
+        "script_path": resolved_script,
+    }
+
+
+def load_or_seed_config(paths: dict[str, Path], seed_if_missing: bool = True) -> dict[str, Any]:
+    cfg_file = paths["config_file"]
+    existing = _read_json(cfg_file)
+    if existing is not None:
+        return _normalize_config(existing, paths["home"], paths["script_path"])
+    has_legacy = (
+        paths["script_path"].is_file()
+        or paths["log_file"].is_file()
+        or paths["run_file"].is_file()
+    )
+    cfg = default_config(paths["home"], paths["script_path"])
+    if not has_legacy:
+        cfg["targets"] = []
+    if seed_if_missing and has_legacy:
+        try:
+            _atomic_write_json(cfg_file, cfg)
+        except OSError:
+            pass
+    return cfg
+
+
+def _expand_user_path(raw: str, home: Path) -> Path:
+    if raw == "~":
+        return home
+    if raw.startswith("~/"):
+        return home / raw[2:]
+    return Path(raw)
+
+
+def _is_remote_spec(dest: str) -> bool:
+    if dest.startswith(("rsync://", "/")):
+        return False
+    first_colon = dest.find(":")
+    first_slash = dest.find("/")
+    return first_colon > 0 and (first_slash == -1 or first_colon < first_slash)
+
+
+def _resolve_dest(dest: str, target_root: Path, home: Path) -> tuple[str, bool, Path | None]:
+    """Return (dest_arg, uses_target_root, local_dest_path)."""
+    if _is_remote_spec(dest):
+        return dest, False, None
+    if dest.startswith("/") or dest.startswith("~/") or dest == "~":
+        p = _expand_user_path(dest, home)
+        try:
+            under_root = p == target_root or target_root in p.parents
+        except ValueError:
+            under_root = False
+        return str(p), under_root, p
+    p = target_root / dest
+    return str(p), True, p
 
 
 def _process_alive(pid: int | None) -> bool:
@@ -58,7 +292,6 @@ def _process_alive(pid: int | None) -> bool:
 
 
 def _find_live_rsync_pids(target_root: Path) -> list[int]:
-    """Return PIDs of running sync-projects or rsync processes targeting target_root."""
     pids: list[int] = []
     uid = os.getuid()
     my_pid = os.getpid()
@@ -66,9 +299,7 @@ def _find_live_rsync_pids(target_root: Path) -> list[int]:
     for proc_dir in Path("/proc").glob("[0-9]*"):
         try:
             pid = int(proc_dir.name)
-            if pid == my_pid:
-                continue
-            if proc_dir.stat().st_uid != uid:
+            if pid == my_pid or proc_dir.stat().st_uid != uid:
                 continue
             raw = (proc_dir / "cmdline").read_bytes()
             if not raw:
@@ -78,11 +309,10 @@ def _find_live_rsync_pids(target_root: Path) -> list[int]:
                 continue
             exe_name = os.path.basename(args[0])
             cmd = " ".join(args)
-            if ("rsync" in exe_name and marker in cmd) or (
-                "sync-projects" in cmd and "noctalia-rsync-status" not in cmd
-            ):
-                if _process_alive(pid):
-                    pids.append(pid)
+            is_rsync = "rsync" in exe_name and (marker in cmd or "--delete" in cmd or "sync-projects" in cmd)
+            is_wrapper = ("sync-projects" in cmd or "noctalia-rsync-status run" in cmd) and "watch" not in cmd
+            if (is_rsync or is_wrapper) and _process_alive(pid):
+                pids.append(pid)
         except (OSError, ValueError):
             continue
     return pids
@@ -108,40 +338,6 @@ def _is_lock_held(lock_path: Path) -> bool:
         os.close(fd)
 
 
-def _resolve_script_path(script_path: Path | None = None) -> Path:
-    if script_path is not None:
-        return script_path
-    override = os.environ.get("SYNC_PROJECTS_BIN")
-    if override:
-        return Path(override)
-    local_bin = Path.home() / ".local/bin/sync-projects"
-    if local_bin.exists():
-        return local_bin
-    found = shutil.which("sync-projects")
-    return Path(found) if found else local_bin
-
-
-def _resolve_target_root(script_path: Path, target_root: Path | None = None) -> Path:
-    if target_root is not None:
-        return target_root
-    user = os.environ.get("USER") or getpass.getuser()
-    default_target = Path(f"/run/media/{user}/nixos/home/{user}")
-    if not script_path.is_file():
-        return default_target
-    try:
-        text = script_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return default_target
-    for line in text.splitlines():
-        match = _TARGET_LINE_RE.match(line.strip())
-        if match:
-            raw = match.group(1)
-            raw = raw.replace("${USER_NAME}", user).replace("${USER:-thinky}", user).replace("${USER}", user)
-            if "$" not in raw:
-                return Path(raw)
-    return default_target
-
-
 def _parse_timestamp_epoch(timestamp: str) -> int | None:
     if not timestamp:
         return None
@@ -152,7 +348,6 @@ def _parse_timestamp_epoch(timestamp: str) -> int | None:
 
 
 def format_short_time(timestamp: str, now_dt: datetime | None = None) -> str:
-    """Format 'YYYY-MM-DD HH:MM:SS' compactly relative to today."""
     if not timestamp:
         return ""
     try:
@@ -168,14 +363,12 @@ def format_short_time(timestamp: str, now_dt: datetime | None = None) -> str:
 
 
 def parse_log_tail(log_path: Path, max_bytes: int = 262144) -> dict[str, Any]:
-    """Read the tail of sync-projects.log for fallback history without loading huge logs."""
     result: dict[str, Any] = {
         "exists": log_path.is_file(),
         "last_attempt": None,
         "last_real_done": None,
         "last_dry_done": None,
         "targets": {},
-        "unclosed_start": None,
     }
     if not result["exists"]:
         return result
@@ -190,15 +383,13 @@ def parse_log_tail(log_path: Path, max_bytes: int = 262144) -> dict[str, Any]:
 
     lines = chunk.splitlines()
     if size > max_bytes and lines:
-        lines = lines[1:]  # Drop potentially truncated first line.
+        lines = lines[1:]
 
     pending_dry = False
-    open_start: dict[str, Any] | None = None
     for line in lines:
         m_start = _START_RE.match(line)
         if m_start:
             pending_dry = bool(m_start.group(2))
-            open_start = {"timestamp": m_start.group(1), "dry_run": pending_dry}
             continue
         m_target = _TARGET_DONE_RE.match(line)
         if m_target:
@@ -212,10 +403,7 @@ def parse_log_tail(log_path: Path, max_bytes: int = 262144) -> dict[str, Any]:
                 "epoch": _parse_timestamp_epoch(ts),
             }
             bucket = result["targets"].setdefault(tid, {})
-            if entry["dry_run"]:
-                bucket["dry"] = entry
-            else:
-                bucket["sync"] = entry
+            bucket["dry" if entry["dry_run"] else "sync"] = entry
             continue
         m_done = _DONE_RE.match(line)
         if m_done:
@@ -230,12 +418,8 @@ def parse_log_tail(log_path: Path, max_bytes: int = 262144) -> dict[str, Any]:
                 "reason": "",
             }
             result["last_attempt"] = entry
-            if pending_dry:
-                result["last_dry_done"] = entry
-            else:
-                result["last_real_done"] = entry
+            result["last_dry_done" if pending_dry else "last_real_done"] = entry
             pending_dry = False
-            open_start = None
             continue
         m_skip = _SKIP_RE.match(line)
         if m_skip:
@@ -249,9 +433,6 @@ def parse_log_tail(log_path: Path, max_bytes: int = 262144) -> dict[str, Any]:
                 "reason": reason.strip(),
             }
             pending_dry = False
-            open_start = None
-
-    result["unclosed_start"] = open_start
     return result
 
 
@@ -265,8 +446,10 @@ def _shorten_home(path: Path, home: Path) -> str:
 
 def _check_mount(home: Path, target_root: Path) -> tuple[bool, bool]:
     """Return (disk_mounted, same_disk) safely."""
-    target_projects = target_root / "Projects"
-    if not target_projects.is_dir():
+    if not target_root.exists():
+        return False, False
+    # For the default /run/media/<user>/nixos/home/<user> target, require Projects or a separate mounted volume.
+    if not target_root.is_dir():
         return False, False
     try:
         home_dev = home.stat().st_dev
@@ -280,6 +463,7 @@ def _check_mount(home: Path, target_root: Path) -> tuple[bool, bool]:
 
 def build_snapshot(
     home: Path | None = None,
+    config_dir: Path | None = None,
     state_dir: Path | None = None,
     cache_dir: Path | None = None,
     runtime_dir: Path | None = None,
@@ -288,38 +472,34 @@ def build_snapshot(
     now_dt: datetime | None = None,
     live_pids: list[int] | None = None,
 ) -> dict[str, Any]:
-    """Build a complete JSON-serializable rsync status snapshot."""
-    home_dir = home or Path.home()
-    xdg_state = Path(os.environ.get("XDG_STATE_HOME") or (home_dir / ".local/state"))
-    xdg_cache = Path(os.environ.get("XDG_CACHE_HOME") or (home_dir / ".cache"))
-    xdg_runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp")
+    paths = _resolve_paths(
+        home=home,
+        config_dir=config_dir,
+        state_dir=state_dir,
+        cache_dir=cache_dir,
+        runtime_dir=runtime_dir,
+        script_path=script_path,
+    )
+    home_dir = paths["home"]
+    cfg = load_or_seed_config(paths, seed_if_missing=True)
+    resolved_target = target_root or _expand_user_path(cfg["target_root"], home_dir)
 
-    resolved_state = state_dir or (xdg_state / "sync-projects")
-    resolved_cache = cache_dir or xdg_cache
-    resolved_runtime = runtime_dir or xdg_runtime
-    resolved_script = _resolve_script_path(script_path)
-    resolved_target = _resolve_target_root(resolved_script, target_root)
-
-    log_path = resolved_cache / "sync-projects.log"
-    lock_path = resolved_runtime / "sync-projects.lock"
-    targets_state_dir = resolved_state / "targets"
-    run_data = _read_json(resolved_state / "run.json")
+    log_path = paths["log_file"]
+    lock_path = paths["lock_file"]
+    targets_state_dir = paths["targets_dir"]
+    run_data = _read_json(paths["run_file"])
     log_info = parse_log_tail(log_path)
 
-    script_exists = resolved_script.is_file() and os.access(resolved_script, os.X_OK)
     disk_mounted, same_disk = _check_mount(home_dir, resolved_target)
     lock_held = _is_lock_held(lock_path)
     detected_pids = live_pids if live_pids is not None else _find_live_rsync_pids(resolved_target)
 
-    # Check if run.json claims a sync is running with a live PID.
     run_active = False
     if run_data and run_data.get("state") == "syncing":
         run_active = _process_alive(run_data.get("pid")) or lock_held or bool(detected_pids)
-
     globally_syncing = run_active or lock_held or bool(detected_pids)
     now_epoch = int((now_dt or datetime.now()).timestamp())
 
-    # Choose the newest run record between run.json and log fallback.
     last_attempt: dict[str, Any] | None = run_data
     log_attempt = log_info.get("last_attempt")
     if log_attempt and (
@@ -331,14 +511,22 @@ def build_snapshot(
     target_rows: list[dict[str, Any]] = []
     active_target_name = ""
     any_error = False
-    any_present = False
-    all_present_ok = True
+    any_enabled_present = False
+    all_enabled_ok = True
+    any_can_run_now = False
     seen_active = False
 
-    for tid, name, rel_src, rel_dst in TARGETS:
-        src_path = home_dir / rel_src
-        dst_path = resolved_target / rel_dst
+    run_epoch = int((run_data or {}).get("epoch") or 0)
+    run_is_dry = bool((run_data or {}).get("dry_run"))
+
+    for t in cfg["targets"]:
+        tid = t["id"]
+        name = t["name"]
+        src_path = _expand_user_path(t["source"], home_dir)
+        dest_arg, uses_root, local_dst = _resolve_dest(t["dest"], resolved_target, home_dir)
         source_exists = src_path.is_dir()
+        enabled = bool(t.get("enabled", True))
+        delete_flag = bool(t.get("delete", True))
 
         active_data = _read_json(targets_state_dir / f"{tid}.active.json")
         if active_data and not _process_alive(active_data.get("pid")) and not lock_held:
@@ -347,35 +535,50 @@ def build_snapshot(
         sync_data = _read_json(targets_state_dir / f"{tid}.sync.json")
         dry_data = _read_json(targets_state_dir / f"{tid}.dry.json")
 
-        # Merge log fallback per-target or whole-run result when no state file exists yet.
         log_target = log_info.get("targets", {}).get(tid, {})
         if not sync_data and log_target.get("sync"):
             sync_data = log_target["sync"]
-        if source_exists and log_info.get("last_real_done"):
-            fallback_done = log_info["last_real_done"]
-            sync_epoch = int((sync_data or {}).get("epoch") or 0)
-            fb_epoch = int(fallback_done.get("epoch") or 0)
-            if sync_data is None or fb_epoch > sync_epoch:
+        if source_exists and log_info.get("last_real_done") and tid in {"projects", "scramble-public", "scramble-references", "trident-optics-attachment"}:
+            fb = log_info["last_real_done"]
+            if sync_data is None or int(fb.get("epoch") or 0) > int(sync_data.get("epoch") or 0):
                 sync_data = {
                     "id": tid,
                     "name": name,
-                    "exit_code": fallback_done["exit_code"],
+                    "exit_code": fb["exit_code"],
                     "dry_run": False,
-                    "timestamp": fallback_done["timestamp"],
-                    "epoch": fallback_done["epoch"],
+                    "timestamp": fb["timestamp"],
+                    "epoch": fb["epoch"],
                     "duration_sec": None,
                     "from_log_batch": True,
                 }
         if not dry_data and log_target.get("dry"):
             dry_data = log_target["dry"]
 
-        run_epoch = int((run_data or {}).get("epoch") or 0)
-        run_is_dry = bool((run_data or {}).get("dry_run"))
         done_this_run = False
         if globally_syncing and run_active and run_epoch > 0:
             check_rec = dry_data if run_is_dry else sync_data
             if check_rec and int(check_rec.get("epoch") or 0) >= run_epoch:
                 done_this_run = True
+
+        # Determine if this individual target can run right now.
+        if not source_exists:
+            target_can_run = False
+        elif _is_remote_spec(t["dest"]):
+            target_can_run = not globally_syncing
+        elif uses_root:
+            target_can_run = disk_mounted and not globally_syncing
+        else:
+            # Custom local path: require parent exists and not same device as source.
+            target_can_run = local_dst is not None and (local_dst.exists() or local_dst.parent.exists()) and not globally_syncing
+            if target_can_run and local_dst is not None and local_dst.exists():
+                try:
+                    if src_path.stat().st_dev == local_dst.stat().st_dev and src_path.resolve() == local_dst.resolve():
+                        target_can_run = False
+                except OSError:
+                    target_can_run = False
+
+        if enabled and target_can_run:
+            any_can_run_now = True
 
         t_state = "never"
         line_status = "Not yet run"
@@ -393,13 +596,16 @@ def build_snapshot(
             elapsed = max(0, now_epoch - int(started_epoch)) if isinstance(started_epoch, (int, float)) else None
             prefix = "Dry run" if active_data.get("dry_run") else "Syncing"
             line_status = f"{prefix}... ({elapsed}s)" if elapsed is not None else f"{prefix}..."
+        elif not enabled:
+            t_state = "disabled"
+            line_status = "Disabled"
         elif not source_exists:
             t_state = "absent"
             line_status = "No local folder"
         else:
-            any_present = True
+            any_enabled_present = True
             if globally_syncing and not done_this_run:
-                if detected_pids and tid == "projects" and not seen_active:
+                if detected_pids and tid == cfg["targets"][0]["id"] and not seen_active:
                     active_target_name = name
                     t_state = "syncing"
                     line_status = "Syncing..."
@@ -407,7 +613,7 @@ def build_snapshot(
                 else:
                     t_state = "queued"
                     line_status = "Queued"
-                all_present_ok = False
+                all_enabled_ok = False
             elif sync_data is not None:
                 exit_code = int(sync_data.get("exit_code", 0))
                 if exit_code == 0:
@@ -416,36 +622,35 @@ def build_snapshot(
                 else:
                     t_state = "error"
                     any_error = True
-                    all_present_ok = False
+                    all_enabled_ok = False
                     line_status = f"Error ({exit_code}) · {short_time}" if short_time else f"Error ({exit_code})"
             elif dry_data is not None:
                 dry_rc = int(dry_data.get("exit_code", 0))
                 dry_time = format_short_time(last_dry_at, now_dt=now_dt)
                 if dry_rc == 0:
-                    t_state = "ready" if disk_mounted else "skipped"
+                    t_state = "ready" if target_can_run else "skipped"
                     line_status = f"Dry run (0) · {dry_time}" if dry_time else "Dry run (0)"
                 else:
                     t_state = "error"
                     any_error = True
                     line_status = f"Dry error ({dry_rc}) · {dry_time}" if dry_time else f"Dry error ({dry_rc})"
-                all_present_ok = False
-            elif last_attempt and last_attempt.get("state") == "skipped":
+                all_enabled_ok = False
+            elif uses_root and not disk_mounted:
                 t_state = "skipped"
-                skip_time = format_short_time(last_attempt.get("timestamp", ""), now_dt=now_dt)
-                line_status = f"Skipped · {skip_time}" if skip_time else "Skipped (unmounted)"
-                all_present_ok = False
-            elif not disk_mounted:
-                t_state = "skipped"
-                line_status = "Disk unmounted"
-                all_present_ok = False
+                if last_attempt and last_attempt.get("state") == "skipped":
+                    skip_time = format_short_time(last_attempt.get("timestamp", ""), now_dt=now_dt)
+                    line_status = f"Skipped · {skip_time}" if skip_time else "Disk unmounted"
+                else:
+                    line_status = "Disk unmounted"
+                all_enabled_ok = False
             else:
                 t_state = "never"
                 line_status = "Not yet run"
-                all_present_ok = False
+                all_enabled_ok = False
 
         tip_lines = [
-            f"{_shorten_home(src_path, home_dir)} → {dst_path}",
-            f"Status: {line_status}",
+            f"{_shorten_home(src_path, home_dir)} → {dest_arg}",
+            f"Status: {line_status} · Mirror(--delete): {'On' if delete_flag else 'Off'}",
         ]
         if last_sync_at:
             dur_note = f" ({duration_sec}s)" if duration_sec is not None else ""
@@ -453,15 +658,21 @@ def build_snapshot(
         if last_dry_at and last_dry_at != last_sync_at:
             tip_lines.append(f"Last dry run: {last_dry_at} · exit {dry_data.get('exit_code', 0)}")
         if not source_exists:
-            tip_lines.append("Optional folder is absent on this machine.")
+            tip_lines.append("Source directory does not exist locally.")
 
         target_rows.append({
             "id": tid,
             "name": name,
-            "source": str(src_path),
+            "source": t["source"],
             "source_short": _shorten_home(src_path, home_dir),
-            "dest": str(dst_path),
+            "dest": t["dest"],
+            "dest_resolved": dest_arg,
+            "uses_root": uses_root,
+            "enabled": enabled,
+            "delete": delete_flag,
+            "excludes": t.get("excludes", []),
             "source_exists": source_exists,
+            "can_run": target_can_run,
             "state": t_state,
             "line_status": line_status,
             "exit_code": exit_code,
@@ -471,11 +682,10 @@ def build_snapshot(
             "tooltip": "\n".join(tip_lines),
         })
 
-    # Determine overall bar icon state.
-    if not script_exists and not log_info["exists"] and run_data is None:
+    if not cfg["targets"]:
         overall_state = "unconfigured"
-        badge = "Not configured"
-        summary = "sync-projects is not installed on this host"
+        badge = "No targets"
+        summary = "Add rsync folder pairs inside the dropdown"
     elif globally_syncing:
         overall_state = "syncing"
         badge = "Syncing"
@@ -486,20 +696,20 @@ def build_snapshot(
         if same_disk:
             summary = "Refused: target resolves to this disk"
         else:
-            failed = [t["name"] for t in target_rows if t["state"] == "error"]
+            failed = [row["name"] for row in target_rows if row["state"] == "error"]
             summary = f"Failed: {', '.join(failed)}" if failed else "Last rsync failed"
-    elif not disk_mounted:
+    elif not disk_mounted and all(row["uses_root"] for row in target_rows if row["enabled"] and row["source_exists"]):
         overall_state = "unmounted"
         badge = "Unmounted"
         summary = f"Backup disk not mounted ({resolved_target})"
-    elif any_present and all_present_ok:
+    elif any_enabled_present and all_enabled_ok:
         overall_state = "ok"
         badge = "Synced"
-        summary = "All targets synced"
+        summary = "All enabled targets synced"
     else:
         overall_state = "ready"
         badge = "Ready"
-        summary = "Backup disk mounted (pending sync)"
+        summary = "Ready to sync"
 
     last_run_text = ""
     if last_attempt and last_attempt.get("timestamp"):
@@ -521,20 +731,22 @@ def build_snapshot(
         tooltip.append({"key": row["name"], "value": row["line_status"]})
     if last_run_text:
         tooltip.append({"key": "History", "value": last_run_text})
-    tooltip.append({"key": "Action", "value": "Click to open status panel"})
+    tooltip.append({"key": "Action", "value": "Click to view / configure rsync"})
 
     return {
         "available": True,
         "state": overall_state,
         "badge": badge,
         "summary": summary,
-        "script_exists": script_exists,
-        "script_path": str(resolved_script),
+        "configured": bool(cfg["targets"]),
         "disk_mounted": disk_mounted,
         "same_disk": same_disk,
         "syncing": globally_syncing,
-        "can_sync": script_exists and disk_mounted and not globally_syncing,
+        "can_sync": any_can_run_now,
         "target_root": str(resolved_target),
+        "target_root_raw": cfg["target_root"],
+        "excludes": cfg["excludes"],
+        "config_path": str(paths["config_file"]),
         "log_path": str(log_path),
         "log_exists": log_path.is_file(),
         "last_run_text": last_run_text,
@@ -543,12 +755,281 @@ def build_snapshot(
     }
 
 
-def _trigger_sync(dry_run: bool = False) -> int:
-    script = _resolve_script_path()
-    if not (script.is_file() and os.access(script, os.X_OK)):
-        print(json.dumps({"ok": False, "error": f"sync-projects not found at {script}"}))
+def _append_log(log_file: Path, msg: str) -> None:
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with log_file.open("a", encoding="utf-8") as stream:
+        stream.write(f"{ts} {msg}\n")
+
+
+def run_sync(
+    dry_run: bool = False,
+    target_id: str | None = None,
+    home: Path | None = None,
+    config_dir: Path | None = None,
+    state_dir: Path | None = None,
+    cache_dir: Path | None = None,
+    runtime_dir: Path | None = None,
+    script_path: Path | None = None,
+    same_disk_guard: bool = True,
+) -> int:
+    """Execute rsync for all enabled targets (or a specific target_id)."""
+    paths = _resolve_paths(home, config_dir, state_dir, cache_dir, runtime_dir, script_path)
+    home_dir = paths["home"]
+    cfg = load_or_seed_config(paths, seed_if_missing=True)
+    target_root = _expand_user_path(cfg["target_root"], home_dir)
+
+    selected = [t for t in cfg["targets"] if (t["id"] == target_id if target_id else t.get("enabled", True))]
+    if target_id and not selected:
+        _append_log(paths["log_file"], f"skipped: unknown target '{target_id}'")
         return 1
-    cmd = [str(script)] + (["--dry-run"] if dry_run else [])
+    if not selected:
+        _append_log(paths["log_file"], "skipped: no enabled rsync targets")
+        return 0
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_epoch = int(time.time())
+
+    # Check target_root mount if any selected target uses target_root.
+    uses_any_root = any(_resolve_dest(t["dest"], target_root, home_dir)[1] for t in selected)
+    if uses_any_root:
+        if not target_root.exists() or not target_root.is_dir():
+            _atomic_write_json(paths["run_file"], {
+                "state": "skipped", "reason": "disk_unmounted", "exit_code": 0,
+                "dry_run": dry_run, "pid": os.getpid(), "target": str(target_root),
+                "timestamp": now_str, "epoch": now_epoch,
+            })
+            _append_log(paths["log_file"], f"skipped: the other disk is not mounted at {target_root}")
+            return 0
+        if same_disk_guard:
+            try:
+                if home_dir.stat().st_dev == target_root.stat().st_dev:
+                    _atomic_write_json(paths["run_file"], {
+                        "state": "refused", "reason": "same_disk", "exit_code": 1,
+                        "dry_run": dry_run, "pid": os.getpid(), "target": str(target_root),
+                        "timestamp": now_str, "epoch": now_epoch,
+                    })
+                    _append_log(paths["log_file"], f"refused: {target_root} is on this disk")
+                    return 1
+            except OSError:
+                pass
+
+    paths["lock_file"].parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = os.open(paths["lock_file"], os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        run_started_epoch = int(time.time())
+        run_started_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _atomic_write_json(paths["run_file"], {
+            "state": "syncing", "reason": "", "exit_code": 0, "dry_run": dry_run,
+            "pid": os.getpid(), "target": str(target_root),
+            "timestamp": run_started_str, "epoch": run_started_epoch,
+        })
+        _append_log(paths["log_file"], "start (dry run)" if dry_run else "start")
+
+        overall_rc = 0
+        for t in selected:
+            tid = t["id"]
+            name = t["name"]
+            src = _expand_user_path(t["source"], home_dir)
+            dest_arg, uses_root, local_dst = _resolve_dest(t["dest"], target_root, home_dir)
+            if not src.is_dir():
+                _append_log(paths["log_file"], f"target [{tid}]: skipped (source missing)")
+                continue
+
+            if local_dst is not None:
+                if same_disk_guard and local_dst.exists():
+                    try:
+                        if src.resolve() == local_dst.resolve() or (not uses_root and src.stat().st_dev == local_dst.stat().st_dev):
+                            _append_log(paths["log_file"], f"target [{tid}]: refused (same disk/path)")
+                            if overall_rc == 0:
+                                overall_rc = 1
+                            continue
+                    except OSError:
+                        pass
+                if not dry_run:
+                    local_dst.mkdir(parents=True, exist_ok=True)
+                elif not local_dst.exists() and not local_dst.parent.exists():
+                    ts_skip = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    _append_log(paths["log_file"], f"(dry run) would make {local_dst} and copy all of it there")
+                    _atomic_write_json(paths["targets_dir"] / f"{tid}.dry.json", {
+                        "id": tid, "name": name, "exit_code": 0, "dry_run": True,
+                        "timestamp": ts_skip, "epoch": int(time.time()), "duration_sec": 0,
+                        "note": "destination missing",
+                    })
+                    continue
+
+            active_file = paths["targets_dir"] / f"{tid}.active.json"
+            t0 = int(time.time())
+            _atomic_write_json(active_file, {
+                "id": tid, "name": name, "pid": os.getpid(), "dry_run": dry_run,
+                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "started_epoch": t0,
+            })
+
+            cmd = ["rsync", "-a"]
+            if t.get("delete", True):
+                cmd.append("--delete")
+            if dry_run:
+                cmd.extend(["--dry-run", "--itemize-changes"])
+            for pattern in [*cfg["excludes"], *t.get("excludes", [])]:
+                if pattern:
+                    cmd.append(f"--exclude={pattern}")
+            cmd.extend([f"{src}/", f"{dest_arg}/" if not dest_arg.endswith("/") else dest_arg])
+
+            rc = 0
+            try:
+                paths["log_file"].parent.mkdir(parents=True, exist_ok=True)
+                with paths["log_file"].open("a", encoding="utf-8") as log_stream:
+                    proc = subprocess.run(cmd, stdout=log_stream, stderr=subprocess.STDOUT, check=False)
+                    rc = proc.returncode
+            finally:
+                active_file.unlink(missing_ok=True)
+
+            t1 = int(time.time())
+            dur = max(0, t1 - t0)
+            ts_done = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            rec = {
+                "id": tid, "name": name, "exit_code": rc, "dry_run": dry_run,
+                "timestamp": ts_done, "epoch": t1, "duration_sec": dur,
+            }
+            out_file = paths["targets_dir"] / (f"{tid}.dry.json" if dry_run else f"{tid}.sync.json")
+            _atomic_write_json(out_file, rec)
+            _append_log(paths["log_file"], f"target [{tid}]: done (status {rc}, {dur}s{', dry run' if dry_run else ''})")
+            if rc != 0 and overall_rc == 0:
+                overall_rc = rc
+
+        run_end_epoch = int(time.time())
+        run_end_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _atomic_write_json(paths["run_file"], {
+            "state": "ok" if overall_rc == 0 else "error",
+            "reason": "", "exit_code": overall_rc, "dry_run": dry_run,
+            "pid": os.getpid(), "target": str(target_root),
+            "timestamp": run_end_str, "epoch": run_end_epoch,
+            "duration_sec": max(0, run_end_epoch - run_started_epoch),
+        })
+        _append_log(paths["log_file"], f"done (rsync status {overall_rc})")
+        return overall_rc
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(lock_fd)
+
+
+def save_target(payload: dict[str, Any], paths: dict[str, Path] | None = None) -> dict[str, Any]:
+    resolved = paths or _resolve_paths()
+    cfg = load_or_seed_config(resolved, seed_if_missing=True)
+    name = str(payload.get("name") or "").strip()
+    source = str(payload.get("source") or "").strip()
+    dest = str(payload.get("dest") or "").strip()
+    if not source:
+        raise ValueError("Source path is required")
+    if not dest:
+        dest = Path(source).name
+    if not name:
+        name = Path(source).name or source
+
+    orig_id = str(payload.get("orig_id") or "").strip()
+    raw_ex = payload.get("excludes", [])
+    if isinstance(raw_ex, str):
+        excludes = [line.strip() for line in re.split(r"[\n,]+", raw_ex) if line.strip()]
+    elif isinstance(raw_ex, list):
+        excludes = [str(x).strip() for x in raw_ex if str(x).strip()]
+    else:
+        excludes = []
+
+    target_entry = {
+        "id": orig_id or _slugify(name),
+        "name": name,
+        "source": source,
+        "dest": dest,
+        "enabled": bool(payload.get("enabled", True)),
+        "delete": bool(payload.get("delete", True)),
+        "excludes": excludes,
+    }
+
+    updated = False
+    if orig_id:
+        for idx, existing in enumerate(cfg["targets"]):
+            if existing["id"] == orig_id:
+                cfg["targets"][idx] = target_entry
+                updated = True
+                break
+    if not updated:
+        existing_ids = {t["id"] for t in cfg["targets"]}
+        candidate = target_entry["id"]
+        suffix = 2
+        while candidate in existing_ids:
+            candidate = f"{target_entry['id']}-{suffix}"
+            suffix += 1
+        target_entry["id"] = candidate
+        cfg["targets"].append(target_entry)
+
+    _atomic_write_json(resolved["config_file"], cfg)
+    return cfg
+
+
+def delete_target(target_id: str, paths: dict[str, Path] | None = None) -> dict[str, Any]:
+    resolved = paths or _resolve_paths()
+    cfg = load_or_seed_config(resolved, seed_if_missing=True)
+    cfg["targets"] = [t for t in cfg["targets"] if t["id"] != target_id]
+    _atomic_write_json(resolved["config_file"], cfg)
+    return cfg
+
+
+def move_target(target_id: str, direction: str, paths: dict[str, Path] | None = None) -> dict[str, Any]:
+    resolved = paths or _resolve_paths()
+    cfg = load_or_seed_config(resolved, seed_if_missing=True)
+    targets = cfg["targets"]
+    idx = next((i for i, t in enumerate(targets) if t["id"] == target_id), None)
+    if idx is not None:
+        swap = idx - 1 if direction == "up" else idx + 1
+        if 0 <= swap < len(targets):
+            targets[idx], targets[swap] = targets[swap], targets[idx]
+            _atomic_write_json(resolved["config_file"], cfg)
+    return cfg
+
+
+def toggle_target(target_id: str, paths: dict[str, Path] | None = None) -> dict[str, Any]:
+    resolved = paths or _resolve_paths()
+    cfg = load_or_seed_config(resolved, seed_if_missing=True)
+    for t in cfg["targets"]:
+        if t["id"] == target_id:
+            t["enabled"] = not bool(t.get("enabled", True))
+            break
+    _atomic_write_json(resolved["config_file"], cfg)
+    return cfg
+
+
+def save_settings(payload: dict[str, Any], paths: dict[str, Path] | None = None) -> dict[str, Any]:
+    resolved = paths or _resolve_paths()
+    cfg = load_or_seed_config(resolved, seed_if_missing=True)
+    if "target_root" in payload and str(payload["target_root"]).strip():
+        cfg["target_root"] = str(payload["target_root"]).strip()
+    if "excludes" in payload:
+        raw_ex = payload["excludes"]
+        if isinstance(raw_ex, str):
+            cfg["excludes"] = [line.strip() for line in re.split(r"[\n,]+", raw_ex) if line.strip()]
+        elif isinstance(raw_ex, list):
+            cfg["excludes"] = [str(x).strip() for x in raw_ex if str(x).strip()]
+    _atomic_write_json(resolved["config_file"], cfg)
+    return cfg
+
+
+def reset_defaults(paths: dict[str, Path] | None = None) -> dict[str, Any]:
+    resolved = paths or _resolve_paths()
+    cfg = default_config(resolved["home"], resolved["script_path"])
+    _atomic_write_json(resolved["config_file"], cfg)
+    return cfg
+
+
+def _trigger_sync(dry_run: bool = False, target_id: str | None = None) -> int:
+    exe = sys.argv[0]
+    cmd = [sys.executable, exe, "run"]
+    if dry_run:
+        cmd.append("--dry-run")
+    if target_id:
+        cmd.extend(["--target", target_id])
     subprocess.Popen(
         cmd,
         stdin=subprocess.DEVNULL,
@@ -556,13 +1037,28 @@ def _trigger_sync(dry_run: bool = False) -> int:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    print(json.dumps({"ok": True, "started": True, "dry_run": dry_run}))
+    print(json.dumps({"ok": True, "started": True, "dry_run": dry_run, "target": target_id or ""}))
     return 0
 
 
+def _pick_folder(initial: str = "") -> int:
+    start_dir = str(_expand_user_path(initial or "~", Path.home()))
+    zenity = shutil.which("zenity")
+    if zenity:
+        cmd = [zenity, "--file-selection", "--directory", "--title=Select Folder"]
+        if os.path.isdir(start_dir):
+            cmd.append(f"--filename={start_dir.rstrip('/')}/")
+        res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if res.returncode == 0 and res.stdout.strip():
+            print(res.stdout.strip())
+            return 0
+        return 1
+    return 1
+
+
 def _open_log() -> int:
-    xdg_cache = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
-    log_path = xdg_cache / "sync-projects.log"
+    paths = _resolve_paths()
+    log_path = paths["log_file"]
     if not log_path.is_file():
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.touch()
@@ -584,17 +1080,18 @@ def _open_log() -> int:
 
     for cmd in candidates:
         try:
-            subprocess.Popen(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
+            subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             return 0
         except OSError:
             continue
-    print(f"No terminal or opener available for {log_path}", file=sys.stderr)
+    return 1
+
+
+def _open_rclone() -> int:
+    for candidate in (shutil.which("rclone-control"), "/run/current-system/sw/bin/rclone-control", str(Path.home() / ".local/bin/rclone-control")):
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            subprocess.Popen([candidate], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            return 0
     return 1
 
 
@@ -603,18 +1100,81 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("status")
     commands.add_parser("watch")
-    trigger_parser = commands.add_parser("trigger")
-    trigger_parser.add_argument("--dry-run", action="store_true")
+
+    run_p = commands.add_parser("run")
+    run_p.add_argument("--dry-run", action="store_true")
+    run_p.add_argument("--target", default="")
+
+    trig_p = commands.add_parser("trigger")
+    trig_p.add_argument("--dry-run", action="store_true")
+    trig_p.add_argument("--target", default="")
+
+    save_t = commands.add_parser("save-target")
+    save_t.add_argument("--json", required=True)
+
+    del_t = commands.add_parser("delete-target")
+    del_t.add_argument("--id", required=True)
+
+    move_t = commands.add_parser("move-target")
+    move_t.add_argument("--id", required=True)
+    move_t.add_argument("--dir", choices=("up", "down"), required=True)
+
+    tog_t = commands.add_parser("toggle-target")
+    tog_t.add_argument("--id", required=True)
+
+    save_s = commands.add_parser("save-settings")
+    save_s.add_argument("--json", required=True)
+
+    commands.add_parser("reset-defaults")
+
+    pick_p = commands.add_parser("pick-folder")
+    pick_p.add_argument("--initial", default="")
+
     commands.add_parser("open-log")
+    commands.add_parser("open-rclone")
     args = parser.parse_args()
 
     if args.command == "status":
         print(json.dumps(build_snapshot()))
         return 0
+    if args.command == "run":
+        return run_sync(dry_run=args.dry_run, target_id=args.target or None)
     if args.command == "trigger":
-        return _trigger_sync(dry_run=args.dry_run)
+        return _trigger_sync(dry_run=args.dry_run, target_id=args.target or None)
+    if args.command == "save-target":
+        try:
+            save_target(json.loads(args.json))
+        except Exception as err:
+            print(json.dumps({"ok": False, "error": str(err)}), file=sys.stderr)
+            return 1
+        print(json.dumps(build_snapshot()))
+        return 0
+    if args.command == "delete-target":
+        delete_target(args.id)
+        print(json.dumps(build_snapshot()))
+        return 0
+    if args.command == "move-target":
+        move_target(args.id, args.dir)
+        print(json.dumps(build_snapshot()))
+        return 0
+    if args.command == "toggle-target":
+        toggle_target(args.id)
+        print(json.dumps(build_snapshot()))
+        return 0
+    if args.command == "save-settings":
+        save_settings(json.loads(args.json))
+        print(json.dumps(build_snapshot()))
+        return 0
+    if args.command == "reset-defaults":
+        reset_defaults()
+        print(json.dumps(build_snapshot()))
+        return 0
+    if args.command == "pick-folder":
+        return _pick_folder(args.initial)
     if args.command == "open-log":
         return _open_log()
+    if args.command == "open-rclone":
+        return _open_rclone()
 
     previous = None
     while True:

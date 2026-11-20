@@ -811,6 +811,7 @@ in
     ethtool                    # Ethernet device configuration
     filezilla                  # GUI FTP/SFTP client
     rclone-browser
+    (callPackage ./packages/rclone-control { })
     remmina                    # Remote desktop client
     freerdp                    # RDP implementation (needed for Remmina RDP plugins)
     python3

@@ -117,7 +117,7 @@ let
   '';
   rsyncStatus = pkgs.writeShellApplication {
     name = "noctalia-rsync-status";
-    runtimeInputs = [ pkgs.python3 pkgs.coreutils pkgs.less ];
+    runtimeInputs = [ pkgs.python3 pkgs.coreutils pkgs.less pkgs.rsync pkgs.zenity ];
     text = ''
       exec python3 ${./rsync-status.py} "$@"
     '';

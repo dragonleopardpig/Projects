@@ -1,12 +1,14 @@
 -- Test local/rsync-status entries (service, bar, panel) under Luau with host stand-ins.
--- Default.nix copies common.luau alongside and splices each entry at the marker.
 
 local sharedState = {}
 local stateWatchers = {}
 local barGlyphs, barColors, barTooltips, toggledPanels = {}, {}, {}, {}
 local panelTrees, panelClosed, launchedCommands = {}, 0, {}
 local streamCallback = nil
-local nextRunResult = { exitCode = 0, stdout = '{"state":"ok","badge":"Synced","summary":"All targets synced","script_exists":true,"disk_mounted":true,"same_disk":false,"syncing":false,"can_sync":true,"target_root":"/run/media/thinky/nixos/home/thinky","log_exists":true,"last_run_text":"Last run: 15:25 · exit 0","targets":[{"id":"projects","name":"Projects","state":"ok","line_status":"OK (0) · 15:25","tooltip":"~/Projects -> target"}],"tooltip":[{"key":"Rsync Backup","value":"All targets synced"}]}' }
+local nextRunResult = {
+  exitCode = 0,
+  stdout = '{"state":"ok","badge":"Synced","summary":"All enabled targets synced","configured":true,"disk_mounted":true,"same_disk":false,"syncing":false,"can_sync":true,"target_root":"/run/media/thinky/nixos/home/thinky","target_root_raw":"/run/media/thinky/nixos/home/thinky","excludes":[".devenv/"],"log_exists":true,"last_run_text":"Last run: 15:25 · exit 0","targets":[{"id":"projects","name":"Projects","source":"/home/thinky/Projects","dest":"Projects","enabled":true,"delete":true,"excludes":[],"can_run":true,"state":"ok","line_status":"OK (0) · 15:25","tooltip":"~/Projects -> target"},{"id":"scramble-public","name":"Scramble Public","source":"/home/thinky/Documents/Scramble Public","dest":"Documents/Scramble Public","enabled":true,"delete":true,"excludes":[],"can_run":true,"state":"ok","line_status":"OK (0) · 15:25","tooltip":"~/Documents/Scramble Public -> target"}],"tooltip":[{"key":"Rsync Backup","value":"All enabled targets synced"}]}',
+}
 
 barWidget = {
   setGlyph = function(g) table.insert(barGlyphs, g) end,
@@ -31,6 +33,8 @@ ui = {
   label = makeNode("label"),
   glyph = makeNode("glyph"),
   button = makeNode("button"),
+  toggle = makeNode("toggle"),
+  input = makeNode("input"),
   separator = makeNode("separator"),
   scroll = makeNode("scroll"),
   spacer = makeNode("spacer"),
@@ -53,68 +57,61 @@ noctalia = {
   runAsync = function(argv, cb)
     table.insert(launchedCommands, argv)
     if cb then
-      cb(nextRunResult)
+      if argv[2] == "pick-folder" then
+        cb({ exitCode = 0, stdout = "/tmp/picked-dir\n" })
+      else
+        cb(nextRunResult)
+      end
     end
     return true
   end,
+  string = {
+    trim = function(s) return (string.gsub(s, "^%s*(.-)%s*$", "%1")) end,
+  },
   json = {
+    encode = function(tbl)
+      if type(tbl) == "table" and tbl.source ~= nil then
+        return '{"name":"' .. tostring(tbl.name or "") .. '","source":"' .. tostring(tbl.source or "") .. '"}'
+      end
+      return "{}"
+    end,
     decode = function(str)
       if string.find(str, '"state":"syncing"') then
         return {
-          state = "syncing",
-          badge = "Syncing",
-          summary = "Syncing Projects...",
-          script_exists = true,
-          disk_mounted = true,
-          same_disk = false,
-          syncing = true,
-          can_sync = false,
-          target_root = "/run/media/thinky/nixos/home/thinky",
-          log_exists = true,
+          state = "syncing", badge = "Syncing", summary = "Syncing Projects...",
+          configured = true, disk_mounted = true, same_disk = false, syncing = true, can_sync = false,
+          target_root = "/run/media/thinky/nixos/home/thinky", excludes = {}, log_exists = true,
           last_run_text = "Started: 15:30",
           targets = {
-            { id = "projects", name = "Projects", state = "syncing", line_status = "Syncing... (3s)" },
-            { id = "scramble-public", name = "Scramble Public", state = "queued", line_status = "Queued" },
+            { id = "projects", name = "Projects", enabled = true, can_run = false, state = "syncing", line_status = "Syncing... (3s)" },
+            { id = "scramble-public", name = "Scramble Public", enabled = true, can_run = false, state = "queued", line_status = "Queued" },
           },
           tooltip = { { key = "Rsync Backup", value = "Syncing Projects..." } },
         }
       end
       if string.find(str, '"state":"error"') then
         return {
-          state = "error",
-          badge = "Error",
-          summary = "Failed: Projects",
-          script_exists = true,
-          disk_mounted = true,
-          same_disk = false,
-          syncing = false,
-          can_sync = true,
-          target_root = "/run/media/thinky/nixos/home/thinky",
-          log_exists = true,
+          state = "error", badge = "Error", summary = "Failed: Projects",
+          configured = true, disk_mounted = true, same_disk = false, syncing = false, can_sync = true,
+          target_root = "/run/media/thinky/nixos/home/thinky", excludes = {}, log_exists = true,
           last_run_text = "Last run: 15:31 · exit 23",
           targets = {
-            { id = "projects", name = "Projects", state = "error", line_status = "Error (23) · 15:31" },
+            { id = "projects", name = "Projects", enabled = true, can_run = true, state = "error", line_status = "Error (23) · 15:31" },
           },
           tooltip = { { key = "Rsync Backup", value = "Failed: Projects" } },
         }
       end
       return {
-        state = "ok",
-        badge = "Synced",
-        summary = "All targets synced",
-        script_exists = true,
-        disk_mounted = true,
-        same_disk = false,
-        syncing = false,
-        can_sync = true,
-        target_root = "/run/media/thinky/nixos/home/thinky",
-        log_exists = true,
+        state = "ok", badge = "Synced", summary = "All enabled targets synced",
+        configured = true, disk_mounted = true, same_disk = false, syncing = false, can_sync = true,
+        target_root = "/run/media/thinky/nixos/home/thinky", target_root_raw = "/run/media/thinky/nixos/home/thinky",
+        excludes = { ".devenv/" }, log_exists = true,
         last_run_text = "Last run: 15:25 · exit 0",
         targets = {
-          { id = "projects", name = "Projects", state = "ok", line_status = "OK (0) · 15:25" },
-          { id = "scramble-public", name = "Scramble Public", state = "ok", line_status = "OK (0) · 15:25" },
+          { id = "projects", name = "Projects", source = "/home/thinky/Projects", dest = "Projects", enabled = true, delete = true, excludes = {}, can_run = true, state = "ok", line_status = "OK (0) · 15:25" },
+          { id = "scramble-public", name = "Scramble Public", source = "/home/thinky/Documents/Scramble Public", dest = "Documents/Scramble Public", enabled = true, delete = true, excludes = {}, can_run = true, state = "ok", line_status = "OK (0) · 15:25" },
         },
-        tooltip = { { key = "Rsync Backup", value = "All targets synced" } },
+        tooltip = { { key = "Rsync Backup", value = "All enabled targets synced" } },
       }
     end,
   },
@@ -169,17 +166,35 @@ elseif TEST_ENTRY == "panel" then
   assert(#panelTrees >= 1, "panel did not render on open")
   local tree = panelTrees[#panelTrees]
   local rowProjects = findNodeByKey(tree, "target_projects")
-  local rowPublic = findNodeByKey(tree, "target_scramble-public")
-  assert(rowProjects ~= nil and rowPublic ~= nil, "target rows missing")
-  assert(rowProjects.children[3].props.text == "OK (0) · 15:25", rowProjects.children[3].props.text)
-  local syncBtn = findNodeByKey(tree, "btn_sync_now")
-  assert(syncBtn ~= nil and syncBtn.props.enabled == true, "sync button should be enabled")
+  assert(rowProjects ~= nil and rowProjects.children[3].props.text == "OK (0) · 15:25", "target row mismatch")
+
+  -- Sync All trigger
   local beforeSync = #launchedCommands
-  syncBtn.props.onClick()
+  findNodeByKey(tree, "btn_sync_now").props.onClick()
   assert(launchedCommands[beforeSync + 1][2] == "trigger", "sync button did not trigger")
-  assert(launchedCommands[beforeSync + 2][2] == "status", "trigger callback did not refresh status")
-  local closeBtn = findNodeByKey(tree, "btn_close")
-  closeBtn.props.onClick()
+
+  -- Open Rclone Control button
+  local beforeRclone = #launchedCommands
+  findNodeByKey(tree, "btn_open_rclone").props.onClick()
+  assert(launchedCommands[beforeRclone + 1][2] == "open-rclone", "rclone button did not launch")
+
+  -- Edit target + Browse folder + Save
+  findNodeByKey(tree, "btn_edit_projects").props.onClick()
+  local editTree = panelTrees[#panelTrees]
+  assert(findNodeByKey(editTree, "edit_card") ~= nil, "edit form did not open")
+  findNodeByKey(editTree, "btn_browse_src").props.onClick()
+  local postPickTree = panelTrees[#panelTrees]
+  assert(findNodeByKey(postPickTree, "inp_src_2").props.value == "/tmp/picked-dir", "browse did not update source input")
+  local beforeSave = #launchedCommands
+  findNodeByKey(postPickTree, "btn_save_target").props.onClick()
+  assert(launchedCommands[beforeSave + 1][2] == "save-target", "save button did not invoke save-target")
+
+  -- Global settings view
+  local listTree = panelTrees[#panelTrees]
+  findNodeByKey(listTree, "btn_settings").props.onClick()
+  local settingsTree = panelTrees[#panelTrees]
+  assert(findNodeByKey(settingsTree, "settings_card") ~= nil, "settings view did not open")
+  findNodeByKey(settingsTree, "btn_close").props.onClick()
   assert(panelClosed == 1, "close button did not close panel")
   onClose()
 else
