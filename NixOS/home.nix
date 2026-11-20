@@ -333,6 +333,10 @@ in
     enable = true;
     defaultApplications = {
       "inode/directory" = [ "io.github.soyeb_jim285.HyprFM.desktop" ];
+      # A mount point (Filen, Google Drive, a USB stick) is inode/mount-point,
+      # not inode/directory; with no default xdg-open fell back to $BROWSER,
+      # so Filen's "Open in explorer" opened Firefox.
+      "inode/mount-point" = [ "io.github.soyeb_jim285.HyprFM.desktop" ];
       "application/pdf" = [ "sioyek.desktop" ];
       # Without this an EPUB falls through to whatever the system MIME cache
       # picks -- OnlyOffice, here. A file manager's "Set as default" cannot fix that,
@@ -382,6 +386,7 @@ in
       "image/png" = [ "iexplorer.desktop" ];
       "video/webm" = [ "iexplorer.desktop" ];
       "inode/directory" = [ "io.github.soyeb_jim285.HyprFM.desktop" ];
+      "inode/mount-point" = [ "io.github.soyeb_jim285.HyprFM.desktop" ];
     };
   };
   
