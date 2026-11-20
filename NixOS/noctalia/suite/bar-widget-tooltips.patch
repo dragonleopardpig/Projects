@@ -1,0 +1,152 @@
+diff -ru a/src/shell/bar/widgets/control_center_widget.cpp b/src/shell/bar/widgets/control_center_widget.cpp
+--- a/src/shell/bar/widgets/control_center_widget.cpp	2026-11-20 08:37:04.794989819 +0800
++++ b/src/shell/bar/widgets/control_center_widget.cpp	2026-11-20 08:37:23.763008951 +0800
+@@ -28,6 +28,7 @@
+     );
+   }
+ 
++  area->setTooltip("Control center: quick settings");
+   setRoot(std::move(area));
+ }
+ 
+diff -ru a/src/shell/bar/widgets/idle_inhibitor_widget.cpp b/src/shell/bar/widgets/idle_inhibitor_widget.cpp
+--- a/src/shell/bar/widgets/idle_inhibitor_widget.cpp	2026-11-20 08:37:04.798989823 +0800
++++ b/src/shell/bar/widgets/idle_inhibitor_widget.cpp	2026-11-20 08:37:23.763191707 +0800
+@@ -12,6 +12,14 @@
+ 
+   const char* glyphForState(bool enabled) { return enabled ? "caffeine-on" : "caffeine-off"; }
+ 
++  const char* tooltipForState(bool available, bool enabled) {
++    if (!available) {
++      return "Caffeine: not available";
++    }
++    return enabled ? "Caffeine on: the screen stays awake (click to turn off)"
++                   : "Caffeine off: click to keep the screen awake";
++  }
++
+ } // namespace
+ 
+ IdleInhibitorWidget::IdleInhibitorWidget(IdleInhibitor* inhibitor) : m_inhibitor(inhibitor) {}
+@@ -28,6 +36,10 @@
+           .color = colorSpecFromRole(ColorRole::OnSurfaceVariant),
+       })
+   );
++  {
++    const bool available = m_inhibitor != nullptr && m_inhibitor->available();
++    area->setTooltip(tooltipForState(available, available && m_inhibitor->enabled()));
++  }
+ 
+   setRoot(std::move(area));
+ }
+@@ -74,6 +86,7 @@
+   }
+   m_glyph->measure(renderer);
+   m_area->setEnabled(available);
++  m_area->setTooltip(tooltipForState(available, enabled));
+   if (auto* node = root(); node != nullptr) {
+     node->setOpacity(available ? 1.0F : 0.55F);
+   }
+diff -ru a/src/shell/bar/widgets/launcher_widget.cpp b/src/shell/bar/widgets/launcher_widget.cpp
+--- a/src/shell/bar/widgets/launcher_widget.cpp	2026-11-20 08:37:04.792989818 +0800
++++ b/src/shell/bar/widgets/launcher_widget.cpp	2026-11-20 08:37:23.762936232 +0800
+@@ -28,6 +28,7 @@
+     );
+   }
+ 
++  area->setTooltip("Launcher: search and open apps");
+   setRoot(std::move(area));
+ }
+ 
+diff -ru a/src/shell/bar/widgets/media_widget.cpp b/src/shell/bar/widgets/media_widget.cpp
+--- a/src/shell/bar/widgets/media_widget.cpp	2026-11-20 08:37:04.803989827 +0800
++++ b/src/shell/bar/widgets/media_widget.cpp	2026-11-20 08:37:23.764124365 +0800
+@@ -336,6 +336,34 @@
+     return;
+   }
+ 
++  if (m_area != nullptr) {
++    if (active.has_value()) {
++      std::vector<TooltipRow> rows;
++      if (!active->title.empty()) {
++        rows.push_back({"Title", active->title});
++      }
++      if (std::string artists = joinArtists(active->artists); !artists.empty()) {
++        rows.push_back({"Artist", std::move(artists)});
++      }
++      if (!active->album.empty()) {
++        rows.push_back({"Album", active->album});
++      }
++      if (!active->identity.empty()) {
++        rows.push_back({"Player", active->identity});
++      }
++      if (!active->playbackStatus.empty()) {
++        rows.push_back({"Status", active->playbackStatus});
++      }
++      if (rows.empty()) {
++        m_area->setTooltip("Media");
++      } else {
++        m_area->setTooltip(std::move(rows));
++      }
++    } else {
++      m_area->setTooltip("Media: nothing playing");
++    }
++  }
++
+   if (playbackChanged && !textChanged && !artChanged && !artAwaitingDecode) {
+     m_lastPlaybackStatus = playbackStatus;
+     m_label->setColor(
+diff -ru a/src/shell/bar/widgets/notification_widget.cpp b/src/shell/bar/widgets/notification_widget.cpp
+--- a/src/shell/bar/widgets/notification_widget.cpp	2026-11-20 08:37:04.801989825 +0800
++++ b/src/shell/bar/widgets/notification_widget.cpp	2026-11-20 08:37:40.890536361 +0800
+@@ -9,9 +9,24 @@
+ #include "ui/style.h"
+ 
+ #include <memory>
++#include <string>
+ 
+ namespace {
+   constexpr float kDotBaseSize = 6.0F;
++
++  std::string tooltipForState(bool hasUnread, bool dnd) {
++    std::string text = hasUnread ? "Notifications: unread (click to open)" : "Notifications: none unread (click to open)";
++    if (dnd) {
++      text += " - Do Not Disturb is on";
++    }
++    return text;
++  }
++
++  void applyTooltip(Node* rootNode, bool hasUnread, bool dnd) {
++    if (auto* area = dynamic_cast<InputArea*>(rootNode); area != nullptr) {
++      area->setTooltip(tooltipForState(hasUnread, dnd));
++    }
++  }
+ } // namespace
+ 
+ NotificationWidget::NotificationWidget(NotificationManager* manager, wl_output* /*output*/, Options options)
+@@ -41,6 +56,7 @@
+   );
+ 
+   setRoot(std::move(area));
++  applyTooltip(root(), m_hasNotifications, m_dndEnabled);
+   refreshIndicatorState();
+ }
+ 
+@@ -100,6 +116,7 @@
+   }
+   m_hasNotifications = hasNotifications;
+   m_dndEnabled = dndEnabled;
++  applyTooltip(root(), m_hasNotifications, m_dndEnabled);
+   if (m_glyph != nullptr) {
+     m_glyph->setGlyph(m_dndEnabled ? "bell-off" : "bell");
+     m_glyph->setColor(widgetIconColorOr(colorSpecFromRole(ColorRole::OnSurface)));
+diff -ru a/src/shell/bar/widgets/session_widget.cpp b/src/shell/bar/widgets/session_widget.cpp
+--- a/src/shell/bar/widgets/session_widget.cpp	2026-11-20 08:37:04.796989821 +0800
++++ b/src/shell/bar/widgets/session_widget.cpp	2026-11-20 08:37:23.763058805 +0800
+@@ -28,6 +28,7 @@
+     );
+   }
+ 
++  area->setTooltip("Session: lock, log out, restart, shut down");
+   setRoot(std::move(area));
+ }
+ 

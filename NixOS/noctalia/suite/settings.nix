@@ -166,11 +166,12 @@
     agent-status.type = "local/agent-status:bar";
     xwayland.type = "tordex/xwayland:bar";
     # ALWAYS-ON MODE (modules/always-on-umbriel.nix): either click switches it; the glyph a cup
-    # when off, an infinity when on (the watcher sets it).
+    # when off, an infinity when on, and the tooltip says which (the watcher sets both).
     always-on = {
       type = "custom_button";
       color = barAccents.lawnGreen;
       glyph = "coffee";
+      tooltip = "Always-on mode: off (click to keep the machine up for remote sessions)";
       actions = { left = "exec /run/current-system/sw/bin/always-on-toggle";
                   right = "exec /run/current-system/sw/bin/always-on-toggle"; };
     };

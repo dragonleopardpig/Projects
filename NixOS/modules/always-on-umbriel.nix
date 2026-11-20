@@ -34,8 +34,9 @@ let
   watch = pkgs.writeShellScript "always-on-umbriel-watch" ''
     set -u
     cup() {
-      # (a TOML value: a string in its own quotes)
+      # (TOML values: strings in their own quotes)
       noctalia msg config-set widget.always-on.glyph "\"$1\"" >/dev/null 2>&1 || true
+      noctalia msg config-set widget.always-on.tooltip "\"$2\"" >/dev/null 2>&1 || true
     }
     was=""
     while true; do
@@ -45,13 +46,13 @@ let
         if [ "$now" = on ]; then
           noctalia msg config-set idle.behavior.lock.enabled false >/dev/null 2>&1 || true
           systemctl --user start ${idleUnit}.service || true
-          cup infinity
+          cup infinity "Always-on mode: ON (power key, lid and suspend ignored; click to turn off)"
         else
           systemctl --user stop ${idleUnit}.service || true
           noctalia msg config-set idle.behavior.lock.enabled true >/dev/null 2>&1 || true
           # (anything left dimmed put back)
           "$HOME/.local/bin/night-look" off || true
-          cup coffee
+          cup coffee "Always-on mode: off (click to keep the machine up for remote sessions)"
         fi
         was=$now
       fi

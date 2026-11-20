@@ -18,6 +18,9 @@
           ./suite/noctalia-umbriel-ipc.patch
           ./suite/fullscreen-launcher.patch
           ./suite/tray-menu-modal-layer.patch
+          # Tooltips for the bar buttons that had none (launcher, media, control
+          # center, caffeine, notifications, session).
+          ./suite/bar-widget-tooltips.patch
         ];
       });
       suite = import ./suite { inherit pkgs shell; };
