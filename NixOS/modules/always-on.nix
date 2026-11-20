@@ -50,6 +50,8 @@ let
     set -eu
     export PATH=${path}
     mode=$(cat ${state} 2>/dev/null || echo off)
+    # (the folder stays even when "off": the bar's watcher waits on it with inotify)
+    mkdir -p ${builtins.dirOf logindFile}
     if [ "$mode" = on ]; then
       install -D -m 0644 ${logindDropIn} ${logindFile}
       install -D -m 0644 ${sleepDropIn} ${sleepFile}

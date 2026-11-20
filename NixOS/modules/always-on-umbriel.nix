@@ -16,7 +16,8 @@
 #     (noctalia/suite/default.nix) -- a monitor powered off drops its signal, which is what the
 #     night look exists to avoid.
 #
-# The watcher follows the logind drop-in, as the old bar did: polled, every 5 s.
+# The watcher follows the logind drop-in: woken by inotify the moment it appears or goes, so a
+# click on the cup changes the glyph at once; every 5 s anyway, as a fallback.
 { lib, pkgs, ... }:
 let
   dropin = "/run/systemd/logind.conf.d/50-always-on.conf";
@@ -56,7 +57,10 @@ let
         fi
         was=$now
       fi
-      sleep 5
+      # (exit 0 = an event, 2 = the 5 s passed; 1 = no folder or no inotify: poll instead)
+      ${pkgs.inotify-tools}/bin/inotifywait -qq -t 5 -e create -e delete -e moved_to -e moved_from \
+        ${builtins.dirOf dropin} 2>/dev/null
+      [ "$?" -ne 1 ] || sleep 5
     done
   '';
 in
