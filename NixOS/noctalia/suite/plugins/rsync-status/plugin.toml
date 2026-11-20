@@ -1,0 +1,28 @@
+id = "local/rsync-status"
+name = "Rsync Status"
+version = "1.0.0"
+plugin_api = 45
+author = "local"
+license = "MIT"
+dependencies = ["rsync"]
+tags = ["sync", "backup", "rsync", "bar", "panel"]
+icon = "arrows-transfer-up"
+description = "Top bar rsync status indicator with a per-target dropdown panel for sync-projects."
+
+[[service]]
+id = "service"
+entry = "service.luau"
+
+[[widget]]
+id = "bar"
+entry = "bar.luau"
+
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 500
+height = "content"
+max_height = 560
+placement = "attached"
+position = "top_right"
+open_near_click = true

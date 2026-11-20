@@ -93,6 +93,7 @@
       "local/agent-status"              # local: Antigravity lifecycle status + scratchpad toggle
       "local/gpu-status"                # local: active renderer GPU + per-monitor scanout GPU
       "local/always-on"                 # local: always-on mode cup (modules/always-on-umbriel.nix)
+      "local/rsync-status"              # local: sync-projects rsync status icon + per-target dropdown
     ];
     auto_update = "none";
   };
@@ -103,6 +104,11 @@
       panel_open_near_click = true;
     };
     "community/kitty-control" = {
+      panel_placement = "attached";
+      panel_position = "top_right";
+      panel_open_near_click = true;
+    };
+    "local/rsync-status" = {
       panel_placement = "attached";
       panel_position = "top_right";
       panel_open_near_click = true;
@@ -121,7 +127,7 @@
     reserve_space = true;
     start = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
     center = [ "active_window" "xwayland" ];
-    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
+    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
   };
   widget = {
     launcher = {
@@ -170,5 +176,6 @@
     # its cup / infinity and tooltip change in place; either click switches it.
     always-on.type = "local/always-on:bar";
     always-on.color = barAccents.lawnGreen;
+    rsync-status.type = "local/rsync-status:bar";
   };
 }
