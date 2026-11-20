@@ -256,10 +256,10 @@ That is the case on FUSE, network and removable mounts."
 ;; call, deaf to every key.  So on such mounts a subprocess does the asking,
 ;; and Emacs waits for it in slices it can leave: on a deadline, or Esc.
 
-(defcustom enhanced-dirvish-slow-mount-probe-timeout 3
-  "Seconds a cloud, network or removable mount gets to answer before a
-folder on it is opened.  A mount that does not answer is not entered, so
-Emacs never waits on it; Esc cancels the check."
+(defcustom enhanced-dirvish-slow-mount-probe-timeout 30
+  "Seconds a cloud, network or removable mount gets to say what a path is.
+It is normally instant; only a mount that stopped answering takes this
+long, and then the folder is not entered.  Esc cancels the wait sooner."
   :type 'number
   :group 'enhanced-dirvish)
 
@@ -293,7 +293,8 @@ done and reads the rest of its output first."
   "Wait for PROC until DEADLINE (a `float-time'); Esc cancels.
 Return `done', `timeout' or `cancelled'.  Events other than Esc that
 arrive meanwhile are put back on `unread-command-events' in order.
-LABEL names the place in the \"Reading...\" message shown after 0.5 s."
+LABEL names the place in the \"Reading... N s (Esc to cancel)\" message,
+shown after 0.5 s and counting up, so a slow cloud drive visibly works."
   (let ((shown nil)
         (start (float-time))
         (deferred nil)
@@ -311,10 +312,13 @@ LABEL names the place in the \"Reading...\" message shown after 0.5 s."
             ;; nil, not PROC: waiting on one process holds back its own
             ;; sentinel, which is what marks it done.
             (accept-process-output nil 0.05)
-            (when (and (not shown) (> (- (float-time) start) 0.5))
-              (setq shown t)
-              (message "Reading %s... (Esc to cancel)" label)
-              (redisplay t))
+            (let ((waited (floor (- (float-time) start))))
+              (when (and (> (- (float-time) start) 0.5) (not (eql shown waited)))
+                (setq shown waited)
+                (message (if (> waited 0) "Reading %s... %d s (Esc to cancel)"
+                           "Reading %s... (Esc to cancel)")
+                         label waited)
+                (redisplay t)))
             (let (event)
               (while (and (not result) (input-pending-p)
                           (setq event (read-event nil nil 0)))
@@ -355,43 +359,83 @@ TIMEOUT seconds, default `enhanced-dirvish-slow-mount-probe-timeout') or
        (not (enhanced-dirvish-location-virtual-p path))
        (enhanced-dirvish-path-unsafe-probe-p path)))
 
-(defun enhanced-dirvish--probe-readable (dir deadline)
-  "Whether DIR can be read before DEADLINE: a `find' fetches its first entry.
-A mount's top folder is answered from cache, so `stat' alone said yes while
-reading it hung (11-20: Filen, 25 requests queued).  Return `done',
-`unresponsive' or `cancelled'."
-  (if-let ((find (executable-find "find")))
-      (let ((proc (enhanced-dirvish--slow-mount-start
-                   "enhanced-dirvish-probe-read"
-                   (list find (directory-file-name (expand-file-name dir))
-                         "-mindepth" "1" "-maxdepth" "1" "-quit"))))
-        (unwind-protect
-            (pcase (enhanced-dirvish--slow-mount-wait
-                    proc deadline (abbreviate-file-name (directory-file-name dir)))
-              ('timeout 'unresponsive)
-              (other other))
-          (enhanced-dirvish--slow-mount-cleanup proc)))
-    'done))
+(defcustom enhanced-dirvish-slow-mount-list-timeout 60
+  "Seconds to wait for a folder listing on a cloud, network or removable mount.
+Such folders are read by a `find' subprocess, never inside Emacs, so a
+mount that stops answering costs at most this long instead of freezing
+Emacs in an uninterruptible system call -- and Esc cancels the wait at
+any time (other keys typed meanwhile are kept for afterwards)."
+  :type 'number
+  :group 'enhanced-dirvish)
+
+(defun enhanced-dirvish--list-slow-mount (dir)
+  "Entries of DIR read by a `find' subprocess, for mounts that may hang.
+Return a list of (NAME DIR-P SIZE MTIME CTIME), the symbol `timeout' when
+the mount did not answer within `enhanced-dirvish-slow-mount-list-timeout',
+`cancelled' when Esc was pressed meanwhile, or nil when `find' is missing
+or DIR cannot be listed."
+  (when-let ((find (executable-find "find")))
+    (let ((proc (enhanced-dirvish--slow-mount-start
+                 "enhanced-dirvish-find"
+                 (list find (directory-file-name dir) "-mindepth" "1" "-maxdepth" "1"
+                       "-printf" "%y\\0%s\\0%T@\\0%C@\\0%f\\0"))))
+      (unwind-protect
+          (pcase (enhanced-dirvish--slow-mount-wait
+                  proc (+ (float-time) enhanced-dirvish-slow-mount-list-timeout)
+                  (abbreviate-file-name (directory-file-name dir)))
+            ((and (or 'timeout 'cancelled) why) why)
+            (_
+             ;; (find exits 1 when some entries are unreadable; keep the readable ones)
+             (when (memq (process-exit-status proc) '(0 1))
+               (let ((fields (split-string (with-current-buffer (process-buffer proc) (buffer-string)) "\0"))
+                     entries)
+                 (while (>= (length fields) 5)
+                   (pcase-let ((`(,type ,size ,mtime ,ctime ,name . ,rest) fields))
+                     (push (list name (equal type "d") (string-to-number size)
+                                 (seconds-to-time (string-to-number mtime))
+                                 (seconds-to-time (string-to-number ctime)))
+                           entries)
+                     (setq fields rest)))
+                 (nreverse entries)))))
+        (enhanced-dirvish--slow-mount-cleanup proc)))))
+
+(defvar enhanced-dirvish--slow-mount-listing nil
+  "(DIR TIME ENTRIES) listed by the entry check, for the listing that follows.")
+
+(defun enhanced-dirvish--slow-mount-take-listing (dir)
+  "ENTRIES the entry check listed for DIR in the last 10 s, once; else nil."
+  (pcase enhanced-dirvish--slow-mount-listing
+    (`(,d ,time ,entries)
+     (setq enhanced-dirvish--slow-mount-listing nil)
+     (and (equal d (directory-file-name (expand-file-name dir)))
+          (< (- (float-time) time) 10)
+          entries))))
 
 (defun enhanced-dirvish--slow-mount-ok-to-enter-p (dir)
   "Non-nil unless DIR is on a mount that may hang and does not answer now.
-It must say what DIR is and, for a folder, give its first entry, within
-`enhanced-dirvish-slow-mount-probe-timeout' seconds in all."
+It must say what DIR is (`stat', `enhanced-dirvish-slow-mount-probe-timeout')
+and, for a folder, be listed -- `stat' alone is answered from cache while
+reading hangs.  The listing waits up to
+`enhanced-dirvish-slow-mount-list-timeout' with \"Reading... (Esc to
+cancel)\" and is kept for the view that opens next, so the folder is read
+once."
   (if (not (enhanced-dirvish--slow-mount-path-p dir))
       t
     (let* ((label (abbreviate-file-name (directory-file-name dir)))
-           (deadline (+ (float-time) enhanced-dirvish-slow-mount-probe-timeout))
-           (kind (enhanced-dirvish--probe-path dir enhanced-dirvish-slow-mount-probe-timeout)))
+           (kind (enhanced-dirvish--probe-path dir))
+           (limit enhanced-dirvish-slow-mount-probe-timeout))
       (when (eq kind 'directory)
-        (pcase (enhanced-dirvish--probe-readable dir deadline)
-          ('unresponsive (setq kind 'unresponsive))
-          ('cancelled (setq kind 'cancelled))))
+        (setq limit enhanced-dirvish-slow-mount-list-timeout)
+        (pcase (enhanced-dirvish--list-slow-mount dir)
+          ('timeout (setq kind 'unresponsive))
+          ('cancelled (setq kind 'cancelled))
+          (entries (setq enhanced-dirvish--slow-mount-listing
+                         (list (directory-file-name (expand-file-name dir)) (float-time) entries)))))
       (pcase kind
         ((or 'directory 'file) t)
         ('missing (message "%s: no such folder" label) nil)
         ('cancelled (message "Opening %s cancelled" label) nil)
-        (_ (message "%s is not responding (%gs) -- not opened; try again later"
-                    label enhanced-dirvish-slow-mount-probe-timeout)
+        (_ (message "%s is not responding (%gs) -- not opened; try again later" label limit)
            nil)))))
 
 (defun enhanced-dirvish--directory-p-safe (file)

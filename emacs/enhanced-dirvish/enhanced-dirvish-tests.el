@@ -283,30 +283,54 @@ waits on it; one that answers is opened as usual."
         (enhanced-dirvish-open-location "/cloud/Filen")
         (should-not opened)
         (should (eq (enhanced-dirvish--directory-p-safe "/cloud/Filen/sub") 'unresponsive)))
-      ;; stat answers (from cache) but reading the folder hangs: not entered
+      ;; stat answers (from cache) but listing the folder hangs: not entered
       (cl-letf (((symbol-function 'enhanced-dirvish--probe-path) (lambda (&rest _) 'directory))
-                ((symbol-function 'enhanced-dirvish--probe-readable) (lambda (&rest _) 'unresponsive)))
+                ((symbol-function 'enhanced-dirvish--list-slow-mount) (lambda (&rest _) 'timeout)))
         (enhanced-dirvish-open-location "/cloud/Filen")
         (should-not opened))
       (cl-letf (((symbol-function 'enhanced-dirvish--probe-path) (lambda (&rest _) 'directory))
-                ((symbol-function 'enhanced-dirvish--probe-readable) (lambda (&rest _) 'done)))
+                ((symbol-function 'enhanced-dirvish--list-slow-mount) (lambda (&rest _) 'cancelled)))
+        (enhanced-dirvish-open-location "/cloud/Filen")
+        (should-not opened))
+      (cl-letf (((symbol-function 'enhanced-dirvish--probe-path) (lambda (&rest _) 'directory))
+                ((symbol-function 'enhanced-dirvish--list-slow-mount)
+                 (lambda (&rest _) (list (list "a.txt" nil 1 nil nil)))))
         (enhanced-dirvish-open-location "/cloud/Filen")
         (should (equal opened "/cloud/Filen"))
         (should (eq (enhanced-dirvish--directory-p-safe "/cloud/Filen/sub") t))))))
 
-(ert-deftest enhanced-dirvish-test-probe-readable-reads-the-folder ()
-  "The read check gives up on a folder whose listing never comes."
-  (let* ((tmp (make-temp-file "enhanced-dirvish-read-" t))
+(ert-deftest enhanced-dirvish-test-entry-check-listing-is-read-once ()
+  "The listing the entry check makes is what the view shows: the folder is
+read once, and the kept listing is used only for that folder, only once."
+  (let* ((tmp (make-temp-file "enhanced-dirvish-once-" t))
          (bin (make-temp-file "enhanced-dirvish-bin-" t))
-         (exec-path (cons bin exec-path)))
+         (count-file (expand-file-name "count" bin))
+         (exec-path (cons bin exec-path))
+         (enhanced-dirvish--slow-mount-listing nil)
+         (p (enhanced-dirvish-prefs--create :sort-key 'name))
+         (runs (lambda () (length (split-string (with-temp-buffer (insert-file-contents count-file)
+                                                                   (buffer-string))
+                                                 "\n" t)))))
     (unwind-protect
-        (progn
-          (should (eq (enhanced-dirvish--probe-readable tmp (+ (float-time) 5)) 'done))
-          (write-region "#!/bin/sh\nexec sleep 30\n" nil (expand-file-name "find" bin))
+        (cl-letf (((symbol-function 'enhanced-dirvish-path-unsafe-probe-p) #'always))
+          (write-region "x" nil (expand-file-name "one.txt" tmp))
+          ;; a find that counts its runs and lists one.txt
+          (write-region (format "#!/bin/sh\necho x >> %s\nprintf 'f\\0001\\0001\\0001\\0one.txt\\0'\n"
+                                (shell-quote-argument count-file))
+                        nil (expand-file-name "find" bin))
           (set-file-modes (expand-file-name "find" bin) #o755)
-          (let ((start (float-time)))
-            (should (eq (enhanced-dirvish--probe-readable tmp (+ (float-time) 1)) 'unresponsive))
-            (should (< (- (float-time) start) 3))))
+          (should (enhanced-dirvish--slow-mount-ok-to-enter-p tmp))
+          (should (equal (mapcar (lambda (e) (plist-get e :name))
+                                 (enhanced-dirvish-list-directory-entries tmp p))
+                         '("one.txt")))
+          (should (= 1 (funcall runs)))
+          ;; used up: the next listing reads again
+          (should (null enhanced-dirvish--slow-mount-listing))
+          (enhanced-dirvish-list-directory-entries tmp p)
+          (should (= 2 (funcall runs)))
+          ;; never for another folder
+          (setq enhanced-dirvish--slow-mount-listing (list "/elsewhere" (float-time) '(("x" nil 1 nil nil))))
+          (should-not (enhanced-dirvish--slow-mount-take-listing tmp)))
       (delete-directory tmp t)
       (delete-directory bin t))))
 

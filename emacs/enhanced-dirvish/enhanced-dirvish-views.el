@@ -538,46 +538,6 @@ With KNOWN-P, DIR-P is taken as the answer and PATH is never statted."
     ('code "Code & Config")
     (_ "Other Files")))
 
-(defcustom enhanced-dirvish-slow-mount-list-timeout 15
-  "Seconds to wait for a folder listing on a cloud, network or removable mount.
-Such folders are read by a `find' subprocess, never inside Emacs, so a
-mount that stops answering costs at most this long instead of freezing
-Emacs in an uninterruptible system call -- and Esc cancels the wait at
-any time (other keys typed meanwhile are kept for afterwards)."
-  :type 'number
-  :group 'enhanced-dirvish)
-
-(defun enhanced-dirvish--list-slow-mount (dir)
-  "Entries of DIR read by a `find' subprocess, for mounts that may hang.
-Return a list of (NAME DIR-P SIZE MTIME CTIME), the symbol `timeout' when
-the mount did not answer within `enhanced-dirvish-slow-mount-list-timeout',
-`cancelled' when Esc was pressed meanwhile, or nil when `find' is missing
-or DIR cannot be listed."
-  (when-let ((find (executable-find "find")))
-    (let ((proc (enhanced-dirvish--slow-mount-start
-                 "enhanced-dirvish-find"
-                 (list find (directory-file-name dir) "-mindepth" "1" "-maxdepth" "1"
-                       "-printf" "%y\\0%s\\0%T@\\0%C@\\0%f\\0"))))
-      (unwind-protect
-          (pcase (enhanced-dirvish--slow-mount-wait
-                  proc (+ (float-time) enhanced-dirvish-slow-mount-list-timeout)
-                  (abbreviate-file-name (directory-file-name dir)))
-            ((and (or 'timeout 'cancelled) why) why)
-            (_
-             ;; (find exits 1 when some entries are unreadable; keep the readable ones)
-             (when (memq (process-exit-status proc) '(0 1))
-               (let ((fields (split-string (with-current-buffer (process-buffer proc) (buffer-string)) "\0"))
-                     entries)
-                 (while (>= (length fields) 5)
-                   (pcase-let ((`(,type ,size ,mtime ,ctime ,name . ,rest) fields))
-                     (push (list name (equal type "d") (string-to-number size)
-                                 (seconds-to-time (string-to-number mtime))
-                                 (seconds-to-time (string-to-number ctime)))
-                           entries)
-                     (setq fields rest)))
-                 (nreverse entries)))))
-        (enhanced-dirvish--slow-mount-cleanup proc)))))
-
 (defun enhanced-dirvish-list-directory-entries (dir &optional prefs)
   "Return sorted entry plists for DIR honoring PREFS & active filter.
 Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
@@ -593,7 +553,8 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
          ;; A cloud/network/removable mount can stop answering; reading it here
          ;; would freeze Emacs in the kernel (11-20: a wedged Filen rclone mount).
          (slow (and (not (file-remote-p dir)) (enhanced-dirvish-path-unsafe-probe-p dir)))
-         (listed (when slow (enhanced-dirvish--list-slow-mount dir)))
+         (listed (when slow (or (enhanced-dirvish--slow-mount-take-listing dir)
+                                (enhanced-dirvish--list-slow-mount dir))))
          (names (cond
                  (slow (pcase listed
                          ('timeout (message "%s is not responding (%gs); listing skipped -- F5 to try again"
