@@ -344,8 +344,16 @@ Return non-nil if the sidebar was newly opened and rendered."
                    (file-exists-p resolved)))))))
 
 (defun enhanced-dirvish-open-location (loc &optional record-history)
-  "Open LOC (path, virtual, or remote URI) cleanly inside the active pane."
+  "Open LOC (path, virtual, or remote URI) cleanly inside the active pane.
+A folder on a mount that may hang (cloud, network, removable) is opened
+only if that mount answers now (`enhanced-dirvish--slow-mount-ok-to-enter-p',
+Esc to cancel): Emacs would otherwise freeze on its first look inside."
   (interactive "sLocation or path: ")
+  (when (enhanced-dirvish--slow-mount-ok-to-enter-p (enhanced-dirvish-resolve-location-uri loc))
+    (enhanced-dirvish--open-location-1 loc record-history)))
+
+(defun enhanced-dirvish--open-location-1 (loc &optional record-history)
+  "Open LOC inside the active pane; see `enhanced-dirvish-open-location'."
   (when (enhanced-dirvish-panes--valid-main-window-p (selected-window))
     (enhanced-dirvish-panes--sync-active-pane-from-window (selected-window)))
   (let* ((resolved (enhanced-dirvish-resolve-location-uri loc))

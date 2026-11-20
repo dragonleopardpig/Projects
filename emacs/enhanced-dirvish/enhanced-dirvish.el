@@ -345,6 +345,9 @@ advice and Dirvish settings, and the keys of
       (advice-add 'dirvish-quit :around #'enhanced-dirvish--around-quit))
     ;; Advice applies once the optional extension defines the function.
     (advice-add 'dirvish-collapse--cache :around #'enhanced-dirvish--collapse-guard)
+    ;; Nothing walks up a cloud or network mount looking for .git,
+    ;; .dir-locals.el, a project or .editorconfig (each step is a call into it).
+    (advice-add 'locate-dominating-file :around #'enhanced-dirvish--dominating-file-guard)
     (dolist (hook '(dired-mode-hook
                     enhanced-dirvish-compact-mode-hook
                     enhanced-dirvish-icons-mode-hook

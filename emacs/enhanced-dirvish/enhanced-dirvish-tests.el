@@ -214,6 +214,117 @@ process start reaches into the mount (each call there can take seconds)."
       (delete-directory tmp t)
       (delete-directory bin t))))
 
+(ert-deftest enhanced-dirvish-test-slow-mount-listing-esc-cancels ()
+  "Esc cancels a slow cloud-mount listing at once and is consumed; other
+keys typed meanwhile are kept for afterwards."
+  (let* ((tmp (make-temp-file "enhanced-dirvish-esc-" t))
+         (bin (make-temp-file "enhanced-dirvish-bin-" t))
+         (fake (expand-file-name "find" bin))
+         (exec-path (cons bin exec-path))
+         (enhanced-dirvish-slow-mount-list-timeout 20)
+         (p (enhanced-dirvish-prefs--create :sort-key 'name)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'enhanced-dirvish-path-unsafe-probe-p) #'always))
+          (write-region "#!/bin/sh\nexec sleep 30\n" nil fake)
+          (set-file-modes fake #o755)
+          ;; Esc: back well before the 20 s timeout, nothing listed, Esc gone.
+          (let ((unread-command-events (list 'escape))
+                (start (float-time)))
+            (should (eq (enhanced-dirvish--list-slow-mount tmp) 'cancelled))
+            (should (< (- (float-time) start) 3))
+            (should (null unread-command-events)))
+          (let ((unread-command-events (list 'escape)))
+            (should (null (enhanced-dirvish-list-directory-entries tmp p))))
+          ;; Another key does not cancel; it is put back once the listing is done.
+          (write-region "#!/bin/sh\nsleep 0.3\nprintf 'f\\0000\\0001\\0001\\0kept.txt\\0'\n" nil fake)
+          (let ((unread-command-events (list ?a)))
+            (should (equal (mapcar #'car (enhanced-dirvish--list-slow-mount tmp)) '("kept.txt")))
+            (should (equal unread-command-events '(?a)))))
+      (delete-directory tmp t)
+      (delete-directory bin t))))
+
+(defmacro enhanced-dirvish-test--with-fake-stat (script &rest body)
+  "Run BODY with a fake `stat' on `exec-path' that runs shell SCRIPT."
+  (declare (indent 1))
+  `(let* ((bin (make-temp-file "enhanced-dirvish-stat-" t))
+          (exec-path (cons bin exec-path)))
+     (unwind-protect
+         (progn
+           (write-region (concat "#!/bin/sh\n" ,script "\n") nil (expand-file-name "stat" bin))
+           (set-file-modes (expand-file-name "stat" bin) #o755)
+           ,@body)
+       (delete-directory bin t))))
+
+(ert-deftest enhanced-dirvish-test-slow-mount-probe-answers-or-gives-up ()
+  "The probe says what a path is, and gives up on a mount that never answers."
+  (enhanced-dirvish-test--with-fake-stat "echo directory"
+    (should (eq (enhanced-dirvish--probe-path "/cloud/dir") 'directory)))
+  (enhanced-dirvish-test--with-fake-stat "echo 'regular file'"
+    (should (eq (enhanced-dirvish--probe-path "/cloud/f.txt") 'file)))
+  (enhanced-dirvish-test--with-fake-stat "exit 1"
+    (should (eq (enhanced-dirvish--probe-path "/cloud/gone") 'missing)))
+  (enhanced-dirvish-test--with-fake-stat "exec sleep 30"
+    (let ((start (float-time)))
+      (should (eq (enhanced-dirvish--probe-path "/cloud/hung" 1) 'unresponsive))
+      (should (< (- (float-time) start) 3)))
+    (let ((unread-command-events (list 'escape))
+          (start (float-time)))
+      (should (eq (enhanced-dirvish--probe-path "/cloud/hung" 20) 'cancelled))
+      (should (< (- (float-time) start) 3)))))
+
+(ert-deftest enhanced-dirvish-test-open-location-does-not-enter-a-hung-mount ()
+  "A folder on a mount that does not answer is not entered, so Emacs never
+waits on it; one that answers is opened as usual."
+  (let (opened)
+    (cl-letf (((symbol-function 'enhanced-dirvish-path-unsafe-probe-p) #'always)
+              ((symbol-function 'enhanced-dirvish--open-location-1)
+               (lambda (loc &rest _) (setq opened loc))))
+      (cl-letf (((symbol-function 'enhanced-dirvish--probe-path) (lambda (&rest _) 'unresponsive)))
+        (enhanced-dirvish-open-location "/cloud/Filen")
+        (should-not opened)
+        (should (eq (enhanced-dirvish--directory-p-safe "/cloud/Filen/sub") 'unresponsive)))
+      ;; stat answers (from cache) but reading the folder hangs: not entered
+      (cl-letf (((symbol-function 'enhanced-dirvish--probe-path) (lambda (&rest _) 'directory))
+                ((symbol-function 'enhanced-dirvish--probe-readable) (lambda (&rest _) 'unresponsive)))
+        (enhanced-dirvish-open-location "/cloud/Filen")
+        (should-not opened))
+      (cl-letf (((symbol-function 'enhanced-dirvish--probe-path) (lambda (&rest _) 'directory))
+                ((symbol-function 'enhanced-dirvish--probe-readable) (lambda (&rest _) 'done)))
+        (enhanced-dirvish-open-location "/cloud/Filen")
+        (should (equal opened "/cloud/Filen"))
+        (should (eq (enhanced-dirvish--directory-p-safe "/cloud/Filen/sub") t))))))
+
+(ert-deftest enhanced-dirvish-test-probe-readable-reads-the-folder ()
+  "The read check gives up on a folder whose listing never comes."
+  (let* ((tmp (make-temp-file "enhanced-dirvish-read-" t))
+         (bin (make-temp-file "enhanced-dirvish-bin-" t))
+         (exec-path (cons bin exec-path)))
+    (unwind-protect
+        (progn
+          (should (eq (enhanced-dirvish--probe-readable tmp (+ (float-time) 5)) 'done))
+          (write-region "#!/bin/sh\nexec sleep 30\n" nil (expand-file-name "find" bin))
+          (set-file-modes (expand-file-name "find" bin) #o755)
+          (let ((start (float-time)))
+            (should (eq (enhanced-dirvish--probe-readable tmp (+ (float-time) 1)) 'unresponsive))
+            (should (< (- (float-time) start) 3))))
+      (delete-directory tmp t)
+      (delete-directory bin t))))
+
+(ert-deftest enhanced-dirvish-test-no-walking-up-a-cloud-mount ()
+  "VC, dir-locals, projects and editorconfig do not walk up a cloud or
+network mount; local and removable folders are searched as usual."
+  (let ((called nil))
+    (let ((orig (lambda (file name) (setq called (list file name)) "/found/")))
+      (cl-letf (((symbol-function 'enhanced-dirvish-path-mount-kind) (lambda (_) 'cloud)))
+        (should-not (enhanced-dirvish--dominating-file-guard orig "/cloud/Filen/x" ".git"))
+        (should-not called))
+      (cl-letf (((symbol-function 'enhanced-dirvish-path-mount-kind) (lambda (_) 'removable)))
+        (should (equal (enhanced-dirvish--dominating-file-guard orig "/usb/repo/x" ".git") "/found/")))
+      (cl-letf (((symbol-function 'enhanced-dirvish-path-mount-kind) (lambda (_) 'local)))
+        (setq called nil)
+        (should (equal (enhanced-dirvish--dominating-file-guard orig "/home/u/x" ".git") "/found/"))
+        (should (equal called '("/home/u/x" ".git")))))))
+
 (ert-deftest enhanced-dirvish-test-slow-mount-listing-times-out ()
   "A mount that never answers costs the timeout, not a frozen Emacs."
   (let* ((tmp (make-temp-file "enhanced-dirvish-hang-" t))

@@ -249,6 +249,172 @@ That is the case on FUSE, network and removable mounts."
             (let ((resolved (expand-file-name target (or (file-name-directory path) "/"))))
               (memq (enhanced-dirvish-path-mount-kind resolved) '(cloud network remote removable))))))))
 
+;;;; Mounts that may hang: ask a subprocess, wait with Esc, never block Emacs
+;;
+;; Emacs runs Lisp on one thread: a file call into a cloud mount that stops
+;; answering (11-20: Filen's rclone) leaves it in an uninterruptible system
+;; call, deaf to every key.  So on such mounts a subprocess does the asking,
+;; and Emacs waits for it in slices it can leave: on a deadline, or Esc.
+
+(defcustom enhanced-dirvish-slow-mount-probe-timeout 3
+  "Seconds a cloud, network or removable mount gets to answer before a
+folder on it is opened.  A mount that does not answer is not entered, so
+Emacs never waits on it; Esc cancels the check."
+  :type 'number
+  :group 'enhanced-dirvish)
+
+(defun enhanced-dirvish--slow-mount-start (name command)
+  "Start COMMAND (a list) as process NAME for a mount that may hang.
+It runs from a local folder -- starting a process checks and enters
+`default-directory', which could be the mount itself -- with stdout and
+stderr in their own buffers.  Its sentinel marks it done for
+`enhanced-dirvish--slow-mount-wait', which also takes a dead process as
+done and reads the rest of its output first."
+  (let ((default-directory (file-name-as-directory (expand-file-name temporary-file-directory))))
+    (make-process :name name
+                  :buffer (generate-new-buffer (format " *%s*" name))
+                  :stderr (generate-new-buffer (format " *%s-err*" name))
+                  :command command
+                  :connection-type 'pipe
+                  :noquery t
+                  :sentinel (lambda (p _event)
+                              (unless (process-live-p p)
+                                (process-put p 'enhanced-dirvish-done t))))))
+
+(defun enhanced-dirvish--slow-mount-cleanup (proc)
+  "Kill PROC if still running, and its buffers."
+  ;; SIGKILL: a FUSE request waits only for a fatal signal.
+  (when (process-live-p proc) (kill-process proc))
+  (let ((err (get-buffer (format " *%s-err*" (process-name proc)))))
+    (when (buffer-live-p (process-buffer proc)) (kill-buffer (process-buffer proc)))
+    (when (buffer-live-p err) (kill-buffer err))))
+
+(defun enhanced-dirvish--slow-mount-wait (proc deadline label)
+  "Wait for PROC until DEADLINE (a `float-time'); Esc cancels.
+Return `done', `timeout' or `cancelled'.  Events other than Esc that
+arrive meanwhile are put back on `unread-command-events' in order.
+LABEL names the place in the \"Reading...\" message shown after 0.5 s."
+  (let ((shown nil)
+        (start (float-time))
+        (deferred nil)
+        (result nil))
+    (unwind-protect
+        (while (not result)
+          (cond
+           ((or (process-get proc 'enhanced-dirvish-done) (not (process-live-p proc)))
+            ;; Read what is left in the pipe: its sentinel (which would have)
+            ;; does not always run inside this wait.
+            (while (accept-process-output proc 0))
+            (setq result 'done))
+           ((>= (float-time) deadline) (setq result 'timeout))
+           (t
+            ;; nil, not PROC: waiting on one process holds back its own
+            ;; sentinel, which is what marks it done.
+            (accept-process-output nil 0.05)
+            (when (and (not shown) (> (- (float-time) start) 0.5))
+              (setq shown t)
+              (message "Reading %s... (Esc to cancel)" label)
+              (redisplay t))
+            (let (event)
+              (while (and (not result) (input-pending-p)
+                          (setq event (read-event nil nil 0)))
+                (if (memq event '(escape ?\e))
+                    (setq result 'cancelled)
+                  (push event deferred)))))))
+      (setq unread-command-events (append unread-command-events (nreverse deferred)))
+      (when shown (message nil)))
+    result))
+
+(defun enhanced-dirvish--probe-path (path &optional timeout)
+  "What PATH is, asked of a `stat' subprocess, for mounts that may hang.
+Return `directory', `file', `missing', `unresponsive' (no answer within
+TIMEOUT seconds, default `enhanced-dirvish-slow-mount-probe-timeout') or
+`cancelled' (Esc)."
+  (if-let ((stat (executable-find "stat")))
+      (let ((proc (enhanced-dirvish--slow-mount-start
+                   "enhanced-dirvish-probe"
+                   (list stat "-L" "-c" "%F" "--" (directory-file-name (expand-file-name path))))))
+        (unwind-protect
+            (pcase (enhanced-dirvish--slow-mount-wait
+                    proc (+ (float-time) (or timeout enhanced-dirvish-slow-mount-probe-timeout))
+                    (abbreviate-file-name (directory-file-name path)))
+              ('timeout 'unresponsive)
+              ('cancelled 'cancelled)
+              (_ (cond ((/= (process-exit-status proc) 0) 'missing)
+                       ((string-prefix-p "directory"
+                                         (with-current-buffer (process-buffer proc) (buffer-string)))
+                        'directory)
+                       (t 'file))))
+          (enhanced-dirvish--slow-mount-cleanup proc)))
+    (if (file-directory-p path) 'directory 'file)))
+
+(defun enhanced-dirvish--slow-mount-path-p (path)
+  "Non-nil for a local PATH on a mount that may hang (not TRAMP, not virtual)."
+  (and (stringp path) (not (string-empty-p path))
+       (not (file-remote-p path))
+       (not (enhanced-dirvish-location-virtual-p path))
+       (enhanced-dirvish-path-unsafe-probe-p path)))
+
+(defun enhanced-dirvish--probe-readable (dir deadline)
+  "Whether DIR can be read before DEADLINE: a `find' fetches its first entry.
+A mount's top folder is answered from cache, so `stat' alone said yes while
+reading it hung (11-20: Filen, 25 requests queued).  Return `done',
+`unresponsive' or `cancelled'."
+  (if-let ((find (executable-find "find")))
+      (let ((proc (enhanced-dirvish--slow-mount-start
+                   "enhanced-dirvish-probe-read"
+                   (list find (directory-file-name (expand-file-name dir))
+                         "-mindepth" "1" "-maxdepth" "1" "-quit"))))
+        (unwind-protect
+            (pcase (enhanced-dirvish--slow-mount-wait
+                    proc deadline (abbreviate-file-name (directory-file-name dir)))
+              ('timeout 'unresponsive)
+              (other other))
+          (enhanced-dirvish--slow-mount-cleanup proc)))
+    'done))
+
+(defun enhanced-dirvish--slow-mount-ok-to-enter-p (dir)
+  "Non-nil unless DIR is on a mount that may hang and does not answer now.
+It must say what DIR is and, for a folder, give its first entry, within
+`enhanced-dirvish-slow-mount-probe-timeout' seconds in all."
+  (if (not (enhanced-dirvish--slow-mount-path-p dir))
+      t
+    (let* ((label (abbreviate-file-name (directory-file-name dir)))
+           (deadline (+ (float-time) enhanced-dirvish-slow-mount-probe-timeout))
+           (kind (enhanced-dirvish--probe-path dir enhanced-dirvish-slow-mount-probe-timeout)))
+      (when (eq kind 'directory)
+        (pcase (enhanced-dirvish--probe-readable dir deadline)
+          ('unresponsive (setq kind 'unresponsive))
+          ('cancelled (setq kind 'cancelled))))
+      (pcase kind
+        ((or 'directory 'file) t)
+        ('missing (message "%s: no such folder" label) nil)
+        ('cancelled (message "Opening %s cancelled" label) nil)
+        (_ (message "%s is not responding (%gs) -- not opened; try again later"
+                    label enhanced-dirvish-slow-mount-probe-timeout)
+           nil)))))
+
+(defun enhanced-dirvish--directory-p-safe (file)
+  "Like `file-directory-p', but on a mount that may hang a subprocess asks.
+Return t, nil, or `unresponsive' / `cancelled' when that mount did not answer."
+  (if (enhanced-dirvish--slow-mount-path-p file)
+      (pcase (enhanced-dirvish--probe-path file)
+        ('directory t)
+        ((or 'file 'missing) nil)
+        (other other))
+    (file-directory-p file)))
+
+(defun enhanced-dirvish--dominating-file-guard (orig-fn file name)
+  "Call ORIG-FN with FILE and NAME, except on a cloud or network mount.
+VC roots, .dir-locals.el, projects and .editorconfig are all found with
+`locate-dominating-file', and each step up is a call into the mount: on
+11-20 a missing .git on a wedged Filen took over 8 s, with Emacs frozen.
+Removable drives keep it (a repository on a USB disk is common)."
+  (if (and (stringp file) (not (file-remote-p file))
+           (memq (enhanced-dirvish-path-mount-kind file) '(cloud network)))
+      nil
+    (funcall orig-fn file name)))
+
 (defun enhanced-dirvish-path-writable-p (dir)
   "Return non-nil when DIR is writable, without statting remote or cloud mounts."
   (and dir (not (enhanced-dirvish-location-virtual-p dir))
