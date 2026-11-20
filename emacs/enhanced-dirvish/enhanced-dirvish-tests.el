@@ -187,6 +187,33 @@
                      slow local)))
       (delete-directory tmp t))))
 
+(ert-deftest enhanced-dirvish-test-slow-mount-calls-stay-off-the-mount ()
+  "On a cloud mount neither the preview's file comparison nor the listing's
+process start reaches into the mount (each call there can take seconds)."
+  (cl-letf (((symbol-function 'enhanced-dirvish-path-unsafe-probe-p) #'always)
+            ((symbol-function 'file-truename) (lambda (&rest _) (error "file-truename on the mount"))))
+    (should (equal (enhanced-dirvish--same-file-key "/cloud/a/../b.txt") "/cloud/b.txt")))
+  (let* ((tmp (make-temp-file "enhanced-dirvish-cwd-" t))
+         (bin (make-temp-file "enhanced-dirvish-bin-" t))
+         (cwd-file (expand-file-name "cwd" bin))
+         (exec-path (cons bin exec-path))
+         (p (enhanced-dirvish-prefs--create :sort-key 'name)))
+    (unwind-protect
+        (progn
+          (write-region (format "#!/bin/sh\npwd > %s\n" (shell-quote-argument cwd-file)) nil
+                        (expand-file-name "find" bin))
+          (set-file-modes (expand-file-name "find" bin) #o755)
+          (let ((default-directory (file-name-as-directory tmp)))
+            (cl-letf (((symbol-function 'enhanced-dirvish-path-unsafe-probe-p) #'always))
+              (enhanced-dirvish-list-directory-entries tmp p)))
+          (should (file-exists-p cwd-file))
+          (should (equal (file-name-as-directory (string-trim (with-temp-buffer
+                                                                  (insert-file-contents cwd-file)
+                                                                  (buffer-string))))
+                         (file-name-as-directory (file-truename temporary-file-directory)))))
+      (delete-directory tmp t)
+      (delete-directory bin t))))
+
 (ert-deftest enhanced-dirvish-test-slow-mount-listing-times-out ()
   "A mount that never answers costs the timeout, not a frozen Emacs."
   (let* ((tmp (make-temp-file "enhanced-dirvish-hang-" t))

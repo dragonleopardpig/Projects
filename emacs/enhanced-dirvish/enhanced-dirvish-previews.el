@@ -200,6 +200,16 @@ Returns fontified `buffer-string' with realized `face' text properties."
   (when (eq enhanced-dirvish-active-preview-kind 'text)
     (enhanced-dirvish-preview--set-text-scale)))
 
+
+(defun enhanced-dirvish--same-file-key (file)
+  "A key to compare FILE with others: its truename, or on a mount that
+may hang (cloud, network, removable) just its expanded name -- resolving
+symlinks there is a call into the mount for every cursor move."
+  (when (stringp file)
+    (if (enhanced-dirvish-path-unsafe-probe-p file)
+        (expand-file-name file)
+      (ignore-errors (file-truename file)))))
+
 (defun enhanced-dirvish-preview--guard-dirvish-update (orig-fn dv index)
   "Prevent background Dirvish preview updates from clobbering focused panes.
 Also attaches `enhanced-dirvish-preview-read-mode' metadata to newly updated
@@ -225,8 +235,8 @@ previews."
                (eq (selected-window) (dv-root-window dv))
                pbuf-edit
                (stringp index)
-               (not (equal (and pbuf-file (ignore-errors (file-truename pbuf-file)))
-                           (ignore-errors (file-truename index)))))))
+               (not (equal (and pbuf-file (enhanced-dirvish--same-file-key pbuf-file))
+                           (enhanced-dirvish--same-file-key index))))))
     (when (or enhanced-dirvish-preview--force-update
               (and (not preview-focused)
                    (or (not (buffer-live-p pbuf))
@@ -660,8 +670,8 @@ browser (`SPC')."
              (cur-file-p
               (and enhanced-dirvish-active-preview-file
                    (stringp f)
-                   (equal (ignore-errors (file-truename enhanced-dirvish-active-preview-file))
-                          (ignore-errors (file-truename f))))))
+                   (equal (enhanced-dirvish--same-file-key enhanced-dirvish-active-preview-file)
+                          (enhanced-dirvish--same-file-key f)))))
         (unless (and focus-read-only
                      (or already-editing
                          (and cur-file-p
@@ -981,7 +991,7 @@ visiting FILE (including via symlinks or across Dirvish sessions)."
   (when (and dv file)
     (when (hash-table-p (dv-preview-hash dv))
       (remhash file (dv-preview-hash dv))
-      (remhash (file-truename file) (dv-preview-hash dv)))
+      (remhash (enhanced-dirvish--same-file-key file) (dv-preview-hash dv)))
     (when-let ((pbuf (get-buffer (format "PREVIEW :: %s :: %s"
                                          (dv-timestamp dv)
                                          (file-name-nondirectory file)))))
@@ -990,7 +1000,7 @@ visiting FILE (including via symlinks or across Dirvish sessions)."
         (let (kill-buffer-query-functions)
           (kill-buffer pbuf)))))
   (when (and kill-visiting file)
-    (let ((target-true (ignore-errors (file-truename (expand-file-name file))))
+    (let ((target-true (enhanced-dirvish--same-file-key (expand-file-name file)))
           (target-abs (expand-file-name file)))
       (dolist (b (buffer-list))
         (when (buffer-live-p b)
@@ -1002,7 +1012,7 @@ visiting FILE (including via symlinks or across Dirvish sessions)."
                            (string-prefix-p " *preview-temp*" (buffer-name b)))
                        (or (equal (expand-file-name bfile) target-abs)
                            (and target-true
-                                (equal (ignore-errors (file-truename (expand-file-name bfile)))
+                                (equal (enhanced-dirvish--same-file-key (expand-file-name bfile))
                                        target-true))))
               (when dv
                 (setf (dv-preview-buffers dv) (delq b (dv-preview-buffers dv))))

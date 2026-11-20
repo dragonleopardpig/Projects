@@ -555,6 +555,9 @@ or nil when `find' is missing or DIR cannot be listed."
         (timeout (executable-find "timeout")))
     (when find
       (with-temp-buffer
+        ;; Spawn from a local folder: starting a process checks and enters
+        ;; `default-directory', which here would be the mount itself.
+        (setq default-directory (file-name-as-directory (expand-file-name temporary-file-directory)))
         (let* ((args (list (directory-file-name dir) "-mindepth" "1" "-maxdepth" "1"
                            "-printf" "%y\\0%s\\0%T@\\0%C@\\0%f\\0"))
                (status (if timeout
