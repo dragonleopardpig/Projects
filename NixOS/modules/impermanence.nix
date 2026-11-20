@@ -303,9 +303,17 @@ in
     environment.systemPackages = lib.mkIf cfg.cleanDevArtifacts [ cleanDevScript ];
     system.extraDependencies = lib.mkIf cfg.cleanDevArtifacts [ cleanDevChecked ];
 
+    # ONCE PER BOOT, never in a running session: as a plain oneshot it went back to
+    # inactive after the boot run, and every `nixos-rebuild switch` started it again
+    # (11-20 on CRUCIAL-SSD: 07:53, 09:03, 09:25 -- a fresh hyprfm build/ and the
+    # caches went with it).  It now stays active once run, a switch never restarts
+    # it, and a stamp in /run (gone at the next boot) skips any later start, even
+    # after a failed run.
     systemd.services.impermanence-clean-dev = lib.mkIf cfg.cleanDevArtifacts {
       description = "Wipe regenerable development artifacts before user login";
       wantedBy = [ "multi-user.target" ];
+      restartIfChanged = false;
+      unitConfig.ConditionPathExists = "!/run/impermanence-clean-dev.done";
       requires = [ "home.mount" ];
       after = [ "home.mount" "local-fs.target" ];
       before = [
@@ -315,8 +323,11 @@ in
       ];
       serviceConfig = {
         Type = "oneshot";
+        RemainAfterExit = true;
         User = cfg.devTargetUser;
         Group = targetGroup;
+        # ("+": as root, outside the sandbox below)
+        ExecStartPre = "+${pkgs.coreutils}/bin/touch /run/impermanence-clean-dev.done";
         ExecStart = "${lib.getExe cleanDevScript} --verbose";
         ProtectSystem = "strict";
         ReadWritePaths = [ "-${targetHome}" "-${cfg.devProjectsDir}" ];

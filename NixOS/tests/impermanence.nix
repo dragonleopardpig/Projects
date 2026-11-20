@@ -179,6 +179,18 @@ inputs.disko.lib.testLib.makeDiskoTest {
         assert mid == mid2, f"machine-id changed: {mid} -> {mid2}"
         machine.succeed("grep -qF 'thinky:${testHash}:' /etc/shadow")
 
+        # Only at boot: neither a later start of the unit nor a switch may clean the
+        # running session (11-20: every nixos-rebuild switch re-ran it).
+        later = "/home/thinky/Projects/demo/later/__pycache__"
+        machine.succeed(f"mkdir -p {later} && touch {later}/x.pyc && chown -R thinky:users /home/thinky/Projects/demo/later")
+        runs = "journalctl -b -u impermanence-clean-dev.service -o cat | grep -c 'clean-dev-cache:' || true"
+        assert machine.succeed(runs).strip() == "1", machine.succeed(runs)
+        machine.succeed("systemctl is-active impermanence-clean-dev.service")
+        machine.succeed("systemctl start impermanence-clean-dev.service")
+        machine.succeed("/run/current-system/bin/switch-to-configuration test")
+        machine.succeed(f"test -e {later}/x.pyc")
+        assert machine.succeed(runs).strip() == "1", machine.succeed(runs)
+
         if crucial:
             # Environments kept; only the stale devenv shell script is pruned.
             for kept in ${pyList environments}:
