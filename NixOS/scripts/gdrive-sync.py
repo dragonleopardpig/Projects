@@ -1426,10 +1426,18 @@ def run_gui_app(start_mode: str = "tray", extra_arg: str = None):
             self.menu.show_all()
 
         def on_toggle_mount_tray(self, _item):
+            # Say what happened: the menu item swaps Mount/Unmount in place, so
+            # without this a mount looked like nothing, and the next click on
+            # the same spot unmounted it again.
             if RcloneOps.is_mounted(mount_point):
                 ok, err = RcloneOps.unmount_drive(mount_point)
+                if ok:
+                    send_notification("Google Drive", "Unmounted.")
             else:
                 ok, err = RcloneOps.mount_drive(remote, mount_point)
+                if ok:
+                    send_notification("Google Drive", f"Mounted at {mount_point}.")
+                    subprocess.Popen(["xdg-open", mount_point])
             if not ok:
                 send_notification("Google Drive Mount", f"Error: {err}", urgency="critical")
             self.build_menu()
