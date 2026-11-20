@@ -43,6 +43,7 @@
         syncSettings = suite.syncSettingsCheck;
         agentStatus = suite.agentStatusCheck;
         gpuStatus = suite.gpuStatusCheck;
+        alwaysOnPlugin = suite.alwaysOnPluginCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
       homeManagerModules.suite = { lib, ... }: {
@@ -71,6 +72,10 @@
         };
         xdg.dataFile."noctalia-suite/noctalia/plugins/gpu-status" = {
           source = ./suite/plugins/gpu-status;
+          force = true;
+        };
+        xdg.dataFile."noctalia-suite/noctalia/plugins/always-on" = {
+          source = ./suite/plugins/always-on;
           force = true;
         };
         home.file.".local/bin/noctalia-agent-status".source = lib.getExe suite.agentStatus;

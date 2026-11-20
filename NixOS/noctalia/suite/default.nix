@@ -115,6 +115,16 @@ let
     python3 ${./test-gpu-status.py} ${./gpu-status.py}
     touch $out
   '';
+  # The always-on cup (plugins/always-on): a click shows the new glyph at once, a failed
+  # switch puts it back, a terminal `always-on off` reaches it through the status stream.
+  alwaysOnPluginCheck = pkgs.runCommand "noctalia-always-on-plugin-checked" {
+    nativeBuildInputs = [ pkgs.luau ];
+  } ''
+    sed -e '/^--@PLUGIN@$/{r ${./plugins/always-on/bar.luau}' -e 'd}' \
+      ${./test-always-on-plugin.luau} > test.luau
+    luau test.luau
+    touch $out
+  '';
   syncPython = pkgs.python3.withPackages (ps: [ ps.tomlkit ]);
   syncSettings = pkgs.writeShellApplication {
     name = "noctalia-sync-settings";
@@ -184,6 +194,7 @@ let
     test -f ${gpuSelectionCheck}
     test -f ${displayCycleCheck}
     test -f ${gpuStatusCheck}
+    test -f ${alwaysOnPluginCheck}
     export NOCTALIA_STATE_HOME="$TMPDIR/noctalia-suite-validation"
     export NOCTALIA_CONFIG_HOME=${configHome}
     ${lib.getExe shell} config validate ${shellConfig}
@@ -249,7 +260,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck displayCycle displayCycleCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;

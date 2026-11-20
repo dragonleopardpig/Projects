@@ -92,6 +92,7 @@
       "community/kitty-control"         # local/community: kitty terminal control panel
       "local/agent-status"              # local: Antigravity lifecycle status + scratchpad toggle
       "local/gpu-status"                # local: active renderer GPU + per-monitor scanout GPU
+      "local/always-on"                 # local: always-on mode cup (modules/always-on-umbriel.nix)
     ];
     auto_update = "none";
   };
@@ -165,15 +166,9 @@
     kitty-control.color = barAccents.neonPurple;
     agent-status.type = "local/agent-status:bar";
     xwayland.type = "tordex/xwayland:bar";
-    # ALWAYS-ON MODE (modules/always-on-umbriel.nix): either click switches it; the glyph a cup
-    # when off, an infinity when on, and the tooltip says which (the watcher sets both).
-    always-on = {
-      type = "custom_button";
-      color = barAccents.lawnGreen;
-      glyph = "coffee";
-      tooltip = "Always-on mode: off (click to keep the machine up for remote sessions)";
-      actions = { left = "exec /run/current-system/sw/bin/always-on-toggle";
-                  right = "exec /run/current-system/sw/bin/always-on-toggle"; };
-    };
+    # ALWAYS-ON MODE (modules/always-on-umbriel.nix): a local plugin (plugins/always-on), so
+    # its cup / infinity and tooltip change in place; either click switches it.
+    always-on.type = "local/always-on:bar";
+    always-on.color = barAccents.lawnGreen;
   };
 }

@@ -1,0 +1,13 @@
+id = "local/always-on"
+name = "Always-on Mode"
+version = "1.0.0"
+plugin_api = 45
+author = "local"
+license = "MIT"
+tags = ["bar", "power", "session"]
+icon = "coffee"
+description = "Always-on mode (modules/always-on-umbriel.nix): a cup when off, an infinity when on; a click switches it."
+
+[[widget]]
+id = "bar"
+entry = "bar.luau"

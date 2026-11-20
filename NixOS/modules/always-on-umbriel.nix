@@ -9,15 +9,17 @@
 #     -- swaylock black (umbriel speaks ext-session-lock) and dimmed -- and puts the monitor back on
 #     any input; Noctalia's own idle lock is switched off for as long as the mode is on, so the two
 #     never race for the lock. Out of always-on mode Noctalia's idle is as configured.
-#   * THE BAR'S CUP: a Noctalia Custom Button (noctalia/suite/settings.nix, "always-on"): either
-#     click runs `always-on-toggle`; its glyph a cup when the mode is off, an infinity when on --
-#     set by the watcher below, so `always-on on` typed in a terminal shows too.
+#   * THE BAR'S CUP: a local Noctalia plugin (noctalia/suite/plugins/always-on): either click
+#     runs `always-on-toggle`; its glyph a cup when the mode is off, an infinity when on. It
+#     follows `always-on-status-watch` below, so `always-on on` typed in a terminal shows too.
+#     (It was a Custom Button until 2026-11-20, its glyph set by config-set: every change of
+#     that config rebuilt the button, so it vanished and came back on each click.)
 #   * F1 / Mod+L: the suite's lock-and-blank goes to the night look in always-on mode
 #     (noctalia/suite/default.nix) -- a monitor powered off drops its signal, which is what the
 #     night look exists to avoid.
 #
-# The watcher follows the logind drop-in: woken by inotify the moment it appears or goes, so a
-# click on the cup changes the glyph at once; every 5 s anyway, as a fallback.
+# The watcher and the status stream follow the logind drop-in: woken by inotify the moment it
+# appears or goes; every 5 s anyway, as a fallback.
 { lib, pkgs, ... }:
 let
   dropin = "/run/systemd/logind.conf.d/50-always-on.conf";
@@ -32,13 +34,31 @@ let
     exec /run/current-system/sw/bin/always-on on
   '';
 
+  # (exit 0 = an event, 2 = the time passed; 1 = no folder or no inotify: poll instead)
+  waitForChange = seconds: ''
+    ${pkgs.inotify-tools}/bin/inotifywait -qq -t ${toString seconds} \
+      -e create -e delete -e moved_to -e moved_from ${builtins.dirOf dropin} 2>/dev/null
+    [ "$?" -ne 1 ] || sleep 5
+  '';
+
+  # For the bar's cup: {"on": true|false} at once, then on every change of the mode.
+  statusWatch = pkgs.writeShellScriptBin "always-on-status-watch" ''
+    set -u
+    was=""
+    while true; do
+      now=false
+      [ -e ${dropin} ] && now=true
+      if [ "$now" != "$was" ]; then
+        # (the bar gone: nobody reads any more)
+        printf '{"on": %s}\n' "$now" || exit 0
+        was=$now
+      fi
+      ${waitForChange 30}
+    done
+  '';
+
   watch = pkgs.writeShellScript "always-on-umbriel-watch" ''
     set -u
-    cup() {
-      # (TOML values: strings in their own quotes)
-      noctalia msg config-set widget.always-on.glyph "\"$1\"" >/dev/null 2>&1 || true
-      noctalia msg config-set widget.always-on.tooltip "\"$2\"" >/dev/null 2>&1 || true
-    }
     was=""
     while true; do
       now=off
@@ -47,25 +67,20 @@ let
         if [ "$now" = on ]; then
           noctalia msg config-set idle.behavior.lock.enabled false >/dev/null 2>&1 || true
           systemctl --user start ${idleUnit}.service || true
-          cup infinity "Always-on mode: ON (power key, lid and suspend ignored; click to turn off)"
         else
           systemctl --user stop ${idleUnit}.service || true
           noctalia msg config-set idle.behavior.lock.enabled true >/dev/null 2>&1 || true
           # (anything left dimmed put back)
           "$HOME/.local/bin/night-look" off || true
-          cup coffee "Always-on mode: off (click to keep the machine up for remote sessions)"
         fi
         was=$now
       fi
-      # (exit 0 = an event, 2 = the 5 s passed; 1 = no folder or no inotify: poll instead)
-      ${pkgs.inotify-tools}/bin/inotifywait -qq -t 5 -e create -e delete -e moved_to -e moved_from \
-        ${builtins.dirOf dropin} 2>/dev/null
-      [ "$?" -ne 1 ] || sleep 5
+      ${waitForChange 5}
     done
   '';
 in
 {
-  environment.systemPackages = [ toggle pkgs.swayidle ];
+  environment.systemPackages = [ toggle statusWatch pkgs.swayidle ];
 
   systemd.user.services.always-on-umbriel = {
     description = "Always-on mode followed under umbriel: the night look on idle, the bar's cup";

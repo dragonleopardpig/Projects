@@ -133,6 +133,26 @@ icon_color = "#FEDCBA"
         self.assertFalse(sync.prune_declarative_overrides(self.config))
         self.assertEqual(self.settings.read_text(), saved)
 
+    def test_saved_glyph_and_tooltip_of_a_plugin_widget_are_removed(self):
+        # (the always-on cup's old watcher saved these with config-set)
+        self.config.write_text('''[widget.always-on]
+type = "local/always-on:bar"
+[widget.launcher]
+type = "launcher"
+''')
+        original = '''[widget.always-on]
+glyph = "coffee"
+tooltip = "Always-on mode: off"
+[widget.launcher]
+glyph = "rocket"
+'''
+        self.settings.write_text(original)
+        self.assertTrue(sync.prune_declarative_overrides(self.config))
+        # (a built-in widget's glyph stays: the GUI may have chosen it)
+        self.assertEqual(tomlkit.parse(self.settings.read_text()).unwrap(),
+                         {"widget": {"launcher": {"glyph": "rocket"}}})
+        self.assertFalse(sync.prune_declarative_overrides(self.config))
+
     def test_colors_and_layout_are_removed_together_preserving_appearance(self):
         self.config.write_text('[widget.clock]\ncolor = "#CCFF00"\n')
         original = '''[bar.main]

@@ -50,6 +50,34 @@ def prune_widget_colors(document, managed_config):
     return changed
 
 
+def prune_plugin_glyph_overrides(document, managed_config):
+    """A plugin widget draws its own glyph and tooltip; saved values for them are leftovers.
+
+    The always-on cup was a custom button whose watcher saved its glyph and tooltip with
+    `noctalia msg config-set`. Now that it is a plugin, those saved keys mean nothing, so
+    they go, for any widget the managed config makes a plugin widget ("<plugin>:<widget>").
+    """
+    if managed_config is None:
+        return False
+    managed = tomlkit.parse(Path(managed_config).read_text(encoding="utf-8")).get("widget")
+    widgets = document.get("widget")
+    if not isinstance(managed, MutableMapping) or not isinstance(widgets, MutableMapping):
+        return False
+    changed = False
+    for name, settings in managed.items():
+        saved = widgets.get(name)
+        if not isinstance(settings, MutableMapping) or not isinstance(saved, MutableMapping):
+            continue
+        if ":" not in str(settings.get("type", "")):
+            continue
+        for key in {"glyph", "tooltip"} & saved.keys():
+            del saved[key]
+            changed = True
+        if changed and not saved:
+            del widgets[name]
+    return changed
+
+
 def prune_declarative_overrides(managed_config=None):
     state_home = os.environ.get("NOCTALIA_STATE_HOME") or os.path.join(
         os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"),
@@ -64,7 +92,8 @@ def prune_declarative_overrides(managed_config=None):
         document = tomlkit.parse(original)
         layout_changed = prune_widget_order(document)
         colors_changed = prune_widget_colors(document, managed_config)
-        if not layout_changed and not colors_changed:
+        glyphs_changed = prune_plugin_glyph_overrides(document, managed_config)
+        if not layout_changed and not colors_changed and not glyphs_changed:
             return False
 
         # Keep comments/formatting and replace atomically, so the shell's file
