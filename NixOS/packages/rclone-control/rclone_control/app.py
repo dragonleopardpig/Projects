@@ -17,6 +17,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", type=Path, help="Override path to rclone.conf")
     parser.add_argument("--left", help="Initial spec for left explorer pane")
     parser.add_argument("--right", help="Initial spec for right explorer pane")
+    parser.add_argument(
+        "--tab",
+        choices=("explorer", "transfers", "remotes", "mounts", "jobs"),
+        default="explorer",
+        help="Initial tab to display",
+    )
     parser.add_argument("--smoke-test", action="store_true", help="Initialize MainWindow, print diagnostics, and exit cleanly")
     return parser.parse_args(argv)
 
@@ -36,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
         left_spec=args.left,
         right_spec=args.right,
     )
+    tab_index = {"explorer": 0, "transfers": 1, "remotes": 2, "mounts": 3, "jobs": 4}[args.tab]
+    window.tabs.setCurrentIndex(tab_index)
     app.aboutToQuit.connect(window.shutdown)
 
     if args.smoke_test:

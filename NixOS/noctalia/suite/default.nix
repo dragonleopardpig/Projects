@@ -142,6 +142,33 @@ let
     done
     touch $out
   '';
+  rcloneStatus = pkgs.writeShellApplication {
+    name = "noctalia-rclone-status";
+    runtimeInputs = [ pkgs.python3 pkgs.coreutils pkgs.systemd ];
+    text = ''
+      exec python3 ${./rclone-status.py} "$@"
+    '';
+  };
+  rcloneStatusCheck = pkgs.runCommand "noctalia-rclone-status-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    python3 ${./test-rclone-status.py} ${./rclone-status.py}
+    touch $out
+  '';
+  rcloneStatusPluginCheck = pkgs.runCommand "noctalia-rclone-status-plugin-checked" {
+    nativeBuildInputs = [ pkgs.luau ];
+  } ''
+    for entry in service bar panel; do
+      {
+        printf 'local TEST_ENTRY = "%s"\n' "$entry"
+        cat ${./test-rclone-status-plugin.luau}
+      } | sed -e '/^--@COMMON@$/{r ${./plugins/rclone-status/common.luau}' -e 'd}' \
+              -e "/^--@ENTRY@$/{r ${./plugins/rclone-status}/$entry.luau" -e 'd}' \
+        | sed 's|require("./common\.luau")|commonModule|g' > "test_$entry.luau"
+      luau "test_$entry.luau"
+    done
+    touch $out
+  '';
   # The always-on cup (plugins/always-on): a click shows the new glyph at once, a failed
   # switch puts it back, a terminal `always-on off` reaches it through the status stream.
   alwaysOnPluginCheck = pkgs.runCommand "noctalia-always-on-plugin-checked" {
@@ -168,7 +195,7 @@ let
   '';
   suiteTools = pkgs.symlinkJoin {
     name = "noctalia-suite-tools";
-    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle gpuStatus rsyncStatus ];
+    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle gpuStatus rsyncStatus rcloneStatus ];
   };
   shellConfig = toml.generate "noctalia-suite.toml" (import ./settings.nix {
     themeName = theme.name;
@@ -223,6 +250,8 @@ let
     test -f ${gpuStatusCheck}
     test -f ${rsyncStatusCheck}
     test -f ${rsyncStatusPluginCheck}
+    test -f ${rcloneStatusCheck}
+    test -f ${rcloneStatusPluginCheck}
     test -f ${alwaysOnPluginCheck}
     export NOCTALIA_STATE_HOME="$TMPDIR/noctalia-suite-validation"
     export NOCTALIA_CONFIG_HOME=${configHome}
@@ -289,7 +318,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;

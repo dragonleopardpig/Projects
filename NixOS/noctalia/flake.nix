@@ -28,7 +28,7 @@
       packages.${system} = {
         default = suite.suiteSession;
         noctalia = shell;
-        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings agentStatus agentHooks gpuStatus rsyncStatus displayCycle;
+        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings agentStatus agentHooks gpuStatus rsyncStatus rcloneStatus displayCycle;
         umbriel = suite.umbriel;
         greeter = suite.greeter;
       };
@@ -45,6 +45,8 @@
         gpuStatus = suite.gpuStatusCheck;
         rsyncStatus = suite.rsyncStatusCheck;
         rsyncStatusPlugin = suite.rsyncStatusPluginCheck;
+        rcloneStatus = suite.rcloneStatusCheck;
+        rcloneStatusPlugin = suite.rcloneStatusPluginCheck;
         alwaysOnPlugin = suite.alwaysOnPluginCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
@@ -84,9 +86,14 @@
           source = ./suite/plugins/rsync-status;
           force = true;
         };
+        xdg.dataFile."noctalia-suite/noctalia/plugins/rclone-status" = {
+          source = ./suite/plugins/rclone-status;
+          force = true;
+        };
         home.file.".local/bin/noctalia-agent-status".source = lib.getExe suite.agentStatus;
         home.file.".local/bin/noctalia-gpu-status".source = lib.getExe suite.gpuStatus;
         home.file.".local/bin/noctalia-rsync-status".source = lib.getExe suite.rsyncStatus;
+        home.file.".local/bin/noctalia-rclone-status".source = lib.getExe suite.rcloneStatus;
         home.file.".gemini/config/hooks.json".source = suite.agentHooks;
         home.activation.syncNoctaliaSuite = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
           ${lib.getExe suite.syncSettings} || true

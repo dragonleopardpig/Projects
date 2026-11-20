@@ -201,7 +201,7 @@ class RcloneControlTests(unittest.TestCase):
 
     def test_app_smoke_test_flag(self) -> None:
         with mock.patch("builtins.print"):
-            rc = app_main(["--smoke-test"])
+            rc = app_main(["--tab", "mounts", "--smoke-test"])
         self.assertEqual(rc, 0)
 
 
