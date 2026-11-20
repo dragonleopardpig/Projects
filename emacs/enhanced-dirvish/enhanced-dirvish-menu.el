@@ -295,7 +295,8 @@
      ["Compact Sidebar Rail" enhanced-dirvish-sidebar-toggle-rail always nil (pref enhanced-dirvish-prefs-sidebar-compact)]
      ["Refresh Sidebar" enhanced-dirvish-sidebar-refresh always] ["Scan Devices" enhanced-dirvish-sidebar-force-refresh always]
      ["Open Sidebar Item" enhanced-dirvish-sidebar-activate-at-point sidebar-item]
-     ["Open Sidebar Item in Tab" enhanced-dirvish-sidebar-open-in-tab-at-point sidebar-location])
+     ["Open Sidebar Item in Tab" enhanced-dirvish-sidebar-open-in-tab-at-point sidebar-location]
+     ["Pin / Unpin Sidebar Item" enhanced-dirvish-sidebar-toggle-pin-at-point sidebar-location])
     ("Preview & Media"
      ["Preview Current File" enhanced-dirvish-preview-at-point current]
      ["Enter Read-Only Preview" enhanced-dirvish-preview-enter-at-point file]

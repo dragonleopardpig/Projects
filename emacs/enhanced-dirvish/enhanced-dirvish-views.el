@@ -511,9 +511,10 @@ into \"dir\" so `enhanced-dirvish-goto-file' could never land on them anyway."
             ((> (- la i) (- lb j)) (setq cmp 1))))
     cmp))
 
-(defun enhanced-dirvish-file-type-group (path &optional dir-p)
-  "Classify PATH into an Enhanced Dirvish type group symbol."
-  (if (or dir-p (file-directory-p path))
+(defun enhanced-dirvish-file-type-group (path &optional dir-p known-p)
+  "Classify PATH into an Enhanced Dirvish type group symbol.
+With KNOWN-P, DIR-P is taken as the answer and PATH is never statted."
+  (if (or dir-p (and (not known-p) (file-directory-p path)))
       'folders
     (let ((ext (downcase (or (file-name-extension path) ""))))
       (cond
@@ -537,6 +538,47 @@ into \"dir\" so `enhanced-dirvish-goto-file' could never land on them anyway."
     ('code "Code & Config")
     (_ "Other Files")))
 
+(defcustom enhanced-dirvish-slow-mount-list-timeout 5
+  "Seconds to wait for a folder listing on a cloud, network or removable mount.
+Such folders are read by a `find' subprocess, never inside Emacs, so a
+mount that stops answering costs at most this long instead of freezing
+Emacs in an uninterruptible system call."
+  :type 'number
+  :group 'enhanced-dirvish)
+
+(defun enhanced-dirvish--list-slow-mount (dir)
+  "Entries of DIR read by a `find' subprocess, for mounts that may hang.
+Return a list of (NAME DIR-P SIZE MTIME CTIME), or the symbol `timeout'
+when the mount did not answer within `enhanced-dirvish-slow-mount-list-timeout',
+or nil when `find' is missing or DIR cannot be listed."
+  (let ((find (executable-find "find"))
+        (timeout (executable-find "timeout")))
+    (when find
+      (with-temp-buffer
+        (let* ((args (list (directory-file-name dir) "-mindepth" "1" "-maxdepth" "1"
+                           "-printf" "%y\\0%s\\0%T@\\0%C@\\0%f\\0"))
+               (status (if timeout
+                           ;; KILL, not TERM: a FUSE request waits only for a fatal signal.
+                           (apply #'call-process timeout nil '(t nil) nil "-s" "KILL"
+                                  (number-to-string enhanced-dirvish-slow-mount-list-timeout)
+                                  find args)
+                         (apply #'call-process find nil '(t nil) nil args))))
+          (cond
+           ((memq status '(124 137)) 'timeout)
+           ;; (find exits 1 when some entries are unreadable; keep the readable ones)
+           ((not (memq status '(0 1))) nil)
+           (t
+            (let ((fields (split-string (buffer-string) "\0"))
+                  out)
+              (while (>= (length fields) 5)
+                (pcase-let ((`(,type ,size ,mtime ,ctime ,name . ,rest) fields))
+                  (push (list name (equal type "d") (string-to-number size)
+                              (seconds-to-time (string-to-number mtime))
+                              (seconds-to-time (string-to-number ctime)))
+                        out)
+                  (setq fields rest)))
+              (nreverse out)))))))))
+
 (defun enhanced-dirvish-list-directory-entries (dir &optional prefs)
   "Return sorted entry plists for DIR honoring PREFS & active filter.
 Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
@@ -549,10 +591,21 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
          (case-sens (enhanced-dirvish-prefs-case-sensitive-sort p))
          (group-type (enhanced-dirvish-prefs-group-by-type p))
          (dir (file-name-as-directory (expand-file-name dir)))
-         (names (when (file-directory-p dir)
+         ;; A cloud/network/removable mount can stop answering; reading it here
+         ;; would freeze Emacs in the kernel (11-20: a wedged Filen rclone mount).
+         (slow (and (not (file-remote-p dir)) (enhanced-dirvish-path-unsafe-probe-p dir)))
+         (listed (when slow (enhanced-dirvish--list-slow-mount dir)))
+         (names (cond
+                 (slow (if (eq listed 'timeout)
+                           (progn (message "%s is not responding (%gs); listing skipped"
+                                           (abbreviate-file-name dir)
+                                           enhanced-dirvish-slow-mount-list-timeout)
+                                  nil)
+                         (mapcar #'car listed)))
+                 ((file-directory-p dir)
                   (condition-case nil
                       (directory-files dir nil "\\`[^.]\\|\\`.[^.]" t)
-                    (error nil))))
+                    (error nil)))))
          (flt (when (and enhanced-dirvish-local-filter (not (string-empty-p enhanced-dirvish-local-filter)))
                 enhanced-dirvish-local-filter))
          entries)
@@ -561,13 +614,14 @@ Each plist contains (:name :path :dir-p :size :mtime :ctime :ext :group)."
                  (or (null flt) (let ((case-fold-search t))
                                   (string-match-p (regexp-quote flt) n))))
         (let* ((path (expand-file-name n dir))
-               (attrs (file-attributes path 'integer))
-               (dir-p (eq t (file-attribute-type attrs)))
-               (size (or (file-attribute-size attrs) 0))
-               (mtime (file-attribute-modification-time attrs))
-               (ctime (file-attribute-status-change-time attrs))
+               (row (when slow (assoc n listed)))
+               (attrs (unless slow (file-attributes path 'integer)))
+               (dir-p (if slow (nth 1 row) (eq t (file-attribute-type attrs))))
+               (size (or (if slow (nth 2 row) (file-attribute-size attrs)) 0))
+               (mtime (if slow (nth 3 row) (file-attribute-modification-time attrs)))
+               (ctime (if slow (nth 4 row) (file-attribute-status-change-time attrs)))
                (ext (downcase (or (file-name-extension n) "")))
-               (grp (enhanced-dirvish-file-type-group path dir-p)))
+               (grp (enhanced-dirvish-file-type-group path dir-p slow)))
           (push (list :name n :path path :dir-p dir-p :size size
                       :mtime mtime :ctime ctime :ext ext :group grp)
                 entries))))

@@ -125,6 +125,89 @@
                            '("alpha_dir" "item2.txt" "item10.txt")))))
       (delete-directory tmp t))))
 
+(defun enhanced-dirvish-test--visible-menu-labels (menu)
+  "Labels of the items of MENU that are shown."
+  (let (labels)
+    (dolist (item (cdr menu))
+      (when (and (consp item) (eq (cadr item) 'menu-item))
+        (let ((visible (plist-member (nthcdr 4 item) :visible)))
+          (when (or (null visible) (eval (cadr visible) t))
+            (push (nth 2 item) labels)))))
+    (nreverse labels)))
+
+(ert-deftest enhanced-dirvish-test-sidebar-right-click-pins-and-unpins ()
+  "Right-click on a sidebar row offers Pin or Unpin; `p' toggles the same."
+  (let* ((tmp (make-temp-file "enhanced-dirvish-pin-" t))
+         (folder (expand-file-name "My Folder" tmp))
+         (enhanced-dirvish-gtk-bookmarks-file (expand-file-name "bookmarks" tmp)))
+    (unwind-protect
+        (progn
+          (make-directory folder)
+          (with-temp-buffer
+            (insert (propertize "  folder\n" 'enhanced-dirvish-sidebar-loc folder))
+            (insert (propertize "  computer\n" 'enhanced-dirvish-sidebar-loc "computer:///"))
+            (let ((row 3)
+                  (virtual-row (+ 3 (length "  folder\n")))
+                  (labels (lambda (pos) (enhanced-dirvish-test--visible-menu-labels
+                                         (enhanced-dirvish-sidebar--context-menu pos)))))
+              (should (member "Pin to Sidebar" (funcall labels row)))
+              (should-not (member "Unpin from Sidebar" (funcall labels row)))
+              (goto-char row)
+              (enhanced-dirvish-sidebar-toggle-pin-at-point)
+              (should (enhanced-dirvish-pinned-p folder))
+              (should (member "Unpin from Sidebar" (funcall labels row)))
+              (should-not (member "Pin to Sidebar" (funcall labels row)))
+              (enhanced-dirvish-sidebar-toggle-pin-at-point)
+              (should-not (enhanced-dirvish-pinned-p folder))
+              ;; computer:/// and the like are never offered
+              (should-not (member "Pin to Sidebar" (funcall labels virtual-row)))
+              (should-not (member "Unpin from Sidebar" (funcall labels virtual-row)))
+              (should (member "Open" (funcall labels virtual-row))))))
+      (delete-directory tmp t))))
+
+(ert-deftest enhanced-dirvish-test-slow-mount-listing-matches-local ()
+  "A folder on a cloud/network mount lists the same through `find' as in-process."
+  (let* ((tmp (make-temp-file "enhanced-dirvish-slow-" t))
+         (p (enhanced-dirvish-prefs--create :sort-key 'name :folders-first t :natural-sort t :show-hidden t)))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "sub dir" tmp))
+          (write-region "hello" nil (expand-file-name "a file.txt" tmp))
+          (write-region "x" nil (expand-file-name ".hidden" tmp))
+          (write-region "line\n" nil (expand-file-name "new\nline.md" tmp))
+          (let* ((local (enhanced-dirvish-list-directory-entries tmp p))
+                 (slow (cl-letf (((symbol-function 'enhanced-dirvish-path-unsafe-probe-p) #'always))
+                         (enhanced-dirvish-list-directory-entries tmp p)))
+                 (key (lambda (e) (list (plist-get e :name) (plist-get e :dir-p)
+                                        (plist-get e :size) (plist-get e :group)))))
+            (should (= (length local) 4))
+            (should (equal (mapcar key slow) (mapcar key local)))
+            (cl-mapc (lambda (a b)
+                       (should (< (abs (float-time (time-subtract (plist-get a :mtime) (plist-get b :mtime)))) 1)))
+                     slow local)))
+      (delete-directory tmp t))))
+
+(ert-deftest enhanced-dirvish-test-slow-mount-listing-times-out ()
+  "A mount that never answers costs the timeout, not a frozen Emacs."
+  (let* ((tmp (make-temp-file "enhanced-dirvish-hang-" t))
+         (bin (make-temp-file "enhanced-dirvish-bin-" t))
+         (fake (expand-file-name "find" bin))
+         (exec-path (cons bin exec-path))
+         (enhanced-dirvish-slow-mount-list-timeout 1)
+         (p (enhanced-dirvish-prefs--create :sort-key 'name)))
+    (unwind-protect
+        (progn
+          (write-region "x" nil (expand-file-name "f.txt" tmp))
+          (write-region "#!/bin/sh\nexec sleep 30\n" nil fake)
+          (set-file-modes fake #o755)
+          (let* ((start (float-time))
+                 (res (cl-letf (((symbol-function 'enhanced-dirvish-path-unsafe-probe-p) #'always))
+                        (enhanced-dirvish-list-directory-entries tmp p))))
+            (should (null res))
+            (should (< (- (float-time) start) 5))))
+      (delete-directory tmp t)
+      (delete-directory bin t))))
+
 (ert-deftest enhanced-dirvish-test-independent-preview-zoom ()
   (let* ((enhanced-dirvish-state-dir (make-temp-file "enhanced-dirvish-zoom-state-" t))
          (enhanced-dirvish-state-file (expand-file-name "prefs.eld" enhanced-dirvish-state-dir))
@@ -4259,6 +4342,22 @@ after the folder, so the second pane must not reuse the first one's."
                         :type 'user-error)))
       (should (file-exists-p a))
       (should (file-directory-p child)))))
+
+(ert-deftest enhanced-dirvish-test-main-right-click-pins-selected-folder ()
+  "The main view's right-click menu pins and unpins the selected folder."
+  (enhanced-dirvish-test--with-selection-view 'compact
+    (let* ((enhanced-dirvish-gtk-bookmarks-file (expand-file-name "bookmarks" enhanced-dirvish-test--root))
+           (sub (expand-file-name "Sub Folder" enhanced-dirvish-test--dir)))
+      (make-directory sub)
+      (enhanced-dirvish-compact-refresh)
+      (enhanced-dirvish-goto-file sub)
+      (let ((menu (enhanced-dirvish-context--popup-menu)))
+        (should (member "Pin to Sidebar" (enhanced-dirvish-test--visible-menu-labels menu)))
+        (call-interactively (enhanced-dirvish-test--popup-menu-command menu "Pin to Sidebar")))
+      (should (enhanced-dirvish-pinned-p sub))
+      (let ((labels (enhanced-dirvish-test--visible-menu-labels (enhanced-dirvish-context--popup-menu))))
+        (should (member "Unpin from Sidebar" labels))
+        (should-not (member "Pin to Sidebar" labels))))))
 
 (require 'enhanced-dirvish-window-tests)
 

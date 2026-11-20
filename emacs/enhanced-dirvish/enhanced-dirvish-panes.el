@@ -247,6 +247,12 @@
       (enhanced-dirvish-sidebar-refresh)
       (message "Pinned %s" lbl))))
 
+(defun enhanced-dirvish-pinned-p (dir)
+  "Return non-nil when DIR is one of the sidebar's pinned folders."
+  (let ((key (directory-file-name (expand-file-name dir))))
+    (seq-some (lambda (pin) (equal key (directory-file-name (expand-file-name (car pin)))))
+              (enhanced-dirvish-bookmarks-read))))
+
 (defun enhanced-dirvish-unpin-directory (&optional dir)
   "Unpin DIR from Sidebar Bookmarks."
   (interactive)
@@ -862,6 +868,8 @@ Keeps shell process & CWD alive while hidden."
     (define-key map (kbd "<double-mouse-1>") #'enhanced-dirvish-sidebar-mouse-activate)
     (define-key map (kbd "<drag-mouse-1>") #'enhanced-dirvish-sidebar-mouse-activate)
     (define-key map (kbd "<mouse-2>") #'enhanced-dirvish-sidebar-mouse-activate)
+    (define-key map (kbd "<mouse-3>") #'enhanced-dirvish-sidebar-mouse-context-menu)
+    (define-key map (kbd "p") #'enhanced-dirvish-sidebar-toggle-pin-at-point)
     (define-key map (kbd "t") #'enhanced-dirvish-sidebar-open-in-tab-at-point)
     (define-key map (kbd "m") #'enhanced-dirvish-sidebar-mount-at-point)
     (define-key map (kbd "u") #'enhanced-dirvish-sidebar-unmount-at-point)
@@ -1044,6 +1052,54 @@ Keeps shell process & CWD alive while hidden."
   (interactive)
   (when-let ((loc (enhanced-dirvish-sidebar--row-prop 'enhanced-dirvish-sidebar-loc)))
     (enhanced-dirvish-tab-new loc)))
+
+
+;;;; Sidebar right-click menu: open, and pin or unpin the row's folder
+
+(defun enhanced-dirvish-sidebar--pin-target (&optional pos)
+  "The folder the sidebar row at POS opens, in pin form, or nil.
+Virtual places (computer:///, the trash) and TRAMP paths are never pinned.
+Nothing is statted: a device row may be a cloud mount that hangs."
+  (let ((loc (get-text-property (or pos (point)) 'enhanced-dirvish-sidebar-loc)))
+    (when (and (stringp loc) (not (string-empty-p loc))
+               (not (enhanced-dirvish-location-virtual-p loc))
+               (not (file-remote-p loc)))
+      (directory-file-name (expand-file-name loc)))))
+
+(defun enhanced-dirvish-sidebar-toggle-pin-at-point ()
+  "Pin the folder of the sidebar row at point, or unpin it if pinned."
+  (interactive)
+  (let ((target (enhanced-dirvish-sidebar--pin-target)))
+    (cond ((null target) (message "Nothing to pin here"))
+          ((enhanced-dirvish-pinned-p target) (enhanced-dirvish-unpin-directory target))
+          (t (enhanced-dirvish-pin-directory target)))))
+
+(defun enhanced-dirvish-sidebar--context-menu (pos)
+  "Right-click menu for the sidebar row at POS."
+  (let* ((loc (get-text-property pos 'enhanced-dirvish-sidebar-loc))
+         (target (enhanced-dirvish-sidebar--pin-target pos))
+         (pinned (and target (enhanced-dirvish-pinned-p target) t)))
+    (easy-menu-create-menu
+     "Sidebar"
+     `(["Open" enhanced-dirvish-sidebar-activate-at-point :enable ,(and loc t)]
+       ["Open in New Tab" enhanced-dirvish-sidebar-open-in-tab-at-point :enable ,(and loc t)]
+       "--"
+       ["Pin to Sidebar" (enhanced-dirvish-pin-directory ,target) :visible ,(and target (not pinned))]
+       ["Unpin from Sidebar" (enhanced-dirvish-unpin-directory ,target) :visible ,pinned]))))
+
+(defun enhanced-dirvish-sidebar-mouse-context-menu (event)
+  "Show the sidebar's right-click menu for the row under EVENT."
+  (interactive "e")
+  (let* ((posn (event-end event))
+         (win (posn-window posn))
+         (pos (posn-point posn)))
+    (when (and (window-live-p win) (integerp pos))
+      (with-selected-window win
+        (goto-char pos)
+        (let ((menu (enhanced-dirvish-sidebar--context-menu pos)))
+          (if (display-popup-menus-p)
+              (popup-menu menu event)
+            (tmm-prompt menu)))))))
 
 (defun enhanced-dirvish-sidebar-mount-at-point ()
   "Mount/unlock device on Sidebar row."

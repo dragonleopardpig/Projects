@@ -315,6 +315,15 @@ Keys: `t' terminal, `c' compress, `e'/`E' extract, `1'..`9', `.'."
                                         (file-directory-p f)))
                               (enhanced-dirvish-archive-file-p f)))))
          (browser (and (derived-mode-p 'dired-mode 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode) t))
+         ;; Pin: the one selected folder, or this folder when nothing is selected
+         ;; (an item on a cloud mount is not statted to find out if it is a folder).
+         (pin-target (cond ((and single (not (enhanced-dirvish-path-unsafe-probe-p (car items)))
+                                 (file-directory-p (car items)))
+                            (car items))
+                           ((and (not has-items) (stringp dir) (not (file-remote-p dir))
+                                 (not (enhanced-dirvish-location-virtual-p dir)))
+                            dir)))
+         (pinned (and pin-target (enhanced-dirvish-pinned-p pin-target) t))
          (title (if (enhanced-dirvish-marked-files-only)
                     (format "Enhanced Dirvish — %d selected" (length (enhanced-dirvish-marked-files-only)))
                   "Enhanced Dirvish"))
@@ -325,6 +334,9 @@ Keys: `t' terminal, `c' compress, `e'/`E' extract, `1'..`9', `.'."
              ["Open With…" enhanced-dirvish-open-with :enable ,has-items]
              ["Open in New Tab" enhanced-dirvish-open-in-new-tab :enable ,has-items]
              ["Open in New Frame" enhanced-dirvish-open-in-new-frame :enable ,has-items]
+             ["Pin to Sidebar" (enhanced-dirvish-pin-directory ,pin-target)
+              :visible ,(and pin-target (not pinned))]
+             ["Unpin from Sidebar" (enhanced-dirvish-unpin-directory ,pin-target) :visible ,pinned]
              "--"
              ["Copy" enhanced-dirvish-copy-selection :enable ,has-items]
              ["Copy Path" enhanced-dirvish-copy-path :enable ,has-items]
