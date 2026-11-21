@@ -1,11 +1,14 @@
 """The bar's icons: every one its own neon colour, and every one can be unpinned.
 
 Reads the generated Noctalia config (settings.nix) and fails on:
-- an icon without a colour, a colour too dull to be neon, two icons whose colours are too
-  alike (CIEDE2000 below MIN_DE), or neighbours on the bar that are hard to tell apart
-  (below MIN_NEIGHBOUR_DE);
+- an icon without a colour, a colour too dull to be neon (chroma), one too dark to read on
+  the see-through bar (contrast below MIN_CONTRAST against WORST_BAR), two icons whose
+  colours are too alike (CIEDE2000 below MIN_DE), or neighbours on the bar that are hard to
+  tell apart (below MIN_NEIGHBOUR_DE);
 - an icon whose right click does not open the bar-pins menu (except those that handle
-  right click per item: the tray and the taskbar, and the drawer button itself);
+  right click per item: the tray and the taskbar);
+- a plugin icon without a left-click action in settings.nix: once unpinned it sits in the
+  tray drawer, which runs config actions only (the plugin's script is not running);
 - an icon the bar-pins catalog (plugins/bar-pins/common.luau) does not name;
 - a catalog `event` aimed at a plugin bar that does not answer `right-click` in onIpc.
 """
@@ -20,13 +23,20 @@ from pathlib import Path
 
 MIN_DE = 7.0
 MIN_NEIGHBOUR_DE = 20.0
-MIN_LIGHTNESS = 48.0
 MIN_CHROMA = 35.0
+# The bar is theme.nix's dark surface; the GUI has it at 60% opacity, so a bright wallpaper
+# shows through.  Worst case measured: that bar over a mid-grey wallpaper.
+BAR_SURFACE = "#080D19"
+BAR_OPACITY = 0.6
+WALLPAPER = "#808080"
+MIN_CONTRAST = 4.5  # WCAG's floor for small text, which bar glyphs are
 # No colour of their own: app icons (taskbar) and the window title (text).
 UNCOLOURED = {"taskbar", "active_window"}
 # White on purpose (2026-11-15 "make the top-bar power button white").
 WHITE_OK = {"session"}
-OWN_RIGHT_CLICK = {"tray", "taskbar", "bar-pins"}
+OWN_RIGHT_CLICK = {"tray", "taskbar"}
+# Plugin icons with nothing to do on a left click.
+NO_LEFT_CLICK = {"xwayland"}
 MENU = "panel-toggle local/bar-pins:menu {}"
 
 
@@ -47,6 +57,24 @@ def lab(hex_colour):
 
     fx, fy, fz = f(x), f(y), f(z)
     return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+
+def luminance(hex_colour):
+    h = hex_colour.lstrip("#")
+    channels = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    r, g, b = (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(c1, c2):
+    high, low = sorted((luminance(c1), luminance(c2)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def worst_bar():
+    bar = [int(BAR_SURFACE[i:i + 2], 16) for i in (1, 3, 5)]
+    wall = [int(WALLPAPER[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(BAR_OPACITY * b + (1 - BAR_OPACITY) * w):02X}" for b, w in zip(bar, wall, strict=True))
 
 
 def delta_e(c1, c2):
@@ -122,9 +150,12 @@ def problems(config, common_luau, plugins_dir):
             found.append(f"{name}: no colour of its own (widget.{name}.color)")
             continue
         if name not in WHITE_OK:
-            lightness, a, b = lab(colour)
-            if lightness < MIN_LIGHTNESS or math.hypot(a, b) < MIN_CHROMA:
-                found.append(f"{name}: {colour} is not neon (L* {lightness:.0f}, chroma {math.hypot(a, b):.0f})")
+            _, a, b = lab(colour)
+            if math.hypot(a, b) < MIN_CHROMA:
+                found.append(f"{name}: {colour} is not neon (chroma {math.hypot(a, b):.0f})")
+        ratio = contrast(colour, worst_bar())
+        if ratio < MIN_CONTRAST:
+            found.append(f"{name}: {colour} is too dark on the bar ({ratio:.2f}:1 < {MIN_CONTRAST}:1)")
         coloured.append((name, colour))
     for (n1, c1), (n2, c2) in itertools.combinations(coloured, 2):
         d = delta_e(c1, c2)
@@ -144,7 +175,10 @@ def problems(config, common_luau, plugins_dir):
             right = widgets.get(name, {}).get("actions", {}).get("right")
             if right != MENU.format(name):
                 found.append(f"{name}: right click is {right!r}, not the Pin/Unpin menu")
-        if name != "bar-pins" and name not in names:
+        if ":" in widgets.get(name, {}).get("type", "") and name not in NO_LEFT_CLICK:
+            if not widgets[name].get("actions", {}).get("left"):
+                found.append(f"{name}: plugin icon without actions.left (the tray drawer could not open it)")
+        if name not in names:
             found.append(f"{name}: missing from the bar-pins catalog (plugins/bar-pins/common.luau)")
     bars = plugin_bars(plugins_dir)
     for entry in sorted(events):

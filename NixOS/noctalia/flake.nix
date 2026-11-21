@@ -21,6 +21,10 @@
           # Tooltips for the bar buttons that had none (launcher, media, control
           # center, caffeine, notifications, session).
           ./suite/bar-widget-tooltips.patch
+          # Unpinned bar widgets (plugins/bar-pins: `[widget.<name>] enabled = false`) sit in
+          # the tray's down-arrow drawer beside the unpinned tray icons; click runs the
+          # widget's left action, right click its right action (the Pin/Unpin menu).
+          ./suite/tray-drawer-unpinned-widgets.patch
         ];
       });
       suite = import ./suite { inherit pkgs shell; };

@@ -52,8 +52,10 @@ configured layer and keyboard mode, including its normal fullscreen behavior.
 ## Bar icons: colours and Pin / Unpin
 
 Every bar icon has its own neon colour (`theme.nix` `barAccents`, assigned in
-`settings.nix`): no two are alike, and neighbours differ clearly. The
-`barIcons` check measures them (CIEDE2000) and fails the build on a repeat.
+`settings.nix`): no two are alike, and neighbours differ clearly. Each one
+reads at 4.5:1 or better even with the bar at 60% opacity over a bright
+wallpaper. The `barIcons` check measures all three (CIEDE2000 and WCAG
+contrast) and fails the build on a repeat or a colour too dark for the bar.
 The power button stays white. A plugin icon changes colour only for a failure
 (red), or the AI widget while it waits for an answer.
 
@@ -73,9 +75,11 @@ if it had one, then **Unpin from bar**. The old actions are:
 | rsync | Refresh |
 | GPU, Displays | Arrange displays |
 
-An unpinned icon moves into the drawer button (a crossed-out pin with a
-count), which shows while anything is unpinned. Its panel lists each unpinned
-icon with **Open** (the icon's left-click action) and **Pin**, plus **Pin all**.
+An unpinned icon moves into the tray's **down-arrow drawer**, beside the
+unpinned tray icons and in its own colour. There a click does what the icon
+did on the bar, and a right click opens the same menu with **Pin to bar**. The
+down arrow shows whenever something is unpinned. Noctalia's drawer only holds
+tray icons, so `tray-drawer-unpinned-widgets.patch` adds the bar icons to it.
 The tray's items and the taskbar's apps keep their own Pin/Unpin.
 
 Unpinning saves `widget.<icon>.enabled = false` in the GUI settings

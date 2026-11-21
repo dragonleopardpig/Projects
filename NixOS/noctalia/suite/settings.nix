@@ -2,12 +2,13 @@
 let
   barStart = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
   barCenter = [ "active_window" "xwayland" ];
-  barEnd = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "backup-status" "gpu-status" "umbriel-displays" "kitty-control" "bar-pins" "session" ];
+  barEnd = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "backup-status" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
   # PIN / UNPIN (plugins/bar-pins): right click on any icon opens a small menu with its old
-  # right-click action (if it had one) and "Unpin from bar"; an unpinned icon moves into the
-  # drawer button (bar-pins), whose panel opens it or pins it back.  Not for the tray and the
-  # taskbar (their items have their own Pin/Unpin) or the drawer button itself.
-  ownRightClick = [ "tray" "taskbar" "bar-pins" ];
+  # right-click action (if it had one) and "Unpin from bar".  An unpinned icon moves into the
+  # tray's down-arrow drawer (suite/tray-drawer-unpinned-widgets.patch): a click there runs
+  # its left-click action, a right click opens the same menu with "Pin to bar".  Not for the
+  # tray and the taskbar: their items have their own Pin/Unpin.
+  ownRightClick = [ "tray" "taskbar" ];
   pinnable = builtins.filter (name: !(builtins.elem name ownRightClick)) (barStart ++ barCenter ++ barEnd);
   withPinMenu = widgets: widgets // builtins.listToAttrs (map (name: {
     inherit name;
@@ -113,7 +114,7 @@ in
       "local/rsync-status"              # local: sync-projects rsync status icon + per-target dropdown
       "local/rclone-status"             # local: rclone mount/remote status icon + dropdown
       "local/backup-status"             # local: restic backup status icon + dropdown (hidden without a backup)
-      "local/bar-pins"                  # local: Pin/Unpin menu on every bar icon + drawer for unpinned ones
+      "local/bar-pins"                  # local: Pin/Unpin menu on every bar icon (unpinned ones: tray drawer)
     ];
     auto_update = "none";
   };
@@ -173,18 +174,18 @@ in
     taskbar = { only_active_workspace = true; taskbar_max_width = 280; };
     active_window = { display = "text_only"; max_length = 800; title_scroll = "none"; show_empty_label = false; };
     media = { color = barAccents.mint; hide_when_no_media = true; hide_artist = true; max_length = 100; };
-    weather = { color = barAccents.neonIndigo; show_condition = false; actions.left = "panel-toggle control-center weather"; };
+    weather = { color = barAccents.brightViolet; show_condition = false; actions.left = "panel-toggle control-center weather"; };
     clock = { color = barAccents.neonYellowGreen; format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
-    control-center = { color = barAccents.deepPink; glyph = "adjustments"; };
-    privacy = { color = barAccents.neonRed; hide_inactive = true; };
-    caffeine.color = barAccents.hotPink;
-    volume = { color = barAccents.dodgerBlue; show_label = false; };
+    control-center = { color = barAccents.brightRose; glyph = "adjustments"; };
+    privacy = { color = barAccents.apricot; hide_inactive = true; };
+    caffeine.color = barAccents.brightHotPink;
+    volume = { color = barAccents.brightDodgerBlue; show_label = false; };
     network = { color = barAccents.darkOrange; show_label = false; };
     bluetooth.color = barAccents.schoolBusYellow;
     battery.color = barAccents.lilac;
     notifications.color = barAccents.electricBlue;
     keyboard_layout = {
-      color = barAccents.royalBlue;
+      color = barAccents.periwinkle;
       glyph = "keyboard";
       display = "short";
       show_glyph = true;
@@ -195,19 +196,20 @@ in
     tray = { color = barAccents.bubblegum; drawer = true; };
     session.color = "#FFFFFF";
     # Plugin bar widgets (see plugins.enabled above).  A plugin's resting colour is this
-    # `color`; it switches to its own colour only for a failure.
-    umbriel-companion = { type = "noctalia/umbriel-companion:bar"; color = barAccents.peach; };
+    # `color`; it switches to its own colour only for a failure.  Their left click is spelt
+    # out as an action (the same thing their script did) so it also works from the tray
+    # drawer once unpinned, where the plugin's script does not run.
+    umbriel-companion = { type = "noctalia/umbriel-companion:bar"; color = barAccents.peach; actions.left = "panel-toggle noctalia/umbriel-companion:panel"; };
     xwayland = { type = "tordex/xwayland:bar"; color = barAccents.lemon; };
-    agent-status = { type = "local/agent-status:bar"; color = barAccents.neonRose; };
+    agent-status = { type = "local/agent-status:bar"; color = barAccents.candyPink; actions.left = "exec umbriel msg scratchpad-toggle:agent"; };
     # ALWAYS-ON MODE (modules/always-on-umbriel.nix): a local plugin (plugins/always-on), so
     # its cup / infinity and tooltip change in place; a left click switches it.
-    always-on = { type = "local/always-on:bar"; color = barAccents.neonLime; };
-    rsync-status = { type = "local/rsync-status:bar"; color = barAccents.neonGreen; };
-    rclone-status = { type = "local/rclone-status:bar"; color = barAccents.vermilion; };
-    backup-status = { type = "local/backup-status:bar"; color = barAccents.neonMagenta; };
-    gpu-status = { type = "local/gpu-status:bar"; color = barAccents.springBud; };
-    umbriel-displays = { type = "prponkshe/umbriel-displays:bar"; color = barAccents.coral; };
-    kitty-control = { type = "community/kitty-control:bar"; color = barAccents.neonPurple; };
-    bar-pins = { type = "local/bar-pins:bar"; color = barAccents.amber; };
+    always-on = { type = "local/always-on:bar"; color = barAccents.neonLime; actions.left = "exec /run/current-system/sw/bin/always-on-toggle"; };
+    rsync-status = { type = "local/rsync-status:bar"; color = barAccents.neonGreen; actions.left = "panel-toggle local/rsync-status:panel"; };
+    rclone-status = { type = "local/rclone-status:bar"; color = barAccents.brightVermilion; actions.left = "panel-toggle local/rclone-status:panel"; };
+    backup-status = { type = "local/backup-status:bar"; color = barAccents.brightMagenta; actions.left = "panel-toggle local/backup-status:panel"; };
+    gpu-status = { type = "local/gpu-status:bar"; color = barAccents.springBud; actions.left = "panel-toggle prponkshe/umbriel-displays:panel"; };
+    umbriel-displays = { type = "prponkshe/umbriel-displays:bar"; color = barAccents.coral; actions.left = "panel-toggle prponkshe/umbriel-displays:panel"; };
+    kitty-control = { type = "community/kitty-control:bar"; color = barAccents.brightPurple; actions.left = "panel-toggle community/kitty-control:panel"; };
   };
 }

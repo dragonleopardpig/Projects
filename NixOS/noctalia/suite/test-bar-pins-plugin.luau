@@ -1,7 +1,6 @@
--- Test local/bar-pins entries (bar, menu, drawer) under Luau with host stand-ins.
+-- Test local/bar-pins' menu under Luau with host stand-ins, on the bar and in the tray drawer.
 -- The stand-in `noctalia msg config-set` changes the widget table, as Noctalia does.
 
-local barGlyphs, barTexts, barTooltips, barVisible = {}, {}, {}, {}
 local toggledPanels, panelTrees, panelClosed, launched = {}, {}, 0, {}
 
 local WIDGETS = {
@@ -12,23 +11,7 @@ local WIDGETS = {
   ["backup-status"] = { color = "#FF2BFF", type = "local/backup-status:bar" },
   ["gpu-status"] = { color = "#C4FF7A", type = "local/gpu-status:bar" },
   mystery = {},
-  ["bar-pins"] = { color = "#FFB300", type = "local/bar-pins:bar" },
 }
-local BAR = {
-  start = { "launcher" },
-  center = {},
-  ["end"] = { "weather", "clock", "volume", "backup-status", "gpu-status", "mystery", "bar-pins" },
-}
-
-barWidget = {
-  setGlyph = function(g) table.insert(barGlyphs, g) end,
-  setGlyphColor = function(_c) end,
-  setColor = function(_c) end,
-  setText = function(t) table.insert(barTexts, t) end,
-  setTooltip = function(t) table.insert(barTooltips, t) end,
-  setVisible = function(v) table.insert(barVisible, v) end,
-}
-
 panel = {
   render = function(tree) table.insert(panelTrees, tree) end,
   close = function() panelClosed += 1 end,
@@ -49,8 +32,6 @@ noctalia = {
   getSetting = function(path)
     if path == "widget" then
       return WIDGETS
-    elseif path == "bar.main" then
-      return BAR
     end
     error("unexpected getSetting(" .. tostring(path) .. ")")
   end,
@@ -101,25 +82,7 @@ end
 
 --@ENTRY@
 
-if TEST_ENTRY == "bar" then
-  assert(barVisible[#barVisible] == false, "the drawer button shows although nothing is unpinned")
-  WIDGETS.clock.enabled = false
-  WIDGETS.weather.enabled = false
-  onConfigChanged()
-  assert(barVisible[#barVisible] == true, "the drawer button did not appear")
-  assert(barGlyphs[#barGlyphs] == "pinned-off", "drawer glyph")
-  assert(barTexts[#barTexts] == "2", "the button does not count the unpinned icons: " .. tostring(barTexts[#barTexts]))
-  local tip = barTooltips[#barTooltips]
-  assert(tip[1].value == "Weather, Clock", "tooltip lists them in bar order: " .. tostring(tip[1].value))
-  onClick()
-  assert(toggledPanels[#toggledPanels] == "local/bar-pins:drawer", "click did not open the drawer")
-  onRightClick()
-  assert(toggledPanels[#toggledPanels] == "local/bar-pins:drawer", "right click did not open the drawer")
-  WIDGETS.clock.enabled = true
-  WIDGETS.weather.enabled = true
-  onConfigChanged()
-  assert(barVisible[#barVisible] == false, "the drawer button stayed after everything was pinned")
-elseif TEST_ENTRY == "menu" then
+if TEST_ENTRY == "menu" then
   -- a plugin icon: its old right click goes back to it as an event, exactly as before
   onOpen("backup-status")
   local tree = panelTrees[#panelTrees]
@@ -154,45 +117,34 @@ elseif TEST_ENTRY == "menu" then
   tree = panelTrees[#panelTrees]
   assert(findKind(findNodeByKey(tree, "menu_head"), "label").props.text == "mystery", "unknown icon label")
   assert(findNodeByKey(tree, "btn_unpin") ~= nil, "an unknown icon cannot be unpinned")
-  onClose()
-elseif TEST_ENTRY == "drawer" then
-  onOpen("")
-  assert(findNodeByKey(panelTrees[#panelTrees], "drawer_empty") ~= nil, "empty drawer has no note")
 
-  WIDGETS.clock.enabled = false
-  WIDGETS.weather.enabled = false
-  WIDGETS.mystery.enabled = false
-  onConfigChanged()
-  local tree = panelTrees[#panelTrees]
-  local column = findNodeByKey(tree, "drawer")
-  local order = {}
-  for _, child in ipairs(column.children) do
-    local key = child.props.key
-    if type(key) == "string" and string.sub(key, 1, 4) == "row_" then
-      table.insert(order, string.sub(key, 5))
-    end
-  end
-  assert(table.concat(order, ",") == "weather,clock,mystery", "drawer order: " .. table.concat(order, ","))
-  assert(findNodeByKey(tree, "open_mystery") == nil, "Open shown for an icon without a known action")
-  assert(findNodeByKey(tree, "btn_pin_all") ~= nil, "no Pin all")
-
-  -- Open runs the icon's left-click action
-  local closedBefore = panelClosed
-  findNodeByKey(tree, "open_clock").props.onClick()
-  assert(panelClosed == closedBefore + 1, "Open did not close the drawer")
-  assert(lastArgv() == "noctalia msg panel-toggle control-center calendar", "Open clock: " .. lastArgv())
-
-  -- Pin puts one back; the drawer redraws without it
-  findNodeByKey(tree, "pin_weather").props.onClick()
-  assert(lastArgv() == "noctalia msg config-set widget.weather.enabled true", "Pin: " .. lastArgv())
+  -- in the tray drawer (unpinned): Pin to bar instead of Unpin
+  onOpen("clock")
   tree = panelTrees[#panelTrees]
-  assert(findNodeByKey(tree, "row_weather") == nil, "the pinned icon is still in the drawer")
+  assert(findNodeByKey(tree, "btn_unpin") == nil, "Unpin offered for an unpinned icon")
+  findNodeByKey(tree, "btn_pin").props.onClick()
+  assert(lastArgv() == "noctalia msg config-set widget.clock.enabled true", "Pin: " .. lastArgv())
+  assert(WIDGETS.clock.enabled == true, "the clock was not pinned back")
 
-  -- Pin all: everything back, and the drawer closes with its button
-  closedBefore = panelClosed
-  findNodeByKey(tree, "btn_pin_all").props.onClick()
-  assert(WIDGETS.clock.enabled == true and WIDGETS.mystery.enabled == true, "Pin all left some unpinned")
-  assert(panelClosed > closedBefore, "the drawer stayed open with nothing in it")
+  -- an unpinned plugin icon: its own right click needs it on the bar, so only Pin
+  WIDGETS["backup-status"].enabled = false
+  onOpen("backup-status")
+  tree = panelTrees[#panelTrees]
+  assert(findNodeByKey(tree, "btn_action") == nil, "Back up now offered while Backup is off the bar")
+  assert(findNodeByKey(tree, "btn_pin") ~= nil, "no Pin for the unpinned Backup")
+
+  -- an unpinned built-in icon keeps its old action (it does not need the icon)
+  WIDGETS.volume.enabled = false
+  onOpen("volume")
+  tree = panelTrees[#panelTrees]
+  findNodeByKey(tree, "btn_action").props.onClick()
+  assert(lastArgv() == "noctalia msg volume-mute", "Mute from the drawer: " .. lastArgv())
+
+  -- pinning from elsewhere while the menu is open redraws it
+  onOpen("volume")
+  WIDGETS.volume.enabled = true
+  onConfigChanged()
+  assert(findNodeByKey(panelTrees[#panelTrees], "btn_unpin") ~= nil, "the menu did not follow the pin state")
   onClose()
 else
   error("unknown TEST_ENTRY: " .. tostring(TEST_ENTRY))

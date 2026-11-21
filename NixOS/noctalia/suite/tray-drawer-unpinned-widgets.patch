@@ -1,0 +1,264 @@
+diff --git a/src/shell/bar/widgets/tray_widget.cpp b/src/shell/bar/widgets/tray_widget.cpp
+index aa8436f..58372c6 100644
+--- a/src/shell/bar/widgets/tray_widget.cpp
++++ b/src/shell/bar/widgets/tray_widget.cpp
+@@ -11,6 +11,11 @@
+ #include "render/scene/input_area.h"
+ #include "render/scene/node.h"
+ #include "render/text/glyph_registry.h"
++#include "core/process/process.h"
++#include "scripting/plugin_registry.h"
++#include "shell/bar/widget_action.h"
++#include "shell/bar/widget_action_dispatcher.h"
++#include "shell/bar/widget_gesture_defaults.h"
+ #include "shell/app_icon_colorization_settings.h"
+ #include "shell/tray/tray_identifier.h"
+ #include "shell/tray/tray_theme_path_index.h"
+@@ -21,7 +26,9 @@
+ #include "util/string_utils.h"
+ 
+ #include <algorithm>
++#include <array>
+ #include <cmath>
++#include <filesystem>
+ #include <linux/input-event-codes.h>
+ #include <memory>
+ #include <optional>
+@@ -161,6 +168,34 @@ namespace {
+ 
+   bool isUniqueBusName(std::string_view value) { return !value.empty() && value.front() == ':'; }
+ 
++  // Glyph and name of built-in widget types, for their cell in the tray drawer once unpinned.
++  struct BuiltinWidgetLook {
++    std::string_view type;
++    std::string_view glyph;
++    std::string_view label;
++  };
++  constexpr std::array<BuiltinWidgetLook, 19> kBuiltinWidgetLooks{{
++      {"active_window", "app-window", "Window title"},
++      {"battery", "battery", "Battery"},
++      {"bluetooth", "bluetooth", "Bluetooth"},
++      {"caffeine", "coffee", "Caffeine"},
++      {"clock", "clock", "Clock"},
++      {"control-center", "adjustments", "Control centre"},
++      {"keyboard_layout", "keyboard", "Keyboard layout"},
++      {"launcher", "layout-grid", "Launcher"},
++      {"media", "music", "Media"},
++      {"network", "network", "Network"},
++      {"notifications", "bell", "Notifications"},
++      {"privacy", "shield-lock", "Privacy"},
++      {"session", "power", "Power"},
++      {"settings", "settings", "Settings"},
++      {"sysmon", "cpu", "System monitor"},
++      {"taskbar", "layout-bottombar", "Taskbar"},
++      {"volume", "volume", "Volume"},
++      {"weather", "cloud", "Weather"},
++      {"workspaces", "layout-board", "Workspaces"},
++  }};
++
+ } // namespace
+ 
+ TrayWidget::TrayWidget(ConfigService& config, TrayService* tray, Options options)
+@@ -577,6 +612,9 @@ void TrayWidget::rebuild(Renderer& renderer) {
+       hasDrawerItems = true;
+       break;
+     }
++    if (!hasDrawerItems) {
++      hasDrawerItems = !unpinnedBarWidgets(m_config).empty();
++    }
+     if (hasDrawerItems) {
+       const float itemSize = m_customItemSize.value_or(Style::baseGlyphSize) * m_contentScale;
+       // Keep the trigger's InputArea across rebuilds so hover and press capture survive icon updates.
+@@ -884,9 +922,149 @@ void TrayWidget::rebuild(Renderer& renderer) {
+     }
+   }
+ 
++  if (m_panelGridMode) {
++    for (const auto& widget : unpinnedBarWidgets(m_config)) {
++      const float itemSize = m_customItemSize.value_or(Style::baseGlyphSize) * m_contentScale;
++      auto areaNode = ui::inputArea({});
++      InputArea* areaPtr = areaNode.get();
++      areaPtr->setSize(itemSize, itemSize);
++      areaPtr->setAcceptedButtons(InputArea::buttonMask({BTN_LEFT, BTN_RIGHT}));
++      ColorSpec color = colorSpecFromRole(ColorRole::OnSurface);
++      if (const auto it = m_config.config().widgets.find(widget.name); it != m_config.config().widgets.end()) {
++        if (auto own = it->second.getOptionalColorSpec("color", "widget.color"); own.has_value()) {
++          color = *own;
++        }
++      }
++      auto glyph = ui::glyph({.glyph = widget.glyph, .glyphSize = itemSize, .color = color});
++      glyph->measure(renderer);
++      glyph->setPosition(
++          std::round((itemSize - glyph->width()) * 0.5F), std::round((itemSize - glyph->height()) * 0.5F)
++      );
++      areaPtr->addChild(std::move(glyph));
++      areaPtr->setOnClick([this, widget](const InputArea::PointerData& data) {
++        runUnpinnedBarWidgetAction(widget, data.button == BTN_RIGHT);
++      });
++      areaPtr->setTooltip(widget.label + " (unpinned) · right click: Pin to bar");
++      attachHover(*areaPtr, itemSize);
++      if (gridRow == nullptr || gridCol >= m_panelGridColumns) {
++        gridRow = static_cast<Flex*>(m_container->addChild(
++            ui::row({
++                .align = FlexAlign::Center,
++                .gap = resolvedInlineEntryGap(),
++            })
++        ));
++        gridCol = 0;
++      }
++      gridRow->addChild(std::move(areaNode));
++      ++gridCol;
++    }
++  }
++
+   m_container->setVisible(!m_container->children().empty());
+ }
+ 
++std::vector<TrayWidget::UnpinnedBarWidget> TrayWidget::unpinnedBarWidgets(const ConfigService& config) {
++  std::vector<UnpinnedBarWidget> unpinned;
++  const Config& cfg = config.config();
++  if (cfg.bars.empty()) {
++    return unpinned;
++  }
++  const BarConfig& bar = cfg.bars.front();
++  for (const auto* names : {&bar.startWidgets, &bar.centerWidgets, &bar.endWidgets}) {
++    for (const auto& name : *names) {
++      const auto it = cfg.widgets.find(name);
++      if (it == cfg.widgets.end() || it->second.getBool("enabled", true)) {
++        continue;
++      }
++      if (std::ranges::any_of(unpinned, [&](const UnpinnedBarWidget& seen) { return seen.name == name; })) {
++        continue;
++      }
++      const WidgetConfig& widget = it->second;
++      UnpinnedBarWidget entry{.name = name, .type = widget.type.empty() ? name : widget.type};
++      if (entry.type == "tray") {
++        continue;
++      }
++      entry.glyph = widget.getString("glyph");
++      for (const auto& look : kBuiltinWidgetLooks) {
++        if (look.type == entry.type) {
++          if (entry.glyph.empty()) {
++            entry.glyph = std::string(look.glyph);
++          }
++          entry.label = std::string(look.label);
++          break;
++        }
++      }
++      if (entry.label.empty()) {
++        auto& registry = scripting::PluginRegistry::instance();
++        registry.ensureScanned();
++        if (const auto plugin = registry.resolve(entry.type); plugin.has_value() && plugin->manifest != nullptr) {
++          entry.label = plugin->manifest->name;
++          if (entry.glyph.empty()) {
++            entry.glyph = plugin->manifest->icon;
++          }
++        }
++      }
++      if (entry.glyph.empty() || !GlyphRegistry::contains(entry.glyph)) {
++        entry.glyph = "point";
++      }
++      if (entry.label.empty()) {
++        entry.label = name;
++      }
++      unpinned.push_back(std::move(entry));
++    }
++  }
++  return unpinned;
++}
++
++void TrayWidget::runUnpinnedBarWidgetAction(const UnpinnedBarWidget& widget, bool rightClick) {
++  const Config& cfg = m_config.config();
++  const auto it = cfg.widgets.find(widget.name);
++  const WidgetConfig* widgetConfig = it != cfg.widgets.end() ? &it->second : nullptr;
++  const auto typeDefaults = noctalia::bar::gestureDefaultsForType(widget.type, widgetConfig);
++  const std::string widgetContext = "widget." + widget.name;
++  noctalia::bar::WidgetActionBindings bindings;
++  bindings.resolve(
++      noctalia::bar::WidgetActionBindings::Inputs{
++          .builtinDefaults = noctalia::bar::builtinGestureDefaults(),
++          .widgetDefaults = typeDefaults,
++          .barActions = nullptr,
++          .widgetActions = noctalia::bar::findActionTable(widgetConfig),
++          .reserved = noctalia::bar::reservedGesturesForType(widget.type),
++          .widgetContext = widgetContext,
++          .barContext = {},
++          .widgetName = widget.name,
++          .widgetType = widget.type,
++      }
++  );
++  const auto* action =
++      bindings.find(rightClick ? noctalia::bar::Gesture::Right : noctalia::bar::Gesture::Left);
++  if (action != nullptr) {
++    if (action->kind == noctalia::bar::WidgetAction::Kind::Exec) {
++      (void)process::runAsync(action->args);
++    } else if (action->kind == noctalia::bar::WidgetAction::Kind::Ipc) {
++      // The drawer has no action dispatcher, and closes right after: hand the command to a
++      // `noctalia msg` of this very binary, so panels open once the drawer is gone.
++      std::error_code error;
++      const auto self = std::filesystem::read_symlink("/proc/self/exe", error);
++      std::vector<std::string> argv{error ? std::string("noctalia") : self.string(), "msg", action->verb};
++      for (std::string_view rest = action->args; !rest.empty();) {
++        const auto start = rest.find_first_not_of(' ');
++        if (start == std::string_view::npos) {
++          break;
++        }
++        rest.remove_prefix(start);
++        const auto end = rest.find(' ');
++        argv.emplace_back(rest.substr(0, end));
++        rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end);
++      }
++      (void)process::runAsync(argv);
++    }
++  }
++  if (m_itemActivated) {
++    m_itemActivated();
++  }
++}
++
+ std::string_view TrayWidget::resolvedGlyph() const {
+   if (!m_glyph.empty()) {
+     return m_glyph;
+diff --git a/src/shell/bar/widgets/tray_widget.h b/src/shell/bar/widgets/tray_widget.h
+index bb5361c..6869693 100644
+--- a/src/shell/bar/widgets/tray_widget.h
++++ b/src/shell/bar/widgets/tray_widget.h
+@@ -58,6 +58,17 @@ public:
+   void setCapsuleCross(float cross) noexcept { m_capsuleCross = cross; }
+   void setColorizeIcons(bool enabled);
+   void create() override;
++
++  // A bar widget unpinned with `[widget.<name>] enabled = false`.  The tray drawer lists
++  // these after its own items (and the bar shows the drawer button for them): a click runs
++  // the widget's left-click action, a right click its right-click action.
++  struct UnpinnedBarWidget {
++    std::string name;
++    std::string type;
++    std::string glyph;
++    std::string label;
++  };
++  static std::vector<UnpinnedBarWidget> unpinnedBarWidgets(const ConfigService& config);
+   bool wantsBarHoverHighlight() const noexcept override { return false; }
+ 
+ private:
+@@ -77,6 +88,7 @@ private:
+   void rebuild(Renderer& renderer);
+   std::string iconForItem(const TrayItemInfo& item) const;
+   bool isPinnedItem(const TrayItemInfo& item) const;
++  void runUnpinnedBarWidgetAction(const UnpinnedBarWidget& widget, bool rightClick);
+   bool isHiddenItem(const TrayItemInfo& item) const;
+   bool isIconOverrideBlacklisted(const TrayItemInfo& item) const;
+   std::string_view resolvedGlyph() const;
+diff --git a/src/shell/tray/tray_drawer_panel.cpp b/src/shell/tray/tray_drawer_panel.cpp
+index c8f0ba7..18c890c 100644
+--- a/src/shell/tray/tray_drawer_panel.cpp
++++ b/src/shell/tray/tray_drawer_panel.cpp
+@@ -195,5 +195,8 @@ std::size_t TrayDrawerPanel::visibleItemCount() const {
+       ++visible;
+     }
+   }
++  if (m_config != nullptr) {
++    visible += TrayWidget::unpinnedBarWidgets(*m_config).size();
++  }
+   return visible;
+ }

@@ -54,12 +54,13 @@ in {
   name = "OLO-Neon";
   inherit dark light neon;
   # Bar icon colours: neon, one per icon, never repeated (settings.nix assigns them; the
-  # barColors check measures them).  18 pure neon hues, then lighter tints for the rest:
-  # the tints went to icons that rarely show (media, privacy, battery, XWayland) or that sit
-  # far from their base hue on the bar.  Keep these apart from the OLO control-fill palette.
+  # barIcons check measures them).  Every one reads at 4.5:1 or better even with the bar at
+  # 60% opacity over a mid-grey wallpaper: the reds, pinks, blues and purples that fell short
+  # were brightened within their own hue (2026-11-21).  Keep these apart from the OLO
+  # control-fill palette.
   barAccents = {
-    neonRed = "#FF3131";
-    vermilion = "#FF6A1F";
+    apricot = "#F2995A";
+    brightVermilion = "#FF8142";
     darkOrange = "#FF8800";
     amber = "#FFB300";
     schoolBusYellow = "#F9DC05";
@@ -68,14 +69,14 @@ in {
     neonGreen = "#1EFF6E";
     aquamarine = "#00FFC8";
     electricBlue = "#00ECFF";
-    dodgerBlue = "#0499FF";
-    royalBlue = "#3D6BFF";
-    neonIndigo = "#7A5CFF";
-    neonPurple = "#BF40FF";
-    neonMagenta = "#FF2BFF";
-    hotPink = "#FF4FC8";
-    deepPink = "#F91095";
-    neonRose = "#FF3D6E";
+    brightDodgerBlue = "#4DA9FF";
+    periwinkle = "#8A9FFF";
+    brightViolet = "#AD94FF";
+    brightPurple = "#D681FE";
+    brightMagenta = "#FF63FC";
+    brightHotPink = "#FF70CE";
+    brightRose = "#F58099";
+    candyPink = "#FF8ABB";
     # tints
     skyBlue = "#6BC5FF";
     peach = "#FFA07A";

@@ -200,11 +200,11 @@ let
     ${lib.getExe shell} plugins lint ${./plugins}/*/
     touch $out
   '';
-  # Pin / Unpin (plugins/bar-pins): the drawer button, the right-click menu and the drawer.
+  # Pin / Unpin (plugins/bar-pins): the right-click menu, on the bar and in the tray drawer.
   barPinsPluginCheck = pkgs.runCommand "noctalia-bar-pins-plugin-checked" {
     nativeBuildInputs = [ pkgs.luau ];
   } ''
-    for entry in bar menu drawer; do
+    for entry in menu; do
       {
         printf 'local TEST_ENTRY = "%s"\n' "$entry"
         cat ${./test-bar-pins-plugin.luau}
@@ -216,7 +216,8 @@ let
     touch $out
   '';
   # Every bar icon has its own neon colour (no two alike, neighbours clearly apart) and the
-  # Pin/Unpin menu on right click.  The self-test first proves a repeated colour fails.
+  # Pin/Unpin menu on right click.  The self-test first proves a repeated colour and one too
+  # dark for the see-through bar both fail.
   barIconsCheck = pkgs.runCommand "noctalia-bar-icons-checked" {
     nativeBuildInputs = [ pkgs.python3 ];
   } ''
@@ -224,14 +225,19 @@ let
       python3 ${./check-bar-icons.py} --catalog ${./plugins/bar-pins/common.luau} \
         --plugins ${./plugins} "$@"
     }
-    sed 's/^color = "#0499FF"$/color = "#CCFF00"/' ${shellConfig} > repeated.toml
+    sed 's/^color = "#4DA9FF"$/color = "#CCFF00"/' ${shellConfig} > repeated.toml
+    sed 's/^color = "#4DA9FF"$/color = "#2A3BA0"/' ${shellConfig} > dark.toml
     if cmp -s repeated.toml ${shellConfig}; then
-      echo "self-test: the volume colour was not found to repeat"; exit 1
+      echo "self-test: the volume colour was not found to change"; exit 1
     fi
     if icons --config repeated.toml 2> bad.log; then
       echo "self-test: a repeated colour was not caught"; exit 1
     fi
     grep -q "too alike" bad.log
+    if icons --config dark.toml 2> dark.log; then
+      echo "self-test: a colour too dark for the bar was not caught"; exit 1
+    fi
+    grep -q "too dark on the bar" dark.log
     icons --config ${shellConfig}
     touch $out
   '';
