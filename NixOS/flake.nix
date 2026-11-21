@@ -666,6 +666,12 @@
         inherit (nixpkgs) lib;
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
       };
+      # backup-pool (scripts/backup-pool.py): schedule, retention, summary, and the bar icon's states.
+      checks.x86_64-linux.backup-pool = let pkgs = nixpkgs.legacyPackages.x86_64-linux; in
+        pkgs.runCommand "backup-pool-checked" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+          python3 ${./tests/test-backup-pool.py} ${./scripts/backup-pool.py}
+          touch $out
+        '';
       # VM rehearsal of the M90aPro ext4 -> btrfs migration tool.
       checks.x86_64-linux.m90-migration = import ./tests/m90-migration.nix {
         inherit inputs;

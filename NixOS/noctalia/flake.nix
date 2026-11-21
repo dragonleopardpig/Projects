@@ -47,6 +47,7 @@
         rsyncStatusPlugin = suite.rsyncStatusPluginCheck;
         rcloneStatus = suite.rcloneStatusCheck;
         rcloneStatusPlugin = suite.rcloneStatusPluginCheck;
+        backupStatusPlugin = suite.backupStatusPluginCheck;
         alwaysOnPlugin = suite.alwaysOnPluginCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
@@ -88,6 +89,12 @@
         };
         xdg.dataFile."noctalia-suite/noctalia/plugins/rclone-status" = {
           source = ./suite/plugins/rclone-status;
+          force = true;
+        };
+        # Its helper, backup-pool, comes with the host's backup (hosts/M90aPro/backup.nix);
+        # on hosts without one the icon hides itself.
+        xdg.dataFile."noctalia-suite/noctalia/plugins/backup-status" = {
+          source = ./suite/plugins/backup-status;
           force = true;
         };
         home.file.".local/bin/noctalia-agent-status".source = lib.getExe suite.agentStatus;

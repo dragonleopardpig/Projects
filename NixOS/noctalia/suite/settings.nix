@@ -95,6 +95,7 @@
       "local/always-on"                 # local: always-on mode cup (modules/always-on-umbriel.nix)
       "local/rsync-status"              # local: sync-projects rsync status icon + per-target dropdown
       "local/rclone-status"             # local: rclone mount/remote status icon + dropdown
+      "local/backup-status"             # local: restic backup status icon + dropdown (hidden without a backup)
     ];
     auto_update = "none";
   };
@@ -119,6 +120,11 @@
       panel_position = "top_right";
       panel_open_near_click = true;
     };
+    "local/backup-status" = {
+      panel_placement = "attached";
+      panel_position = "top_right";
+      panel_open_near_click = true;
+    };
   };
   bar.main = {
     position = "top";
@@ -133,7 +139,7 @@
     reserve_space = true;
     start = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
     center = [ "active_window" "xwayland" ];
-    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
+    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "backup-status" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
   };
   widget = {
     launcher = {
@@ -184,5 +190,6 @@
     always-on.color = barAccents.lawnGreen;
     rsync-status.type = "local/rsync-status:bar";
     rclone-status.type = "local/rclone-status:bar";
+    backup-status.type = "local/backup-status:bar";
   };
 }

@@ -31,8 +31,8 @@ everything names them by serial (`/dev/disk/by-id/nvme-SAMSUNG_MZVL8256HFJD-00BL
 
 The pool keeps **data `single`** (about 440 GB, no mirror) and **metadata
 `raid1`**.  If one SSD dies the pool mounts with `-o degraded,ro`, so the files on
-the other one can be rescued; for everything else rely on the backups
-(`sync-projects` to the X299-SSD).
+the other one can be rescued; for everything else rely on the daily backup to
+the Seagate ("Backup" below) and `sync-projects` to the X299-SSD.
 
 The new system boots from its own firmware entry **NixOS-pool**.  The old disk
 keeps **NixOS-boot**: rollback means picking it in the boot menu (F12).
@@ -127,25 +127,53 @@ The pool keeps one copy of each file, so a dead SSD loses the files on it.
 restic to the Seagate USB disk's `Linux-Data` partition, repository
 `restic/m90apro`.
 
+**The bar's Backup icon** (left of the GPU icon; hidden on the other hosts)
+shows what the backup is doing:
+
+| Icon | State |
+|---|---|
+| shield, green | up to date |
+| database arrow + `42%` | backing up (tooltip: what is done, time left) |
+| hourglass, red | running but no progress for 10 min (stalled) |
+| warning, red | the last backup failed (until the next one works); a desktop notification too |
+| clock / history | due: starts within 15 min / overdue (more than a day since the last one) |
+| plug crossed out | the Seagate is unplugged |
+| pause | paused |
+| stop | the last backup was stopped before it finished |
+| folder | the backups are open read-only (Browse) |
+
+- **Click** opens the dropdown with: last backup and what it added, next
+  backup, snapshots, space used and free, and the buttons **Run now**, **Stop**,
+  **Browse** (every snapshot, read-only, in the file manager: copy out what you
+  need; it closes itself after 4 h), **Log** (follows the journal in a
+  terminal).
+- **Right click** runs a backup now.
+- **Settings** (the gear) edits the daily time, **Paused**, how many daily,
+  weekly and monthly snapshots to keep, extra folders to back up and extra
+  patterns to leave out.  They are saved in `~/.config/backup-status/settings.json`
+  and apply from the next backup, with no rebuild; **Reset to defaults** removes
+  the file.  The defaults (12:30, keep 7/4/6) and the fixed paths are in
+  `backup.nix`.
+- A day missed (machine off, disk unplugged) runs as soon as both are back;
+  after a failure it tries again an hour later.  Desktop notifications: a
+  failure, a stall, and once a day when the last backup is over 3 days old.
+
 - **Not in the backup:** caches, Trash, podman images, cargo `target/`
   (anything tagged `CACHEDIR.TAG`), and the rclone cloud mounts in the home
   folder.
 - **The disk is not encrypted, so the backup is.** Keep its passphrase
   somewhere other than this computer (`/persist/secrets/restic-m90.pass` holds
   it for the daily run). Without the passphrase the backup cannot be read.
-- **Unplugged at backup time:** the run is skipped, and it tries again the
-  next day.
-- **History:** 7 daily, 4 weekly and 6 monthly snapshots.
 - **Failing SSDs:** smartd warns on the desktop when an SSD's health turns
   bad. Replace it while it can still be read (`btrfs replace start`), not
   after.
 
 ```bash
-systemctl list-timers restic-backups-pool          # next run
-journalctl -u restic-backups-pool -n 30            # last run
+backup-pool status | jq .                         # what the icon shows
+backup-pool --help                                # every command
+journalctl -u restic-backups-pool -n 30           # last run
 sudo restic-pool snapshots
 sudo restic-pool restore latest --target /tmp/restore --include /home/thinky/Projects/<path>
-sudo restic-pool mount /mnt/snapshots              # browse every snapshot, Ctrl+C to stop
 ```
 
 **After a dead SSD:**

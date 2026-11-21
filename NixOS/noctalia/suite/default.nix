@@ -169,6 +169,23 @@ let
     done
     touch $out
   '';
+  # The backup icon (plugins/backup-status): hidden without the helper, the percentage while
+  # it runs, Run/Stop/Browse and the settings form call `backup-pool` (scripts/backup-pool.py,
+  # tested with the M90aPro backup in the main flake: tests/test-backup-pool.py, m90-backup).
+  backupStatusPluginCheck = pkgs.runCommand "noctalia-backup-status-plugin-checked" {
+    nativeBuildInputs = [ pkgs.luau ];
+  } ''
+    for entry in service bar panel; do
+      {
+        printf 'local TEST_ENTRY = "%s"\n' "$entry"
+        cat ${./test-backup-status-plugin.luau}
+      } | sed -e '/^--@COMMON@$/{r ${./plugins/backup-status/common.luau}' -e 'd}' \
+              -e "/^--@ENTRY@$/{r ${./plugins/backup-status}/$entry.luau" -e 'd}' \
+        | sed 's|require("./common\.luau")|commonModule|g' > "test_$entry.luau"
+      luau "test_$entry.luau"
+    done
+    touch $out
+  '';
   # The always-on cup (plugins/always-on): a click shows the new glyph at once, a failed
   # switch puts it back, a terminal `always-on off` reaches it through the status stream.
   alwaysOnPluginCheck = pkgs.runCommand "noctalia-always-on-plugin-checked" {
@@ -252,6 +269,7 @@ let
     test -f ${rsyncStatusPluginCheck}
     test -f ${rcloneStatusCheck}
     test -f ${rcloneStatusPluginCheck}
+    test -f ${backupStatusPluginCheck}
     test -f ${alwaysOnPluginCheck}
     export NOCTALIA_STATE_HOME="$TMPDIR/noctalia-suite-validation"
     export NOCTALIA_CONFIG_HOME=${configHome}
@@ -318,7 +336,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;
