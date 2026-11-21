@@ -18,6 +18,7 @@ id = "menu"
 entry = "menu.luau"
 width = 260
 height = "content"
+max_height = 320
 placement = "attached"
 position = "top_right"
 open_near_click = true

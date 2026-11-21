@@ -186,6 +186,20 @@ let
     done
     touch $out
   '';
+  # Noctalia's own lint of every local plugin: a manifest it rejects leaves the plugin
+  # silently missing from the bar (bar-pins once lacked a panel max_height).  The
+  # self-test first proves such a manifest fails.
+  pluginLintCheck = pkgs.runCommand "noctalia-plugin-lint-checked" { } ''
+    export HOME="$TMPDIR" XDG_CONFIG_HOME="$TMPDIR/config" XDG_STATE_HOME="$TMPDIR/state"
+    cp -r ${./plugins/bar-pins} bad && chmod -R u+w bad
+    sed -i '/^max_height = /d' bad/plugin.toml
+    if ${lib.getExe shell} plugins lint bad > bad.log 2>&1; then
+      echo "self-test: a panel without max_height passed the lint"; exit 1
+    fi
+    grep -q 'requires max_height' bad.log
+    ${lib.getExe shell} plugins lint ${./plugins}/*/
+    touch $out
+  '';
   # Pin / Unpin (plugins/bar-pins): the drawer button, the right-click menu and the drawer.
   barPinsPluginCheck = pkgs.runCommand "noctalia-bar-pins-plugin-checked" {
     nativeBuildInputs = [ pkgs.luau ];
@@ -328,6 +342,7 @@ let
     test -f ${pluginGlyphsCheck}
     test -f ${barPinsPluginCheck}
     test -f ${barIconsCheck}
+    test -f ${pluginLintCheck}
     test -f ${alwaysOnPluginCheck}
     export NOCTALIA_STATE_HOME="$TMPDIR/noctalia-suite-validation"
     export NOCTALIA_CONFIG_HOME=${configHome}
@@ -394,7 +409,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barPinsPluginCheck barIconsCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barPinsPluginCheck barIconsCheck pluginLintCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;

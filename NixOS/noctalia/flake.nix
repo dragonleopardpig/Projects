@@ -51,6 +51,7 @@
         pluginGlyphs = suite.pluginGlyphsCheck;
         barPinsPlugin = suite.barPinsPluginCheck;
         barIcons = suite.barIconsCheck;
+        pluginLint = suite.pluginLintCheck;
         alwaysOnPlugin = suite.alwaysOnPluginCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
