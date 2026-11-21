@@ -143,11 +143,6 @@ in
       panel_position = "top_right";
       panel_open_near_click = true;
     };
-    "local/bar-pins" = {
-      panel_placement = "attached";
-      panel_position = "top_right";
-      panel_open_near_click = true;
-    };
   };
   bar.main = {
     position = "top";
