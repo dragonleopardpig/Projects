@@ -49,11 +49,11 @@ let
     runtimeInputs = [ shell umbriel drmLauncher lockAndBlank pkgs.dbus pkgs.jq pkgs.coreutils pkgs.util-linux pkgs.wlrctl pkgs.wtype ];
     text = builtins.readFile ./test-lock-power.sh;
   };
-  # End to end, on a private headless desktop: an unpinned bar icon shows in the tray's
-  # down-arrow drawer (tray-drawer-unpinned-widgets.patch) and pins back.
+  # End to end, on a private headless desktop with a real pointer: the native Pin/Unpin
+  # menus on the bar and in the tray's down-arrow drawer (tray-drawer-unpinned-widgets.patch).
   trayDrawerTest = pkgs.writeShellApplication {
     name = "noctalia-tray-drawer-test";
-    runtimeInputs = [ shell umbriel drmLauncher pkgs.dbus pkgs.jq pkgs.coreutils pkgs.util-linux pkgs.imagemagick ];
+    runtimeInputs = [ shell umbriel drmLauncher pkgs.dbus pkgs.jq pkgs.coreutils pkgs.util-linux pkgs.imagemagick pkgs.wlrctl ];
     text = builtins.readFile ./test-tray-drawer.sh;
   };
   gpuSelectionCheck = pkgs.runCommand "noctalia-gpu-selection-checked" {
@@ -194,32 +194,17 @@ let
     touch $out
   '';
   # Noctalia's own lint of every local plugin: a manifest it rejects leaves the plugin
-  # silently missing from the bar (bar-pins once lacked a panel max_height).  The
+  # silently missing from the bar (a menu panel once lacked max_height).  The
   # self-test first proves such a manifest fails.
   pluginLintCheck = pkgs.runCommand "noctalia-plugin-lint-checked" { } ''
     export HOME="$TMPDIR" XDG_CONFIG_HOME="$TMPDIR/config" XDG_STATE_HOME="$TMPDIR/state"
-    cp -r ${./plugins/bar-pins} bad && chmod -R u+w bad
+    cp -r ${./plugins/backup-status} bad && chmod -R u+w bad
     sed -i '/^max_height = /d' bad/plugin.toml
     if ${lib.getExe shell} plugins lint bad > bad.log 2>&1; then
       echo "self-test: a panel without max_height passed the lint"; exit 1
     fi
     grep -q 'requires max_height' bad.log
     ${lib.getExe shell} plugins lint ${./plugins}/*/
-    touch $out
-  '';
-  # Pin / Unpin (plugins/bar-pins): the right-click menu, on the bar and in the tray drawer.
-  barPinsPluginCheck = pkgs.runCommand "noctalia-bar-pins-plugin-checked" {
-    nativeBuildInputs = [ pkgs.luau ];
-  } ''
-    for entry in menu; do
-      {
-        printf 'local TEST_ENTRY = "%s"\n' "$entry"
-        cat ${./test-bar-pins-plugin.luau}
-      } | sed -e '/^--@COMMON@$/{r ${./plugins/bar-pins/common.luau}' -e 'd}' \
-              -e "/^--@ENTRY@$/{r ${./plugins/bar-pins}/$entry.luau" -e 'd}' \
-        | sed 's|require("./common\.luau")|commonModule|g' > "test_$entry.luau"
-      luau "test_$entry.luau"
-    done
     touch $out
   '';
   # Every bar icon has its own neon colour (no two alike, neighbours clearly apart) and the
@@ -229,8 +214,7 @@ let
     nativeBuildInputs = [ pkgs.python3 ];
   } ''
     icons() {
-      python3 ${./check-bar-icons.py} --catalog ${./plugins/bar-pins/common.luau} \
-        --plugins ${./plugins} "$@"
+      python3 ${./check-bar-icons.py} --plugins ${./plugins} "$@"
     }
     sed 's/^color = "#4DA9FF"$/color = "#CCFF00"/' ${shellConfig} > repeated.toml
     sed 's/^color = "#4DA9FF"$/color = "#2A3BA0"/' ${shellConfig} > dark.toml
@@ -353,7 +337,6 @@ let
     test -f ${rcloneStatusPluginCheck}
     test -f ${backupStatusPluginCheck}
     test -f ${pluginGlyphsCheck}
-    test -f ${barPinsPluginCheck}
     test -f ${barIconsCheck}
     test -f ${pluginLintCheck}
     test -f ${alwaysOnPluginCheck}
@@ -422,7 +405,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barPinsPluginCheck barIconsCheck pluginLintCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barIconsCheck pluginLintCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest trayDrawerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;

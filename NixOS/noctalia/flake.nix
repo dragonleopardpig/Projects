@@ -21,9 +21,10 @@
           # Tooltips for the bar buttons that had none (launcher, media, control
           # center, caffeine, notifications, session).
           ./suite/bar-widget-tooltips.patch
-          # Unpinned bar widgets (plugins/bar-pins: `[widget.<name>] enabled = false`) sit in
-          # the tray's down-arrow drawer beside the unpinned tray icons; click runs the
-          # widget's left action, right click its right action (the Pin/Unpin menu).
+          # Pin / Unpin for every bar widget: `actions.right = "widget-menu"` opens a native
+          # menu (the widget's own right-click action, then Unpin from bar); an unpinned widget
+          # (`[widget.<name>] enabled = false`) sits in the tray's down-arrow drawer, where a
+          # click runs its left action and a right click offers Pin to bar.
           ./suite/tray-drawer-unpinned-widgets.patch
         ];
       });
@@ -54,7 +55,6 @@
         rcloneStatusPlugin = suite.rcloneStatusPluginCheck;
         backupStatusPlugin = suite.backupStatusPluginCheck;
         pluginGlyphs = suite.pluginGlyphsCheck;
-        barPinsPlugin = suite.barPinsPluginCheck;
         barIcons = suite.barIconsCheck;
         pluginLint = suite.pluginLintCheck;
         alwaysOnPlugin = suite.alwaysOnPluginCheck;
@@ -104,10 +104,6 @@
         # on hosts without one the icon hides itself.
         xdg.dataFile."noctalia-suite/noctalia/plugins/backup-status" = {
           source = ./suite/plugins/backup-status;
-          force = true;
-        };
-        xdg.dataFile."noctalia-suite/noctalia/plugins/bar-pins" = {
-          source = ./suite/plugins/bar-pins;
           force = true;
         };
         home.file.".local/bin/noctalia-agent-status".source = lib.getExe suite.agentStatus;

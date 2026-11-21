@@ -1,10 +1,14 @@
 # End-to-end check of tray-drawer-unpinned-widgets.patch on a private headless desktop
-# (its own compositor, buses, config and state; the real desktop is not touched):
+# (its own compositor, buses, config and state; the real desktop is not touched), driven
+# with a real pointer (wlrctl) the way a person would:
 #   1. the clock is on the bar and no down arrow shows (the session has no tray items);
-#   2. unpinned, the clock leaves the bar and the down arrow appears for it;
-#   3. the drawer shows the clock in its own colour;
-#   4. pinned back, the clock returns and the arrow goes.
-# Colours are unique on purpose, so a screenshot's pixel counts tell what is drawn.
+#   2. right click on the clock opens the native menu below the bar; its entry (Unpin from
+#      bar) takes the clock off the bar and the down arrow appears for it;
+#   3. a click on the arrow opens the drawer, with the clock in its own colour;
+#   4. right click on the clock there opens the menu while the drawer stays open; its entry
+#      (Pin to bar) puts the clock back and the arrow goes.
+# Colours are unique on purpose, so a screenshot's pixel counts tell what is drawn, and a
+# popup is found as the region that changed between two screenshots.
 CLOCK="#CCFF00"
 ARROW="#FF00FF"
 probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/noctalia-tray-drawer.XXXXXX")
@@ -42,7 +46,9 @@ center = []
 end = ["clock", "tray"]
 [widget.clock]
 color = "$CLOCK"
-format = "{:%H:%M %A}"
+format = "{:%A %B}"
+[widget.clock.actions]
+right = "widget-menu"
 [widget.tray]
 color = "$ARROW"
 drawer = true
@@ -89,14 +95,14 @@ fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
+settle() { sleep 1.5; }
 echo 0 > "$probe_dir/shots/counter"
-# Pixels of exactly this colour in a fresh full-screen screenshot.  (Called in $(...), a
-# subshell, so the shot number lives in a file.)
-count() {
-  local shot
+# A fresh screenshot's path.  (Called in $(...), a subshell, so the number lives in a file.)
+snap() {
+  local shot name
   shot=$(($(cat "$probe_dir/shots/counter") + 1))
   echo "$shot" > "$probe_dir/shots/counter"
-  local name="shot$shot"
+  name="shot$shot"
   # A capture still being saved drops the next request: ask again until the file lands.
   for _ in {1..5}; do
     noctalia msg screenshot-fullscreen --save-to-file --no-pipe-to-command --no-copy-to-clipboard \
@@ -108,31 +114,90 @@ count() {
     done
   done
   [[ -s $probe_dir/shots/$name.png ]] || fail "screenshot $name was not saved"
-  # Near-exact colour (anti-aliased glyph edges included), as a pixel count.
-  local pixels
-  pixels=$(magick "$probe_dir/shots/$name.png" -alpha off -fuzz 12% -fill black +opaque "$1" \
+  echo "$probe_dir/shots/$name.png"
+}
+# Pixels of (nearly) colour $1 in a fresh screenshot, anti-aliased glyph edges included.
+count() {
+  local file pixels
+  file=$(snap)
+  pixels=$(magick "$file" -alpha off -fuzz 12% -fill black +opaque "$1" \
     -fill white -opaque "$1" -colorspace gray -format '%[fx:round(mean*w*h)]' info:)
-  echo "$name: $1 x $pixels" >&2
+  echo "$(basename "$file"): $1 x $pixels" >&2
   echo "$pixels"
 }
-settle() { sleep 1.5; }
+# "x y": the centre of the pixels of colour $2 in screenshot $1.
+centre_of() {
+  local box
+  box=$(magick "$1" -alpha off -fuzz 12% -fill black +opaque "$2" -fill white -opaque "$2" -format '%@' info:)
+  [[ $box =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ ]] || fail "no $2 in $1"
+  echo "$((BASH_REMATCH[3] + BASH_REMATCH[1] / 2)) $((BASH_REMATCH[4] + BASH_REMATCH[2] / 2))"
+}
+# "x y w h": the region that changed from screenshot $1 to $2 (a popup that opened).
+changed() {
+  local box
+  magick compare -fuzz 3% "$1" "$2" -compose src -highlight-color white -lowlight-color black \
+    "$probe_dir/shots/diff.png" 2> /dev/null || true
+  box=$(magick "$probe_dir/shots/diff.png" -alpha off -format '%@' info:)
+  [[ $box =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ && ${BASH_REMATCH[1]} -gt 1 ]] ||
+    fail "nothing changed between $(basename "$1") and $(basename "$2") (no menu opened)"
+  echo "${BASH_REMATCH[3]} ${BASH_REMATCH[4]} ${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+}
+point_at() {
+  wlrctl pointer move -5000 -5000
+  wlrctl pointer move "$1" "$2"
+}
 
+# Toasts ("screenshot saved") would change the screen between shots; Do Not Disturb hides them.
+noctalia msg notification-dnd-set on > /dev/null
+# Umbriel greets a session without keybinds with a help box that takes the first click.
+point_at 640 650
+wlrctl pointer click left
 settle
+# 1. pinned: on the bar, no arrow
 [[ $(count "$CLOCK") -gt 20 ]] || fail "the pinned clock is not on the bar"
 [[ $(count "$ARROW") -eq 0 ]] || fail "a down arrow shows with nothing in the drawer"
 
-noctalia msg config-set widget.clock.enabled false > /dev/null
+# 2. right click on the clock: the native menu below the bar, then its entry, Unpin from bar
+read -r x y < <(centre_of "$(snap)" "$CLOCK")
+point_at "$x" "$y"
 settle
-[[ $(count "$CLOCK") -eq 0 ]] || fail "the unpinned clock is still on the bar"
+before=$(snap)
+wlrctl pointer click right
+settle
+after=$(snap)
+read -r mx my mw mh < <(changed "$before" "$after")
+echo "menu on the bar: ${mw}x${mh}+${mx}+${my}" >&2
+[[ $my -gt $y ]] || fail "no menu opened below the clock"
+point_at "$((mx + mw / 2))" "$((my + mh / 2))"
+settle
+wlrctl pointer click left
+settle
+[[ $(count "$CLOCK") -eq 0 ]] || fail "Unpin from bar left the clock on the bar"
 [[ $(count "$ARROW") -gt 5 ]] || fail "no down arrow for the unpinned clock"
 
-noctalia msg panel-toggle tray-drawer tray > /dev/null
+# 3. a click on the arrow opens the drawer, the clock in it
+read -r ax ay < <(centre_of "$(snap)" "$ARROW")
+point_at "$ax" "$ay"
+settle
+wlrctl pointer click left
 settle
 [[ $(count "$CLOCK") -gt 5 ]] || fail "the drawer does not show the unpinned clock in its colour"
-noctalia msg panel-toggle tray-drawer tray > /dev/null
 
-noctalia msg config-set widget.clock.enabled true > /dev/null
+# 4. right click on it there: the menu opens, the drawer stays; its entry, Pin to bar
+read -r cx cy < <(centre_of "$(snap)" "$CLOCK")
+point_at "$cx" "$cy"
 settle
-[[ $(count "$CLOCK") -gt 20 ]] || fail "the clock did not come back to the bar"
+before=$(snap)
+wlrctl pointer click right
+settle
+after=$(snap)
+read -r mx my mw mh < <(changed "$before" "$after")
+echo "menu in the drawer: ${mw}x${mh}+${mx}+${my}" >&2
+[[ $(count "$CLOCK") -gt 5 ]] || fail "right click closed the drawer"
+point_at "$((mx + mw / 2))" "$((my + mh / 2))"
+settle
+wlrctl pointer click left
+settle
+[[ $(count "$CLOCK") -gt 20 ]] || fail "Pin to bar did not bring the clock back"
 [[ $(count "$ARROW") -eq 0 ]] || fail "the down arrow stayed with nothing in the drawer"
-echo "tray drawer: unpinned bar icon shown in the drawer, arrow follows it, pin restores it"
+echo "tray drawer: native Pin/Unpin menus on the bar and in the drawer, drawer stays open, pin restores"

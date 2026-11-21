@@ -3,17 +3,18 @@ let
   barStart = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
   barCenter = [ "active_window" "xwayland" ];
   barEnd = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "backup-status" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
-  # PIN / UNPIN (plugins/bar-pins): right click on any icon opens a small menu with its old
-  # right-click action (if it had one) and "Unpin from bar".  An unpinned icon moves into the
-  # tray's down-arrow drawer (suite/tray-drawer-unpinned-widgets.patch): a click there runs
-  # its left-click action, a right click opens the same menu with "Pin to bar".  Not for the
-  # tray and the taskbar: their items have their own Pin/Unpin.
+  # PIN / UNPIN (suite/tray-drawer-unpinned-widgets.patch): right click on any icon opens
+  # Noctalia's native menu (the tray's look) with the icon's own right-click action first (if
+  # it has one) and "Unpin from bar".  An unpinned icon moves into the tray's down-arrow
+  # drawer: a click there runs its left-click action, a right click opens the same menu with
+  # "Pin to bar" and the drawer stays open.  Not for the tray and the taskbar: their items
+  # have their own Pin/Unpin.
   ownRightClick = [ "tray" "taskbar" ];
   pinnable = builtins.filter (name: !(builtins.elem name ownRightClick)) (barStart ++ barCenter ++ barEnd);
   withPinMenu = widgets: widgets // builtins.listToAttrs (map (name: {
     inherit name;
     value = let own = widgets.${name} or { }; in own // {
-      actions = (own.actions or { }) // { right = "panel-toggle local/bar-pins:menu ${name}"; };
+      actions = (own.actions or { }) // { right = "widget-menu"; };
     };
   }) pinnable);
 in
@@ -114,7 +115,6 @@ in
       "local/rsync-status"              # local: sync-projects rsync status icon + per-target dropdown
       "local/rclone-status"             # local: rclone mount/remote status icon + dropdown
       "local/backup-status"             # local: restic backup status icon + dropdown (hidden without a backup)
-      "local/bar-pins"                  # local: Pin/Unpin menu on every bar icon (unpinned ones: tray drawer)
     ];
     auto_update = "none";
   };
@@ -198,7 +198,8 @@ in
     # Plugin bar widgets (see plugins.enabled above).  A plugin's resting colour is this
     # `color`; it switches to its own colour only for a failure.  Their left click is spelt
     # out as an action (the same thing their script did) so it also works from the tray
-    # drawer once unpinned, where the plugin's script does not run.
+    # drawer once unpinned, where the plugin's script does not run.  Their right click stays
+    # in the script; plugin.toml's `right_click_label` names it in the Pin/Unpin menu.
     umbriel-companion = { type = "noctalia/umbriel-companion:bar"; color = barAccents.peach; actions.left = "panel-toggle noctalia/umbriel-companion:panel"; };
     xwayland = { type = "tordex/xwayland:bar"; color = barAccents.lemon; };
     agent-status = { type = "local/agent-status:bar"; color = barAccents.candyPink; actions.left = "exec umbriel msg scratchpad-toggle:agent"; };

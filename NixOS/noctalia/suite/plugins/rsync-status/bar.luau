@@ -36,13 +36,6 @@ function onRightClick()
   end
 end
 
--- The bar-pins menu runs the old right click as `noctalia msg plugin <this>:bar all right-click`.
-function onIpc(event, _payload)
-  if event == "right-click" then
-    onRightClick()
-  end
-end
-
 function onConfigChanged()
   render()
 end

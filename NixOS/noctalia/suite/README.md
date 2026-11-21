@@ -59,28 +59,33 @@ contrast) and fails the build on a repeat or a colour too dark for the bar.
 The power button stays white. A plugin icon changes colour only for a failure
 (red), or the AI widget while it waits for an answer.
 
-**Right click any icon** for a small menu: its old right-click action first,
-if it had one, then **Unpin from bar**. The old actions are:
+**Right click any icon** for Noctalia's native menu (the tray's look): the
+icon's own right-click action first, if it has one, then **Unpin from bar**.
+Built-in icons keep Noctalia's own labels; the plugins name theirs in
+`plugin.toml` (`right_click_label`):
 
-| Icon | Old right-click action |
+| Icon | Its own right-click action |
 |---|---|
-| Volume | Mute / unmute |
-| Network | Network on / off |
-| Bluetooth | Bluetooth on / off |
-| Notifications | Do not disturb |
-| Media | Play / pause |
+| Volume | Toggle mute |
+| Network | Toggle network connection |
+| Bluetooth | Toggle Bluetooth |
+| Notifications | Toggle Do Not Disturb |
+| Media | Media control (play / pause) |
 | Always-on | Always-on on / off |
 | Backup | Back up now |
 | rclone | Open rclone GUI |
 | rsync | Refresh |
-| GPU, Displays | Arrange displays |
+| GPU | Arrange displays |
 
 An unpinned icon moves into the tray's **down-arrow drawer**, beside the
 unpinned tray icons and in its own colour. There a click does what the icon
-did on the bar, and a right click opens the same menu with **Pin to bar**. The
-down arrow shows whenever something is unpinned. Noctalia's drawer only holds
-tray icons, so `tray-drawer-unpinned-widgets.patch` adds the bar icons to it.
-The tray's items and the taskbar's apps keep their own Pin/Unpin.
+did on the bar, and a right click opens the same menu with **Pin to bar** while
+the drawer stays open. The down arrow shows whenever something is unpinned.
+Noctalia's drawer and menus only know tray icons, so
+`tray-drawer-unpinned-widgets.patch` adds the bar icons to them;
+`nix run path:./noctalia#check-tray-drawer` clicks through it all on a private
+headless desktop. The tray's items and the taskbar's apps keep their own
+Pin/Unpin.
 
 Unpinning saves `widget.<icon>.enabled = false` in the GUI settings
 (`~/.local/state/noctalia-suite/noctalia/settings.toml`), so it survives

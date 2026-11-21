@@ -5,12 +5,12 @@ Reads the generated Noctalia config (settings.nix) and fails on:
   the see-through bar (contrast below MIN_CONTRAST against WORST_BAR), two icons whose
   colours are too alike (CIEDE2000 below MIN_DE), or neighbours on the bar that are hard to
   tell apart (below MIN_NEIGHBOUR_DE);
-- an icon whose right click does not open the bar-pins menu (except those that handle
-  right click per item: the tray and the taskbar);
+- an icon whose right click does not open the native Pin/Unpin menu (`widget-menu`; except
+  the tray and the taskbar, which handle right click per item);
 - a plugin icon without a left-click action in settings.nix: once unpinned it sits in the
   tray drawer, which runs config actions only (the plugin's script is not running);
-- an icon the bar-pins catalog (plugins/bar-pins/common.luau) does not name;
-- a catalog `event` aimed at a plugin bar that does not answer `right-click` in onIpc.
+- a local plugin whose bar script has its own onRightClick but whose plugin.toml does not
+  name it (`right_click_label`), so the Pin/Unpin menu could not offer it.
 """
 
 import argparse
@@ -37,7 +37,7 @@ WHITE_OK = {"session"}
 OWN_RIGHT_CLICK = {"tray", "taskbar"}
 # Plugin icons with nothing to do on a left click.
 NO_LEFT_CLICK = {"xwayland"}
-MENU = "panel-toggle local/bar-pins:menu {}"
+MENU = "widget-menu"
 
 
 def lab(hex_colour):
@@ -116,26 +116,19 @@ def delta_e(c1, c2):
     return math.sqrt((dlp / sl) ** 2 + (dcp / sc) ** 2 + (dhp / sh) ** 2 + rt * (dcp / sc) * (dhp / sh))
 
 
-def catalog_names(common_luau):
-    """Icon names in bar-pins' WIDGETS table, and the plugin bars its `event`s address."""
-    text = Path(common_luau).read_text(encoding="utf-8")
-    body = text.split("M.WIDGETS = {", 1)[1].split("\n}\n", 1)[0]
-    names = set(re.findall(r'^  (?:\["([^"]+)"\]|([A-Za-z_][\w]*)) = \{', body, re.MULTILINE))
-    events = set(re.findall(r'event = "([^"]+)"', body))
-    return {a or b for a, b in names}, events
-
-
-def plugin_bars(plugins_dir):
-    """plugin id -> its bar entry's source."""
-    bars = {}
-    for manifest in Path(plugins_dir).glob("*/plugin.toml"):
+def unnamed_right_clicks(plugins_dir):
+    """Local plugin bars with their own onRightClick that plugin.toml does not name."""
+    missing = []
+    for manifest in sorted(Path(plugins_dir).glob("*/plugin.toml")):
         data = tomllib.loads(manifest.read_text(encoding="utf-8"))
         for widget in data.get("widget", []):
-            bars[f"{data['id']}:{widget['id']}"] = manifest.parent / widget["entry"]
-    return bars
+            script = (manifest.parent / widget["entry"]).read_text(encoding="utf-8")
+            if re.search(r"^function onRightClick\b", script, re.MULTILINE) and not widget.get("right_click_label"):
+                missing.append(f"{data['id']}:{widget['id']}")
+    return missing
 
 
-def problems(config, common_luau, plugins_dir):
+def problems(config, plugins_dir):
     found = []
     bar = config["bar"]["main"]
     widgets = config.get("widget", {})
@@ -169,39 +162,26 @@ def problems(config, common_luau, plugins_dir):
             if d < MIN_NEIGHBOUR_DE:
                 found.append(f"neighbours {n1} and {n2} are hard to tell apart (dE {d:.1f} < {MIN_NEIGHBOUR_DE})")
 
-    names, events = catalog_names(common_luau)
     for name in itertools.chain(*sections):
         if name not in OWN_RIGHT_CLICK:
             right = widgets.get(name, {}).get("actions", {}).get("right")
-            if right != MENU.format(name):
+            if right != MENU:
                 found.append(f"{name}: right click is {right!r}, not the Pin/Unpin menu")
         if ":" in widgets.get(name, {}).get("type", "") and name not in NO_LEFT_CLICK:
             if not widgets[name].get("actions", {}).get("left"):
                 found.append(f"{name}: plugin icon without actions.left (the tray drawer could not open it)")
-        if name not in names:
-            found.append(f"{name}: missing from the bar-pins catalog (plugins/bar-pins/common.luau)")
-    bars = plugin_bars(plugins_dir)
-    for entry in sorted(events):
-        source = bars.get(entry)
-        if source is None:
-            found.append(f"catalog event {entry}: no such local plugin bar")
-            continue
-        text = source.read_text(encoding="utf-8")
-        if "function onIpc" not in text or '"right-click"' not in text:
-            found.append(f"catalog event {entry}: {source.name} does not answer onIpc 'right-click'")
-    if "local/bar-pins" not in config.get("plugins", {}).get("enabled", []):
-        found.append("local/bar-pins is not enabled")
+    for entry in unnamed_right_clicks(plugins_dir):
+        found.append(f"{entry}: onRightClick without right_click_label in plugin.toml (the menu cannot offer it)")
     return found, len(coloured)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--config", required=True, help="the generated Noctalia config.toml")
-    parser.add_argument("--catalog", required=True, help="plugins/bar-pins/common.luau")
     parser.add_argument("--plugins", required=True, help="the local plugins directory")
     args = parser.parse_args(argv)
     config = tomllib.loads(Path(args.config).read_text(encoding="utf-8"))
-    found, count = problems(config, args.catalog, args.plugins)
+    found, count = problems(config, args.plugins)
     if found:
         print("\n".join(found), file=sys.stderr)
         return 1

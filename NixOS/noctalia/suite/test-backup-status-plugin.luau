@@ -172,10 +172,6 @@ elseif TEST_ENTRY == "bar" then
   assert(barColors[#barColors] == "error", "failed colour")
   onRightClick()
   assert(lastArgs() == "run", "right click did not run the backup")
-  -- the bar-pins menu's "Back up now" sends the old right click as an event
-  local beforeEvent = #launchedCommands
-  onIpc("right-click", "")
-  assert(#launchedCommands == beforeEvent + 1 and lastArgs() == "run", "the menu's right-click event did not run the backup")
 
   onClick()
   assert(toggledPanels[#toggledPanels] == "local/backup-status:panel", "click did not toggle the panel")

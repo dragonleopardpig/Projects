@@ -1,8 +1,576 @@
+diff --git a/meson.build b/meson.build
+index 9278eb2..9bb6adc 100644
+--- a/meson.build
++++ b/meson.build
+@@ -772,6 +772,7 @@ _noctalia_sources = files(
+   'src/shell/bar/widget_factory.cpp',
+   'src/shell/bar/widget_gesture.cpp',
+   'src/shell/bar/widget_gesture_defaults.cpp',
++  'src/shell/bar/widget_pin_menu.cpp',
+   'src/shell/bar/widgets/active_window_widget.cpp',
+   'src/shell/bar/widgets/active_window_widget_definition.cpp',
+   'src/shell/bar/widgets/audio_visualizer_widget.cpp',
+diff --git a/src/scripting/plugin_manifest.cpp b/src/scripting/plugin_manifest.cpp
+index 8bfd364..9c7da5d 100644
+--- a/src/scripting/plugin_manifest.cpp
++++ b/src/scripting/plugin_manifest.cpp
+@@ -683,6 +683,9 @@ namespace scripting {
+               return false;
+             }
+           }
++          if (const auto label = (*entryTable)["right_click_label"].value<std::string>(); label.has_value()) {
++            entry.rightClickLabel = *label;
++          }
+           if (const auto* actionsTable = (*entryTable)["actions"].as_table()) {
+             for (const auto& [gestureKey, actionNode] : *actionsTable) {
+               const auto action = actionNode.value<std::string>();
+diff --git a/src/scripting/plugin_manifest.h b/src/scripting/plugin_manifest.h
+index cb549f1..30e4e39 100644
+--- a/src/scripting/plugin_manifest.h
++++ b/src/scripting/plugin_manifest.h
+@@ -101,6 +101,8 @@ namespace scripting {
+     // types use, so `[widget.<name>.actions]` still overrides them. Kept as strings here: the
+     // gesture vocabulary and action grammar belong to the bar, not to the manifest parser.
+     std::vector<std::pair<std::string, std::string>> widgetActions;
++    // Widget entries: names the script's onRightClick in the bar's Pin/Unpin menu.
++    std::string rightClickLabel;
+ 
+     // Whether the bar draws its whole-widget hover highlight over this [[widget]] entry
+     // (`hover_highlight`, plugin_api >= 34). False when the widget draws its own per-item hover.
+diff --git a/src/shell/bar/bar.cpp b/src/shell/bar/bar.cpp
+index 4489e0a..062d957 100644
+--- a/src/shell/bar/bar.cpp
++++ b/src/shell/bar/bar.cpp
+@@ -1,3 +1,4 @@
++#include "shell/bar/widget_pin_menu.h"
+ #include "shell/bar/bar.h"
+ 
+ #include "compositors/compositor_platform.h"
+@@ -1516,6 +1517,7 @@ Bar::Bar() = default;
+ bool Bar::initialize(const BarServices& services) {
+   m_platform = &services.platform;
+   m_config = &services.config;
++  noctalia::bar::setPinMenuConfig(m_config);
+   m_notifications = services.notifications;
+   m_tray = services.tray;
+   m_audio = services.audio;
+@@ -3770,6 +3772,9 @@ bool Bar::onPointerEvent(const PointerEvent& event) {
+   }
+ 
+   auto routeWidgetPopups = [&](BarInstance& instance) {
++    if (noctalia::bar::PinMenu::instance().onBarPointerEvent(event)) {
++      return true;
++    }
+     auto routeGroup = [&](std::vector<std::unique_ptr<Widget>>& widgets) {
+       for (auto& widget : widgets) {
+         if (widget != nullptr && widget->onPointerEvent(event)) {
+diff --git a/src/shell/bar/widget.cpp b/src/shell/bar/widget.cpp
+index 6807232..b8b7fcf 100644
+--- a/src/shell/bar/widget.cpp
++++ b/src/shell/bar/widget.cpp
+@@ -7,6 +7,7 @@
+ #include "render/scene/node.h"
+ #include "shell/bar/widget_action_dispatcher.h"
+ #include "shell/bar/widget_gesture_defaults.h"
++#include "shell/bar/widget_pin_menu.h"
+ #include "ui/builders.h"
+ #include "ui/palette.h"
+ #include "util/string_utils.h"
+@@ -23,6 +24,7 @@ namespace {
+ } // namespace
+ 
+ Widget::~Widget() {
++  noctalia::bar::PinMenu::instance().closeFor(this);
+   if (m_animations != nullptr) {
+     m_animations->cancelForOwner(this);
+     m_animations->cancelForOwner(peekAnimationOwner());
+@@ -288,6 +290,7 @@ void Widget::resolveGestureBindings(
+     const noctalia::bar::WidgetActionDispatcher* dispatcher
+ ) {
+   m_actionDispatcher = dispatcher;
++  m_widgetType = std::string(widgetType);
+ 
+   const std::string widgetContext = std::format("widget.{}", m_configName);
+   // Named, not inlined: the span in Inputs borrows from it.
+@@ -400,14 +403,21 @@ bool Widget::dispatchGesture(noctalia::bar::Gesture gesture) {
+ 
+   onGestureDispatch(gesture, *action);
+ 
++  if (action->kind == noctalia::bar::WidgetAction::Kind::Ipc && action->verb == noctalia::bar::kWidgetMenuVerb) {
++    openPinMenu();
++    return true;
++  }
++  return runAction(*action, gestureConfigKey(gesture));
++}
++
++bool Widget::runAction(const noctalia::bar::WidgetAction& actionRef, std::string_view gestureName) {
++  const auto* action = &actionRef;
+   // Panel actions re-enter through the bar's panel callback so the panel anchors at this widget
+   // rather than at the compositor's focused output.
+   if (action->kind == noctalia::bar::WidgetAction::Kind::Ipc && noctalia::bar::isAnchoredPanelVerb(action->verb)) {
+     const auto args = noctalia::bar::parsePanelVerbArgs(action->args);
+     if (args.panelId.empty()) {
+-      kLog.error(
+-          "widget.{}.actions.{}: \"{}\" needs a panel id", m_configName, gestureConfigKey(gesture), action->verb
+-      );
++      kLog.error("widget.{}.actions.{}: \"{}\" needs a panel id", m_configName, gestureName, action->verb);
+       return false;
+     }
+     const auto activation =
+@@ -423,3 +433,33 @@ bool Widget::dispatchGesture(noctalia::bar::Gesture gesture) {
+   // The dispatcher reports the command and the failure itself.
+   return m_actionDispatcher->run(*action, m_actionContext);
+ }
++
++void Widget::openPinMenu() {
++  Node* anchorNode = m_innerRoot != nullptr ? m_innerRoot : m_outerPtr;
++  if (anchorNode == nullptr) {
++    return;
++  }
++  float x = 0.0F;
++  float y = 0.0F;
++  Node::absolutePosition(anchorNode, x, y);
++  noctalia::bar::PinMenuRequest request{
++      .name = m_configName,
++      .pinned = true,
++      .own = noctalia::bar::ownRightClick(m_configName, m_widgetType),
++      .x = x,
++      .y = y,
++      .width = anchorNode->width(),
++      .height = anchorNode->height(),
++      .contentScale = m_contentScale,
++      .inPanel = false,
++      .owner = this,
++  };
++  if (request.own.has_value()) {
++    if (request.own->script) {
++      request.runOwn = [this] { runScriptRightClick(); };
++    } else if (request.own->action.has_value()) {
++      request.runOwn = [this, action = *request.own->action] { (void)runAction(action); };
++    }
++  }
++  (void)noctalia::bar::PinMenu::instance().open(std::move(request));
++}
+diff --git a/src/shell/bar/widget.h b/src/shell/bar/widget.h
+index 210f183..88cc3ce 100644
+--- a/src/shell/bar/widget.h
++++ b/src/shell/bar/widget.h
+@@ -64,6 +64,8 @@ public:
+     (void)event;
+     return false;
+   }
++  // A plugin widget's own right click (its script's onRightClick), offered in the Pin/Unpin menu.
++  virtual void runScriptRightClick() {}
+ 
+   virtual bool noGapAroundMe() const noexcept { return false; }
+   // Takes a share of its lane's free space (start and end lanes only; the center lane sizes to its content).
+@@ -174,6 +176,10 @@ protected:
+   }
+   // Runs the action bound to `gesture`, if any. Returns whether it was handled.
+   bool dispatchGesture(noctalia::bar::Gesture gesture);
++  // Runs one resolved action as this widget's gesture would (panels anchor at the widget).
++  bool runAction(const noctalia::bar::WidgetAction& action, std::string_view gestureName = "right");
++  // The native Pin/Unpin menu (`widget-menu`): this widget's own right-click action, then Unpin.
++  void openPinMenu();
+   // Called just before a bound action runs, so a widget can snapshot state for an optimistic
+   // update. Match on `action` when the update only makes sense for one verb.
+   virtual void onGestureDispatch(noctalia::bar::Gesture gesture, const noctalia::bar::WidgetAction& action) {
+@@ -245,6 +251,7 @@ private:
+   noctalia::bar::ScrollRepeatMode m_scrollRepeatMode = noctalia::bar::ScrollRepeatMode::Auto;
+   const noctalia::bar::WidgetActionDispatcher* m_actionDispatcher = nullptr;
+   IpcInvocationContext m_actionContext;
++  std::string m_widgetType;
+   bool m_peekEnabled = false;
+   float m_peekDelayMs = 0.0F;
+   bool m_peekExpanded = false;
+diff --git a/src/shell/bar/widget_pin_menu.cpp b/src/shell/bar/widget_pin_menu.cpp
+new file mode 100644
+index 0000000..39d33fb
+--- /dev/null
++++ b/src/shell/bar/widget_pin_menu.cpp
+@@ -0,0 +1,266 @@
++#include "shell/bar/widget_pin_menu.h"
++
++#include "config/config_service.h"
++#include "i18n/i18n.h"
++#include "i18n/i18n_service.h"
++#include "scripting/plugin_registry.h"
++#include "shell/bar/widget_gesture_defaults.h"
++#include "shell/panel/panel_manager.h"
++#include "shell/wayland/layer_shell.h"
++#include "ui/controls/context_menu.h"
++#include "ui/controls/context_menu_popup.h"
++#include "ui/style.h"
++#include "wayland/wayland_connection.h"
++#include "wayland/wayland_seat.h"
++#include "xdg-shell-client-protocol.h"
++
++#include <algorithm>
++#include <cmath>
++
++namespace noctalia::bar {
++
++  namespace {
++
++    ConfigService* g_config = nullptr;
++
++    constexpr std::int32_t kEntryOwn = 1;
++    constexpr std::int32_t kEntryPin = 2;
++
++    // Below a top bar, above a bottom one, beside a side bar (as the screenshot widget's menu).
++    ContextMenuPopupPlacement placementForBar(std::string_view barPosition, float contentScale) {
++      const std::int32_t gap = std::max(2, static_cast<std::int32_t>(std::lround(Style::spaceMd * contentScale)));
++      if (barPosition == "bottom") {
++        return ContextMenuPopupPlacement{
++            .anchor = XDG_POSITIONER_ANCHOR_TOP,
++            .gravity = XDG_POSITIONER_GRAVITY_TOP,
++            .offsetX = 0,
++            .offsetY = -gap,
++            .chromeAttachment = popup_chrome::Attachment{
++                .horizontal = popup_chrome::HorizontalAttachment::Center,
++                .vertical = popup_chrome::VerticalAttachment::Bottom,
++            },
++        };
++      }
++      if (barPosition == "left") {
++        return ContextMenuPopupPlacement{
++            .anchor = XDG_POSITIONER_ANCHOR_RIGHT,
++            .gravity = XDG_POSITIONER_GRAVITY_RIGHT,
++            .offsetX = gap,
++            .offsetY = 0,
++            .chromeAttachment = popup_chrome::Attachment{
++                .horizontal = popup_chrome::HorizontalAttachment::Left,
++                .vertical = popup_chrome::VerticalAttachment::Center,
++            },
++        };
++      }
++      if (barPosition == "right") {
++        return ContextMenuPopupPlacement{
++            .anchor = XDG_POSITIONER_ANCHOR_LEFT,
++            .gravity = XDG_POSITIONER_GRAVITY_LEFT,
++            .offsetX = -gap,
++            .offsetY = 0,
++            .chromeAttachment = popup_chrome::Attachment{
++                .horizontal = popup_chrome::HorizontalAttachment::Right,
++                .vertical = popup_chrome::VerticalAttachment::Center,
++            },
++        };
++      }
++      return ContextMenuPopupPlacement{
++          .anchor = XDG_POSITIONER_ANCHOR_BOTTOM,
++          .gravity = XDG_POSITIONER_GRAVITY_BOTTOM,
++          .offsetX = 0,
++          .offsetY = gap,
++          .chromeAttachment = popup_chrome::Attachment{
++              .horizontal = popup_chrome::HorizontalAttachment::Center,
++              .vertical = popup_chrome::VerticalAttachment::Top,
++          },
++      };
++    }
++
++  } // namespace
++
++  void setPinMenuConfig(ConfigService* config) noexcept { g_config = config; }
++
++  ConfigService* pinMenuConfig() noexcept { return g_config; }
++
++  std::optional<OwnRightClick> ownRightClick(std::string_view name, std::string_view type) {
++    const WidgetConfig* widgetConfig = nullptr;
++    if (g_config != nullptr) {
++      if (const auto it = g_config->config().widgets.find(std::string(name)); it != g_config->config().widgets.end()) {
++        widgetConfig = &it->second;
++      }
++    }
++    for (const auto& binding : gestureDefaultsForType(type, widgetConfig)) {
++      if (binding.gesture != Gesture::Right) {
++        continue;
++      }
++      auto parsed = parseWidgetAction(binding.action);
++      if (!parsed.has_value() || !parsed->isBound()) {
++        return std::nullopt;
++      }
++      std::string label;
++      if (parsed->kind == WidgetAction::Kind::Ipc) {
++        label = std::string(i18n::Service::instance().lookup("settings.widgets.actions.commands." + parsed->verb + ".label"));
++      }
++      if (label.empty()) {
++        label = parsed->kind == WidgetAction::Kind::Ipc ? parsed->commandLine() : parsed->args;
++      }
++      return OwnRightClick{.label = std::move(label), .action = std::move(*parsed)};
++    }
++    auto& registry = scripting::PluginRegistry::instance();
++    registry.ensureScanned();
++    if (const auto plugin = registry.resolve(type);
++        plugin.has_value() && plugin->entry != nullptr && !plugin->entry->rightClickLabel.empty()) {
++      return OwnRightClick{.label = plugin->entry->rightClickLabel, .script = true};
++    }
++    return std::nullopt;
++  }
++
++  bool setWidgetPinned(std::string_view name, bool pinned) {
++    if (g_config == nullptr || name.empty()) {
++      return false;
++    }
++    return g_config->setOverride({"widget", std::string(name), "enabled"}, pinned);
++  }
++
++  PinMenu& PinMenu::instance() {
++    static PinMenu menu;
++    return menu;
++  }
++
++  bool PinMenu::open(PinMenuRequest request) {
++    WaylandConnection* wayland = PanelManager::instance().wayland();
++    RenderContext* renderContext = PanelManager::instance().renderContext();
++    if (wayland == nullptr || renderContext == nullptr || request.name.empty()) {
++      return false;
++    }
++    close();
++
++    std::vector<ContextMenuControlEntry> entries;
++    if (request.own.has_value() && request.runOwn) {
++      entries.push_back(ContextMenuControlEntry{.id = kEntryOwn, .label = request.own->label, .enabled = true});
++    }
++    entries.push_back(
++        ContextMenuControlEntry{
++            .id = kEntryPin,
++            .label = request.pinned ? std::string("Unpin from bar") : std::string("Pin to bar"),
++            .enabled = true,
++        }
++    );
++
++    if (m_popup == nullptr) {
++      m_popup = std::make_unique<ContextMenuPopup>(*wayland, *renderContext);
++    }
++    if (g_config != nullptr) {
++      m_popup->setShadowConfig(g_config->config().shell.shadow);
++    }
++    m_popup->setOnActivate([name = request.name, pinned = request.pinned, runOwn = request.runOwn,
++                            afterPinChange = request.afterPinChange](const ContextMenuControlEntry& entry) {
++      if (entry.id == kEntryOwn && runOwn) {
++        runOwn();
++      } else if (entry.id == kEntryPin) {
++        setWidgetPinned(name, !pinned);
++        if (afterPinChange) {
++          afterPinChange();
++        }
++      }
++    });
++
++    const float scale = request.contentScale;
++    const PopupAnchorRect anchor{
++        .x = static_cast<std::int32_t>(std::lround(request.x)),
++        .y = static_cast<std::int32_t>(std::lround(request.y)),
++        .width = std::max(1, static_cast<std::int32_t>(std::lround(request.width))),
++        .height = std::max(1, static_cast<std::int32_t>(std::lround(request.height))),
++    };
++    constexpr float kMenuWidth = 220.0F;
++
++    if (request.inPanel) {
++      const auto parent = PanelManager::instance().fallbackPopupParentContext();
++      if (!parent.has_value()) {
++        return false;
++      }
++      m_inPanel = true;
++      m_panelSurface = parent->surface;
++      PanelManager::instance().beginAttachedPopup(parent->surface);
++      PanelManager::instance().setActivePopup(m_popup.get());
++      m_popup->setOnDismissed([this, surface = parent->surface] {
++        PanelManager::instance().clearActivePopup();
++        PanelManager::instance().endAttachedPopup(surface);
++        if (m_panelSurface == surface) {
++          m_panelSurface = nullptr;
++        }
++      });
++      m_owner = request.owner;
++      m_popup->open(
++          ContextMenuPopupRequest{
++              .entries = std::move(entries),
++              .minMenuWidth = kMenuWidth * scale,
++              .maxMenuWidth = Style::menuAutoMaxWidth * scale,
++              .maxVisible = 4,
++              .anchor = anchor,
++              .parent = PopupSurfaceParent{.attach = parent->attach, .output = parent->output},
++          }
++      );
++      return true;
++    }
++
++    wl_surface* pointerSurface = wayland->lastPointerSurface();
++    auto& layerShell = wayland->extension<LayerShell>();
++    auto* layerSurface = layerShell.layerSurfaceFor(pointerSurface);
++    if (layerSurface == nullptr) {
++      return false;
++    }
++    std::string barPosition = "top";
++    if (g_config != nullptr && !g_config->config().bars.empty()) {
++      barPosition = g_config->config().bars.front().position;
++    }
++    m_inPanel = false;
++    m_owner = request.owner;
++    m_popup->setOnDismissed([] {});
++    m_popup->open(
++        ContextMenuPopupRequest{
++            .entries = std::move(entries),
++            .minMenuWidth = kMenuWidth * scale,
++            .maxMenuWidth = Style::menuAutoMaxWidth * scale,
++            .maxVisible = 4,
++            .anchor = anchor,
++            .parent =
++                PopupSurfaceParent{
++                    .attach = LayerShell::popupAttach(layerSurface),
++                    .output = wayland->lastPointerOutput(),
++                    .keyboardGrab = layerShell.popupKeyboardGrab(pointerSurface),
++                },
++            .pointerParentSurface = pointerSurface,
++            .placement = placementForBar(barPosition, scale),
++        }
++    );
++    return true;
++  }
++
++  bool PinMenu::onBarPointerEvent(const PointerEvent& event) {
++    if (m_popup == nullptr || m_inPanel || !m_popup->isOpen()) {
++      return false;
++    }
++    const bool consumed = m_popup->onPointerEvent(event);
++    if (!consumed && event.type == PointerEvent::Type::Button && event.pressed) {
++      m_popup->close();
++      return true;
++    }
++    return consumed;
++  }
++
++  void PinMenu::closeFor(const void* owner) {
++    if (owner != nullptr && owner == m_owner) {
++      close();
++    }
++  }
++
++  void PinMenu::close() {
++    if (m_popup != nullptr && m_popup->isOpen()) {
++      m_popup->close();
++    }
++    m_owner = nullptr;
++  }
++
++} // namespace noctalia::bar
+diff --git a/src/shell/bar/widget_pin_menu.h b/src/shell/bar/widget_pin_menu.h
+new file mode 100644
+index 0000000..16c9bb9
+--- /dev/null
++++ b/src/shell/bar/widget_pin_menu.h
+@@ -0,0 +1,76 @@
++#pragma once
++
++#include "shell/bar/widget_action.h"
++
++#include <functional>
++#include <memory>
++#include <optional>
++#include <string>
++#include <string_view>
++
++class ConfigService;
++class ContextMenuPopup;
++struct PointerEvent;
++struct WidgetConfig;
++struct wl_surface;
++
++namespace noctalia::bar {
++
++  // Bound to a bar widget's right click as `actions.right = "widget-menu"`: a native menu with the
++  // widget's own right-click action first (if it has one), then Unpin from bar. An unpinned widget
++  // (`[widget.<name>] enabled = false`) sits in the tray's drawer, where its menu offers Pin to bar.
++  inline constexpr std::string_view kWidgetMenuVerb = "widget-menu";
++
++  // The config the menus pin and unpin through; the bar sets it when it initializes.
++  void setPinMenuConfig(ConfigService* config) noexcept;
++  ConfigService* pinMenuConfig() noexcept;
++
++  // A widget's own right-click action, offered first in its menu: the type's default binding,
++  // labelled as in the settings' action picker, or a plugin's onRightClick when its manifest
++  // names it (`right_click_label` on the [[widget]] entry).
++  struct OwnRightClick {
++    std::string label;
++    std::optional<WidgetAction> action;
++    bool script = false;
++  };
++  std::optional<OwnRightClick> ownRightClick(std::string_view name, std::string_view type);
++
++  // Pin (true) or unpin (false) the bar widget `name`.
++  bool setWidgetPinned(std::string_view name, bool pinned);
++
++  struct PinMenuRequest {
++    std::string name;
++    bool pinned = true;
++    std::optional<OwnRightClick> own;
++    // The clicked item, in the coordinates of the surface under the pointer.
++    float x = 0.0F;
++    float y = 0.0F;
++    float width = 1.0F;
++    float height = 1.0F;
++    float contentScale = 1.0F;
++    // Inside a panel (the tray drawer) the panel routes the menu's input; on a bar, the bar does.
++    bool inPanel = false;
++    const void* owner = nullptr;
++    std::function<void()> runOwn;
++    std::function<void()> afterPinChange;
++  };
++
++  // One native menu at a time, bar or drawer, like the tray's own menu.
++  class PinMenu {
++  public:
++    static PinMenu& instance();
++    bool open(PinMenuRequest request);
++    // Bar input while a bar-attached menu is open; true when consumed.
++    bool onBarPointerEvent(const PointerEvent& event);
++    // Closes the menu if `owner` opened it (a widget going away).
++    void closeFor(const void* owner);
++    void close();
++
++  private:
++    std::unique_ptr<ContextMenuPopup> m_popup;
++    const void* m_owner = nullptr;
++    bool m_inPanel = false;
++    wl_surface* m_panelSurface = nullptr;
++  };
++
++} // namespace noctalia::bar
+diff --git a/src/shell/bar/widgets/plugin_widget.cpp b/src/shell/bar/widgets/plugin_widget.cpp
+index d320784..251324f 100644
+--- a/src/shell/bar/widgets/plugin_widget.cpp
++++ b/src/shell/bar/widgets/plugin_widget.cpp
+@@ -151,6 +151,12 @@ std::filesystem::path PluginWidget::resolvePluginPath(std::string_view path) con
+   return m_pluginDir / path;
+ }
+ 
++void PluginWidget::runScriptRightClick() {
++  if (m_runtime) {
++    (void)m_runtime->enqueueCall("onRightClick", makeScriptSnapshot());
++  }
++}
++
+ void PluginWidget::create() {
+   auto area = ui::inputArea({});
+   area->setAcceptedButtons(InputArea::buttonMask({BTN_LEFT, BTN_RIGHT, BTN_MIDDLE}));
+diff --git a/src/shell/bar/widgets/plugin_widget.h b/src/shell/bar/widgets/plugin_widget.h
+index b4a53a8..cf2874c 100644
+--- a/src/shell/bar/widgets/plugin_widget.h
++++ b/src/shell/bar/widgets/plugin_widget.h
+@@ -45,6 +45,7 @@ public:
+       bool enableScroll = true
+   );
+   ~PluginWidget() override;
++  void runScriptRightClick() override;
+ 
+   void create() override;
+ 
 diff --git a/src/shell/bar/widgets/tray_widget.cpp b/src/shell/bar/widgets/tray_widget.cpp
-index aa8436f..58372c6 100644
+index aa8436f..a519beb 100644
 --- a/src/shell/bar/widgets/tray_widget.cpp
 +++ b/src/shell/bar/widgets/tray_widget.cpp
-@@ -11,6 +11,11 @@
+@@ -11,6 +11,13 @@
  #include "render/scene/input_area.h"
  #include "render/scene/node.h"
  #include "render/text/glyph_registry.h"
@@ -11,10 +579,12 @@ index aa8436f..58372c6 100644
 +#include "shell/bar/widget_action.h"
 +#include "shell/bar/widget_action_dispatcher.h"
 +#include "shell/bar/widget_gesture_defaults.h"
++#include "shell/bar/widget_pin_menu.h"
++#include "shell/panel/panel_manager.h"
  #include "shell/app_icon_colorization_settings.h"
  #include "shell/tray/tray_identifier.h"
  #include "shell/tray/tray_theme_path_index.h"
-@@ -21,7 +26,9 @@
+@@ -21,7 +28,9 @@
  #include "util/string_utils.h"
  
  #include <algorithm>
@@ -24,7 +594,7 @@ index aa8436f..58372c6 100644
  #include <linux/input-event-codes.h>
  #include <memory>
  #include <optional>
-@@ -161,6 +168,34 @@ namespace {
+@@ -161,6 +170,34 @@ namespace {
  
    bool isUniqueBusName(std::string_view value) { return !value.empty() && value.front() == ':'; }
  
@@ -59,7 +629,7 @@ index aa8436f..58372c6 100644
  } // namespace
  
  TrayWidget::TrayWidget(ConfigService& config, TrayService* tray, Options options)
-@@ -577,6 +612,9 @@ void TrayWidget::rebuild(Renderer& renderer) {
+@@ -577,6 +614,9 @@ void TrayWidget::rebuild(Renderer& renderer) {
        hasDrawerItems = true;
        break;
      }
@@ -69,7 +639,7 @@ index aa8436f..58372c6 100644
      if (hasDrawerItems) {
        const float itemSize = m_customItemSize.value_or(Style::baseGlyphSize) * m_contentScale;
        // Keep the trigger's InputArea across rebuilds so hover and press capture survive icon updates.
-@@ -884,9 +922,149 @@ void TrayWidget::rebuild(Renderer& renderer) {
+@@ -884,9 +924,188 @@ void TrayWidget::rebuild(Renderer& renderer) {
      }
    }
  
@@ -92,8 +662,12 @@ index aa8436f..58372c6 100644
 +          std::round((itemSize - glyph->width()) * 0.5F), std::round((itemSize - glyph->height()) * 0.5F)
 +      );
 +      areaPtr->addChild(std::move(glyph));
-+      areaPtr->setOnClick([this, widget](const InputArea::PointerData& data) {
-+        runUnpinnedBarWidgetAction(widget, data.button == BTN_RIGHT);
++      areaPtr->setOnClick([this, widget, areaPtr](const InputArea::PointerData& data) {
++        if (data.button == BTN_RIGHT) {
++          openUnpinnedBarWidgetMenu(widget, *areaPtr);
++        } else {
++          runUnpinnedBarWidgetAction(widget, false);
++        }
 +      });
 +      areaPtr->setTooltip(widget.label + " (unpinned) · right click: Pin to bar");
 +      attachHover(*areaPtr, itemSize);
@@ -167,7 +741,42 @@ index aa8436f..58372c6 100644
 +  return unpinned;
 +}
 +
-+void TrayWidget::runUnpinnedBarWidgetAction(const UnpinnedBarWidget& widget, bool rightClick) {
++void TrayWidget::openUnpinnedBarWidgetMenu(const UnpinnedBarWidget& widget, InputArea& area) {
++  float x = 0.0F;
++  float y = 0.0F;
++  Node::absolutePosition(&area, x, y);
++  noctalia::bar::PinMenuRequest request{
++      .name = widget.name,
++      .pinned = false,
++      .own = noctalia::bar::ownRightClick(widget.name, widget.type),
++      .x = x,
++      .y = y,
++      .width = area.width(),
++      .height = area.height(),
++      .contentScale = m_contentScale,
++      .inPanel = true,
++      .owner = this,
++  };
++  // A plugin's own right click runs in its bar script, which is not running while unpinned.
++  if (request.own.has_value() && !request.own->script) {
++    request.runOwn = [this, widget] { runUnpinnedBarWidgetAction(widget, true, false); };
++  } else {
++    request.own.reset();
++  }
++  // Pinned back: drop its cell, and close the drawer once nothing is left in it.
++  request.afterPinChange = [this] {
++    m_rebuildPending = true;
++    requestUpdate();
++    if (unpinnedBarWidgets(m_config).empty() && !std::ranges::any_of(m_items, [this](const TrayItemInfo& item) {
++          return !(m_hidePassive && tray::isPassiveStatus(item)) && !isHiddenItem(item) && !isPinnedItem(item);
++        })) {
++      PanelManager::instance().close();
++    }
++  };
++  (void)noctalia::bar::PinMenu::instance().open(std::move(request));
++}
++
++void TrayWidget::runUnpinnedBarWidgetAction(const UnpinnedBarWidget& widget, bool rightClick, bool closeDrawer) {
 +  const Config& cfg = m_config.config();
 +  const auto it = cfg.widgets.find(widget.name);
 +  const WidgetConfig* widgetConfig = it != cfg.widgets.end() ? &it->second : nullptr;
@@ -211,7 +820,7 @@ index aa8436f..58372c6 100644
 +      (void)process::runAsync(argv);
 +    }
 +  }
-+  if (m_itemActivated) {
++  if (closeDrawer && m_itemActivated) {
 +    m_itemActivated();
 +  }
 +}
@@ -220,7 +829,7 @@ index aa8436f..58372c6 100644
    if (!m_glyph.empty()) {
      return m_glyph;
 diff --git a/src/shell/bar/widgets/tray_widget.h b/src/shell/bar/widgets/tray_widget.h
-index bb5361c..6869693 100644
+index bb5361c..884412a 100644
 --- a/src/shell/bar/widgets/tray_widget.h
 +++ b/src/shell/bar/widgets/tray_widget.h
 @@ -58,6 +58,17 @@ public:
@@ -241,11 +850,12 @@ index bb5361c..6869693 100644
    bool wantsBarHoverHighlight() const noexcept override { return false; }
  
  private:
-@@ -77,6 +88,7 @@ private:
+@@ -77,6 +88,8 @@ private:
    void rebuild(Renderer& renderer);
    std::string iconForItem(const TrayItemInfo& item) const;
    bool isPinnedItem(const TrayItemInfo& item) const;
-+  void runUnpinnedBarWidgetAction(const UnpinnedBarWidget& widget, bool rightClick);
++  void runUnpinnedBarWidgetAction(const UnpinnedBarWidget& widget, bool rightClick, bool closeDrawer = true);
++  void openUnpinnedBarWidgetMenu(const UnpinnedBarWidget& widget, InputArea& area);
    bool isHiddenItem(const TrayItemInfo& item) const;
    bool isIconOverrideBlacklisted(const TrayItemInfo& item) const;
    std::string_view resolvedGlyph() const;
