@@ -1,9 +1,11 @@
 # M90aPro: ext4 → impermanent btrfs pool on both SSDs
 
-**B0–B4 done 2026-11-21**: M90aPro runs the btrfs layout on `S7XLNE0Y733872`;
-`layouts.nix` defaults to `"btrfs"` and the temporary `M90aPro-btrfs` flake
-output is gone (so `prepare` no longer applies).  Left: Part C after about a
-week of good boots.
+**Done 2026-11-21, B0–B4 and Part C**: M90aPro runs the btrfs pool on both
+SSDs, `S7XLNE0Y733872` (`cryptpool`) and `S7XLNE0Y733865` (`m90-pool2`,
+`cryptpool2`): 460 GB, data `single`, metadata `raid1`.  `layouts.nix` defaults
+to `"btrfs"` with `custom.m90Pool.secondDisk = true`.  The old ext4 system and
+its NixOS-boot firmware entry are gone, so `prepare` … `install` no longer
+apply.  Part C was done the same day, at the user's request, not after a week.
 
 The M90aPro moves to the layout CRUCIAL-SSD and the PortableSSD use: `/` wiped
 on every boot, regenerable dev artifacts cleaned, dependency environments and

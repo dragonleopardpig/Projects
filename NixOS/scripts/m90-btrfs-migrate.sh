@@ -35,7 +35,7 @@ STATE=${M90_STATE:-/home/$TARGET_USER/.local/state/m90-migration}
 REPO=${M90_REPO:-/home/$TARGET_USER/Projects/NixOS}
 # disko.nix reads the new disk's passphrase from here (RAM only).
 KEY_FILE=${M90_KEY_FILE:-/dev/shm/m90-luks-key}
-FLAKE_ATTR=M90aPro-btrfs
+FLAKE_ATTR=${M90_FLAKE_ATTR:-M90aPro}  # the btrfs layout is the default now
 MNT=/mnt/m90
 NEW=$MNT/new          # = disko.rootMountPoint in layouts.nix
 OLD=$MNT/old
@@ -501,7 +501,7 @@ phase_install() {
   run sync
   mark install
   say "Installed.  Shut down, unplug the PortableSSD and boot: the firmware starts NixOS-pool."
-  say "The old system stays bootable as NixOS-boot in the boot menu.  Then MIGRATE.md step B5."
+  say "The old system stays bootable as NixOS-boot in the boot menu.  Then MIGRATE.md step B4."
 }
 
 # ------------------------------------------------------- pool (Part C) --

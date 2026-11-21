@@ -3,12 +3,11 @@
 #   btrfs -- the default since 2026-11-21 (MIGRATE.md B0-B4): disko.nix on
 #            S7XLNE0Y733872, / wiped on every boot (modules/impermanence.nix),
 #            dev artifacts cleaned, dependency environments kept (as on
-#            CRUCIAL-SSD).  Later the old disk is added as a second pool member
-#            (pool.nix).
+#            CRUCIAL-SSD).  Since 2026-11-21 (Part C) the same btrfs also spans
+#            S7XLNE0Y733865 as the second pool member (pool.nix).
 #   ext4  -- the system before the migration: ext4 inside LUKS on the Samsung
-#            S7XLNE0Y733865, everything persists.  Kept untouched as the
-#            fallback (firmware boot entry "NixOS-boot") until that disk joins
-#            the pool (Part C).
+#            S7XLNE0Y733865.  That disk is now the second pool member, so this
+#            layout can no longer boot; it stays only as the record of it.
 #
 # If this setting ever disagrees with the running disk, the impermanence
 # pre-switch check refuses the switch.
