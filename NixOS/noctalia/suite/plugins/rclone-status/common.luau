@@ -79,6 +79,16 @@ function M.helperArgv(args: { string }): { string }?
   return argv
 end
 
+M.FAILURE_STATES = { error = true, failed = true }
+-- The bar icon's colour: its own neon colour from settings.nix (an empty colour hands the
+-- glyph back to the widget's `color`), the error colour only for a failure.
+function M.barColor(state: string?): string
+  if state and M.FAILURE_STATES[state] then
+    return "error"
+  end
+  return ""
+end
+
 function M.stateColor(state: string?): string
   if state and M.STATE_COLORS[state] then
     return M.STATE_COLORS[state]

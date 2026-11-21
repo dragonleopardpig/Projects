@@ -153,12 +153,12 @@ elseif TEST_ENTRY == "bar" then
   -- first render: the helper answers ok
   assert(barVisible[#barVisible] == true, "bar hidden although the helper is there")
   assert(barGlyphs[#barGlyphs] == "shield-check", "ok glyph: " .. tostring(barGlyphs[#barGlyphs]))
-  assert(barColors[#barColors] == "secondary", "ok colour: " .. tostring(barColors[#barColors]))
+  assert(barColors[#barColors] == "", "an ok icon keeps its own colour: " .. tostring(barColors[#barColors]))
   assert(barTexts[#barTexts] == "", "no text when idle")
 
   noctalia.state.set("snapshot", FIXTURES.running)
   assert(barGlyphs[#barGlyphs] == "database-export", "running glyph")
-  assert(barColors[#barColors] == "primary", "running colour")
+  assert(barColors[#barColors] == "", "a running icon keeps its own colour")
   assert(barTexts[#barTexts] == "42%", "running shows the percentage: " .. tostring(barTexts[#barTexts]))
 
   -- right click never stops a running backup: it opens the panel instead
@@ -172,6 +172,10 @@ elseif TEST_ENTRY == "bar" then
   assert(barColors[#barColors] == "error", "failed colour")
   onRightClick()
   assert(lastArgs() == "run", "right click did not run the backup")
+  -- the bar-pins menu's "Back up now" sends the old right click as an event
+  local beforeEvent = #launchedCommands
+  onIpc("right-click", "")
+  assert(#launchedCommands == beforeEvent + 1 and lastArgs() == "run", "the menu's right-click event did not run the backup")
 
   onClick()
   assert(toggledPanels[#toggledPanels] == "local/backup-status:panel", "click did not toggle the panel")

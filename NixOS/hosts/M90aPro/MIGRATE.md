@@ -147,7 +147,8 @@ shows what the backup is doing:
   **Browse** (every snapshot, read-only, in the file manager: copy out what you
   need; it closes itself after 4 h), **Log** (follows the journal in a
   terminal).
-- **Right click** runs a backup now.
+- **Right click** opens its menu: **Back up now**, or **Unpin from bar** (see
+  Pin / Unpin in `noctalia/suite/README.md`).
 - **Settings** (the gear) edits the daily time, **Paused**, how many daily,
   weekly and monthly snapshots to keep, extra folders to back up and extra
   patterns to leave out.  They are saved in `~/.config/backup-status/settings.json`

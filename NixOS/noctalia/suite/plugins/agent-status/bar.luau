@@ -2,7 +2,8 @@
 local current = { status = "idle", counts = {} }
 local labels = { idle = "AI", working = "Working", waiting = "Waiting", done = "Done", error = "Error" }
 local glyphs = { idle = "sparkles", working = "loader", waiting = "message-question", done = "circle-check", error = "alert-circle" }
-local colors = { idle = "on_surface_variant", working = "primary", waiting = "tertiary", done = "secondary", error = "error" }
+-- Its own colour (settings.nix, an empty colour) unless it waits for you or failed.
+local colors = { idle = "", working = "", waiting = "tertiary", done = "", error = "error" }
 
 local function render()
   local state = labels[current.status] and current.status or "idle"

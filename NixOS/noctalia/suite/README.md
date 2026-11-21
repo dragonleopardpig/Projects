@@ -49,11 +49,45 @@ exclusive keyboard focus. Menus stay above application windows while moving
 through menu items or across their edges. Closing the menu restores the bar's
 configured layer and keyboard mode, including its normal fullscreen behavior.
 
+## Bar icons: colours and Pin / Unpin
+
+Every bar icon has its own neon colour (`theme.nix` `barAccents`, assigned in
+`settings.nix`): no two are alike, and neighbours differ clearly. The
+`barIcons` check measures them (CIEDE2000) and fails the build on a repeat.
+The power button stays white. A plugin icon changes colour only for a failure
+(red), or the AI widget while it waits for an answer.
+
+**Right click any icon** for a small menu: its old right-click action first,
+if it had one, then **Unpin from bar**. The old actions are:
+
+| Icon | Old right-click action |
+|---|---|
+| Volume | Mute / unmute |
+| Network | Network on / off |
+| Bluetooth | Bluetooth on / off |
+| Notifications | Do not disturb |
+| Media | Play / pause |
+| Always-on | Always-on on / off |
+| Backup | Back up now |
+| rclone | Open rclone GUI |
+| rsync | Refresh |
+| GPU, Displays | Arrange displays |
+
+An unpinned icon moves into the drawer button (a crossed-out pin with a
+count), which shows while anything is unpinned. Its panel lists each unpinned
+icon with **Open** (the icon's left-click action) and **Pin**, plus **Pin all**.
+The tray's items and the taskbar's apps keep their own Pin/Unpin.
+
+Unpinning saves `widget.<icon>.enabled = false` in the GUI settings
+(`~/.local/state/noctalia-suite/noctalia/settings.toml`), so it survives
+restarts and rebuilds. From a terminal:
+`noctalia msg config-set widget.clock.enabled true`.
+
 ## Desktop agent
 
 The **AI** widget beside the workspaces toggles the same Antigravity scratchpad
 as **Super+C**. It shows **Working**, **Waiting** (a question needs an answer),
-**Done** or **Error**, using the active shell palette. The agent retains fully
+**Done** or **Error**, in its own colour (Waiting and Error stand out). The agent retains fully
 automatic tool permissions. **Super+Shift+C** detaches its window as before.
 
 Antigravity's global lifecycle hooks in `~/.gemini/config/hooks.json` call

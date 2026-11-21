@@ -8,7 +8,7 @@ local current = noctalia.state.get("snapshot") or common.DEFAULT_SNAPSHOT
 local function render()
   local state = current.state or "ready"
   barWidget.setGlyph(common.barGlyph(state))
-  barWidget.setGlyphColor(common.stateColor(state))
+  barWidget.setGlyphColor(common.barColor(state))
   if type(current.tooltip) == "table" and #current.tooltip > 0 then
     barWidget.setTooltip(current.tooltip)
   else
@@ -24,6 +24,13 @@ function onRightClick()
   local argv = common.helperArgv({ "open-gui" })
   if argv ~= nil then
     noctalia.runAsync(argv)
+  end
+end
+
+-- The bar-pins menu runs the old right click as `noctalia msg plugin <this>:bar all right-click`.
+function onIpc(event, _payload)
+  if event == "right-click" then
+    onRightClick()
   end
 end
 

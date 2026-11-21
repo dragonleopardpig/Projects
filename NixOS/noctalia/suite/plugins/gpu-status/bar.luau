@@ -1,13 +1,7 @@
 --!nonstrict
 local current = { available = false, state = "idle", glyph = "cpu", text = "", tooltip = {} }
-local colors = {
-  nvidia = "primary",
-  intel = "tertiary",
-  hybrid = "#FFD166",
-  amd = "error",
-  other = "on_surface_variant",
-  idle = "on_surface_variant",
-}
+-- One colour whatever renders (the text names the GPU): the icon's own, from settings.nix.
+local OWN_COLOR = ""
 
 local function render()
   if current.available ~= true then
@@ -15,8 +9,7 @@ local function render()
     return
   end
   barWidget.setVisible(true)
-  local state = colors[current.state] and current.state or "other"
-  local color = colors[state]
+  local color = OWN_COLOR
   barWidget.setGlyph(current.glyph or "cpu")
   barWidget.setText(current.text or "GPU")
   barWidget.setColor(color)

@@ -1,4 +1,21 @@
 { themeName, wallpaper, barAccents, launcherIcon }:
+let
+  barStart = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
+  barCenter = [ "active_window" "xwayland" ];
+  barEnd = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "backup-status" "gpu-status" "umbriel-displays" "kitty-control" "bar-pins" "session" ];
+  # PIN / UNPIN (plugins/bar-pins): right click on any icon opens a small menu with its old
+  # right-click action (if it had one) and "Unpin from bar"; an unpinned icon moves into the
+  # drawer button (bar-pins), whose panel opens it or pins it back.  Not for the tray and the
+  # taskbar (their items have their own Pin/Unpin) or the drawer button itself.
+  ownRightClick = [ "tray" "taskbar" "bar-pins" ];
+  pinnable = builtins.filter (name: !(builtins.elem name ownRightClick)) (barStart ++ barCenter ++ barEnd);
+  withPinMenu = widgets: widgets // builtins.listToAttrs (map (name: {
+    inherit name;
+    value = let own = widgets.${name} or { }; in own // {
+      actions = (own.actions or { }) // { right = "panel-toggle local/bar-pins:menu ${name}"; };
+    };
+  }) pinnable);
+in
 {
   storage.key_source = "secret-service";
   shell = {
@@ -96,6 +113,7 @@
       "local/rsync-status"              # local: sync-projects rsync status icon + per-target dropdown
       "local/rclone-status"             # local: rclone mount/remote status icon + dropdown
       "local/backup-status"             # local: restic backup status icon + dropdown (hidden without a backup)
+      "local/bar-pins"                  # local: Pin/Unpin menu on every bar icon + drawer for unpinned ones
     ];
     auto_update = "none";
   };
@@ -125,6 +143,11 @@
       panel_position = "top_right";
       panel_open_near_click = true;
     };
+    "local/bar-pins" = {
+      panel_placement = "attached";
+      panel_position = "top_right";
+      panel_open_near_click = true;
+    };
   };
   bar.main = {
     position = "top";
@@ -137,34 +160,36 @@
     background_opacity = 0.94;
     compositor_blur = true;
     reserve_space = true;
-    start = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
-    center = [ "active_window" "xwayland" ];
-    end = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "backup-status" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
+    start = barStart;
+    center = barCenter;
+    end = barEnd;
   };
-  widget = {
+  # Every icon has its own neon colour, never repeated (theme.nix barAccents; the barColors
+  # check fails the build on a repeat).  Native warning/mute/attention colours and the
+  # plugins' failure red still mark exceptional states; the power button stays white.
+  widget = withPinMenu {
     launcher = {
       custom_image = launcherIcon;
       custom_image_colorize = true;
-      color = barAccents.desktop;
+      color = barAccents.skyBlue;
       scale = 1.25;
     };
-    workspaces = { labels_only_when_occupied = true; hide_when_empty = true; };
+    workspaces = { color = barAccents.aquamarine; labels_only_when_occupied = true; hide_when_empty = true; };
     taskbar = { only_active_workspace = true; taskbar_max_width = 280; };
     active_window = { display = "text_only"; max_length = 800; title_scroll = "none"; show_empty_label = false; };
-    # Main controls use distinct accents, with white for the power button.
-    # Native warning/mute/attention colors still communicate exceptional states.
-    media = { color = barAccents.audio; hide_when_no_media = true; hide_artist = true; max_length = 100; };
+    media = { color = barAccents.mint; hide_when_no_media = true; hide_artist = true; max_length = 100; };
+    weather = { color = barAccents.neonIndigo; show_condition = false; actions.left = "panel-toggle control-center weather"; };
     clock = { color = barAccents.neonYellowGreen; format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
-    weather = { color = barAccents.distro; show_condition = false; actions.left = "panel-toggle control-center weather"; };
-    privacy = { color = barAccents.fuchsia; hide_inactive = true; };
-    caffeine.color = barAccents.schoolBusYellow;
+    control-center = { color = barAccents.deepPink; glyph = "adjustments"; };
+    privacy = { color = barAccents.neonRed; hide_inactive = true; };
+    caffeine.color = barAccents.hotPink;
     volume = { color = barAccents.dodgerBlue; show_label = false; };
     network = { color = barAccents.darkOrange; show_label = false; };
-    bluetooth.color = barAccents.lemonLime;
-    battery.color = barAccents.springBud;
+    bluetooth.color = barAccents.schoolBusYellow;
+    battery.color = barAccents.lilac;
     notifications.color = barAccents.electricBlue;
     keyboard_layout = {
-      color = barAccents.desktop;
+      color = barAccents.royalBlue;
       glyph = "keyboard";
       display = "short";
       show_glyph = true;
@@ -172,24 +197,22 @@
       hide_when_single_layout = false;
       actions.left = "exec fcitx5-remote -t";
     };
-    tray = { color = barAccents.desktop; drawer = true; };
-    control-center = { color = barAccents.deepPink; glyph = "adjustments"; };
+    tray = { color = barAccents.bubblegum; drawer = true; };
     session.color = "#FFFFFF";
-    # Plugin bar widgets (see plugins.enabled above).
-    umbriel-companion.type = "noctalia/umbriel-companion:bar";
-    umbriel-displays.type = "prponkshe/umbriel-displays:bar";
-    umbriel-displays.color = barAccents.desktop;
-    gpu-status.type = "local/gpu-status:bar";
-    kitty-control.type = "community/kitty-control:bar";
-    kitty-control.color = barAccents.neonPurple;
-    agent-status.type = "local/agent-status:bar";
-    xwayland.type = "tordex/xwayland:bar";
+    # Plugin bar widgets (see plugins.enabled above).  A plugin's resting colour is this
+    # `color`; it switches to its own colour only for a failure.
+    umbriel-companion = { type = "noctalia/umbriel-companion:bar"; color = barAccents.peach; };
+    xwayland = { type = "tordex/xwayland:bar"; color = barAccents.lemon; };
+    agent-status = { type = "local/agent-status:bar"; color = barAccents.neonRose; };
     # ALWAYS-ON MODE (modules/always-on-umbriel.nix): a local plugin (plugins/always-on), so
-    # its cup / infinity and tooltip change in place; either click switches it.
-    always-on.type = "local/always-on:bar";
-    always-on.color = barAccents.lawnGreen;
-    rsync-status.type = "local/rsync-status:bar";
-    rclone-status.type = "local/rclone-status:bar";
-    backup-status.type = "local/backup-status:bar";
+    # its cup / infinity and tooltip change in place; a left click switches it.
+    always-on = { type = "local/always-on:bar"; color = barAccents.neonLime; };
+    rsync-status = { type = "local/rsync-status:bar"; color = barAccents.neonGreen; };
+    rclone-status = { type = "local/rclone-status:bar"; color = barAccents.vermilion; };
+    backup-status = { type = "local/backup-status:bar"; color = barAccents.neonMagenta; };
+    gpu-status = { type = "local/gpu-status:bar"; color = barAccents.springBud; };
+    umbriel-displays = { type = "prponkshe/umbriel-displays:bar"; color = barAccents.coral; };
+    kitty-control = { type = "community/kitty-control:bar"; color = barAccents.neonPurple; };
+    bar-pins = { type = "local/bar-pins:bar"; color = barAccents.amber; };
   };
 }

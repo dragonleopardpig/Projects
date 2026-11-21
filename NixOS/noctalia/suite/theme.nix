@@ -53,25 +53,38 @@ let
 in {
   name = "OLO-Neon";
   inherit dark light neon;
-  # Shared bar accents, including a distinct color for each main control.
-  # Keep these foreground accents separate from the OLO control-fill palette.
+  # Bar icon colours: neon, one per icon, never repeated (settings.nix assigns them; the
+  # barColors check measures them).  18 pure neon hues, then lighter tints for the rest:
+  # the tints went to icons that rarely show (media, privacy, battery, XWayland) or that sit
+  # far from their base hue on the bar.  Keep these apart from the OLO control-fill palette.
   barAccents = {
-    distro = "#FFD166";
-    desktop = "#6BC5FF";
-    system = "#4EF2C2";
-    audio = "#C27DFF";
-    neonPurple = "#BF40FF";
-    neonYellowGreen = "#CCFF00";
-    deepPink = "#F91095";
-    fuchsia = "#FF06FA";
-    schoolBusYellow = "#F9DC05";
-    lawnGreen = "#92F830";
-    dodgerBlue = "#0499FF";
+    neonRed = "#FF3131";
+    vermilion = "#FF6A1F";
     darkOrange = "#FF8800";
-    lemonLime = "#EFFE01";
-    springBud = "#9BFE01";
+    amber = "#FFB300";
+    schoolBusYellow = "#F9DC05";
+    neonYellowGreen = "#CCFF00";
+    neonLime = "#7CFF2B";
+    neonGreen = "#1EFF6E";
+    aquamarine = "#00FFC8";
     electricBlue = "#00ECFF";
-    shockingPink = "#FF00C2";
+    dodgerBlue = "#0499FF";
+    royalBlue = "#3D6BFF";
+    neonIndigo = "#7A5CFF";
+    neonPurple = "#BF40FF";
+    neonMagenta = "#FF2BFF";
+    hotPink = "#FF4FC8";
+    deepPink = "#F91095";
+    neonRose = "#FF3D6E";
+    # tints
+    skyBlue = "#6BC5FF";
+    peach = "#FFA07A";
+    lemon = "#FFF57A";
+    mint = "#9CFFD0";
+    springBud = "#C4FF7A";
+    lilac = "#E6A3FF";
+    bubblegum = "#FF9AE0";
+    coral = "#FF8A8A";
   };
   fontConfig = pkgs.writeText "olo-neon-fonts.conf" ''
     <?xml version="1.0"?>

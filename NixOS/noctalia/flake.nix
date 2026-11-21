@@ -49,6 +49,8 @@
         rcloneStatusPlugin = suite.rcloneStatusPluginCheck;
         backupStatusPlugin = suite.backupStatusPluginCheck;
         pluginGlyphs = suite.pluginGlyphsCheck;
+        barPinsPlugin = suite.barPinsPluginCheck;
+        barIcons = suite.barIconsCheck;
         alwaysOnPlugin = suite.alwaysOnPluginCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
@@ -96,6 +98,10 @@
         # on hosts without one the icon hides itself.
         xdg.dataFile."noctalia-suite/noctalia/plugins/backup-status" = {
           source = ./suite/plugins/backup-status;
+          force = true;
+        };
+        xdg.dataFile."noctalia-suite/noctalia/plugins/bar-pins" = {
+          source = ./suite/plugins/bar-pins;
           force = true;
         };
         home.file.".local/bin/noctalia-agent-status".source = lib.getExe suite.agentStatus;

@@ -1,0 +1,34 @@
+id = "local/bar-pins"
+name = "Bar Pins"
+version = "1.0.0"
+plugin_api = 45
+author = "local"
+license = "MIT"
+tags = ["bar", "panel"]
+icon = "pinned-off"
+description = "Pin / Unpin for every bar icon: right click on an icon offers its old right-click action and Unpin from bar; unpinned icons wait in a drawer button that opens them or pins them back."
+
+[[widget]]
+id = "bar"
+entry = "bar.luau"
+
+# The menu a right click opens (settings.nix binds `panel-toggle local/bar-pins:menu <icon>`).
+[[panel]]
+id = "menu"
+entry = "menu.luau"
+width = 260
+height = "content"
+placement = "attached"
+position = "top_right"
+open_near_click = true
+
+# The drawer: unpinned icons, with Open and Pin.
+[[panel]]
+id = "drawer"
+entry = "drawer.luau"
+width = 360
+height = "content"
+max_height = 640
+placement = "attached"
+position = "top_right"
+open_near_click = true

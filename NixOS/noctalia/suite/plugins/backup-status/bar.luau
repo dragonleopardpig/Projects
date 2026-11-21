@@ -14,10 +14,10 @@ local function render()
   barWidget.setVisible(true)
   local state = current.state or "ok"
   barWidget.setGlyph(common.barGlyph(state))
-  barWidget.setGlyphColor(common.stateColor(state))
+  barWidget.setGlyphColor(common.barColor(state))
   if state == "running" and type(current.percent) == "number" then
     barWidget.setText(string.format("%d%%", math.floor(current.percent)))
-    barWidget.setColor(common.stateColor(state))
+    barWidget.setColor(common.barColor(state))
   else
     barWidget.setText("")
   end
@@ -46,6 +46,13 @@ function onRightClick()
         noctalia.state.set("snapshot", data)
       end
     end)
+  end
+end
+
+-- The bar-pins menu runs the old right click as `noctalia msg plugin <this>:bar all right-click`.
+function onIpc(event, _payload)
+  if event == "right-click" then
+    onRightClick()
   end
 end
 

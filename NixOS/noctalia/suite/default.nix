@@ -186,6 +186,41 @@ let
     done
     touch $out
   '';
+  # Pin / Unpin (plugins/bar-pins): the drawer button, the right-click menu and the drawer.
+  barPinsPluginCheck = pkgs.runCommand "noctalia-bar-pins-plugin-checked" {
+    nativeBuildInputs = [ pkgs.luau ];
+  } ''
+    for entry in bar menu drawer; do
+      {
+        printf 'local TEST_ENTRY = "%s"\n' "$entry"
+        cat ${./test-bar-pins-plugin.luau}
+      } | sed -e '/^--@COMMON@$/{r ${./plugins/bar-pins/common.luau}' -e 'd}' \
+              -e "/^--@ENTRY@$/{r ${./plugins/bar-pins}/$entry.luau" -e 'd}' \
+        | sed 's|require("./common\.luau")|commonModule|g' > "test_$entry.luau"
+      luau "test_$entry.luau"
+    done
+    touch $out
+  '';
+  # Every bar icon has its own neon colour (no two alike, neighbours clearly apart) and the
+  # Pin/Unpin menu on right click.  The self-test first proves a repeated colour fails.
+  barIconsCheck = pkgs.runCommand "noctalia-bar-icons-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    icons() {
+      python3 ${./check-bar-icons.py} --catalog ${./plugins/bar-pins/common.luau} \
+        --plugins ${./plugins} "$@"
+    }
+    sed 's/^color = "#0499FF"$/color = "#CCFF00"/' ${shellConfig} > repeated.toml
+    if cmp -s repeated.toml ${shellConfig}; then
+      echo "self-test: the volume colour was not found to repeat"; exit 1
+    fi
+    if icons --config repeated.toml 2> bad.log; then
+      echo "self-test: a repeated colour was not caught"; exit 1
+    fi
+    grep -q "too alike" bad.log
+    icons --config ${shellConfig}
+    touch $out
+  '';
   # Every glyph name the plugins, helpers and bar settings use is one Noctalia knows (an
   # unknown one draws a skull).  The self-test first proves a bad name is caught.
   pluginGlyphsCheck = pkgs.runCommand "noctalia-plugin-glyphs-checked" {
@@ -291,6 +326,8 @@ let
     test -f ${rcloneStatusPluginCheck}
     test -f ${backupStatusPluginCheck}
     test -f ${pluginGlyphsCheck}
+    test -f ${barPinsPluginCheck}
+    test -f ${barIconsCheck}
     test -f ${alwaysOnPluginCheck}
     export NOCTALIA_STATE_HOME="$TMPDIR/noctalia-suite-validation"
     export NOCTALIA_CONFIG_HOME=${configHome}
@@ -357,7 +394,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barPinsPluginCheck barIconsCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;
