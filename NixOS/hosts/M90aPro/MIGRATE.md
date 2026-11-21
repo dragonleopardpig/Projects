@@ -1,5 +1,10 @@
 # M90aPro: ext4 → impermanent btrfs pool on both SSDs
 
+**B0–B4 done 2026-11-21**: M90aPro runs the btrfs layout on `S7XLNE0Y733872`;
+`layouts.nix` defaults to `"btrfs"` and the temporary `M90aPro-btrfs` flake
+output is gone (so `prepare` no longer applies).  Left: Part C after about a
+week of good boots.
+
 The M90aPro moves to the layout CRUCIAL-SSD and the PortableSSD use: `/` wiped
 on every boot, regenerable dev artifacts cleaned, dependency environments and
 everything else kept.  Unlike CRUCIAL-SSD it moves to its **other SSD**, so the

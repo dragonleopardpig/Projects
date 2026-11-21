@@ -678,12 +678,6 @@
 
       # M90aPro Laptop Configuration
       nixosConfigurations.M90aPro = mkSystem ./hosts/M90aPro;
-      # The impermanent btrfs layout on the new disk, until hosts/M90aPro/
-      # layouts.nix defaults to it (hosts/M90aPro/MIGRATE.md).  Temporary.
-      nixosConfigurations.M90aPro-btrfs = mkSystem {
-        imports = [ ./hosts/M90aPro ];
-        custom.m90Layout = "btrfs";
-      };
 
       # Portable SSD — boots on any x86_64 UEFI machine
       nixosConfigurations.PortableSSD = mkSystem ./hosts/PortableSSD;

@@ -1,13 +1,14 @@
 # Root filesystem layouts for M90aPro (procedure: hosts/M90aPro/MIGRATE.md).
 #
+#   btrfs -- the default since 2026-11-21 (MIGRATE.md B0-B4): disko.nix on
+#            S7XLNE0Y733872, / wiped on every boot (modules/impermanence.nix),
+#            dev artifacts cleaned, dependency environments kept (as on
+#            CRUCIAL-SSD).  Later the old disk is added as a second pool member
+#            (pool.nix).
 #   ext4  -- the system before the migration: ext4 inside LUKS on the Samsung
-#            S7XLNE0Y733865, everything persists.  The default until the new
-#            disk has proven itself; also the fallback (firmware boot entry
-#            "NixOS-boot") until that disk joins the pool.
-#   btrfs -- disko.nix on S7XLNE0Y733872: / wiped on every boot
-#            (modules/impermanence.nix), dev artifacts cleaned, dependency
-#            environments kept (as on CRUCIAL-SSD).  Later the old disk is
-#            added as a second pool member (pool.nix).
+#            S7XLNE0Y733865, everything persists.  Kept untouched as the
+#            fallback (firmware boot entry "NixOS-boot") until that disk joins
+#            the pool (Part C).
 #
 # If this setting ever disagrees with the running disk, the impermanence
 # pre-switch check refuses the switch.
@@ -23,7 +24,7 @@ in
 
   options.custom.m90Layout = lib.mkOption {
     type = lib.types.enum [ "ext4" "btrfs" ];
-    default = "ext4";
+    default = "btrfs";
     description = "Root filesystem layout of M90aPro (see hosts/M90aPro/MIGRATE.md).";
   };
 
