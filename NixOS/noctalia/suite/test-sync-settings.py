@@ -153,6 +153,46 @@ glyph = "rocket"
                          {"widget": {"launcher": {"glyph": "rocket"}}})
         self.assertFalse(sync.prune_declarative_overrides(self.config))
 
+    def test_saved_plugin_list_no_longer_hides_managed_plugins(self):
+        # (M90aPro 2026-11-21: a list saved on 11-09 hid rsync-status, rclone-status ...)
+        self.config.write_text('''[plugins]
+enabled = ["noctalia/umbriel-companion", "local/rsync-status", "local/rclone-status"]
+auto_update = "none"
+''')
+        original = '''[plugins]
+enabled = ["noctalia/umbriel-companion"]
+
+[shell.panel]
+transparency_mode = "glass"
+'''
+        self.settings.write_text(original)
+        self.assertTrue(sync.prune_declarative_overrides(self.config))
+        self.assertEqual(tomlkit.parse(self.settings.read_text()).unwrap(),
+                         {"shell": {"panel": {"transparency_mode": "glass"}}})
+        self.assertFalse(sync.prune_declarative_overrides(self.config))
+
+    def test_other_plugin_preferences_stay_with_the_list_removed(self):
+        self.config.write_text('[plugins]\nenabled = ["local/rclone-status"]\n')
+        self.settings.write_text('[plugins]\nenabled = []\nauto_update = "daily"\n')
+        self.assertTrue(sync.prune_declarative_overrides(self.config))
+        self.assertEqual(tomlkit.parse(self.settings.read_text()).unwrap(),
+                         {"plugins": {"auto_update": "daily"}})
+
+    def test_gui_only_plugins_are_kept_after_the_managed_ones(self):
+        self.config.write_text('[plugins]\nenabled = ["local/rsync-status", "local/rclone-status"]\n')
+        self.settings.write_text('[plugins]\nenabled = ["someone/weather-plus", "local/rsync-status"]\n')
+        self.assertTrue(sync.prune_declarative_overrides(self.config))
+        self.assertEqual(tomlkit.parse(self.settings.read_text()).unwrap()["plugins"]["enabled"],
+                         ["local/rsync-status", "local/rclone-status", "someone/weather-plus"])
+        self.assertFalse(sync.prune_declarative_overrides(self.config))
+
+    def test_no_saved_plugin_list_is_a_noop(self):
+        self.config.write_text('[plugins]\nenabled = ["local/rclone-status"]\n')
+        original = '[shell.panel]\ntransparency_mode = "glass"\n'
+        self.settings.write_text(original)
+        self.assertFalse(sync.prune_declarative_overrides(self.config))
+        self.assertEqual(self.settings.read_text(), original)
+
     def test_colors_and_layout_are_removed_together_preserving_appearance(self):
         self.config.write_text('[widget.clock]\ncolor = "#CCFF00"\n')
         original = '''[bar.main]

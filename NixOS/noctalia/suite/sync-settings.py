@@ -78,6 +78,39 @@ def prune_plugin_glyph_overrides(document, managed_config):
     return changed
 
 
+def prune_plugin_list(document, managed_config):
+    """A saved plugin list hides the managed plugins, so ones added in Nix never load.
+
+    Noctalia takes `plugins.enabled` from the GUI state over the config's list. On M90aPro
+    a list saved on 2026-11-09, before the local plugins existed, hid agent-status,
+    gpu-status, always-on, rsync-status and rclone-status. The managed plugins always load
+    now; plugins enabled only in the GUI stay, after them.
+    """
+    if managed_config is None:
+        return False
+    managed = tomlkit.parse(Path(managed_config).read_text(encoding="utf-8")).get("plugins")
+    plugins = document.get("plugins")
+    if not isinstance(managed, MutableMapping) or not isinstance(plugins, MutableMapping):
+        return False
+    managed_enabled = managed.get("enabled")
+    saved = plugins.get("enabled")
+    if not isinstance(managed_enabled, list) or not isinstance(saved, list):
+        return False
+    managed_names = [str(name) for name in managed_enabled]
+    saved_names = [str(name) for name in saved]
+    gui_only = [name for name in saved_names if name not in managed_names]
+    if not gui_only:
+        del plugins["enabled"]
+        if not plugins:
+            del document["plugins"]
+        return True
+    merged = managed_names + gui_only
+    if saved_names == merged:
+        return False
+    plugins["enabled"] = merged
+    return True
+
+
 def prune_declarative_overrides(managed_config=None):
     state_home = os.environ.get("NOCTALIA_STATE_HOME") or os.path.join(
         os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"),
@@ -93,7 +126,8 @@ def prune_declarative_overrides(managed_config=None):
         layout_changed = prune_widget_order(document)
         colors_changed = prune_widget_colors(document, managed_config)
         glyphs_changed = prune_plugin_glyph_overrides(document, managed_config)
-        if not layout_changed and not colors_changed and not glyphs_changed:
+        plugins_changed = prune_plugin_list(document, managed_config)
+        if not (layout_changed or colors_changed or glyphs_changed or plugins_changed):
             return False
 
         # Keep comments/formatting and replace atomically, so the shell's file
