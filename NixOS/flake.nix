@@ -653,6 +653,20 @@
         inherit (nixpkgs) lib;
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
       };
+      # M90aPro: its disko layout (swap partition, LUKS "cryptpool"), then the
+      # pool extension onto a second disk across reboots.
+      checks.x86_64-linux.impermanence-m90 = import ./tests/impermanence.nix {
+        inherit inputs;
+        inherit (nixpkgs) lib;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        variant = "m90";
+      };
+      # VM rehearsal of the M90aPro ext4 -> btrfs migration tool.
+      checks.x86_64-linux.m90-migration = import ./tests/m90-migration.nix {
+        inherit inputs;
+        inherit (nixpkgs) lib;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      };
 
       # X299 Desktop (external SSD clone)
       nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
@@ -664,6 +678,12 @@
 
       # M90aPro Laptop Configuration
       nixosConfigurations.M90aPro = mkSystem ./hosts/M90aPro;
+      # The impermanent btrfs layout on the new disk, until hosts/M90aPro/
+      # layouts.nix defaults to it (hosts/M90aPro/MIGRATE.md).  Temporary.
+      nixosConfigurations.M90aPro-btrfs = mkSystem {
+        imports = [ ./hosts/M90aPro ];
+        custom.m90Layout = "btrfs";
+      };
 
       # Portable SSD — boots on any x86_64 UEFI machine
       nixosConfigurations.PortableSSD = mkSystem ./hosts/PortableSSD;

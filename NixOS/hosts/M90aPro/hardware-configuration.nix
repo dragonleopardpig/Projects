@@ -13,20 +13,8 @@
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" =
-    { device = "/dev/disk/by-uuid/a6606f8d-be76-44e3-9121-bb8c82acb6c9";
-      fsType = "ext4";
-    };
-
-  boot.initrd.luks.devices."luks-e4268bbb-c627-4904-b67f-8a76fe0cbf52".device = "/dev/disk/by-uuid/e4268bbb-c627-4904-b67f-8a76fe0cbf52";
-
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/6D0B-8E30";
-      fsType = "vfat";
-      options = [ "fmask=0077" "dmask=0077" ];
-    };
-
-  swapDevices = [ ];
+  # Root, /boot, the LUKS unlock and swap depend on the disk layout: see
+  # layouts.nix (ext4 on S7XLNE0Y733865, or the btrfs pool from disko.nix).
 
   # Enables DHCP on each ethernet and wireless interface. In case of scripted networking
   # (the default) this is the recommended approach. When using systemd-networkd it's

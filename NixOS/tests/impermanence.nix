@@ -13,12 +13,23 @@
 # environments (.devenv/.direnv/.venv/node_modules) kept across boots.  It also
 # checks the pre-switch guard refuses a configuration that does not match the
 # running root.
+#
+# variant = "m90" formats with hosts/M90aPro/disko.nix itself (swap partition
+# with a random key, LUKS "cryptpool"), keeps environments like CRUCIAL-SSD,
+# and then runs the pool extension of hosts/M90aPro/MIGRATE.md Part C on a
+# second disk: m90-btrfs-migrate extend-prepare, boot the configuration with
+# custom.m90Pool.secondDisk, extend, reboot -- the root must still be wiped
+# and everything kept on a two-device btrfs (data single, metadata raid1).
 { pkgs, lib, inputs, variant ? "portable" }:
 let
   crucial = variant == "crucial";
+  m90 = variant == "m90";
+  keepEnvs = crucial || m90;
+  mapper = if m90 then "cryptpool" else "cryptroot";
   testHash = "$6$impermtest$xqdvItgMcuG2UFxxfTcc254TWeSnmHuqQo5HrUmw29qdoH5Vc.kFyDQf9XIJJjd.4MSLBXVbyG75R3T1cayyh/"; # "test"
+  m90Migrate = pkgs.callPackage ../packages/m90-btrfs-migrate.nix { };
 
-  diskoConfig = lib.recursiveUpdate (import ../hosts/PortableSSD/disko.nix { inherit lib; }) {
+  portableDisko = lib.recursiveUpdate (import ../hosts/PortableSSD/disko.nix { inherit lib; }) {
     disko.devices.disk.portable = {
       device = "/dev/vdb";
       content.partitions = {
@@ -31,6 +42,25 @@ let
       };
     };
   };
+
+  m90Disko = lib.recursiveUpdate (import ../hosts/M90aPro/disko.nix { inherit lib; }) {
+    disko.devices.disk.m90 = {
+      device = "/dev/vdb";
+      content.partitions = {
+        ESP.size = "300M";
+        swap.size = "64M";
+        root.content.passwordFile = "/tmp/secret.key";
+      };
+    };
+    # Only to give the VM a second disk (vdc): extend-prepare partitions it.
+    disko.devices.disk.pool2 = {
+      type = "disk";
+      device = "/dev/vdc";
+      content = { type = "gpt"; partitions = { }; };
+    };
+  };
+
+  diskoConfig = if m90 then m90Disko else portableDisko;
 
   # Paths the boot sweep removes on both hosts, and the environments that only
   # PortableSSD removes.
@@ -56,20 +86,37 @@ inputs.disko.lib.testLib.makeDiskoTest {
     imports = [
       inputs.impermanence.nixosModules.impermanence
       ../modules/impermanence.nix
+    ] ++ lib.optional m90 ../hosts/M90aPro/pool.nix;
+    config = lib.mkMerge [
+      {
+        custom.impermanence.enable = true;
+        custom.impermanence.device = "/dev/mapper/${mapper}";
+        custom.impermanence.cleanDevEnvironments = !keepEnvs;
+        boot.initrd.systemd.enable = true;
+        users.users.thinky.isNormalUser = true;
+        # Unlock without typing: systemd-cryptsetup picks this path up by name.
+        boot.initrd.systemd.contents."/etc/cryptsetup-keys.d/${mapper}.key".source =
+          pkgs.writeText "luks-test-key" "secretsecret";
+      }
+      (lib.mkIf keepEnvs {
+        # Same disk, impermanence off: the guard must refuse to switch into it.
+        specialisation.no-impermanence.configuration = {
+          custom.impermanence.enable = lib.mkForce false;
+        };
+      })
+      (lib.mkIf crucial {
+        swapDevices = [ { device = "/swap/swapfile"; size = 64; } ];
+      })
+      (lib.mkIf m90 {
+        environment.systemPackages = [ m90Migrate ];
+        boot.initrd.systemd.contents."/etc/cryptsetup-keys.d/cryptpool2.key".source =
+          pkgs.writeText "luks-test-key" "secretsecret";
+        # What `nixos-rebuild boot` with custom.m90Pool.secondDisk = true gives.
+        specialisation.pooled.configuration = {
+          custom.m90Pool.secondDisk = true;
+        };
+      })
     ];
-    custom.impermanence.enable = true;
-    custom.impermanence.cleanDevEnvironments = !crucial;
-    boot.initrd.systemd.enable = true;
-    users.users.thinky.isNormalUser = true;
-    # Unlock without typing: systemd-cryptsetup picks this path up by name.
-    boot.initrd.systemd.contents."/etc/cryptsetup-keys.d/cryptroot.key".source =
-      pkgs.writeText "luks-test-key" "secretsecret";
-  } // lib.optionalAttrs crucial {
-    swapDevices = [ { device = "/swap/swapfile"; size = 64; } ];
-    # Same disk, impermanence off: the guard must refuse to switch into it.
-    specialisation.no-impermanence.configuration = {
-      custom.impermanence.enable = lib.mkForce false;
-    };
   };
 
   postDisko = ''
@@ -81,6 +128,8 @@ inputs.disko.lib.testLib.makeDiskoTest {
 
   extraTestScript = ''
     crucial = ${if crucial then "True" else "False"}
+    m90 = ${if m90 then "True" else "False"}
+    keep_envs = ${if keepEnvs then "True" else "False"}
     try:
         machine.wait_for_unit("multi-user.target")
         machine.succeed("findmnt -no OPTIONS / | grep -q 'subvol=/@root'")
@@ -192,13 +241,18 @@ inputs.disko.lib.testLib.makeDiskoTest {
         assert machine.succeed(runs).strip() == "1", machine.succeed(runs)
 
         if crucial:
+            machine.succeed("swapon --show=NAME --noheadings | grep -qx /swap/swapfile")
+        if m90:
+            # The swap partition, under a fresh random key.
+            machine.succeed("swapon --show=TYPE --noheadings | grep -qx partition")
+            machine.succeed("test \"$(lsblk -no TYPE $(swapon --show=NAME --noheadings))\" = crypt")
+        if keep_envs:
             # Environments kept; only the stale devenv shell script is pruned.
             for kept in ${pyList environments}:
                 machine.succeed(f"test -e {kept}")
             machine.succeed("test -e /home/thinky/Projects/demo/.devenv/state/venv/bin/python")
             machine.succeed("test -e /home/thinky/Projects/demo/.devenv/shell-new.sh")
             machine.fail("test -e /home/thinky/Projects/demo/.devenv/shell-old.sh")
-            machine.succeed("swapon --show=NAME --noheadings | grep -qx /swap/swapfile")
             # Impermanence off on this impermanent root: refused, unless overridden.
             spec = "/run/current-system/specialisation/no-impermanence/bin/switch-to-configuration"
             out = machine.fail(f"{spec} check 2>&1")
@@ -210,10 +264,79 @@ inputs.disko.lib.testLib.makeDiskoTest {
 
         # The previous root is kept for recovery; @tmp and @dev-scratch are
         # deleted outright, so neither shows up in old_roots.
-        machine.succeed("mkdir -p /top && mount -t btrfs -o subvol=/ /dev/mapper/cryptroot /top")
+        machine.succeed("mkdir -p /top && mount -t btrfs -o subvol=/ /dev/mapper/${mapper} /top")
         machine.succeed("ls /top/old_roots/*/root-canary")
         machine.fail("ls /top/old_roots/*/tmp/tmp-canary")
         machine.fail("test -e /top/old_roots/*dev-scratch*")
+        machine.succeed("umount /top")
+
+        if m90:
+            # MIGRATE.md Part C on the second disk (vdb once booted: the test
+            # runner's own disk is gone, so vdb/vdc became vda/vdb).  /tmp is wiped at
+            # every boot, so the key file is written again where it is needed.
+            env = ("M90_TARGET=/dev/vda M90_SECOND=/dev/vdb M90_KEY_FILE=/tmp/pool.key M90_YES=1 "
+                   "M90_LUKS_ARGS='--pbkdf pbkdf2 --pbkdf-force-iterations 1000'")
+            def migrate(phase):
+                return machine.succeed(f"{env} m90-btrfs-migrate {phase} 2>&1")
+            def migrate_fails(phase):
+                return machine.fail(f"{env} m90-btrfs-migrate {phase} 2>&1")
+            def pool_devices():
+                return int(machine.succeed("btrfs filesystem show / | grep -c devid").strip())
+
+            machine.succeed("printf secretsecret > /tmp/pool.key")
+            out = migrate_fails("extend")
+            assert "does not unlock the second disk at boot" in out, out
+            # A passphrase that is not the pool's is refused (boot would ask twice).
+            machine.succeed("printf wrongwrong > /tmp/wrong.key")
+            out = machine.fail(f"{env} M90_KEY_FILE=/tmp/wrong.key m90-btrfs-migrate extend-prepare 2>&1")
+            assert "not the pool's" in out, out
+            machine.succeed("test \"$(lsblk -nro NAME /dev/vdb | wc -l)\" = 1")  # still no partition
+
+            migrate("extend-prepare")
+            machine.succeed("test \"$(readlink -f /dev/disk/by-partlabel/m90-pool2)\" = /dev/vdb1")
+            machine.succeed("cryptsetup isLuks /dev/vdb1")
+            assert "ran already" in migrate_fails("extend-prepare")
+            assert pool_devices() == 1
+
+            # `nixos-rebuild boot` with custom.m90Pool.secondDisk = true, then reboot.
+            # Done by hand here: this VM's /nix/store is the host's over 9p,
+            # where nix-env (also used by the boot-loader installer) cannot take
+            # ownership of it.  So: the profile generation link, and systemd-boot's
+            # default set to the boot entry that already exists for the configuration.
+            pooled = machine.succeed("readlink -f /run/current-system/specialisation/pooled").strip()
+            machine.succeed(f"ln -sfn {pooled} /nix/var/nix/profiles/system-99-link")
+            machine.succeed("ln -sfn system-99-link /nix/var/nix/profiles/system")
+            entry = machine.succeed(f"grep -l '{pooled}/init' /boot/loader/entries/*.conf | head -1").strip()
+            assert entry, machine.succeed("ls /boot/loader/entries")
+            machine.succeed(f"sed -i '/^default /d' /boot/loader/loader.conf && echo 'default {entry.split('/')[-1]}' >> /boot/loader/loader.conf")
+            machine.shutdown()
+            machine.start()
+            machine.wait_for_unit("multi-user.target")
+            machine.succeed("test -e /dev/mapper/cryptpool2")
+            machine.succeed("test -e /etc/m90-pool/second-disk")
+            assert pool_devices() == 1  # unlocked, not yet in the pool
+
+            migrate("extend")
+            assert pool_devices() == 2
+            df = machine.succeed("btrfs filesystem df /")
+            for want in ["Data, single", "Metadata, RAID1", "System, RAID1"]:
+                assert want in df, df
+            assert "in the pool already" in migrate("extend")
+            machine.succeed("touch /root-canary2 /home/home-canary2 /persist/persist-canary2")
+
+            machine.shutdown()
+            machine.start()
+            machine.wait_for_unit("multi-user.target")
+            assert pool_devices() == 2
+            machine.fail("test -e /root-canary2")
+            machine.succeed("test -e /home/home-canary2")
+            machine.succeed("test -e /persist/persist-canary2")
+            machine.succeed("test -e /home/home-canary")
+            machine.succeed("test -e /home/thinky/.ssh/id_ed25519")
+            machine.succeed("test \"$(cat /etc/machine-id)\" = " + mid)
+            machine.succeed("grep -qF 'thinky:${testHash}:' /etc/shadow")
+            machine.succeed("findmnt -no OPTIONS / | grep -q 'subvol=/@root'")
+            machine.succeed("swapon --show=TYPE --noheadings | grep -qx partition")
     finally:
         # Shutdown explicitly: disko's makeDiskoTest adds booted_machine to Driver.machines
         # (a temporary list property), so Driver.__exit__ otherwise leaves QEMU running.

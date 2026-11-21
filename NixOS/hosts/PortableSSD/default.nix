@@ -25,7 +25,10 @@
   # Wipe / on every boot; see modules/impermanence.nix for what survives.
   custom.impermanence.enable = true;
 
-  # PortableSSD is the rescue system for migrating CRUCIAL-SSD to the same
-  # layout (hosts/Crucial-SSD/MIGRATE.md).
-  environment.systemPackages = [ (pkgs.callPackage ../../packages/crucial-btrfs-migrate.nix { }) ];
+  # PortableSSD is the rescue system for migrating CRUCIAL-SSD and M90aPro to
+  # the same layout (hosts/Crucial-SSD/MIGRATE.md, hosts/M90aPro/MIGRATE.md).
+  environment.systemPackages = [
+    (pkgs.callPackage ../../packages/crucial-btrfs-migrate.nix { })
+    (pkgs.callPackage ../../packages/m90-btrfs-migrate.nix { })
+  ];
 }

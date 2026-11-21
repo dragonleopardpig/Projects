@@ -3,6 +3,7 @@
 {
   imports = [
     ./hardware-configuration.nix
+    ./layouts.nix
     ./nvidia-prime.nix
   ];
 
@@ -15,9 +16,5 @@
   # that portable images can stay verbose (see hosts/universal-boot.nix).
   boot.kernelParams = [ "quiet" "splash" "rd.systemd.show_status=auto" ];
 
-
-  # Enable swap on laptop to avoid OOM during rebuilds
-  swapDevices = lib.mkForce [
-    { device = "/swapfile"; size = 16384; }
-  ];
+  # Swap (the /swapfile on ext4, a partition on btrfs) is in layouts.nix.
 }
