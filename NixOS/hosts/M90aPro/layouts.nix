@@ -74,6 +74,9 @@ in
       }];
       # For `extend-prepare` / `extend` (pool.nix), run on this system.
       environment.systemPackages = [ (pkgs.callPackage ../../packages/m90-btrfs-migrate.nix { }) ];
+      # 2026-11-21: the old system disk S7XLNE0Y733865 is now the LUKS partition
+      # m90-pool2 (extend-prepare); initrd unlocks it as the second pool member.
+      custom.m90Pool.secondDisk = true;
     })
   ];
 }
