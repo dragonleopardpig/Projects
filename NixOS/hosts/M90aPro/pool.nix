@@ -19,13 +19,25 @@ in
     description = "Unlock the second pool member (partlabel m90-pool2) as /dev/mapper/cryptpool2 in initrd.";
   };
 
-  config = lib.mkIf cfg.secondDisk {
-    boot.initrd.luks.devices.cryptpool2 = {
-      device = "/dev/disk/by-partlabel/m90-pool2";
-      allowDiscards = true;
-    };
-    # `m90-btrfs-migrate extend` reads this to know the running system unlocks
-    # the second disk at boot, i.e. that adding it to the pool is safe.
-    environment.etc."m90-pool/second-disk".text = "/dev/disk/by-partlabel/m90-pool2\n";
-  };
+  config = lib.mkMerge [
+    {
+      # The pool's encrypted containers, and the second member's opened mapper
+      # (the same btrfs as /), are plumbing: hide them from file managers, which
+      # would show them by kernel name (nvme1n1p3) or as a second "nixos-m90".
+      # The pool itself shows once, as / ("nixos-m90").
+      services.udev.extraRules = ''
+        ENV{ID_PART_ENTRY_NAME}=="disk-m90-root|m90-pool2", ENV{UDISKS_IGNORE}="1"
+        ENV{DM_NAME}=="cryptpool2", ENV{UDISKS_IGNORE}="1"
+      '';
+    }
+    (lib.mkIf cfg.secondDisk {
+      boot.initrd.luks.devices.cryptpool2 = {
+        device = "/dev/disk/by-partlabel/m90-pool2";
+        allowDiscards = true;
+      };
+      # `m90-btrfs-migrate extend` reads this to know the running system unlocks
+      # the second disk at boot, i.e. that adding it to the pool is safe.
+      environment.etc."m90-pool/second-disk".text = "/dev/disk/by-partlabel/m90-pool2\n";
+    })
+  ];
 }
