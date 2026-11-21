@@ -186,6 +186,26 @@ let
     done
     touch $out
   '';
+  # Every glyph name the plugins, helpers and bar settings use is one Noctalia knows (an
+  # unknown one draws a skull).  The self-test first proves a bad name is caught.
+  pluginGlyphsCheck = pkgs.runCommand "noctalia-plugin-glyphs-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    glyphs() {
+      python3 ${./check-plugin-glyphs.py} \
+        --tabler ${shell}/share/noctalia/assets/fonts/tabler.json \
+        --registry ${shell.src}/lib/render/text/glyph_registry.cpp "$@"
+    }
+    cp -r ${./plugins} plugins && chmod -R u+w plugins
+    printf 'ui.button({ glyph = "rotate-ccw" })\n' >> plugins/rsync-status/panel.luau
+    if glyphs --plugins plugins 2> bad.log; then
+      echo "self-test: an unknown glyph was not caught"; exit 1
+    fi
+    grep -q "unknown glyph 'rotate-ccw'" bad.log
+    glyphs --plugins ${./plugins} ${./settings.nix} ${./gpu-status.py} ${./rsync-status.py} \
+      ${./rclone-status.py} ${./agent-status.py}
+    touch $out
+  '';
   # The always-on cup (plugins/always-on): a click shows the new glyph at once, a failed
   # switch puts it back, a terminal `always-on off` reaches it through the status stream.
   alwaysOnPluginCheck = pkgs.runCommand "noctalia-always-on-plugin-checked" {
@@ -270,6 +290,7 @@ let
     test -f ${rcloneStatusCheck}
     test -f ${rcloneStatusPluginCheck}
     test -f ${backupStatusPluginCheck}
+    test -f ${pluginGlyphsCheck}
     test -f ${alwaysOnPluginCheck}
     export NOCTALIA_STATE_HOME="$TMPDIR/noctalia-suite-validation"
     export NOCTALIA_CONFIG_HOME=${configHome}
@@ -336,7 +357,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;

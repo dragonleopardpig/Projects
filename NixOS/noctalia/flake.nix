@@ -48,6 +48,7 @@
         rcloneStatus = suite.rcloneStatusCheck;
         rcloneStatusPlugin = suite.rcloneStatusPluginCheck;
         backupStatusPlugin = suite.backupStatusPluginCheck;
+        pluginGlyphs = suite.pluginGlyphsCheck;
         alwaysOnPlugin = suite.alwaysOnPluginCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };

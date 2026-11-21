@@ -657,7 +657,7 @@ local function renderSettingsView()
     ui.button({
       key = "btn_reset_defaults",
       text = "Reset Defaults",
-      glyph = "rotate-ccw",
+      glyph = "arrow-back-up",
       controlSize = "sm",
       variant = "secondary",
       onClick = function()

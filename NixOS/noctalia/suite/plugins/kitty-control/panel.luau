@@ -970,7 +970,7 @@ render = function()
     ui.button({
       key = "btn_reset_defaults",
       text = "Reset to Defaults",
-      glyph = "rotate-ccw",
+      glyph = "arrow-back-up",
       variant = "secondary",
       onClick = function()
         state.opacity = 0.94
