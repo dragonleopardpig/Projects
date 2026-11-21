@@ -119,3 +119,38 @@ so no boot ever meets a pool member it cannot open.  After Part C the old system
 ```bash
 sudo mount -o subvol=/ /dev/mapper/cryptpool /mnt && ls /mnt/old_roots
 ```
+
+## Backup (daily, to the Seagate)
+
+The pool keeps one copy of each file, so a dead SSD loses the files on it.
+`hosts/M90aPro/backup.nix` backs up `/home` and `/persist` every day with
+restic to the Seagate USB disk's `Linux-Data` partition, repository
+`restic/m90apro`.
+
+- **Not in the backup:** caches, Trash, podman images, cargo `target/`
+  (anything tagged `CACHEDIR.TAG`), and the rclone cloud mounts in the home
+  folder.
+- **The disk is not encrypted, so the backup is.** Keep its passphrase
+  somewhere other than this computer (`/persist/secrets/restic-m90.pass` holds
+  it for the daily run). Without the passphrase the backup cannot be read.
+- **Unplugged at backup time:** the run is skipped, and it tries again the
+  next day.
+- **History:** 7 daily, 4 weekly and 6 monthly snapshots.
+- **Failing SSDs:** smartd warns on the desktop when an SSD's health turns
+  bad. Replace it while it can still be read (`btrfs replace start`), not
+  after.
+
+```bash
+systemctl list-timers restic-backups-pool          # next run
+journalctl -u restic-backups-pool -n 30            # last run
+sudo restic-pool snapshots
+sudo restic-pool restore latest --target /tmp/restore --include /home/thinky/Projects/<path>
+sudo restic-pool mount /mnt/snapshots              # browse every snapshot, Ctrl+C to stop
+```
+
+**After a dead SSD:**
+1. Boot the PortableSSD.
+2. Rebuild the pool on the remaining or new SSDs (`m90-btrfs-migrate`
+   format/install, then Part C).
+3. Restore `/home` and `/persist` from the latest snapshot with restic, using
+   the passphrase.

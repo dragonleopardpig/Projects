@@ -4,6 +4,7 @@
   imports = [
     ./hardware-configuration.nix
     ./layouts.nix
+    ./backup.nix
     ./nvidia-prime.nix
   ];
 
@@ -17,4 +18,11 @@
   boot.kernelParams = [ "quiet" "splash" "rd.systemd.show_status=auto" ];
 
   # Swap (the /swapfile on ext4, a partition on btrfs) is in layouts.nix.
+
+  # The pool has no second copy of its data (pool.nix): warn on the desktop as
+  # soon as an SSD's SMART health turns bad, while its files can still be read.
+  services.smartd = {
+    enable = true;
+    notifications.systembus-notify.enable = true;
+  };
 }

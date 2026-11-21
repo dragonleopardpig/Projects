@@ -661,6 +661,11 @@
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
         variant = "m90";
       };
+      # M90aPro's daily restic backup to the Seagate (hosts/M90aPro/backup.nix).
+      checks.x86_64-linux.m90-backup = import ./tests/m90-backup.nix {
+        inherit (nixpkgs) lib;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      };
       # VM rehearsal of the M90aPro ext4 -> btrfs migration tool.
       checks.x86_64-linux.m90-migration = import ./tests/m90-migration.nix {
         inherit inputs;
