@@ -66,11 +66,8 @@
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
     let
-      localOverlay = final: prev: {
-        # Gone from nixpkgs in 2026-11 (see nixpkgs-legacy above): AGS v2.3.0 + Astal
-        # 2025-11-26, and FUSE 2 (`fuse` is FUSE 3 now).
-        inherit (inputs.nixpkgs-legacy.legacyPackages.${prev.stdenv.hostPlatform.system}) ags astal;
-        fuse2-legacy = inputs.nixpkgs-legacy.legacyPackages.${prev.stdenv.hostPlatform.system}.fuse;
+      # Our patches and overrides on nixpkgs packages.
+      patchOverlay = final: prev: {
         # Lapce with:
         # 1. Floem context menu bug fix (disappearing on mouse release)
         # 2. Native Org mode (.org) language syntax definition
@@ -599,6 +596,26 @@
               (prev.lib.cmakeBool "ENABLE_ISOLATED_GFX" false)
             ];
           });
+      };
+
+      # The previous nixpkgs (2026-04-27) with the same patches: exactly the builds the
+      # system ran before the 2026-11 update, for what that update broke.
+      legacyPatched = import inputs.nixpkgs-legacy {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+        overlays = [ patchOverlay ];
+      };
+
+      localOverlay = final: prev: (patchOverlay final prev) // {
+        # Gone from nixpkgs in 2026-11 (see nixpkgs-legacy above): AGS v2.3.0 + Astal
+        # 2025-11-26, and FUSE 2 (`fuse` is FUSE 3 now).
+        inherit (legacyPatched) ags astal;
+        fuse2-legacy = legacyPatched.fuse;
+        # Our patches no longer apply to these in the 2026-11 nixpkgs (freerdp 3.33: one
+        # hunk of freerdp-cliprdr-png-target; sioyek: seven hunks of
+        # sioyek-reader-enhancements; filen-desktop: dist/index.js moved).  They stay the
+        # previous, patched builds until the patches are redone; remmina goes with freerdp.
+        inherit (legacyPatched) freerdp remmina sioyek filen-desktop;
       };
 
       mkSystem = hostModule: nixpkgs.lib.nixosSystem {
