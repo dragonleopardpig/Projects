@@ -49,6 +49,13 @@ let
     runtimeInputs = [ shell umbriel drmLauncher lockAndBlank pkgs.dbus pkgs.jq pkgs.coreutils pkgs.util-linux pkgs.wlrctl pkgs.wtype ];
     text = builtins.readFile ./test-lock-power.sh;
   };
+  # End to end, on a private headless desktop: an unpinned bar icon shows in the tray's
+  # down-arrow drawer (tray-drawer-unpinned-widgets.patch) and pins back.
+  trayDrawerTest = pkgs.writeShellApplication {
+    name = "noctalia-tray-drawer-test";
+    runtimeInputs = [ shell umbriel drmLauncher pkgs.dbus pkgs.jq pkgs.coreutils pkgs.util-linux pkgs.imagemagick ];
+    text = builtins.readFile ./test-tray-drawer.sh;
+  };
   gpuSelectionCheck = pkgs.runCommand "noctalia-gpu-selection-checked" {
     nativeBuildInputs = [ pkgs.bash ];
   } ''
@@ -416,7 +423,7 @@ let
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
   inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barPinsPluginCheck barIconsCheck pluginLintCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
-  inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest;
+  inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest trayDrawerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;
   inherit theme;

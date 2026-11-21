@@ -40,6 +40,7 @@
         default = { type = "app"; program = lib.getExe suite.suiteSession; };
         session = { type = "app"; program = lib.getExe suite.suiteSession; };
         check-lock = { type = "app"; program = lib.getExe suite.lockPowerTest; };
+        check-tray-drawer = { type = "app"; program = lib.getExe suite.trayDrawerTest; };
       };
       checks.${system} = {
         suite = suite.validatedSuite;
