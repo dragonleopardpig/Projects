@@ -92,7 +92,6 @@ inputs.disko.lib.testLib.makeDiskoTest {
         custom.impermanence.enable = true;
         custom.impermanence.device = "/dev/mapper/${mapper}";
         custom.impermanence.cleanDevEnvironments = !keepEnvs;
-        boot.initrd.systemd.enable = true;
         users.users.thinky.isNormalUser = true;
         # Unlock without typing: systemd-cryptsetup picks this path up by name.
         boot.initrd.systemd.contents."/etc/cryptsetup-keys.d/${mapper}.key".source =

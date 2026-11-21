@@ -16,12 +16,12 @@ let
   # text layer, so the OCR pass is what makes the output searchable at all.
   # Still useful alongside native DjVu: this gives a clean text layer, where the
   # DjVu's own carries the hyphen-duplication fault.
-  djvuToPdf = inputs.djvu2pdf.packages.${pkgs.system}.default;
+  djvuToPdf = inputs.djvu2pdf.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   # pdf-prep: whiten, speed up and OCR a scanned PDF, doing only what each scan
   # needs. Its ~575 lines used to be embedded here; it is now its own repo, so
   # edit https://github.com/dragonleopardpig/pdf-prep and bump the flake input.
-  pdfPrep = inputs.pdf-prep.packages.${pkgs.system}.default;
+  pdfPrep = inputs.pdf-prep.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   wlCopyImage = pkgs.callPackage ./packages/wl-copy-image.nix {};
   sioyekSnip = pkgs.callPackage ./packages/sioyek-snip.nix { inherit wlCopyImage; };
@@ -271,8 +271,8 @@ in
     ];
     # silence first boot output
     consoleLogLevel = 3;
-    initrd.verbose = false;
-    initrd.systemd.enable = true;
+    # The initrd is always systemd's now (nixpkgs dropped the scripted one in 2026-11); the
+    # impermanence rollback and the pool's unlock run as initrd systemd units.
 
     # plymouth, showing after LUKS unlock
     plymouth.enable = true;
@@ -334,7 +334,7 @@ in
 
   # Logitech wireless/wired device support (G502X, PRO Gaming Keyboard)
   hardware.logitech.wireless.enable = true;
-  hardware.logitech.wireless.enableGraphical = true;  # Solaar GUI/device access
+  programs.solaar.enable = true;  # Solaar GUI/device access (was hardware.logitech.wireless.enableGraphical)
 
   # GVFS for file-manager trash and network mounts.
   services.gvfs.enable = true;
@@ -572,9 +572,7 @@ in
   };
 
   # Fast session shutdown: prevent misbehaving user processes from stalling logout
-  systemd.user.extraConfig = ''
-    DefaultTimeoutStopSec=4s
-  '';
+  systemd.user.settings.Manager.DefaultTimeoutStopSec = "4s";
 
   programs.dconf.enable = true;
 
@@ -677,8 +675,8 @@ in
   security.pam.services.hyprlock = { };
 
   security.rtkit.enable = true;
-  # Required for bubblewrap-based FHS env (EasyConnect launcher).
-  security.unprivilegedUsernsClone = true;
+  # Bubblewrap-based FHS env (EasyConnect launcher): user namespaces.  (The kernel allows
+  # unprivileged ones by default; `security.unprivilegedUsernsClone` was removed 2026-11.)
   boot.kernel.sysctl."user.max_user_namespaces" = 15000;
   security.wrappers.bwrap = {
     source = "${pkgs.bubblewrap}/bin/bwrap";
@@ -736,6 +734,11 @@ in
     
   };
 
+  # GTK 2 is flagged "broken" in nixpkgs since 2026-11 (to be removed before NixOS 27.05);
+  # xsane (and sane-frontends) still use it.  Warn instead of refusing until xsane moves on;
+  # simple-scan and naps2 below are GTK 3.
+  nixpkgs.config.problems.handlers."gtk+".broken = "warn";
+
   # Allow only the specific unfree packages we intentionally use.
   nixpkgs.config.allowUnfreePredicate = pkg:
     let
@@ -748,6 +751,7 @@ in
     in
       builtins.elem name [
         "antigravity"
+        "antigravity-ide"         # its package name since nixpkgs 2026-11
         "brother-udev-rule-type1"
         "brscan4"
         "claude-code"
@@ -755,6 +759,7 @@ in
         "codex"
         "corefonts"
         "megasync"
+        "nvidia-kernel-modules"   # split out of nvidia-x11 in nixpkgs 2026-11
         "nvidia-settings"
         "nvidia-x11"
         "proton-vpn"
@@ -1006,7 +1011,7 @@ in
                                # -m KrakenOS.UI.validate_open3d_...`.
 
     # ── AI Assistants ──
-    antigravity                # Google Antigravity IDE (official agentic desktop IDE)
+    antigravity-ide            # Google Antigravity IDE (official agentic desktop IDE)
     claude-code                # Anthropic Claude CLI coding assistant
     claude-monitor             # Claude usage monitoring tool
     codex                      # OpenAI Codex CLI
@@ -1014,7 +1019,7 @@ in
 
     # ── Containers & Compatibility ──
     distrobox                  # Run other Linux distros in containers
-    cryfs                      # Encrypts files locally
+    gocryptfs                  # Encrypts files locally (cryfs left nixpkgs in 2026-11 with FUSE 2)
     # FHS environment for running non-NixOS binaries
     (let base = pkgs.appimageTools.defaultFhsEnvArgs; in
      pkgs.buildFHSEnv (base // {
@@ -1026,7 +1031,7 @@ in
            zstd
            gtk2
            gnome-themes-extra
-           gtk-engine-murrine
+           # (gtk-engine-murrine, a GTK 2 theme engine, left nixpkgs in 2026-11)
            gtk3
            glib
            cairo

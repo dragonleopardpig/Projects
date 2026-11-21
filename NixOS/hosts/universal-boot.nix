@@ -61,7 +61,6 @@
   boot.kernelParams = [
     "rd.systemd.show_status=yes"
   ];
-  boot.initrd.verbose = lib.mkForce true;
   boot.plymouth.enable = lib.mkForce false;
 
   # Probe external monitors for DDC/CI brightness control.  It is harmless on

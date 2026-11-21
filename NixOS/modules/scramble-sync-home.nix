@@ -38,7 +38,7 @@ let
         name = "Scramble-${version}-x86_64.AppImage";
         hash = "sha512-aQuicNwWWaXCxA8aHMqp7o3Z/x7FD+lZ7RGVG37h69ZMhyu6YpAMCGSKhOe31VszOhL+Sf6TfybVcAWamJDNyw==";
       };
-      appimageContents = pkgs.appimageTools.extractType2 {
+      appimageContents = pkgs.appimageTools.extract {
         inherit pname version src;
         postExtract = ''
           chmod u+w "$out/resources/app.asar"

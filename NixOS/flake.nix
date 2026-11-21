@@ -57,11 +57,20 @@
     # only where its overlay takes zig_0_17 (build-time, for the built-in
     # terminal) while our nixpkgs has none.
     hyprfm.url = "github:dragonleopardpig/hyprfm";
+    # The nixpkgs before the 2026-11 update, for what that update removed and nothing
+    # replaces like for like (localOverlay): AGS v2 + Astal (the fallback Hyprland + AGS
+    # desktop keeps the builds it ran on; AGS's own v2.3.0 flake pins an older Astal) and
+    # FUSE 2's library (the MEGAcmd runner from a Debian package may link libfuse.so.2).
+    nixpkgs-legacy.url = "github:nixos/nixpkgs/1c3fe55ad329cbcb28471bb30f05c9827f724c76";
   };
 
   outputs = inputs@{ nixpkgs, grub2-themes, home-manager, disko, ... }:
     let
       localOverlay = final: prev: {
+        # Gone from nixpkgs in 2026-11 (see nixpkgs-legacy above): AGS v2.3.0 + Astal
+        # 2025-11-26, and FUSE 2 (`fuse` is FUSE 3 now).
+        inherit (inputs.nixpkgs-legacy.legacyPackages.${prev.stdenv.hostPlatform.system}) ags astal;
+        fuse2-legacy = inputs.nixpkgs-legacy.legacyPackages.${prev.stdenv.hostPlatform.system}.fuse;
         # Lapce with:
         # 1. Floem context menu bug fix (disappearing on mouse release)
         # 2. Native Org mode (.org) language syntax definition

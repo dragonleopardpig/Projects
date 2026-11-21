@@ -148,7 +148,7 @@ in
       ConditionPathExists = diskDevice;
       RequiresMountsFor = [ mountPoint ];
     };
-    path = [ pkgs.fuse3 pkgs.fuse ]; # restic mounts through fusermount3 (or fusermount)
+    path = [ pkgs.fuse3 ]; # restic mounts through fusermount3
     serviceConfig = {
       # A forgotten browse closes itself (pruning waits while it is open).
       RuntimeMaxSec = "4h";

@@ -1334,7 +1334,7 @@ in
       fi
 
       export PATH="$APP_DIR/usr/bin:/run/wrappers/bin:$PATH"
-      export LD_LIBRARY_PATH="${pkgs.fuse.out}/lib:$APP_DIR/opt/megacmd/lib:''${LD_LIBRARY_PATH:-}"
+      export LD_LIBRARY_PATH="${pkgs.fuse2-legacy.out}/lib:${pkgs.fuse3.out}/lib:$APP_DIR/opt/megacmd/lib:''${LD_LIBRARY_PATH:-}"
 
       if [ "$cmd_name" = "mega-runner" ]; then
         cmd="$1"
@@ -3204,6 +3204,7 @@ in
   };
 
   home.pointerCursor = {
+    enable = true;
     name = "Hyprland-Logo";
     package = pkgs.callPackage ./packages/hyprland-logo-cursor.nix { };
     size = 24;
@@ -3226,6 +3227,8 @@ in
 
   wayland.windowManager.hyprland = {
     enable = true;
+    # Keep the hyprlang config this file writes (home-manager's default became "lua" in 2026-11).
+    configType = "hyprlang";
     systemd = {
       # disable the systemd integration, as it conflicts with uwsm.
       enable = false;

@@ -184,10 +184,6 @@ in
   (lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion = config.boot.initrd.systemd.enable;
-        message = "custom.impermanence needs boot.initrd.systemd.enable = true.";
-      }
-      {
         assertion = (config.fileSystems."/".fsType or null) == "btrfs";
         message = "custom.impermanence needs / on btrfs (subvol=@root).";
       }
