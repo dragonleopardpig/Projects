@@ -59,28 +59,30 @@ contrast) and fails the build on a repeat or a colour too dark for the bar.
 The power button stays white. A plugin icon changes colour only for a failure
 (red), or the AI widget while it waits for an answer.
 
-**Right click any icon** for Noctalia's native menu (the tray's look): the
-icon's own right-click action first, if it has one, then **Unpin from bar**.
-Built-in icons keep Noctalia's own labels; the plugins name theirs in
-`plugin.toml` (`right_click_label`):
+**Right click any icon** for Noctalia's native menu (the tray's look) with
+what the icon can do, then **Unpin from bar**: **Open …** (what a click does),
+the icon's own right-click action (built-in icons, labelled as in the settings'
+action picker), and the entries its plugin declares in `plugin.toml`
+(`menu = [{ label, action }]`). The tooltip steps aside while the menu is open.
 
-| Icon | Its own right-click action |
+| Icon | Its menu, before Unpin |
 |---|---|
-| Volume | Toggle mute |
-| Network | Toggle network connection |
-| Bluetooth | Toggle Bluetooth |
-| Notifications | Toggle Do Not Disturb |
-| Media | Media control (play / pause) |
+| Volume | Open Volume, Toggle mute |
+| Network | Open Network, Toggle network connection |
+| Bluetooth | Open Bluetooth, Toggle Bluetooth |
+| Notifications | Open Notifications, Toggle Do Not Disturb |
+| Clock, Weather, … | Open Clock, Open Weather, … |
+| Backup | Open Backup Status, Back up now, Stop backup, Browse backups, Show log |
+| rsync | Open Rsync Status, Sync now, Show log |
+| rclone | Open Rclone Status, Open rclone GUI |
+| GPU | Display settings, Arrange displays |
 | Always-on | Always-on on / off |
-| Backup | Back up now |
-| rclone | Open rclone GUI |
-| rsync | Refresh |
-| GPU | Arrange displays |
+| AI agent | Show / hide the agent |
 
 An unpinned icon moves into the tray's **down-arrow drawer**, beside the
 unpinned tray icons and in its own colour. There a click does what the icon
-did on the bar, and a right click opens the same menu with **Pin to bar** while
-the drawer stays open. The down arrow shows whenever something is unpinned.
+did on the bar, and a right click opens the same menu, every entry included,
+ending with **Pin to bar** while the drawer stays open. The down arrow shows whenever something is unpinned.
 Noctalia's drawer and menus only know tray icons, so
 `tray-drawer-unpinned-widgets.patch` adds the bar icons to them;
 `nix run path:./noctalia#check-tray-drawer` clicks through it all on a private

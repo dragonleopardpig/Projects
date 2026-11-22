@@ -11,3 +11,8 @@ description = "Antigravity activity from lifecycle hooks; click to toggle the ag
 [[widget]]
 id = "bar"
 entry = "bar.luau"
+# Entries of the bar's native Pin/Unpin menu (suite/tray-drawer-unpinned-widgets.patch), on the
+# bar and in the tray drawer; plain actions, so they work while the icon is unpinned.
+menu = [
+  { label = "Show / hide the agent", action = "exec umbriel msg scratchpad-toggle:agent" },
+]

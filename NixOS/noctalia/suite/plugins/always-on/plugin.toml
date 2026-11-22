@@ -11,5 +11,8 @@ description = "Always-on mode (modules/always-on-umbriel.nix): a cup when off, a
 [[widget]]
 id = "bar"
 entry = "bar.luau"
-# Names onRightClick in the bar's native Pin/Unpin menu (suite/tray-drawer-unpinned-widgets.patch).
-right_click_label = "Always-on on / off"
+# Entries of the bar's native Pin/Unpin menu (suite/tray-drawer-unpinned-widgets.patch), on the
+# bar and in the tray drawer; plain actions, so they work while the icon is unpinned.
+menu = [
+  { label = "Always-on on / off", action = "exec /run/current-system/sw/bin/always-on-toggle" },
+]

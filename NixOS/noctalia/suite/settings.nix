@@ -198,8 +198,8 @@ in
     # Plugin bar widgets (see plugins.enabled above).  A plugin's resting colour is this
     # `color`; it switches to its own colour only for a failure.  Their left click is spelt
     # out as an action (the same thing their script did) so it also works from the tray
-    # drawer once unpinned, where the plugin's script does not run.  Their right click stays
-    # in the script; plugin.toml's `right_click_label` names it in the Pin/Unpin menu.
+    # drawer once unpinned, where the plugin's script does not run.  What their right click
+    # did, and more, is in plugin.toml's `menu` entries, listed in the Pin/Unpin menu.
     umbriel-companion = { type = "noctalia/umbriel-companion:bar"; color = barAccents.peach; actions.left = "panel-toggle noctalia/umbriel-companion:panel"; };
     xwayland = { type = "tordex/xwayland:bar"; color = barAccents.lemon; };
     agent-status = { type = "local/agent-status:bar"; color = barAccents.candyPink; actions.left = "exec umbriel msg scratchpad-toggle:agent"; };

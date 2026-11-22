@@ -9,8 +9,9 @@ Reads the generated Noctalia config (settings.nix) and fails on:
   the tray and the taskbar, which handle right click per item);
 - a plugin icon without a left-click action in settings.nix: once unpinned it sits in the
   tray drawer, which runs config actions only (the plugin's script is not running);
-- a local plugin whose bar script has its own onRightClick but whose plugin.toml does not
-  name it (`right_click_label`), so the Pin/Unpin menu could not offer it.
+- a local plugin whose bar script has its own onRightClick but whose plugin.toml declares no
+  `menu` entries (the Pin/Unpin menu would not offer what its right click did), or a menu
+  entry without a label or with an action that is neither `exec ...` nor an IPC verb.
 """
 
 import argparse
@@ -116,16 +117,24 @@ def delta_e(c1, c2):
     return math.sqrt((dlp / sl) ** 2 + (dcp / sc) ** 2 + (dhp / sh) ** 2 + rt * (dcp / sc) * (dhp / sh))
 
 
-def unnamed_right_clicks(plugins_dir):
-    """Local plugin bars with their own onRightClick that plugin.toml does not name."""
-    missing = []
+ACTION = re.compile(r"^(exec \S.*|[a-z][a-z0-9-]*( \S.*)?)$")
+
+
+def menu_problems(plugins_dir):
+    """Local plugin bars whose right click the Pin/Unpin menu could not offer, bad entries."""
+    found = []
     for manifest in sorted(Path(plugins_dir).glob("*/plugin.toml")):
         data = tomllib.loads(manifest.read_text(encoding="utf-8"))
         for widget in data.get("widget", []):
+            entry = f"{data['id']}:{widget['id']}"
+            menu = widget.get("menu", [])
             script = (manifest.parent / widget["entry"]).read_text(encoding="utf-8")
-            if re.search(r"^function onRightClick\b", script, re.MULTILINE) and not widget.get("right_click_label"):
-                missing.append(f"{data['id']}:{widget['id']}")
-    return missing
+            if re.search(r"^function onRightClick\b", script, re.MULTILINE) and not menu:
+                found.append(f"{entry}: onRightClick but no menu entries in plugin.toml (the menu cannot offer it)")
+            for item in menu:
+                if not item.get("label") or not ACTION.match(item.get("action", "")):
+                    found.append(f"{entry}: menu entry {item!r} needs a label and an `exec ...` or IPC action")
+    return found
 
 
 def problems(config, plugins_dir):
@@ -170,8 +179,7 @@ def problems(config, plugins_dir):
         if ":" in widgets.get(name, {}).get("type", "") and name not in NO_LEFT_CLICK:
             if not widgets[name].get("actions", {}).get("left"):
                 found.append(f"{name}: plugin icon without actions.left (the tray drawer could not open it)")
-    for entry in unnamed_right_clicks(plugins_dir):
-        found.append(f"{entry}: onRightClick without right_click_label in plugin.toml (the menu cannot offer it)")
+    found.extend(menu_problems(plugins_dir))
     return found, len(coloured)
 
 

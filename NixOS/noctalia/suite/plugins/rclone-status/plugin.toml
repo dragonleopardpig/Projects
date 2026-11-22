@@ -16,8 +16,11 @@ entry = "service.luau"
 [[widget]]
 id = "bar"
 entry = "bar.luau"
-# Names onRightClick in the bar's native Pin/Unpin menu (suite/tray-drawer-unpinned-widgets.patch).
-right_click_label = "Open rclone GUI"
+# Entries of the bar's native Pin/Unpin menu (suite/tray-drawer-unpinned-widgets.patch), on the
+# bar and in the tray drawer; plain actions, so they work while the icon is unpinned.
+menu = [
+  { label = "Open rclone GUI", action = "exec noctalia-rclone-status open-gui" },
+]
 
 [[panel]]
 id = "panel"

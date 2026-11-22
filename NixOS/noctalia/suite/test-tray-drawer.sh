@@ -2,11 +2,13 @@
 # (its own compositor, buses, config and state; the real desktop is not touched), driven
 # with a real pointer (wlrctl) the way a person would:
 #   1. the clock is on the bar and no down arrow shows (the session has no tray items);
-#   2. right click on the clock opens the native menu below the bar; its entry (Unpin from
-#      bar) takes the clock off the bar and the down arrow appears for it;
+#   2. right click on the clock opens the native menu below the bar -- Open Clock, then Unpin
+#      from bar -- and the clock's (long) tooltip steps aside; Unpin takes the clock off the
+#      bar and the down arrow appears for it;
 #   3. a click on the arrow opens the drawer, with the clock in its own colour;
-#   4. right click on the clock there opens the menu while the drawer stays open; its entry
-#      (Pin to bar) puts the clock back and the arrow goes.
+#   4. right click on the clock there opens the same menu, ending with Pin to bar, while the
+#      drawer stays open and the cell's tooltip steps aside; Pin puts the clock back and the
+#      arrow goes.
 # Colours are unique on purpose, so a screenshot's pixel counts tell what is drawn, and a
 # popup is found as the region that changed between two screenshots.
 CLOCK="#CCFF00"
@@ -47,6 +49,7 @@ end = ["clock", "tray"]
 [widget.clock]
 color = "$CLOCK"
 format = "{:%A %B}"
+tooltip_format = "{:%A %d %B %Y} -- a long tooltip that has to step aside for the menu"
 [widget.clock.actions]
 right = "widget-menu"
 [widget.tray]
@@ -132,15 +135,38 @@ centre_of() {
   [[ $box =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ ]] || fail "no $2 in $1"
   echo "$((BASH_REMATCH[3] + BASH_REMATCH[1] / 2)) $((BASH_REMATCH[4] + BASH_REMATCH[2] / 2))"
 }
-# "x y w h": the region that changed from screenshot $1 to $2 (a popup that opened).
+# "x y w h": the region that changed from screenshot $1 to $2 below row $3 (default 0).
 changed() {
-  local box
+  local box h from="${3:-0}"
   magick compare -fuzz 3% "$1" "$2" -compose src -highlight-color white -lowlight-color black \
     "$probe_dir/shots/diff.png" 2> /dev/null || true
-  box=$(magick "$probe_dir/shots/diff.png" -alpha off -format '%@' info:)
+  h=$(magick identify -format %h "$probe_dir/shots/diff.png")
+  box=$(magick "$probe_dir/shots/diff.png" -alpha off -crop "x$((h - from))+0+$from" +repage -format '%@' info:)
   [[ $box =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ && ${BASH_REMATCH[1]} -gt 1 ]] ||
-    fail "nothing changed between $(basename "$1") and $(basename "$2") (no menu opened)"
-  echo "${BASH_REMATCH[3]} ${BASH_REMATCH[4]} ${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+    fail "nothing changed between $(basename "$1") and $(basename "$2") below row $from"
+  echo "${BASH_REMATCH[3]} $((BASH_REMATCH[4] + from)) ${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+}
+# Right click on the item at $1,$2 whose tooltip shows below row $3: the tooltip must be up
+# first (or the check proves nothing), then the menu alone must change the screen below it.
+# Prints the menu's "x y w h".
+menu_at() {
+  local base tip after tw mx my mw mh
+  point_at 640 650
+  settle
+  base=$(snap)
+  point_at "$1" "$2"
+  settle
+  tip=$(snap)
+  read -r _ _ tw _ < <(changed "$base" "$tip" "$3")
+  [[ $tw -gt 260 ]] || fail "test setup: no wide tooltip under the item (changed ${tw}px)"
+  wlrctl pointer click right
+  settle
+  after=$(snap)
+  read -r mx my mw mh < <(changed "$base" "$after" "$3")
+  echo "menu ${mw}x${mh}+${mx}+${my} (tooltip was ${tw}px wide)" >&2
+  [[ $mw -le 260 ]] || fail "the tooltip stays over the menu (changed ${mw}px wide below the item)"
+  [[ $mh -gt 60 ]] || fail "the menu has one entry only (${mh}px tall): Open is missing"
+  echo "$mx $my $mw $mh"
 }
 point_at() {
   wlrctl pointer move -5000 -5000
@@ -157,18 +183,11 @@ settle
 [[ $(count "$CLOCK") -gt 20 ]] || fail "the pinned clock is not on the bar"
 [[ $(count "$ARROW") -eq 0 ]] || fail "a down arrow shows with nothing in the drawer"
 
-# 2. right click on the clock: the native menu below the bar, then its entry, Unpin from bar
+# 2. right click on the clock: the native menu below the bar, the tooltip gone; Unpin from bar
 read -r x y < <(centre_of "$(snap)" "$CLOCK")
-point_at "$x" "$y"
-settle
-before=$(snap)
-wlrctl pointer click right
-settle
-after=$(snap)
-read -r mx my mw mh < <(changed "$before" "$after")
-echo "menu on the bar: ${mw}x${mh}+${mx}+${my}" >&2
-[[ $my -gt $y ]] || fail "no menu opened below the clock"
-point_at "$((mx + mw / 2))" "$((my + mh / 2))"
+read -r mx my mw mh < <(menu_at "$x" "$y" "$((y + 14))")
+# Unpin from bar is the last entry.
+point_at "$((mx + mw / 2))" "$((my + mh - 22))"
 settle
 wlrctl pointer click left
 settle
@@ -183,21 +202,15 @@ wlrctl pointer click left
 settle
 [[ $(count "$CLOCK") -gt 5 ]] || fail "the drawer does not show the unpinned clock in its colour"
 
-# 4. right click on it there: the menu opens, the drawer stays; its entry, Pin to bar
+# 4. right click on it there: the same menu, the drawer stays, the tooltip gone; Pin to bar
 read -r cx cy < <(centre_of "$(snap)" "$CLOCK")
-point_at "$cx" "$cy"
-settle
-before=$(snap)
-wlrctl pointer click right
-settle
-after=$(snap)
-read -r mx my mw mh < <(changed "$before" "$after")
-echo "menu in the drawer: ${mw}x${mh}+${mx}+${my}" >&2
+read -r mx my mw mh < <(menu_at "$cx" "$cy" "$((cy + 14))")
 [[ $(count "$CLOCK") -gt 5 ]] || fail "right click closed the drawer"
-point_at "$((mx + mw / 2))" "$((my + mh / 2))"
+# Pin to bar is the last entry.
+point_at "$((mx + mw / 2))" "$((my + mh - 22))"
 settle
 wlrctl pointer click left
 settle
 [[ $(count "$CLOCK") -gt 20 ]] || fail "Pin to bar did not bring the clock back"
 [[ $(count "$ARROW") -eq 0 ]] || fail "the down arrow stayed with nothing in the drawer"
-echo "tray drawer: native Pin/Unpin menus on the bar and in the drawer, drawer stays open, pin restores"
+echo "tray drawer: full native menus on the bar and in the drawer, tooltips step aside, drawer stays open, pin restores"
