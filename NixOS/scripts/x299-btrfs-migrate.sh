@@ -233,14 +233,16 @@ find_devices() {
 
 # The stage dir: on a mounted filesystem of another disk.
 check_stage_disk() {
-  local base=$STAGE src
+  local base=$STAGE src target
   while [ ! -e "$base" ]; do base=$(dirname "$base"); done
-  src=$(findmnt -no SOURCE -T "$base" | sed 's/\[.*//')
-  if [ -b "$src" ] && lsblk -nrps -o NAME "$src" 2>/dev/null | grep -qx "$DISK"; then
+  # An automount point lists the autofs entry and the filesystem on it: take the latter.
+  read -r target src < <(findmnt -nro TARGET,SOURCE,FSTYPE -T "$base" | awk '$3 != "autofs" { t = $1; s = $2 } END { print t, s }')
+  src=${src%%\[*}
+  [ -b "$src" ] || die "cannot tell which disk holds $STAGE (source '$src')"
+  if lsblk -nrps -o NAME "$src" 2>/dev/null | grep -qx "$DISK"; then
     die "the stage dir $STAGE is on the X299 disk itself"
   fi
-  [ "$(findmnt -no TARGET -T "$base")" != / ] || [ "${X299_STAGE_ON_ROOT:-0}" = 1 ] ||
-    die "$STAGE is not on a mounted data disk (Linux-Data at /mnt/backup?)"
+  [ "$target" != / ] || die "$STAGE is not on a mounted data disk (Linux-Data at /mnt/backup?)"
 }
 
 mark() { run touch "$STAGE/$1.done"; }
@@ -369,7 +371,7 @@ phase_stage() {
   while [ ! -e "$base" ]; do base=$(dirname "$base"); done
   need=$(( $(blockdev --getsize64 "$LUKS_PART") + 2 * 1073741824 ))
   avail=$(df --output=avail -B1 "$base" | tail -1)
-  echo "  image needs $(( need / 1073741824 )) GiB; $(( avail / 1073741824 )) GiB free on $(findmnt -no TARGET -T "$base")"
+  echo "  image needs $(( need / 1073741824 )) GiB; $(( avail / 1073741824 )) GiB free in $base"
   [ "$avail" -gt "$need" ] || die "not enough room for the image in $STAGE"
 
   confirm STAGE "Unmount and lock X299's root, then copy its partition table, ESP and raw encrypted

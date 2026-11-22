@@ -40,6 +40,9 @@ pkgs.testers.runNixOSTest {
     ];
     system.extraDependencies = [ fakeSystem ];
     nix.settings.experimental-features = [ "nix-command" ];
+    # Linux-Data on M90aPro is an automount: findmnt lists autofs and ext4 there.
+    systemd.mounts = [ { what = "/dev/vdc"; where = "/mnt/backup"; type = "ext4"; } ];
+    systemd.automounts = [ { where = "/mnt/backup"; wantedBy = [ "multi-user.target" ]; } ];
   };
 
   testScript = ''
@@ -70,7 +73,7 @@ pkgs.testers.runNixOSTest {
         f"cryptsetup luksFormat --batch-mode --type luks2 --uuid ${luksUuid} {fast} /dev/vdb3 /dev/shm/key",
         "mkfs.vfat -F 32 -i 1EF410FF -n DATA /dev/vdb4",
         "mkfs.ext4 -q -L 'Virtual Windows' -U ${vwUuid} /dev/vdb5",
-        "mkfs.ext4 -q -L Linux-Data /dev/vdc && mkdir -p /mnt/backup && mount /dev/vdc /mnt/backup",
+        "mkfs.ext4 -q -L Linux-Data /dev/vdc && ls /mnt/backup && findmnt -t autofs /mnt/backup",
         "udevadm settle",
     )
     mbr = sha("head -c 440 /dev/vdb")
