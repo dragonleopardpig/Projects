@@ -1,5 +1,5 @@
 diff --git a/pdf_viewer/config.cpp b/pdf_viewer/config.cpp
-index 0803fe4e..4deec863 100644
+index a76c8d68..7b242510 100644
 --- a/pdf_viewer/config.cpp
 +++ b/pdf_viewer/config.cpp
 @@ -33,6 +33,7 @@ bool SCROLL_PAST_DOCUMENT_ENDS = true;
@@ -8,18 +8,18 @@ index 0803fe4e..4deec863 100644
  bool RECTO_VERSO_ADJUSTMENT = false;
 +bool STARTUP_TWO_PAGE_MODE = false;
  bool KEYBOARD_SELECT_INCLUSIVE = false;
- 
- #ifdef SIOYEK_MOBILE
-@@ -1039,6 +1040,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
+ bool SHOW_COMMAND_HINTS = false;
+ bool RESTORE_ALL_WINDOWS_ON_STARTUP = false;
+@@ -1051,6 +1052,7 @@ ConfigManager::ConfigManager(const Path& default_path, const Path& auto_path, co
      add_bool(L"uniform_page_widths", &SAME_WIDTH);
      add_bool(L"simplify_freehand_drawings", &SIMPLIFY_FREEHAND_DRAWINGS);
      add_bool(L"recto_verso_adjustment", &RECTO_VERSO_ADJUSTMENT);
 +    add_bool(L"startup_two_page_mode", &STARTUP_TWO_PAGE_MODE);
      add_bool(L"keyboard_select_inclusive", &KEYBOARD_SELECT_INCLUSIVE);
- 
-     add_string(L"google_scholar_address", &GOOGLE_SCHOLAR_ADDRESS);
+     add_bool(L"show_command_hints", &SHOW_COMMAND_HINTS);
+     add_bool(L"restore_all_windows_on_startup", &RESTORE_ALL_WINDOWS_ON_STARTUP);
 diff --git a/pdf_viewer/document_view.cpp b/pdf_viewer/document_view.cpp
-index 58b2ee6f..7ab398ee 100644
+index 303194dd..b03a94ed 100644
 --- a/pdf_viewer/document_view.cpp
 +++ b/pdf_viewer/document_view.cpp
 @@ -400,8 +400,18 @@ NormalizedWindowPos DocumentView::absolute_to_window_pos(AbsoluteDocumentPos abs
@@ -42,21 +42,6 @@ index 58b2ee6f..7ab398ee 100644
  
      return NormalizedWindowRect(top_left, bottom_right);
  }
-diff --git a/pdf_viewer/pdf_view_opengl_widget.cpp b/pdf_viewer/pdf_view_opengl_widget.cpp
-index fc2693be..579b33a8 100644
---- a/pdf_viewer/pdf_view_opengl_widget.cpp
-+++ b/pdf_viewer/pdf_view_opengl_widget.cpp
-@@ -3749,6 +3749,10 @@ ScratchPad* PdfViewOpenGLWidget::get_scratchpad() {
- void PdfViewOpenGLWidget::render_selected_rectangle() {
- 
-     if (selected_rectangle) {
-+        // Two-page rendering leaves the last page mask in the stencil buffer.
-+        // Rectangle selection owns the whole-window mask, so start it clean;
-+        // otherwise one page is treated as part of the selected rectangle.
-+        glClear(GL_STENCIL_BUFFER_BIT);
-         enable_stencil();
- 
-         write_to_stencil();
 diff --git a/pdf_viewer/keys.config b/pdf_viewer/keys.config
 index 7f5c83da..a32a5a5a 100644
 --- a/pdf_viewer/keys.config
@@ -73,10 +58,10 @@ index 7f5c83da..a32a5a5a 100644
  toggle_dark_mode <f8>
  
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index 9a9a62ed..400a316b 100644
+index ca53fe73..1afaa3f5 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
-@@ -110,6 +110,7 @@ extern bool MULTILINE_MENUS;
+@@ -112,6 +112,7 @@ extern bool MULTILINE_MENUS;
  extern bool SORT_BOOKMARKS_BY_LOCATION;
  extern bool SORT_HIGHLIGHTS_BY_LOCATION;
  extern bool FLAT_TABLE_OF_CONTENTS;
@@ -84,7 +69,7 @@ index 9a9a62ed..400a316b 100644
  extern bool HOVER_OVERVIEW;
  extern bool WHEEL_ZOOM_ON_CURSOR;
  extern float MOVE_SCREEN_PERCENTAGE;
-@@ -1778,6 +1779,12 @@ void MainWidget::validate_render() {
+@@ -1812,6 +1813,12 @@ void MainWidget::validate_render() {
      if (!isVisible()) {
          return;
      }
@@ -98,10 +83,10 @@ index 9a9a62ed..400a316b 100644
          int current_page = get_current_page_number();
          if (current_page != last_smart_fit_page) {
 diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
-index 474fe789..8b82e726 100644
+index f42d6fdb..1f08b518 100644
 --- a/pdf_viewer/main_widget.h
 +++ b/pdf_viewer/main_widget.h
-@@ -359,6 +359,9 @@ public:
+@@ -376,6 +376,9 @@ public:
      // the current drawing of MainWidget is not correct (for example due to moving vertically)
      bool is_render_invalidated = false;
  
@@ -111,6 +96,21 @@ index 474fe789..8b82e726 100644
      // determines if the UI is invalid and needs to be updated
      // this can be the case for example when updating the search progress
      // note that when render is invalid we automatically validate the UI anyway
+diff --git a/pdf_viewer/pdf_view_opengl_widget.cpp b/pdf_viewer/pdf_view_opengl_widget.cpp
+index 3c6bd368..398fc717 100644
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp
+@@ -3755,6 +3755,10 @@ ScratchPad* PdfViewOpenGLWidget::get_scratchpad() {
+ void PdfViewOpenGLWidget::render_selected_rectangle() {
+ 
+     if (selected_rectangle) {
++        // Two-page rendering leaves the last page mask in the stencil buffer.
++        // Rectangle selection owns the whole-window mask, so start it clean;
++        // otherwise one page is treated as part of the selected rectangle.
++        glClear(GL_STENCIL_BUFFER_BIT);
+         enable_stencil();
+ 
+         write_to_stencil();
 diff --git a/pdf_viewer/prefs.config b/pdf_viewer/prefs.config
 index 661ec549..40814363 100644
 --- a/pdf_viewer/prefs.config

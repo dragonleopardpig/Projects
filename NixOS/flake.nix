@@ -162,6 +162,9 @@
             # always dry-run with `patch -p1 -F0` before committing. Note that
             # this nixpkgs snapshot is older than the branch's base, so branch
             # code touching newer upstream (e.g. db_mutex) does not transfer.
+            # 2026-11: all eleven sioyek patches rebased from nixpkgs' source
+            # a0650b5a (2026-04-08) onto 1e2f8037 (2026-11-04) with git rebase
+            # (patches/README.md, "After a nixpkgs update").
             ./patches/sioyek-reader-enhancements.patch
             ./patches/sioyek-reader-performance-selection.patch
             ./patches/sioyek-file-picker-navigation.patch
@@ -456,69 +459,17 @@
         });
 
         filen-desktop = prev.filen-desktop.overrideAttrs (old: {
+          # Our edits (patches/filen-desktop-edit.py): no local crash reporter (a crash once
+          # made systemd-coredump stream tens of GB), and tray mode hides the window on Linux
+          # (close, minimize, window buttons, a "Hide" tray entry).  Since 3.0.53 the app is
+          # packed in resources/app.asar with native parts in app.asar.unpacked: unpack it
+          # once into resources/app, which Electron runs the same way, and edit it there.
           postFixup = (old.postFixup or "") + ''
-            ${prev.python3}/bin/python <<PY
-            from pathlib import Path
-
-            index_path = Path("${placeholder "out"}/lib/node_modules/@filen/desktop/dist/index.js")
-            text = index_path.read_text()
-
-            # Filen enables Electron's local Crashpad database even though it
-            # never uploads reports. On Electron 41 an Exit-triggered crash can
-            # make systemd-coredump stream tens of gigabytes from Electron's
-            # sparse address space, saturating the disk for several minutes.
-            old_crash_reporter = """        electron_1.crashReporter.start({\n            submitURL: undefined,\n            productName: \"io.filen.desktop\",\n            uploadToServer: false,\n            ignoreSystemCrashHandler: false,\n            rateLimit: false,\n            compress: false,\n            globalExtra: {\n                cpus: os_1.default.cpus().length.toString(),\n                ram: os_1.default.totalmem().toString(),\n                platform: os_1.default.platform(),\n                release: os_1.default.release()\n            }\n        });"""
-            new_crash_reporter = """        // Local crash reporting disabled by the NixOS overlay."""
-
-            old_minimize = """        (_c = this.driveWindow) === null || _c === void 0 ? void 0 : _c.on(\"minimize\", () => {\n            var _a;\n            if (process.platform === \"darwin\" && this.minimizeToTray) {\n                (_a = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _a === void 0 ? void 0 : _a.hide();\n            }\n        });"""
-            new_minimize = """        (_c = this.driveWindow) === null || _c === void 0 ? void 0 : _c.on(\"minimize\", e => {\n            var _a, _b;\n            if (this.minimizeToTray) {\n                if (process.platform === \"darwin\") {\n                    (_a = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _a === void 0 ? void 0 : _a.hide();\n                }\n                else {\n                    e.preventDefault();\n                    (_b = this.driveWindow) === null || _b === void 0 ? void 0 : _b.hide();\n                    return;\n                }\n            }\n        });"""
-
-            old_close = """        (_e = this.driveWindow) === null || _e === void 0 ? void 0 : _e.on(\"close\", e => {\n            var _a, _b, _c;\n            if ((process.platform === \"darwin\" || this.minimizeToTray) && !((_a = this.driveWindow) === null || _a === void 0 ? void 0 : _a.isMinimized()) && !this.shouldExitOnQuit) {\n                e.preventDefault();\n                (_b = this.driveWindow) === null || _b === void 0 ? void 0 : _b.minimize();\n                if (process.platform === \"darwin\" && this.minimizeToTray) {\n                    (_c = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _c === void 0 ? void 0 : _c.hide();\n                }\n            }\n        });"""
-            new_close = """        (_e = this.driveWindow) === null || _e === void 0 ? void 0 : _e.on(\"close\", e => {\n            var _a, _b, _c;\n            if ((process.platform === \"darwin\" || this.minimizeToTray) && !((_a = this.driveWindow) === null || _a === void 0 ? void 0 : _a.isMinimized()) && !this.shouldExitOnQuit) {\n                e.preventDefault();\n                if (process.platform === \"darwin\") {\n                    (_b = this.driveWindow) === null || _b === void 0 ? void 0 : _b.minimize();\n                    if (this.minimizeToTray) {\n                        (_c = electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.dock) === null || _c === void 0 ? void 0 : _c.hide();\n                    }\n                }\n                else {\n                    this.driveWindow.hide();\n                }\n            }\n        });"""
-            old_init = """            const options = await this.options.get();\n            await electron_1.app.whenReady();"""
-            new_init = """            const options = await this.options.get();\n            this.minimizeToTray = options.minimizeToTray ?? false;\n            await electron_1.app.whenReady();"""
-
-            if old_crash_reporter not in text or old_minimize not in text or old_close not in text or old_init not in text:
-                raise SystemExit("filen-desktop patch anchors not found")
-
-            text = text.replace(old_crash_reporter, new_crash_reporter)
-            text = text.replace(old_init, new_init)
-            text = text.replace(old_minimize, new_minimize)
-            text = text.replace(old_close, new_close)
-            index_path.write_text(text)
-
-            ipc_path = Path("${placeholder "out"}/lib/node_modules/@filen/desktop/dist/ipc/index.js")
-            ipc_text = ipc_path.read_text()
-
-            old_ipc_minimize = """        electron_1.ipcMain.handle(\"minimizeWindow\", async () => {\n            var _a;\n            (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.minimize();\n        });"""
-            new_ipc_minimize = """        electron_1.ipcMain.handle(\"minimizeWindow\", async () => {\n            var _a, _b;\n            if (this.desktop.minimizeToTray) {\n                (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.hide();\n                return;\n            }\n            (_b = this.desktop.driveWindow) === null || _b === void 0 ? void 0 : _b.minimize();\n        });"""
-
-            old_ipc_close = """        electron_1.ipcMain.handle(\"closeWindow\", async () => {\n            var _a;\n            (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.close();\n        });"""
-            new_ipc_close = """        electron_1.ipcMain.handle(\"closeWindow\", async () => {\n            var _a, _b;\n            if (this.desktop.minimizeToTray) {\n                (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.hide();\n                return;\n            }\n            (_b = this.desktop.driveWindow) === null || _b === void 0 ? void 0 : _b.close();\n        });"""
-
-            if old_ipc_minimize not in ipc_text or old_ipc_close not in ipc_text:
-                raise SystemExit("filen-desktop ipc patch anchors not found")
-
-            ipc_text = ipc_text.replace(old_ipc_minimize, new_ipc_minimize)
-            ipc_text = ipc_text.replace(old_ipc_close, new_ipc_close)
-            ipc_path.write_text(ipc_text)
-
-            status_path = Path("${placeholder "out"}/lib/node_modules/@filen/desktop/dist/lib/status.js")
-            status_text = status_path.read_text()
-
-            old_open = """                {\n                    label: \"Open\",\n                    type: \"normal\",\n                    click: () => {\n                        this.desktop.showOrOpenDriveWindow();\n                    }\n                },\n                {\n                    label: \"Separator\",\n                    type: \"separator\"\n                },"""
-            new_open = """                {\n                    label: \"Open\",\n                    type: \"normal\",\n                    click: () => {\n                        this.desktop.showOrOpenDriveWindow();\n                    }\n                },\n                {\n                    label: \"Hide\",\n                    type: \"normal\",\n                    click: () => {\n                        var _a;\n                        (_a = this.desktop.driveWindow) === null || _a === void 0 ? void 0 : _a.hide();\n                    }\n                },\n                {\n                    label: \"Separator\",\n                    type: \"separator\"\n                },"""
-
-            old_exit = """                    click: () => {\n                        electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.exit(0);\n                    }"""
-            new_exit = """                    click: () => {\n                        this.desktop.shouldExitOnQuit = true;\n                        electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.exit(0);\n                    }"""
-
-            if old_open not in status_text or old_exit not in status_text:
-                raise SystemExit("filen-desktop status patch anchor not found")
-
-            status_text = status_text.replace(old_open, new_open)
-            status_text = status_text.replace(old_exit, new_exit)
-            status_path.write_text(status_text)
-            PY
+            res=$out/share/filen-desktop/resources
+            ${prev.asar}/bin/asar extract "$res/app.asar" "$res/app"
+            rm -rf "$res/app.asar" "$res/app.asar.unpacked"
+            substituteInPlace "$out/bin/filen-desktop" --replace-fail "$res/app.asar" "$res/app"
+            ${prev.python3}/bin/python ${./patches/filen-desktop-edit.py} "$res/app"
           '';
         });
 
@@ -611,11 +562,6 @@
         # 2025-11-26, and FUSE 2 (`fuse` is FUSE 3 now).
         inherit (legacyPatched) ags astal;
         fuse2-legacy = legacyPatched.fuse;
-        # Our patches no longer apply to these in the 2026-11 nixpkgs (freerdp 3.33: one
-        # hunk of freerdp-cliprdr-png-target; sioyek: seven hunks of
-        # sioyek-reader-enhancements; filen-desktop: dist/index.js moved).  They stay the
-        # previous, patched builds until the patches are redone; remmina goes with freerdp.
-        inherit (legacyPatched) freerdp remmina sioyek filen-desktop;
       };
 
       mkSystem = hostModule: nixpkgs.lib.nixosSystem {

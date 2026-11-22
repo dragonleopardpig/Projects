@@ -1,6 +1,8 @@
+diff --git a/client/X11/xf_cliprdr.c b/client/X11/xf_cliprdr.c
+index 245d84a..5871eb9 100644
 --- a/client/X11/xf_cliprdr.c
 +++ b/client/X11/xf_cliprdr.c
-@@ -105,6 +105,9 @@
+@@ -112,6 +112,9 @@ struct xf_clipboard
  	size_t numTargets;
  	Atom targets[20];
  
@@ -10,7 +12,7 @@
  	UINT32 requestedFormatId;
  
  	wHashTable* cachedData;
-@@ -371,6 +374,33 @@
+@@ -416,6 +419,33 @@ static const xfCliprdrFormat* xf_cliprdr_get_client_available_format_by_id(xfCli
  
  	const BOOL formatIsHtml = formatId == ClipboardGetFormatId(clipboard->system, type_HtmlFormat);
  	const BOOL fetchImage = clipboard->isImageContent && formatIsHtml;
@@ -44,15 +46,15 @@
  	for (size_t index = 0; index < clipboard->numClientFormats; index++)
  	{
  		const xfCliprdrFormat* format = &(clipboard->clientFormats[index]);
-@@ -692,6 +722,7 @@
- 	WINPR_ASSERT(xfc);
+@@ -752,6 +782,7 @@ static CLIPRDR_FORMAT* xf_cliprdr_get_formats_from_targets(xfClipboard* clipboar
  
  	*numFormats = 0;
+ 	*atomsCount = 0;
 +	clipboard->numOwnerTargets = 0;
- 	LogDynAndXGetWindowProperty(xfc->log, xfc->display, xfc->drawable, clipboard->property_atom, 0,
- 	                            200, 0, XA_ATOM, &atom, &format_property, &proplength, &bytes_left,
- 	                            &data);
-@@ -705,6 +736,13 @@
+ 	{
+ 		XFree(*atoms);
+ 		*atoms = nullptr;
+@@ -771,6 +802,13 @@ static CLIPRDR_FORMAT* xf_cliprdr_get_formats_from_targets(xfClipboard* clipboar
  			goto out;
  		}
  
@@ -65,8 +67,8 @@
 +
  		if (!(formats = (CLIPRDR_FORMAT*)calloc(length, sizeof(CLIPRDR_FORMAT))))
  		{
- 			WLog_ERR(TAG, "failed to allocate %lu CLIPRDR_FORMAT structs", length);
-@@ -1352,6 +1390,7 @@
+ 			WLog_Print(clipboard->log, WLOG_ERROR, "failed to allocate %lu CLIPRDR_FORMAT structs",
+@@ -1411,6 +1449,7 @@ void xf_cliprdr_clear_cached_data(xfClipboard* clipboard)
  
  	cliprdr_file_context_clear(clipboard->file);
  
@@ -74,7 +76,7 @@
  	xf_cliprdr_stop_incr(clipboard);
  	ClipboardUnlock(clipboard->system);
  }
-@@ -1752,6 +1791,7 @@
+@@ -1895,6 +1934,7 @@ void xf_cliprdr_handle_xevent(xfContext* xfc, const XEvent* event)
  				return;
  
  			clipboard->owner = None;
@@ -82,23 +84,3 @@
  			xf_cliprdr_check_owner(clipboard);
  		}
  
---- a/winpr/libwinpr/clipboard/synthetic.c
-+++ b/winpr/libwinpr/clipboard/synthetic.c
-@@ -561,14 +561,16 @@
- 		dst = nullptr;
- 		goto fail;
- 	}
--	*pSize = (UINT32)size;
- 
- fail:
- 	winpr_image_free(image, TRUE);
- 
- 	if (dst)
-+	{
- 		memmove(dst, &dst[sizeof(WINPR_BITMAP_FILE_HEADER)],
- 		        size - sizeof(WINPR_BITMAP_FILE_HEADER));
-+		*pSize = (UINT32)(size - sizeof(WINPR_BITMAP_FILE_HEADER));
-+	}
- 	return dst;
- }
- #endif

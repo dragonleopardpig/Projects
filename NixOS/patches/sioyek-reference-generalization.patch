@@ -1,8 +1,8 @@
 diff --git a/pdf_viewer/book.h b/pdf_viewer/book.h
-index b191c33..3766dac 100644
+index 32f821e9..c13eaab8 100644
 --- a/pdf_viewer/book.h
 +++ b/pdf_viewer/book.h
-@@ -396,6 +396,11 @@ struct IndexedData {
+@@ -397,6 +397,11 @@ struct IndexedData {
      std::wstring text;
  };
  
@@ -15,7 +15,7 @@ index b191c33..3766dac 100644
  bool operator==(const BookMark& lhs, const BookMark& rhs);
  bool operator==(const Highlight& lhs, const Highlight& rhs);
 diff --git a/pdf_viewer/document.cpp b/pdf_viewer/document.cpp
-index 115c608..d1d3bd3 100644
+index ca5314da..15f4bca8 100644
 --- a/pdf_viewer/document.cpp
 +++ b/pdf_viewer/document.cpp
 @@ -1,6 +1,8 @@
@@ -35,7 +35,7 @@ index 115c608..d1d3bd3 100644
  #include "utf8/checked.h"
  #include "utils.h"
  
-@@ -1401,6 +1404,37 @@ int Document::get_offset_page_number(float y_offset) {
+@@ -1410,6 +1413,37 @@ int Document::get_offset_page_number(float y_offset) {
      return (it - accum_page_heights.begin());
  }
  
@@ -73,7 +73,7 @@ index 115c608..d1d3bd3 100644
  void Document::index_document(bool* invalid_flag) {
      int n = num_pages();
  
-@@ -1414,8 +1448,10 @@ void Document::index_document(bool* invalid_flag) {
+@@ -1423,8 +1457,10 @@ void Document::index_document(bool* invalid_flag) {
  
      this->document_indexing_thread = std::thread([this, n, invalid_flag]() {
          std::vector<IndexedData> local_generic_data;
@@ -85,7 +85,7 @@ index 115c608..d1d3bd3 100644
  
          std::wstring local_super_fast_search_index;
          std::vector<int> local_page_begin_indices;
-@@ -1452,6 +1488,7 @@ void Document::index_document(bool* invalid_flag) {
+@@ -1461,6 +1497,7 @@ void Document::index_document(bool* invalid_flag) {
                  index_references(stext_page, i, local_reference_data);
                  index_equations(flat_chars, i, local_equation_data);
                  index_generic(flat_chars, i, local_generic_data);
@@ -93,7 +93,7 @@ index 115c608..d1d3bd3 100644
  
                  // if the document doesn't have table of contents, try to create one
                  if (CREATE_TABLE_OF_CONTENTS_IF_NOT_EXISTS && (top_level_toc_nodes.size() == 0)) {
-@@ -1477,6 +1514,7 @@ void Document::index_document(bool* invalid_flag) {
+@@ -1486,6 +1523,7 @@ void Document::index_document(bool* invalid_flag) {
          reference_indices = std::move(local_reference_data);
          equation_indices = std::move(local_equation_data);
          generic_indices = std::move(local_generic_data);
@@ -101,7 +101,7 @@ index 115c608..d1d3bd3 100644
  
          super_fast_search_index = std::move(local_super_fast_search_index);
          super_fast_page_begin_indices = std::move(local_page_begin_indices);
-@@ -1514,20 +1552,24 @@ std::vector<IndexedData> Document::find_reference_with_string(std::wstring refer
+@@ -1523,20 +1561,24 @@ std::vector<IndexedData> Document::find_reference_with_string(std::wstring refer
  }
  
  std::vector<IndexedData> Document::find_equation_with_string(std::wstring equation_name, int page_number) {
@@ -136,7 +136,7 @@ index 115c608..d1d3bd3 100644
              }
          }
  
-@@ -1540,23 +1582,35 @@ std::vector<IndexedData> Document::find_equation_with_string(std::wstring equati
+@@ -1549,23 +1591,35 @@ std::vector<IndexedData> Document::find_equation_with_string(std::wstring equati
  }
  
  std::vector<IndexedData> Document::find_generic_with_string(std::wstring equation_name, int page_number) {
@@ -187,7 +187,7 @@ index 115c608..d1d3bd3 100644
      }
      return res;
  }
-@@ -1570,10 +1624,10 @@ std::optional<std::wstring> Document::get_equation_text_at_position(
+@@ -1579,10 +1633,10 @@ std::optional<std::wstring> Document::get_equation_text_at_position(
  
  
      std::optional<std::wstring> match = get_regex_match_at_position(
@@ -200,7 +200,7 @@ index 115c608..d1d3bd3 100644
      }
      else {
          return {};
-@@ -1603,75 +1657,106 @@ std::optional<std::wstring> Document::get_regex_match_at_position(const std::wre
+@@ -1612,75 +1666,106 @@ std::optional<std::wstring> Document::get_regex_match_at_position(const std::wre
  
  std::vector<DocumentPos> Document::find_generic_locations(const std::wstring& type, const std::wstring& name) {
      const std::wstring lower_type = to_lower(type);
@@ -367,7 +367,7 @@ index 115c608..d1d3bd3 100644
      }
  
      std::vector<std::pair<int, DocumentPos>> pos_scores;
-@@ -1733,6 +1818,23 @@ std::optional<std::pair<std::wstring, std::wstring>> Document::get_generic_link_
+@@ -1742,6 +1827,23 @@ std::optional<std::pair<std::wstring, std::wstring>> Document::get_generic_link_
      std::pair<int,
      int>* out_range) {
  
@@ -392,7 +392,7 @@ index 115c608..d1d3bd3 100644
      std::optional<std::wstring> match_string = get_regex_match_at_position(regex, flat_chars, position, out_range);
      if (match_string) {
 diff --git a/pdf_viewer/document.h b/pdf_viewer/document.h
-index aa0a99d..49e2e57 100644
+index 3779fb5f..2cb61112 100644
 --- a/pdf_viewer/document.h
 +++ b/pdf_viewer/document.h
 @@ -60,6 +60,12 @@ struct CachedPageIndex {
@@ -420,7 +420,7 @@ index aa0a99d..49e2e57 100644
      std::mutex document_indexing_mutex;
      std::optional<std::thread> document_indexing_thread = {};
 diff --git a/pdf_viewer/document_view.cpp b/pdf_viewer/document_view.cpp
-index 7987bf4..40a93d8 100644
+index b1e0d636..1800a1b9 100644
 --- a/pdf_viewer/document_view.cpp
 +++ b/pdf_viewer/document_view.cpp
 @@ -4,6 +4,7 @@
@@ -431,7 +431,7 @@ index 7987bf4..40a93d8 100644
  #include "qlogging.h"
  #include "utils.h"
  #include "config.h"
-@@ -1407,15 +1408,18 @@ std::vector<SmartViewCandidate> DocumentView::find_line_definitions() {
+@@ -1420,15 +1421,18 @@ std::vector<SmartViewCandidate> DocumentView::find_line_definitions() {
                  return result;
              }
  
@@ -455,7 +455,7 @@ index 7987bf4..40a93d8 100644
  
 diff --git a/pdf_viewer/reference_numbers.h b/pdf_viewer/reference_numbers.h
 new file mode 100644
-index 0000000..8d876c3
+index 00000000..8d876c3a
 --- /dev/null
 +++ b/pdf_viewer/reference_numbers.h
 @@ -0,0 +1,222 @@
@@ -682,7 +682,7 @@ index 0000000..8d876c3
 +
 +} // namespace section_references
 diff --git a/pdf_viewer/utils.cpp b/pdf_viewer/utils.cpp
-index 66aa143..5e126d2 100644
+index dd3d943a..ec046c19 100644
 --- a/pdf_viewer/utils.cpp
 +++ b/pdf_viewer/utils.cpp
 @@ -38,6 +38,7 @@
@@ -693,7 +693,7 @@ index 66aa143..5e126d2 100644
  
  #ifdef SIOYEK_ANDROID
  #include <QtCore/private/qandroidextras_p.h>
-@@ -1405,23 +1406,20 @@ std::wstring find_first_regex_match(const std::wstring& haystack, const std::wst
+@@ -1421,23 +1422,20 @@ std::wstring find_first_regex_match(const std::wstring& haystack, const std::wst
  
  std::vector<std::wstring> find_all_regex_matches(std::wstring haystack,
      const std::wstring& regex_string,
@@ -725,7 +725,7 @@ index 66aa143..5e126d2 100644
          }
          skipped_length += match.prefix().length() + match.length();
          haystack = match.suffix();
-@@ -1467,24 +1465,12 @@ bool are_stext_chars_far_enough_for_equation(fz_stext_char* first, fz_stext_char
+@@ -1483,24 +1481,12 @@ bool are_stext_chars_far_enough_for_equation(fz_stext_char* first, fz_stext_char
  }
  
  const std::wregex& get_equation_identifier_regex() {
@@ -753,7 +753,7 @@ index 66aa143..5e126d2 100644
  }
  
  bool is_whitespace(int chr) {
-@@ -1562,11 +1548,12 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
+@@ -1578,11 +1564,12 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
      }
  }
  
@@ -768,7 +768,7 @@ index 66aa143..5e126d2 100644
  
      for (size_t i = 0; i < match_ranges.size(); i++) {
          auto [start_index, end_index] = match_ranges[i];
-@@ -1578,18 +1565,17 @@ void index_equations(const std::vector<fz_stext_char*>& flat_chars, int page_num
+@@ -1594,18 +1581,17 @@ void index_equations(const std::vector<fz_stext_char*>& flat_chars, int page_num
          // we expect the equation reference to be sufficiently separated from the rest of the text
          if (((start_index > 0) && are_stext_chars_far_enough_for_equation(flat_chars[start_index - 1], flat_chars[start_index]))) {
  
@@ -796,7 +796,7 @@ index 66aa143..5e126d2 100644
      }
  
 diff --git a/pdf_viewer/utils.h b/pdf_viewer/utils.h
-index 32d9517..10d836d 100644
+index 40ef42fb..4d1828aa 100644
 --- a/pdf_viewer/utils.h
 +++ b/pdf_viewer/utils.h
 @@ -104,7 +104,8 @@ void get_flat_chars_from_stext_page(fz_stext_page* stext_page, std::vector<fz_st
@@ -820,10 +820,10 @@ index 32d9517..10d836d 100644
  bool command_requires_text(const std::wstring& command);
  bool command_requires_rect(const std::wstring& command);
  void hexademical_to_normalized_color(std::wstring color_string, float* color, int n_components);
-@@ -535,4 +538,4 @@ QString translate_key_mapping_to_macos(QString mapping);
- bool is_platform_meta_pressed(QKeyEvent* kevent);
- bool is_platform_control_pressed(QKeyEvent* kevent);
- std::vector<std::wstring> get_last_opened_file_name();
+@@ -540,4 +543,4 @@ struct WindowState {
+     std::vector<std::wstring> tabs;
+ };
+ std::vector<WindowState> get_last_saved_windows_states();
 -bool stext_page_has_lines(fz_stext_page* page);
 \ No newline at end of file
 +bool stext_page_has_lines(fz_stext_page* page);

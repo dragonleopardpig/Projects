@@ -1,7 +1,22 @@
 # Local package patches
 
-This directory contains source patches applied via the `localOverlay` in
-`../flake.nix`.
+This directory contains source patches applied via the `patchOverlay` (part of
+`localOverlay`) in `../flake.nix`.
+
+## After a nixpkgs update
+
+A patch that no longer fits stops the build before anything is installed
+(`Hunk #n FAILED`). Until it is redone, `localOverlay` can take that package
+from `legacyPatched`: the previous nixpkgs (`nixpkgs-legacy`) with these same
+patches, i.e. exactly the build the system ran before. To redo a stack of
+patches (as for sioyek in 2026-11):
+
+1. Check out nixpkgs' *old* source revision in a git worktree, apply the
+   patches in order with `patch -p1`, and commit each one.
+2. `git rebase --onto <new rev> <old rev>`: git merges what it can; only the
+   real conflicts are left to resolve.
+3. Regenerate each patch from its rebased commit (`git diff <c>^ <c>`) and check
+   that the whole set applies to the new source with `patch -p1 -F0`.
 
 ## Active patches
 
@@ -30,9 +45,19 @@ Fixes two FreeRDP clipboard redirection bugs:
 1. Matches `format->atom` against the X11 clipboard owner's advertised `TARGETS`
    so FreeRDP selects `image/png` instead of hardcoding `image/bmp` when Windows
    requests `CF_DIB`.
-2. Updates `*pSize` to reflect the 14-byte `BITMAPFILEHEADER` stripping when
-   synthesizing `CF_DIB` from PNG/image formats in `winpr/libwinpr/clipboard/synthetic.c`,
-   eliminating the size mismatch corruption in Windows Paint.
+2. (Dropped in 2026-11: FreeRDP 3.33 synthesizes `CF_DIB` through
+   `clipboard_synthesize_cf_dib()`, which reports the size without the 14-byte
+   `BITMAPFILEHEADER` itself, so Windows Paint no longer sees a mismatch.)
+
+### `filen-desktop-edit.py`
+
+Not a diff: Filen ships compiled JavaScript, edited in `postFixup`. It turns off
+Filen's local crash reporter (a crash once made systemd-coredump stream tens of
+GB to disk) and makes tray mode hide the window on Linux: on close, on minimize,
+from the window buttons, and from a new "Hide" tray entry. Since 3.0.53 the app
+is packed in `resources/app.asar`; the override unpacks it once into
+`resources/app` (Electron runs a folder the same way) and edits it there. Each
+anchor must match exactly once, or the build stops.
 
 ### `nwg-drawer-click-outside-to-close.patch`
 

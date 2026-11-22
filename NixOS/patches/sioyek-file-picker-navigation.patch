@@ -1,5 +1,5 @@
 diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
-index e0f4800a..1fc204e7 100644
+index 64cc9ac2..7f5f033a 100644
 --- a/pdf_viewer/input.cpp
 +++ b/pdf_viewer/input.cpp
 @@ -4251,7 +4251,7 @@ public:
@@ -12,7 +12,7 @@ index e0f4800a..1fc204e7 100644
          widget->set_current_widget(new FileSelector(
              FUZZY_SEARCHING,
 diff --git a/pdf_viewer/ui.h b/pdf_viewer/ui.h
-index 2ab1f08b..01866603 100644
+index 2ab1f08b..2158ae5f 100644
 --- a/pdf_viewer/ui.h
 +++ b/pdf_viewer/ui.h
 @@ -635,7 +635,15 @@ public:

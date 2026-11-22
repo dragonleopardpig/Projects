@@ -25,10 +25,10 @@ index 98c211b5..74da6702 100644
      - name: Install Qt
        uses: jurplel/install-qt-action@v4
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 259de223..91b44b0d 100644
+index 21f21ced..58e6d61f 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -78,6 +78,25 @@ qt_add_executable(sioyek WIN32 MACOSX_BUNDLE
+@@ -80,6 +80,25 @@ qt_add_executable(sioyek WIN32 MACOSX_BUNDLE
      pdf_viewer/utils.cpp pdf_viewer/utils.h
  )
  
@@ -89,10 +89,10 @@ index 45ba5b41..facf276f 100644
  ```
 diff --git a/pdf_viewer/djvu_document.cpp b/pdf_viewer/djvu_document.cpp
 new file mode 100644
-index 00000000..c050da45
+index 00000000..c69cc236
 --- /dev/null
 +++ b/pdf_viewer/djvu_document.cpp
-@@ -0,0 +1,1164 @@
+@@ -0,0 +1,1181 @@
 +#include "djvu_document.h"
 +
 +#include <libdjvu/ddjvuapi.h>
@@ -659,13 +659,30 @@ index 00000000..c050da45
 +    fz_drop_page(context, image->page);
 +}
 +
++#if FZ_VERSION_MAJOR > 1 || (FZ_VERSION_MAJOR == 1 && FZ_VERSION_MINOR >= 28)
++// MuPDF 1.28 checksums images through a callback (fz_image_digest throws without one).
++// As MuPDF does for its display-list images, the image is identified by what it renders:
++// here, its page.
++void get_djvu_image_digest(fz_context*, fz_image* image_, unsigned char digest[16]) {
++    auto* image = reinterpret_cast<DjvuImage*>(image_);
++    fz_md5 state;
++    fz_md5_init(&state);
++    fz_md5_update(&state, reinterpret_cast<unsigned char*>(&image->page), sizeof(image->page));
++    fz_md5_final(&state, digest);
++}
++#endif
++
 +fz_image* new_djvu_image(fz_context* context, fz_page* page_) {
 +    auto* page = reinterpret_cast<DjvuPage*>(page_);
 +    auto* image = fz_new_derived_image(context,
 +        page->pixel_width, page->pixel_height, 8,
 +        fz_device_rgb(context), page->dpi, page->dpi, 1, 0,
 +        nullptr, nullptr, nullptr, DjvuImage,
-+        get_djvu_pixmap, get_djvu_image_size, drop_djvu_image);
++        get_djvu_pixmap, get_djvu_image_size,
++#if FZ_VERSION_MAJOR > 1 || (FZ_VERSION_MAJOR == 1 && FZ_VERSION_MINOR >= 28)
++        get_djvu_image_digest,
++#endif
++        drop_djvu_image);
 +    image->page = fz_keep_page(context, page_);
 +    return reinterpret_cast<fz_image*>(image);
 +}
@@ -1272,7 +1289,7 @@ index 00000000..b7667246
 +// be called for Sioyek's root context before renderer threads are started.
 +void register_djvu_document_handler(fz_context* context);
 diff --git a/pdf_viewer/document.cpp b/pdf_viewer/document.cpp
-index 847949f7..31731b25 100644
+index 847949f7..3a703601 100644
 --- a/pdf_viewer/document.cpp
 +++ b/pdf_viewer/document.cpp
 @@ -1545,11 +1545,11 @@ std::optional<std::wstring> Document::get_equation_text_at_position(
@@ -1311,7 +1328,7 @@ index 847949f7..31731b25 100644
  
      std::vector<int> found_indices;
 diff --git a/pdf_viewer/main.cpp b/pdf_viewer/main.cpp
-index 2e98a68d..0e4eff56 100644
+index 307dcd24..8524ba79 100644
 --- a/pdf_viewer/main.cpp
 +++ b/pdf_viewer/main.cpp
 @@ -72,6 +72,10 @@
@@ -1336,10 +1353,10 @@ index 2e98a68d..0e4eff56 100644
      fz_catch(mupdf_context) {
          std::cerr << "could not register document handlers" << std::endl;
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index 29f7d1ed..94454693 100644
+index 1afaa3f5..81321436 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
-@@ -2972,6 +2972,19 @@ ReferenceType MainWidget::find_location_of_selected_text(int* out_page, float* o
+@@ -2976,6 +2976,19 @@ ReferenceType MainWidget::find_location_of_selected_text(int* out_page, float* o
              }
          }
          else{
@@ -1379,10 +1396,10 @@ index 605a98de..908bafba 100644
          if (fd.exec()) {
  
 diff --git a/pdf_viewer/utils.cpp b/pdf_viewer/utils.cpp
-index a2cb50a9..785d5fd3 100644
+index f15bc928..7fb53bc2 100644
 --- a/pdf_viewer/utils.cpp
 +++ b/pdf_viewer/utils.cpp
-@@ -1381,6 +1381,27 @@ bool are_stext_chars_far_enough_for_equation(fz_stext_char* first, fz_stext_char
+@@ -1388,6 +1388,27 @@ bool are_stext_chars_far_enough_for_equation(fz_stext_char* first, fz_stext_char
      return (second->origin.x - first->origin.x) > (5 * second_width);
  }
  
@@ -1410,7 +1427,7 @@ index a2cb50a9..785d5fd3 100644
  bool is_whitespace(int chr) {
      if ((chr == ' ') || (chr == '\n') || (chr == '\t')) {
          return true;
-@@ -1457,11 +1478,10 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
+@@ -1464,11 +1485,10 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
  }
  
  void index_equations(const std::vector<fz_stext_char*>& flat_chars, int page_number, std::map<std::wstring, std::vector<IndexedData>>& indices) {
@@ -1423,7 +1440,7 @@ index a2cb50a9..785d5fd3 100644
  
      for (size_t i = 0; i < match_ranges.size(); i++) {
          auto [start_index, end_index] = match_ranges[i];
-@@ -1473,7 +1493,7 @@ void index_equations(const std::vector<fz_stext_char*>& flat_chars, int page_num
+@@ -1480,7 +1500,7 @@ void index_equations(const std::vector<fz_stext_char*>& flat_chars, int page_num
          // we expect the equation reference to be sufficiently separated from the rest of the text
          if (((start_index > 0) && are_stext_chars_far_enough_for_equation(flat_chars[start_index - 1], flat_chars[start_index]))) {
  
@@ -1433,7 +1450,7 @@ index a2cb50a9..785d5fd3 100644
              indexed_equation.page = page_number;
              indexed_equation.text = match_text;
 diff --git a/pdf_viewer/utils.h b/pdf_viewer/utils.h
-index bf1e7212..0cb30b6c 100644
+index bf1e7212..92045d54 100644
 --- a/pdf_viewer/utils.h
 +++ b/pdf_viewer/utils.h
 @@ -100,6 +100,8 @@ void get_flat_chars_from_stext_page(fz_stext_page* stext_page, std::vector<fz_st

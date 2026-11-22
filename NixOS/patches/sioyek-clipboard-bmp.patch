@@ -1,5 +1,5 @@
 diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
-index 9c92147..f8bfcbb 100644
+index edcd7f0b..279bc940 100644
 --- a/pdf_viewer/input.cpp
 +++ b/pdf_viewer/input.cpp
 @@ -15,6 +15,9 @@
@@ -12,7 +12,7 @@ index 9c92147..f8bfcbb 100644
  
  #include "coordinates.h"
  #include "utils.h"
-@@ -2288,7 +2291,23 @@ public:
+@@ -2318,7 +2321,23 @@ public:
  
          //widget->render(&pixmap, QPoint(), QRegion(widget->rect()));
          widget->render(&pixmap, QPoint(), QRegion(window_qrect));

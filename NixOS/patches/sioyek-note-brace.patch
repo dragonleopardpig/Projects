@@ -1,7 +1,8 @@
-diff -ruN n3/pdf_viewer/book.cpp nwork/pdf_viewer/book.cpp
---- a/pdf_viewer/book.cpp	2026-10-15 10:59:58.237868438 +0800
-+++ b/pdf_viewer/book.cpp	2026-10-15 10:58:59.853743760 +0800
-@@ -220,6 +220,7 @@
+diff --git a/pdf_viewer/book.cpp b/pdf_viewer/book.cpp
+index 5f33ff4e..6bd7aeaf 100644
+--- a/pdf_viewer/book.cpp
++++ b/pdf_viewer/book.cpp
+@@ -220,6 +220,7 @@ QJsonObject BookMark::to_json(std::string doc_checksum) const
          res["border_width"] = border_width;
          res["text_offset_x"] = text_offset_x;
          res["text_offset_y"] = text_offset_y;
@@ -9,7 +10,7 @@ diff -ruN n3/pdf_viewer/book.cpp nwork/pdf_viewer/book.cpp
          res["font_face"] = QString::fromStdWString(font_face);
          if (!arrows.empty()) {
              QJsonArray arrow_array;
-@@ -271,6 +272,7 @@
+@@ -271,6 +272,7 @@ void BookMark::from_json(const QJsonObject& json_object)
          border_width = json_object["border_width"].toDouble(2.0);
          text_offset_x = json_object["text_offset_x"].toDouble(0.0);
          text_offset_y = json_object["text_offset_y"].toDouble(0.0);
@@ -17,7 +18,7 @@ diff -ruN n3/pdf_viewer/book.cpp nwork/pdf_viewer/book.cpp
          font_face = json_object["font_face"].toString().toStdWString();
      }
      arrows.clear();
-@@ -316,6 +318,69 @@
+@@ -316,6 +318,69 @@ bool BookMark::is_free_arrow() const {
          std::abs(end_x - begin_x) < 0.01f && std::abs(end_y - begin_y) < 0.01f;
  }
  
@@ -87,10 +88,11 @@ diff -ruN n3/pdf_viewer/book.cpp nwork/pdf_viewer/book.cpp
  bool BookMark::is_marked() const {
      return (begin_y > -1) && (end_y == -1);
  }
-diff -ruN n3/pdf_viewer/book.h nwork/pdf_viewer/book.h
---- a/pdf_viewer/book.h	2026-10-15 10:59:58.238105749 +0800
-+++ b/pdf_viewer/book.h	2026-10-15 10:58:59.853807724 +0800
-@@ -103,10 +103,24 @@
+diff --git a/pdf_viewer/book.h b/pdf_viewer/book.h
+index 61d87b47..32f821e9 100644
+--- a/pdf_viewer/book.h
++++ b/pdf_viewer/book.h
+@@ -104,10 +104,24 @@ struct NoteArrow {
  // one-element list -- notes made before this keep their arrow.
  QString note_arrows_to_db_string(const std::vector<NoteArrow>& arrows);
  std::vector<NoteArrow> note_arrows_from_db_string(const QString& value);
@@ -115,7 +117,7 @@ diff -ruN n3/pdf_viewer/book.h nwork/pdf_viewer/book.h
  
  /*
      A bookmark is similar to mark but instead of being indexed by a symbol, it has a description.
-@@ -130,6 +144,9 @@
+@@ -131,6 +145,9 @@ struct BookMark : Annotation {
      // its place on the page whichever handle is used.
      float text_offset_x = 0.0f;
      float text_offset_y = 0.0f;
@@ -125,7 +127,7 @@ diff -ruN n3/pdf_viewer/book.h nwork/pdf_viewer/book.h
      std::wstring font_face;
      std::vector<NoteArrow> arrows;
  
-@@ -146,6 +163,9 @@
+@@ -147,6 +164,9 @@ struct BookMark : Annotation {
      // An arrow standing on its own, with no box: the note's rectangle has
      // collapsed onto the point the arrow grows from.
      bool is_free_arrow() const;
@@ -135,10 +137,11 @@ diff -ruN n3/pdf_viewer/book.h nwork/pdf_viewer/book.h
      bool is_marked() const;
      std::optional<char> get_type() const;
  
-diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
---- a/pdf_viewer/database.cpp	2026-10-15 10:59:58.238609095 +0800
-+++ b/pdf_viewer/database.cpp	2026-10-15 11:01:15.999602830 +0800
-@@ -243,7 +243,7 @@
+diff --git a/pdf_viewer/database.cpp b/pdf_viewer/database.cpp
+index 321f13bc..0f0f43cb 100644
+--- a/pdf_viewer/database.cpp
++++ b/pdf_viewer/database.cpp
+@@ -243,7 +243,7 @@ static int global_highlight_select_callback(void* res_vector, int argc, char** a
  // the process on the first document that had a bookmark. Derive the count from
  // the list so they cannot drift again.
  static constexpr const char* BOOKMARK_SELECT_COLUMNS =
@@ -147,7 +150,7 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
  
  static constexpr int count_select_columns(const char* columns) {
      int count = 1;
-@@ -329,6 +329,7 @@
+@@ -329,6 +329,7 @@ static int bookmark_select_callback(void* res_vector, int argc, char** argv, cha
      if (argv[15]) bm.border_width = atof(argv[15]);
      if (argv[16]) bm.text_offset_x = atof(argv[16]);
      if (argv[17]) bm.text_offset_y = atof(argv[17]);
@@ -155,7 +158,7 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
  
      res->push_back(bm);
      return 0;
-@@ -604,6 +605,7 @@
+@@ -608,6 +609,7 @@ bool DatabaseManager::create_bookmarks_table() {
          "border_width REAL DEFAULT 2.0,"\
          "text_offset_x REAL DEFAULT 0,"\
          "text_offset_y REAL DEFAULT 0,"\
@@ -163,8 +166,8 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
          "begin_x real DEFAULT -1,"\
          "begin_y real DEFAULT -1,"\
          "end_x real DEFAULT -1,"\
-@@ -818,7 +820,7 @@
- bool DatabaseManager::insert_bookmark_freetext(const std::string& document_path, const BookMark& bm) {
+@@ -833,7 +835,7 @@ bool DatabaseManager::insert_bookmark_freetext(const std::string& document_path,
+     std::lock_guard<std::recursive_mutex> lock(db_mutex);
  
      std::wstringstream ss;
 -    ss << "INSERT INTO bookmarks (document_path, desc, begin_x, begin_y, end_x, end_y, color_red, color_green, color_blue, font_size, font_face, arrow_json, border_width, text_offset_x, text_offset_y, uuid, creation_time, modification_time) VALUES ('"
@@ -172,7 +175,7 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
          << esc(document_path) << "', '"
          << esc(bm.description) << "', "
          << bm.begin_x << " , "
-@@ -833,7 +835,8 @@
+@@ -848,7 +850,8 @@ bool DatabaseManager::insert_bookmark_freetext(const std::string& document_path,
          << esc(note_arrows_to_db_string(bm.arrows).toStdWString()) << "', "
          << bm.border_width << ", "
          << bm.text_offset_x << ", "
@@ -182,7 +185,7 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
          << esc(bm.uuid) << "', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);";
      char* error_message = nullptr;
  
-@@ -1720,11 +1723,13 @@
+@@ -1769,11 +1772,13 @@ void DatabaseManager::ensure_schema_compatibility() {
          bool has_arrow_column = false;
          bool has_border_width_column = false;
          bool has_text_offset_columns = false;
@@ -196,7 +199,7 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
          }
          sqlite3_finalize(columns);
          if (!has_arrow_column) run_schema_query("ALTER TABLE bookmarks ADD COLUMN arrow_json TEXT;");
-@@ -1733,6 +1738,7 @@
+@@ -1782,6 +1787,7 @@ void DatabaseManager::ensure_schema_compatibility() {
              run_schema_query("ALTER TABLE bookmarks ADD COLUMN text_offset_x REAL DEFAULT 0;");
              run_schema_query("ALTER TABLE bookmarks ADD COLUMN text_offset_y REAL DEFAULT 0;");
          }
@@ -204,7 +207,7 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
      }
  }
  
-@@ -1958,6 +1964,12 @@
+@@ -2018,6 +2024,12 @@ bool DatabaseManager::update_bookmark_change_color(const std::string& uuid, cons
              {"modification_time", "CURRENT_TIMESTAMP"},
          });
  }
@@ -217,10 +220,11 @@ diff -ruN n3/pdf_viewer/database.cpp nwork/pdf_viewer/database.cpp
  bool DatabaseManager::update_bookmark_border_width(const std::string& uuid, float border_width) {
      return generic_update_run_query("bookmarks",
          {{"uuid", QString::fromStdString(uuid)}},
-diff -ruN n3/pdf_viewer/database.h nwork/pdf_viewer/database.h
---- a/pdf_viewer/database.h	2026-10-15 10:59:58.238864170 +0800
-+++ b/pdf_viewer/database.h	2026-10-15 10:58:59.854017753 +0800
-@@ -76,6 +76,7 @@
+diff --git a/pdf_viewer/database.h b/pdf_viewer/database.h
+index 00fa001c..24315c6d 100644
+--- a/pdf_viewer/database.h
++++ b/pdf_viewer/database.h
+@@ -79,6 +79,7 @@ public:
      bool update_bookmark_change_color(const std::string& uuid, const float color[3]);
      bool update_bookmark_border_width(const std::string& uuid, float border_width);
      bool update_bookmark_arrow(const std::string& uuid, const std::vector<NoteArrow>& arrows);
@@ -228,10 +232,11 @@ diff -ruN n3/pdf_viewer/database.h nwork/pdf_viewer/database.h
      bool update_bookmark_change_position(const std::string& uuid, AbsoluteDocumentPos new_begin, AbsoluteDocumentPos new_end);
      bool update_portal_change_src_position(const std::string& uuid, AbsoluteDocumentPos new_pos);
      bool select_opened_books_path_values(std::vector<std::wstring>& out_result);
-diff -ruN n3/pdf_viewer/document.cpp nwork/pdf_viewer/document.cpp
---- a/pdf_viewer/document.cpp	2026-10-15 10:59:58.239203067 +0800
-+++ b/pdf_viewer/document.cpp	2026-10-15 10:58:59.854175373 +0800
-@@ -2423,6 +2423,10 @@
+diff --git a/pdf_viewer/document.cpp b/pdf_viewer/document.cpp
+index ee808fb7..270bc3e1 100644
+--- a/pdf_viewer/document.cpp
++++ b/pdf_viewer/document.cpp
+@@ -2606,6 +2606,10 @@ void Document::embed_annotations(std::wstring new_file_path) {
              // Nothing to export for a box that has collapsed to a point; only
              // the ink arrow below carries any of this note's geometry.
          }
@@ -242,7 +247,7 @@ diff -ruN n3/pdf_viewer/document.cpp nwork/pdf_viewer/document.cpp
          else if (bookmark.is_freetext() && (!bookmark.is_box())) {
              if (bookmark.description.empty()) {
                  // An empty note is drawn as a rectangle, and a FreeText annotation
-@@ -2488,6 +2492,30 @@
+@@ -2671,6 +2675,30 @@ void Document::embed_annotations(std::wstring new_file_path) {
              created_annotations.push_back(std::make_pair(pdf_page, bookmark_annot));
          }
  
@@ -273,12 +278,10 @@ diff -ruN n3/pdf_viewer/document.cpp nwork/pdf_viewer/document.cpp
          // PDF has no curved-arrow annotation, so the cubic is flattened into an
          // ink annotation. Without this the arrow is simply lost on export.
          for (const NoteArrow& arrow : bookmark.arrows) {
-@@ -4007,6 +4035,15 @@
-         bookmarks[index].update_modification_time();
-         is_annotations_dirty = true;
+@@ -4192,6 +4220,15 @@ void Document::update_bookmark_color(int index, const float color[3]) {
      }
-+}
-+
+ }
+ 
 +void Document::update_bookmark_shape(int index, int shape) {
 +    if (index >= 0 && index < bookmarks.size() &&
 +        db_manager->update_bookmark_shape(bookmarks[index].uuid, shape)) {
@@ -286,13 +289,16 @@ diff -ruN n3/pdf_viewer/document.cpp nwork/pdf_viewer/document.cpp
 +        bookmarks[index].update_modification_time();
 +        is_annotations_dirty = true;
 +    }
- }
- 
++}
++
  void Document::update_bookmark_border_width(int index, float border_width) {
-diff -ruN n3/pdf_viewer/document.h nwork/pdf_viewer/document.h
---- a/pdf_viewer/document.h	2026-10-15 10:59:58.239670840 +0800
-+++ b/pdf_viewer/document.h	2026-10-15 10:58:59.854332220 +0800
-@@ -365,6 +365,7 @@
+     if (index >= 0 && index < bookmarks.size() &&
+         db_manager->update_bookmark_border_width(bookmarks[index].uuid, border_width)) {
+diff --git a/pdf_viewer/document.h b/pdf_viewer/document.h
+index 9c1692e8..3779fb5f 100644
+--- a/pdf_viewer/document.h
++++ b/pdf_viewer/document.h
+@@ -367,6 +367,7 @@ public:
      void update_bookmark_color(int index, const float color[3]);
      void update_bookmark_border_width(int index, float border_width);
      void update_bookmark_arrow(int index, const std::vector<NoteArrow>& arrows);
@@ -300,10 +306,11 @@ diff -ruN n3/pdf_viewer/document.h nwork/pdf_viewer/document.h
      void update_bookmark_position(int index, AbsoluteDocumentPos new_begin_position, AbsoluteDocumentPos new_end_position);
      void update_portal_src_position(int index, AbsoluteDocumentPos new_position);
  
-diff -ruN n3/pdf_viewer/input.cpp nwork/pdf_viewer/input.cpp
---- a/pdf_viewer/input.cpp	2026-10-15 10:59:58.250541040 +0800
-+++ b/pdf_viewer/input.cpp	2026-10-15 10:58:59.854592065 +0800
-@@ -3671,6 +3671,37 @@
+diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
+index 7f5f033a..edcd7f0b 100644
+--- a/pdf_viewer/input.cpp
++++ b/pdf_viewer/input.cpp
+@@ -3716,6 +3716,37 @@ public:
      void perform() override { widget->begin_note_arrow(); }
  };
  
@@ -341,7 +348,7 @@ diff -ruN n3/pdf_viewer/input.cpp nwork/pdf_viewer/input.cpp
  class AddFreeArrowCommand : public Command {
  public:
      static inline const std::string cname = "add_free_arrow";
-@@ -7260,6 +7291,7 @@
+@@ -7447,6 +7478,7 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
      register_command<ChangeSelectedBookmarkColorCommand>();
      register_command<AddNoteArrowCommand>();
      register_command<AddFreeArrowCommand>();
@@ -349,10 +356,11 @@ diff -ruN n3/pdf_viewer/input.cpp nwork/pdf_viewer/input.cpp
      register_command<UndoDeleteAnnotationCommand>();
      register_command<ToggleNoteArrowStraightCommand>();
      register_command<FitNoteToTextCommand>();
-diff -ruN n3/pdf_viewer/main_widget.cpp nwork/pdf_viewer/main_widget.cpp
---- a/pdf_viewer/main_widget.cpp	2026-10-15 10:59:58.247655935 +0800
-+++ b/pdf_viewer/main_widget.cpp	2026-10-15 10:58:59.855235874 +0800
-@@ -9138,6 +9138,55 @@
+diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
+index d698b4ff..c0f75ef2 100644
+--- a/pdf_viewer/main_widget.cpp
++++ b/pdf_viewer/main_widget.cpp
+@@ -9368,6 +9368,55 @@ void MainWidget::begin_note_arrow() {
      setCursor(Qt::CrossCursor);
  }
  
@@ -408,7 +416,7 @@ diff -ruN n3/pdf_viewer/main_widget.cpp nwork/pdf_viewer/main_widget.cpp
  // An arrow with no box. The press that follows makes the note, so unlike
  // begin_note_arrow() there is no index to remember here.
  void MainWidget::begin_free_note_arrow() {
-@@ -9473,7 +9522,9 @@
+@@ -9703,7 +9752,9 @@ void MainWidget::show_freetext_editor() {
      ui_trace("freetext_editor.show.enter", std::to_wstring(selected_bookmark_index));
      if (TOUCH_MODE || !doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
      const BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
@@ -419,7 +427,7 @@ diff -ruN n3/pdf_viewer/main_widget.cpp nwork/pdf_viewer/main_widget.cpp
      capture_freetext_edit_appearance();
      text_command_line_edit_container->hide();
      freetext_editor->setPlainText(text_command_line_edit->text());
-@@ -9522,7 +9573,7 @@
+@@ -9752,7 +9803,7 @@ void MainWidget::grow_freetext_editor_to_fit() {
  void MainWidget::fit_note_to_text() {
      if (!doc() || selected_bookmark_index < 0 || selected_bookmark_index >= doc()->get_bookmarks().size()) return;
      BookMark& bookmark = doc()->get_bookmarks()[selected_bookmark_index];
@@ -428,10 +436,11 @@ diff -ruN n3/pdf_viewer/main_widget.cpp nwork/pdf_viewer/main_widget.cpp
      if (freetext_editor && freetext_editor->isVisible() && !finish_freetext_edit_keeping_selection()) return;
  
      const QString text = QString::fromStdWString(bookmark.description);
-diff -ruN n3/pdf_viewer/main_widget.h nwork/pdf_viewer/main_widget.h
---- a/pdf_viewer/main_widget.h	2026-10-15 10:59:58.243538635 +0800
-+++ b/pdf_viewer/main_widget.h	2026-10-15 10:58:59.855640756 +0800
-@@ -539,6 +539,9 @@
+diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
+index 0464640c..5ecea162 100644
+--- a/pdf_viewer/main_widget.h
++++ b/pdf_viewer/main_widget.h
+@@ -560,6 +560,9 @@ public:
      void change_selected_bookmark_color(char type);
      void begin_note_arrow();
      void begin_free_note_arrow();
@@ -441,10 +450,11 @@ diff -ruN n3/pdf_viewer/main_widget.h nwork/pdf_viewer/main_widget.h
      void delete_selected_note_arrow();
      int note_arrow_handle_at(WindowPos pos, int* out_arrow_index = nullptr);
      void note_text_ink_inset(const BookMark& bookmark, float* out_top, float* out_left);
-diff -ruN n3/pdf_viewer/pdf_view_opengl_widget.cpp nwork/pdf_viewer/pdf_view_opengl_widget.cpp
---- a/pdf_viewer/pdf_view_opengl_widget.cpp	2026-10-15 10:59:58.248653891 +0800
-+++ b/pdf_viewer/pdf_view_opengl_widget.cpp	2026-10-15 10:58:59.855812438 +0800
-@@ -2331,9 +2331,27 @@
+diff --git a/pdf_viewer/pdf_view_opengl_widget.cpp b/pdf_viewer/pdf_view_opengl_widget.cpp
+index 6abe27d5..819c0127 100644
+--- a/pdf_viewer/pdf_view_opengl_widget.cpp
++++ b/pdf_viewer/pdf_view_opengl_widget.cpp
+@@ -2365,9 +2365,27 @@ void PdfViewOpenGLWidget::my_render(QPainter* painter) {
  
                      std::array<float, 3> bookmark_color = cc3(bookmarks[i].color);
                      painter->setPen(convert_float3_to_qcolor(&bookmark_color[0]));

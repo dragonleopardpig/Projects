@@ -1,8 +1,8 @@
 diff --git a/pdf_viewer/main.cpp b/pdf_viewer/main.cpp
-index bb7943bd..fc7177f9 100644
+index 95ff71e1..fb284c66 100644
 --- a/pdf_viewer/main.cpp
 +++ b/pdf_viewer/main.cpp
-@@ -705,6 +705,7 @@ int main(int argc, char* args[]) {
+@@ -709,6 +709,7 @@ int main(int argc, char* args[]) {
  #ifdef SIOYEK_ANDROID
      format.setVersion(3, 1);
  #else
@@ -11,10 +11,10 @@ index bb7943bd..fc7177f9 100644
  #endif
  
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index 2e5cc6a7..fab30a31 100644
+index 60f0760d..d698b4ff 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
-@@ -966,6 +966,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
+@@ -968,6 +968,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
      // binary now running.
      ui_trace("startup", QCoreApplication::applicationFilePath().toStdWString());
  
@@ -22,7 +22,7 @@ index 2e5cc6a7..fab30a31 100644
      setMouseTracking(true);
      setAcceptDrops(true);
      setAttribute(Qt::WA_DeleteOnClose);
-@@ -973,6 +974,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
+@@ -975,6 +976,7 @@ MainWidget::MainWidget(fz_context* mupdf_context,
  
  
      central_widget = new QWidget(this);
@@ -30,7 +30,7 @@ index 2e5cc6a7..fab30a31 100644
      central_widget->setMouseTracking(true);
  
      inverse_search_command = INVERSE_SEARCH_COMMAND;
-@@ -3365,7 +3367,7 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
+@@ -3382,7 +3384,7 @@ void MainWidget::mouseReleaseEvent(QMouseEvent* mevent) {
  }
  
  int MainWidget::update_recent_clicks(AbsoluteDocumentPos mouse_abspos) {

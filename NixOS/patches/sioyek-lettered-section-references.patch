@@ -1,5 +1,5 @@
 diff --git a/pdf_viewer/document.cpp b/pdf_viewer/document.cpp
-index 6f5f597a..236ab4ec 100644
+index 270bc3e1..ca5314da 100644
 --- a/pdf_viewer/document.cpp
 +++ b/pdf_viewer/document.cpp
 @@ -1,5 +1,6 @@
@@ -110,10 +110,10 @@ index 6f5f597a..236ab4ec 100644
      if (match_string) {
          std::vector<std::wstring> parts = split_whitespace(match_string.value());
 diff --git a/pdf_viewer/document_view.cpp b/pdf_viewer/document_view.cpp
-index 5e555e8c..bd06ccc1 100644
+index 4f35824d..b1e0d636 100644
 --- a/pdf_viewer/document_view.cpp
 +++ b/pdf_viewer/document_view.cpp
-@@ -1418,7 +1418,7 @@ std::vector<SmartViewCandidate> DocumentView::find_line_definitions() {
+@@ -1420,7 +1420,7 @@ std::vector<SmartViewCandidate> DocumentView::find_line_definitions() {
                  return result;
              }
  
@@ -123,10 +123,10 @@ index 5e555e8c..bd06ccc1 100644
              std::wstring equation_regex(L"\\([0-9]+(\\.[0-9]+)*\\)");
  
 diff --git a/pdf_viewer/utils.cpp b/pdf_viewer/utils.cpp
-index 73aca42b..70f07730 100644
+index 40336958..dd3d943a 100644
 --- a/pdf_viewer/utils.cpp
 +++ b/pdf_viewer/utils.cpp
-@@ -1519,7 +1519,7 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
+@@ -1547,7 +1547,7 @@ void index_generic(const std::vector<fz_stext_char*>& flat_chars, int page_numbe
          }
      }
  
