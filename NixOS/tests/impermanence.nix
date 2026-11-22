@@ -2,6 +2,7 @@
 #
 #   nix build .#checks.x86_64-linux.impermanence -L          # PortableSSD
 #   nix build .#checks.x86_64-linux.impermanence-crucial -L  # CRUCIAL-SSD
+#   nix build .#checks.x86_64-linux.impermanence-x299 -L     # X299-SSD
 #
 # Formats a virtual disk with hosts/PortableSSD/disko.nix (partitions shrunk
 # to fit a 4 GiB test disk), installs a minimal system with the impermanence
@@ -14,6 +15,10 @@
 # checks the pre-switch guard refuses a configuration that does not match the
 # running root.
 #
+# variant = "x299" is X299-SSD (hosts/X299-SSD/layouts.nix): CRUCIAL-SSD's
+# subvolumes and swapfile, but dependency environments removed at boot like
+# PortableSSD.
+#
 # variant = "m90" formats with hosts/M90aPro/disko.nix itself (swap partition
 # with a random key, LUKS "cryptpool"), keeps environments like CRUCIAL-SSD,
 # and then runs the pool extension of hosts/M90aPro/MIGRATE.md Part C on a
@@ -24,7 +29,9 @@
 let
   crucial = variant == "crucial";
   m90 = variant == "m90";
+  x299 = variant == "x299";
   keepEnvs = crucial || m90;
+  swapSubvol = crucial || x299;
   mapper = if m90 then "cryptpool" else "cryptroot";
   testHash = "$6$impermtest$xqdvItgMcuG2UFxxfTcc254TWeSnmHuqQo5HrUmw29qdoH5Vc.kFyDQf9XIJJjd.4MSLBXVbyG75R3T1cayyh/"; # "test"
   m90Migrate = pkgs.callPackage ../packages/m90-btrfs-migrate.nix { };
@@ -36,7 +43,7 @@ let
         ESP.size = "300M";
         root.size = "3G";
         root.content.passwordFile = "/tmp/secret.key"; # written by the disko test driver
-        root.content.content.subvolumes = lib.optionalAttrs crucial {
+        root.content.content.subvolumes = lib.optionalAttrs swapSubvol {
           "@swap" = { mountpoint = "/swap"; mountOptions = [ "noatime" ]; };
         };
       };
@@ -103,7 +110,7 @@ inputs.disko.lib.testLib.makeDiskoTest {
           custom.impermanence.enable = lib.mkForce false;
         };
       })
-      (lib.mkIf crucial {
+      (lib.mkIf swapSubvol {
         swapDevices = [ { device = "/swap/swapfile"; size = 64; } ];
       })
       (lib.mkIf m90 {
@@ -126,7 +133,7 @@ inputs.disko.lib.testLib.makeDiskoTest {
   '';
 
   extraTestScript = ''
-    crucial = ${if crucial then "True" else "False"}
+    swap_subvol = ${if swapSubvol then "True" else "False"}
     m90 = ${if m90 then "True" else "False"}
     keep_envs = ${if keepEnvs then "True" else "False"}
     try:
@@ -239,7 +246,7 @@ inputs.disko.lib.testLib.makeDiskoTest {
         machine.succeed(f"test -e {later}/x.pyc")
         assert machine.succeed(runs).strip() == "1", machine.succeed(runs)
 
-        if crucial:
+        if swap_subvol:
             machine.succeed("swapon --show=NAME --noheadings | grep -qx /swap/swapfile")
         if m90:
             # The swap partition, under a fresh random key.

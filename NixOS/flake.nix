@@ -620,8 +620,20 @@
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
         variant = "crucial";
       };
+      checks.x86_64-linux.impermanence-x299 = import ./tests/impermanence.nix {
+        inherit inputs;
+        inherit (nixpkgs) lib;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        variant = "x299";
+      };
       # VM rehearsal of the CRUCIAL-SSD ext4 -> btrfs migration tool.
       checks.x86_64-linux.crucial-migration = import ./tests/crucial-migration.nix {
+        inherit (nixpkgs) lib;
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      };
+      # VM rehearsal of the X299-SSD migration (CRUCIAL-style partitions, staged on
+      # another disk, run from M90aPro).
+      checks.x86_64-linux.x299-migration = import ./tests/x299-migration.nix {
         inherit (nixpkgs) lib;
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
       };
@@ -653,6 +665,12 @@
 
       # X299 Desktop (external SSD clone)
       nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
+      # The same disk after hosts/X299-SSD/MIGRATE.md (btrfs, impermanent): what
+      # `x299-btrfs-migrate prepare` builds.  Dropped once layouts.nix defaults to btrfs.
+      nixosConfigurations.X299-SSD-btrfs = mkSystem {
+        imports = [ ./hosts/X299-SSD ];
+        custom.x299Layout = "btrfs";
+      };
 
       # Crucial 1TB External SSD (identical to X299-SSD)
       nixosConfigurations.CRUCIAL-SSD = mkSystem ./hosts/Crucial-SSD;

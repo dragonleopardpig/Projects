@@ -257,6 +257,23 @@ def _expand_user_path(raw: str, home: Path) -> Path:
     return Path(raw)
 
 
+def _subvolume_fallback(target: Path) -> Path:
+    """The same folder on a disk mounted at its btrfs top level, when only that exists.
+
+    An impermanent disk (X299-SSD, CRUCIAL-SSD) mounted by udisks shows its /home
+    subvolume as @home: /run/media/<u>/nixos/home/<u> is then .../nixos/@home/<u>.
+    """
+    if target.exists():
+        return target
+    parts = target.parts
+    for i in range(len(parts) - 1, 0, -1):
+        base = Path(*parts[:i])
+        if base.is_dir():
+            alt = base.joinpath(f"@{parts[i]}", *parts[i + 1:])
+            return alt if alt.is_dir() else target
+    return target
+
+
 def _is_remote_spec(dest: str) -> bool:
     if dest.startswith(("rsync://", "/")):
         return False
@@ -448,7 +465,8 @@ def _check_mount(home: Path, target_root: Path) -> tuple[bool, bool]:
     """Return (disk_mounted, same_disk) safely."""
     if not target_root.exists():
         return False, False
-    # For the default /run/media/<user>/nixos/home/<user> target, require Projects or a separate mounted volume.
+    # For the default /run/media/<user>/nixos/home/<user> target (or its @home/<user> on a
+    # btrfs disk, see _subvolume_fallback), require Projects or a separate mounted volume.
     if not target_root.is_dir():
         return False, False
     try:
@@ -482,7 +500,7 @@ def build_snapshot(
     )
     home_dir = paths["home"]
     cfg = load_or_seed_config(paths, seed_if_missing=True)
-    resolved_target = target_root or _expand_user_path(cfg["target_root"], home_dir)
+    resolved_target = target_root or _subvolume_fallback(_expand_user_path(cfg["target_root"], home_dir))
 
     log_path = paths["log_file"]
     lock_path = paths["lock_file"]
@@ -777,7 +795,7 @@ def run_sync(
     paths = _resolve_paths(home, config_dir, state_dir, cache_dir, runtime_dir, script_path)
     home_dir = paths["home"]
     cfg = load_or_seed_config(paths, seed_if_missing=True)
-    target_root = _expand_user_path(cfg["target_root"], home_dir)
+    target_root = _subvolume_fallback(_expand_user_path(cfg["target_root"], home_dir))
 
     selected = [t for t in cfg["targets"] if (t["id"] == target_id if target_id else t.get("enabled", True))]
     if target_id and not selected:

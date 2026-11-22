@@ -209,6 +209,36 @@ class RsyncStatusTests(unittest.TestCase):
             self.assertIn("--delete", called_cmd)
             self.assertIn("--exclude=*.bak", called_cmd)
 
+    def test_impermanent_disk_mirror_goes_to_its_home_subvolume(self):
+        # A btrfs disk mounted at its top level: home/thinky is not there, @home/thinky is.
+        subvol = self.target.parent.parent / "@home/thinky"
+        (subvol / "Projects").mkdir(parents=True)
+        self.assertEqual(rsync_status._subvolume_fallback(self.target), subvol)
+        self.assertEqual(rsync_status._subvolume_fallback(subvol), subvol)
+        # Not mounted at all: the configured path stays (and reads as unmounted).
+        gone = Path(self.tmp.name) / "unplugged/nixos/home/thinky"
+        self.assertEqual(rsync_status._subvolume_fallback(gone), gone)
+        rsync_status.save_settings({"target_root": str(self.target), "excludes": []}, paths=self.paths)
+        with patch.object(rsync_status.subprocess, "run") as mock_run:
+            mock_run.return_value.returncode = 0
+            rc = rsync_status.run_sync(
+                target_id="projects",
+                home=self.home,
+                config_dir=self.cfg_dir,
+                state_dir=self.state,
+                cache_dir=self.cache,
+                runtime_dir=self.runtime,
+                script_path=self.script,
+                same_disk_guard=False,
+            )
+            self.assertEqual(rc, 0)
+            self.assertEqual(mock_run.call_args[0][0][-1], str(subvol / "Projects") + "/")
+        snap = rsync_status.build_snapshot(
+            home=self.home, config_dir=self.cfg_dir, state_dir=self.state, cache_dir=self.cache,
+            runtime_dir=self.runtime, script_path=self.script, now_dt=NOW, live_pids=[],
+        )
+        self.assertEqual(snap["target_root"], str(subvol))
+
 
 if __name__ == "__main__":
     unittest.main()

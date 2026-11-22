@@ -13,12 +13,8 @@
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" =
-    { device = "/dev/mapper/luks-d9622547-f79a-4640-8036-b478f59bf3fd";
-      fsType = "ext4";
-    };
-
-  boot.initrd.luks.devices."luks-d9622547-f79a-4640-8036-b478f59bf3fd".device = "/dev/disk/by-uuid/d9622547-f79a-4640-8036-b478f59bf3fd";
+  # The root filesystem itself: layouts.nix (custom.x299Layout).
+  boot.initrd.luks.devices."cryptroot".device = "/dev/disk/by-uuid/d9622547-f79a-4640-8036-b478f59bf3fd";
 
   fileSystems."/boot" =
     { device = "/dev/disk/by-uuid/0C04-2087";

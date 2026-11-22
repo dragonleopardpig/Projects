@@ -1,5 +1,5 @@
 # M90aPro Laptop - Host-specific configuration
-{ lib, ... }:
+{ lib, pkgs, ... }:
 {
   imports = [
     ./hardware-configuration.nix
@@ -18,6 +18,10 @@
   boot.kernelParams = [ "quiet" "splash" "rd.systemd.show_status=auto" ];
 
   # Swap (the /swapfile on ext4, a partition on btrfs) is in layouts.nix.
+
+  # X299-SSD is migrated from here (hosts/X299-SSD/MIGRATE.md); drop this after its
+  # `release-stage`.
+  environment.systemPackages = [ (pkgs.callPackage ../../packages/x299-btrfs-migrate.nix { }) ];
 
   # The pool has no second copy of its data (pool.nix): warn on the desktop as
   # soon as an SSD's SMART health turns bad, while its files can still be read.
