@@ -4119,6 +4119,16 @@ in
       };
     };
   };
+  # udiskie gives up when udisks2 takes over 25 s to start (D-Bus activation timeout),
+  # as on 2026-11-23: a USB SSD's bridge stalled the boot-time SMART probe and udisks2
+  # needed 42 s.  Without a restart no drive was mounted all session.  Retry, but stop
+  # after 5 failures in 5 minutes.
+  systemd.user.services.udiskie = {
+    Unit.StartLimitIntervalSec = 300;
+    Unit.StartLimitBurst = 5;
+    Service.Restart = "on-failure";
+    Service.RestartSec = 5;
+  };
 
   services.hypridle.enable = true;
   services.hypridle.settings = {
