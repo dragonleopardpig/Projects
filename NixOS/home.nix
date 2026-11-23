@@ -1757,14 +1757,29 @@ in
   # its HDMI link after a while, and on 2026-11-02/03 Hyprland fell back to a
   # fake output nine times overnight -- every window moved each time, XWayland
   # stopped mapping windows by morning.  The user: "make sure the monitor looks
-  # like power off".  So: locked on PURE BLACK, no ring until a key is pressed,
-  # and the monitor's brightness and contrast taken to 0 over DDC/CI (ddcutil);
-  # put back as it was on any input, and at every login in case a reboot came
-  # between.  A session that is not locked is never dimmed (an open door that
-  # looks shut); a monitor with no DDC/CI is left black but lit.
-  #   night-look on     lock black (if not locked), then dim
+  # like power off".  So: locked, and the monitor's brightness and contrast
+  # taken to 0 over DDC/CI (ddcutil); put back as it was on any input, and at
+  # every login in case a reboot came between.  A session that is not locked is
+  # never dimmed (an open door that looks shut); a monitor with no DDC/CI is
+  # left lit.  THE LOCK: under umbriel, Noctalia's own lock screen -- the one the
+  # day uses (asked 2026-11-23: "shouldn't we changed to the Umbriel lockscreen
+  # already?"; the black swaylock was left up 2.5 days, its monitor drawing
+  # nothing by the morning); under Hyprland, swaylock on PURE BLACK, no ring
+  # until a key is pressed.  THE BLANK: under umbriel, the compositor's own
+  # screen-off, as the day's lock does -- a key wakes it, the pointer does not
+  # (2026-11-23: "dimmer in 3 stages, not completely blank" at DDC 0/0 over the
+  # lock screen; the monitor's own DDC power-off, VCP D6 05, is a HARD off that
+  # drops its HDMI link and wakes only by its power button -- never use it);
+  # under Hyprland, the DDC dim above.  THE KEYBOARD's lights go dark with the
+  # screens (asked 2026-11-23: "make F1 turn off the keyboard backlight as
+  # well") and come back with them: the Logitech PRO's lights are the Sioyek
+  # palette that udev puts on it at plug-in (packages/sioyek-keyboard-lights.nix),
+  # so `sioyek-keyboard-lights` puts them back as they were.
+  #   night-look on     lock (if not locked), then blank, keyboard dark
+  #   night-look keys-dark / keys-back   the keyboard's lights alone (F1 out of
+  #                     always-on mode: noctalia/suite/default.nix)
   #   night-look leave  `on`, in always-on mode only (idle, past any inhibitor)
-  #   night-look idle   dim again if locked, in always-on mode only
+  #   night-look idle   blank again if locked, in always-on mode only
   #   night-look dim    dim only;  night-look off   put back
   home.file.".local/bin/night-look" = {
     executable = true;
@@ -1782,7 +1797,21 @@ in
       # screen black the moment it was unlocked in the morning, 2026-11-04)
       flock -w 15 9 || exit 0
 
-      locked() { pgrep swaylock >/dev/null 2>&1; }
+      # Umbriel tells of its lock only in its log: the last "session is locked"
+      # or "session unlocked" of the compositor running now.  (Its lines carry
+      # colour codes: no brackets in the pattern.)
+      umbriel_session() { [ "''${XDG_CURRENT_DESKTOP:-}" = umbriel ]; }
+      umbriel_locked() {
+        local run
+        run=$(systemctl --user show -p InvocationID --value umbriel.service 2>/dev/null)
+        [ -n "$run" ] || return 1
+        journalctl --user -u umbriel.service _SYSTEMD_INVOCATION_ID="$run" -n 1 \
+          -o cat --grep 'session (is locked|unlocked)' 2>/dev/null | grep -q 'is locked'
+      }
+      locked() {
+        if umbriel_session; then umbriel_locked; else pgrep swaylock >/dev/null 2>&1; fi
+      }
+      export -f umbriel_session umbriel_locked locked
 
       dim() {
         [ -e "$saved" ] && return 0
@@ -1802,8 +1831,52 @@ in
         rm -f "$saved"
       }
 
-      lock_black() {
+      # The keyboard's lights (a Logitech PRO, g810-led's gpro-led): off, and
+      # the palette udev gives it at plug-in put back -- only if this put them out.
+      keys_dark() {
+        command -v gpro-led >/dev/null 2>&1 || return 0
+        gpro-led -a 000000 >/dev/null 2>&1 9>&- && touch "$state/keys-dark"
+      }
+      keys_back() {
+        [ -e "$state/keys-dark" ] || return 0
+        rm -f "$state/keys-dark"
+        # (the PRO plugged in: its palette at once -- sioyek-keyboard-lights
+        # looks for the PRO X TKL first, some 2.5 s)
+        if grep -qx c339 /sys/bus/usb/devices/*/idProduct 2>/dev/null \
+           && command -v gpro-sioyek >/dev/null 2>&1; then
+          gpro-sioyek >/dev/null 2>&1 9>&- || true
+        else
+          sioyek-keyboard-lights >/dev/null 2>&1 9>&- || true
+        fi
+      }
+
+      # Blank: umbriel's screen-off (the DDC dim if it cannot), or the dim.
+      blank() {
+        if umbriel_session; then
+          noctalia msg dpms-off >/dev/null 2>&1 9>&- || dim
+        else
+          dim
+        fi
+      }
+
+      # Whether an output in use is switched off (blank, a pointer having woken
+      # nothing).  (No jq on the system: umbriel's own listing, Enabled before
+      # Power in each output's block.)
+      screens_dark() {
+        umbriel outputs 2>/dev/null | awk '
+          /^  Enabled:/ { enabled = $2 }
+          /^  Power:/   { if (enabled == "yes" && $2 == "off") dark = 1 }
+          END           { exit !dark }'
+      }
+      export -f screens_dark
+
+      lock_now() {
         locked && return 0
+        if umbriel_session; then
+          noctalia msg session lock >/dev/null 2>&1 9>&- || return 1
+          for _ in $(seq 1 50); do locked && return 0; sleep 0.1; done
+          return 1
+        fi
         # --daemonize: back once the lock is really up.  No idle ring: the
         # screen is black until a key is pressed, and then the ring shows.
         swaylock --daemonize --color 000000 \
@@ -1823,25 +1896,53 @@ in
 
       case "''${1:-}" in
         on)
-          if lock_black; then
-            dim
+          if lock_now; then
+            blank
+            keys_dark
             # UNLOCKED, PUT BACK -- however the lock came (idle, F1, Mod+L). Only
             # swayidle's resume put the monitor back, and a lock from F1 is no
             # idle: unlocked, its contrast stayed at 0 under a "100%" brightness
             # (2026-11-12: "After unlock the screen, the brightness is low even
-            # 100%"). A waiter of its own, the lock (fd 9) not held by it.
-            setsid bash -c 'while pgrep swaylock >/dev/null 2>&1; do sleep 1; done
+            # 100%"). A waiter of its own, the lock (fd 9) not held by it.  It
+            # also puts the keyboard's lights back the moment a key wakes the
+            # screens: a lock from F1 is no idle, so swayidle's resume never
+            # comes (2026-11-23: "the keyboard light come back takes a while" --
+            # it came only after the unlock).
+            setsid bash -c 'while locked; do
+                              umbriel_session && ! screens_dark && "$0" keys-back
+                              sleep 1
+                            done
                             exec "$0" off' "$0" 9>&- >/dev/null 2>&1 < /dev/null &
           else
             notify-send -a Display -i dialog-warning -t 6000 "Lock failed" \
-              "swaylock did not start; the screen was left as it was." >/dev/null 2>&1 || true
+              "The screen did not lock; it was left as it was." >/dev/null 2>&1 || true
           fi
           ;;
         leave) [ -e "$dropin" ] && { flock -u 9; exec "$0" on; } ;;
-        idle)  [ -e "$dropin" ] && locked && dim ;;
+        idle)  [ -e "$dropin" ] && locked && blank ;;
         dim)   dim ;;
-        off)   restore ;;
-        *)     echo "usage: night-look on|leave|idle|dim|off" >&2; exit 2 ;;
+        keys-dark) keys_dark ;;
+        keys-back) keys_back ;;
+        off)
+          restore
+          if umbriel_session; then
+            # Once the screens are on (a key wakes them, the pointer does not;
+            # a second for the wake to land): the keyboard's lights back, and A
+            # MONITOR THAT DRAWS NOTHING put on the record (2026-11-23: after 2.5
+            # days locked the monitor was lit but no frame reached it;
+            # re-plugging its cable set it going again).
+            ( sleep 1
+              if ! screens_dark; then
+                keys_back
+                timeout 8 umbriel settle >/dev/null 2>&1 \
+                  || logger -t night-look "woken, but umbriel drew no frame on every" \
+                       "output within 8 s -- re-plug the monitor's cable to reset it"
+              fi ) 9>&- >/dev/null 2>&1 < /dev/null &
+          else
+            keys_back
+          fi
+          ;;
+        *)     echo "usage: night-look on|leave|idle|dim|off|keys-dark|keys-back" >&2; exit 2 ;;
       esac
       exit 0
     '';

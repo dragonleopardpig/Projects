@@ -6,17 +6,22 @@
 # over the wallpaper. So, in always-on mode only:
 #
 #   * IDLE: swayidle (umbriel speaks ext-idle-notify) brings on the night look after 15 minutes
-#     -- swaylock black (umbriel speaks ext-session-lock) and dimmed -- and puts the monitor back on
-#     any input; Noctalia's own idle lock is switched off for as long as the mode is on, so the two
-#     never race for the lock. Out of always-on mode Noctalia's idle is as configured.
+#     -- Noctalia's own lock screen (`noctalia msg session lock`), then the compositor's
+#     screen-off (`noctalia msg dpms-off`; a key wakes it, the pointer does not); Noctalia's own
+#     idle lock is switched off for as long as the mode is on, so the two never race for the
+#     lock. Out of always-on mode Noctalia's idle is as configured. (Until 2026-11-23 the night
+#     look locked with a black swaylock and dimmed the monitor over DDC/CI, keeping its signal:
+#     the user wanted the Umbriel lock screen, and then "completely blank" -- DDC 0/0 left the
+#     lock screen faintly lit. Whether the monitor keeps its HDMI link through a night without
+#     a signal under umbriel is to be seen; under Hyprland it dropped it, 2026-11-03.)
 #   * THE BAR'S CUP: a local Noctalia plugin (noctalia/suite/plugins/always-on): either click
 #     runs `always-on-toggle`; its glyph a cup when the mode is off, an infinity when on. It
 #     follows `always-on-status-watch` below, so `always-on on` typed in a terminal shows too.
 #     (It was a Custom Button until 2026-11-20, its glyph set by config-set: every change of
 #     that config rebuilt the button, so it vanished and came back on each click.)
 #   * F1 / Mod+L: the suite's lock-and-blank goes to the night look in always-on mode
-#     (noctalia/suite/default.nix) -- a monitor powered off drops its signal, which is what the
-#     night look exists to avoid.
+#     (noctalia/suite/default.nix): no lid inhibitor there -- the mode already has logind
+#     ignore the lid.
 #
 # The watcher and the status stream follow the logind drop-in: woken by inotify the moment it
 # appears or goes; every 5 s anyway, as a fallback.

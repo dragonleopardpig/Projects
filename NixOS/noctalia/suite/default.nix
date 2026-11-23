@@ -10,8 +10,9 @@ let
     name = "noctalia-lock-and-blank";
     runtimeInputs = [ shell umbriel pkgs.systemd pkgs.jq pkgs.coreutils ];
     text = ''
-      # ALWAYS-ON MODE keeps the monitor's signal (modules/always-on-umbriel.nix): locked black
-      # and dimmed -- the night look -- never powered off.
+      # ALWAYS-ON MODE (modules/always-on-umbriel.nix): the night look -- this same lock screen
+      # and screen-off, by ~/.local/bin/night-look, which also puts things back on unlock; the
+      # mode already has logind ignore the lid, so no inhibitor here.
       if [ -e /run/systemd/logind.conf.d/50-always-on.conf ]; then
         exec "$HOME/.local/bin/night-look" on
       fi
@@ -24,6 +25,9 @@ let
       noctalia msg session lock
       # Noctalia waits for an acknowledged safe lock frame before powering off.
       noctalia msg dpms-off
+      # The keyboard's lights out with the screens, back when a key wakes them
+      # (~/.local/bin/night-look keys-dark / keys-back; asked 2026-11-23).
+      "$HOME/.local/bin/night-look" keys-dark || true
       screens_off() {
         umbriel outputs --json | jq -e 'any(.[]; .enabled and (.powered | not))' >/dev/null
       }
@@ -34,6 +38,7 @@ let
       # Release the lid inhibitor when a keyboard wakes the displays, or when
       # the compositor exits. Pointer activity does not power them back on.
       while screens_off; do sleep 0.5; done
+      "$HOME/.local/bin/night-look" keys-back || true
     '';
   };
   greeter = pkgs.noctalia-greeter;
