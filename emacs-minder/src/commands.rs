@@ -1,4 +1,7 @@
-use crate::layout::{balance_sides, center_on_node, propagate_side, zoom_fit};
+use crate::layout::{
+    balance_sides, center_on_node, ensure_all_tree_bboxes, propagate_side, shift_subtree,
+    update_badge_hitboxes, zoom_fit,
+};
 use crate::model::*;
 
 fn remove_subtree(doc: &mut MapDocument, id: i32) {
@@ -161,7 +164,9 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
         | EditCommand::ResizeImage { id, .. }
         | EditCommand::SetUrl { id, .. }
         | EditCommand::SetTags { id, .. }
-        | EditCommand::SetCallout { id, .. } => id.or(doc.selected_node),
+        | EditCommand::SetCallout { id, .. }
+        | EditCommand::MoveNode { id, .. }
+        | EditCommand::ResizeNode { id, .. } => id.or(doc.selected_node),
         _ => doc.selected_node,
     };
 
@@ -190,7 +195,7 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
             };
             doc.push_undo();
             let cid = doc.alloc_id();
-            let (p_layout, p_side, p_children_len, p_is_root, p_color, p_is_list) = {
+            let (p_layout, p_side, p_children_len, p_is_root, p_color, p_is_list, p_posx, p_posy, p_w) = {
                 let p = doc.nodes.get(&pid).ok_or("Missing parent")?;
                 (
                     p.layout,
@@ -199,6 +204,9 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
                     p.is_root(),
                     p.color,
                     p.is_org_list_item,
+                    p.posx,
+                    p.posy,
+                    p.width,
                 )
             };
             let side = if p_is_root {
@@ -224,6 +232,12 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
             node.layout = p_layout;
             node.style = doc.global_style.clone();
             node.is_org_list_item = p_is_list;
+            node.posx = if side == NodeSide::Left {
+                p_posx - 160.0
+            } else {
+                p_posx + p_w + 72.0
+            };
+            node.posy = p_posy + (p_children_len as f64) * 48.0;
             doc.nodes.insert(cid, node);
 
             if let Some(p) = doc.nodes.get_mut(&pid) {
@@ -259,6 +273,8 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
             sib.layout = cur.layout;
             sib.style = cur.style.clone();
             sib.is_org_list_item = cur.is_org_list_item;
+            sib.posx = cur.posx;
+            sib.posy = cur.posy + cur.height + 16.0;
             doc.nodes.insert(sid, sib);
             if let Some(p) = doc.nodes.get_mut(&pid) {
                 if let Some(idx) = p.children.iter().position(|&id| id == cur_id) {
@@ -837,6 +853,98 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
             let s = doc.scale.max(0.1);
             doc.origin_x += dx / s;
             doc.origin_y += dy / s;
+        }
+        EditCommand::MoveNode {
+            dx,
+            dy,
+            move_subtree,
+            record_undo,
+            ..
+        } => {
+            if let Some(nid) = target_id {
+                if doc.nodes.contains_key(&nid) {
+                    if record_undo {
+                        doc.push_undo();
+                    }
+                    let mut root_id = nid;
+                    while let Some(pid) = doc.nodes.get(&root_id).and_then(|n| n.parent) {
+                        root_id = pid;
+                    }
+                    if let Some(r) = doc.nodes.get_mut(&root_id) {
+                        r.layout = LayoutKind::Manual;
+                    }
+                    let s = doc.scale.max(0.05);
+                    let wx = dx / s;
+                    let wy = dy / s;
+                    if move_subtree {
+                        shift_subtree(doc, nid, wx, wy);
+                    } else if let Some(n) = doc.nodes.get_mut(&nid) {
+                        n.posx += wx;
+                        n.posy += wy;
+                    }
+                    if let Some(pid) = doc.nodes.get(&nid).and_then(|n| n.parent) {
+                        if let (Some(n), Some(p)) = (doc.nodes.get(&nid), doc.nodes.get(&pid)) {
+                            let child_cx = n.posx + n.width / 2.0;
+                            let parent_cx = p.posx + p.width / 2.0;
+                            let new_side = if child_cx < parent_cx {
+                                NodeSide::Left
+                            } else {
+                                NodeSide::Right
+                            };
+                            if let Some(nm) = doc.nodes.get_mut(&nid) {
+                                nm.side = new_side;
+                            }
+                        }
+                    }
+                    ensure_all_tree_bboxes(doc);
+                    update_badge_hitboxes(doc);
+                    doc.dirty = true;
+                }
+            }
+        }
+        EditCommand::ResizeNode {
+            width,
+            record_undo,
+            ..
+        } => {
+            if let Some(nid) = target_id {
+                if doc.nodes.contains_key(&nid) {
+                    if record_undo {
+                        doc.push_undo();
+                    }
+                    let new_outer = width.clamp(68.0, 1800.0);
+                    let pad = doc
+                        .nodes
+                        .get(&nid)
+                        .map(|n| n.style.nodepadding.max(4.0))
+                        .unwrap_or(6.0);
+                    let inner_w = (new_outer - 2.0 * pad).max(48.0);
+                    if let Some(n) = doc.nodes.get_mut(&nid) {
+                        n.maxwidth = inner_w;
+                        n.style.nodewidth = inner_w;
+                        n.custom_width = Some(inner_w);
+                        if let Some(ref mut img) = n.image {
+                            img.size = inner_w;
+                        }
+                    }
+                    doc.dirty_measure_node = Some(nid);
+                    doc.dirty = true;
+                    if doc.source_format == SourceFormat::Org {
+                        let mut root_id = nid;
+                        while let Some(pid) = doc.nodes.get(&root_id).and_then(|n| n.parent) {
+                            root_id = pid;
+                        }
+                        let is_manual = doc
+                            .nodes
+                            .get(&root_id)
+                            .map(|r| r.layout == LayoutKind::Manual)
+                            .unwrap_or(false);
+                        if !is_manual {
+                            doc.layout_dirty = true;
+                        }
+                    }
+                }
+            }
         }
         EditCommand::Zoom {
             factor,

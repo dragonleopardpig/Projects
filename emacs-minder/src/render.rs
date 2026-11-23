@@ -2,7 +2,7 @@ use crate::ffi::*;
 use crate::latex::LatexCache;
 use crate::layout::{
     build_rich_pango_layout, document_bounds, ensure_all_tree_bboxes, ensure_minimum_node_sizes,
-    measure_table, relayout_document, update_badge_hitboxes, AssetCache,
+    measure_single_node, measure_table, relayout_document, update_badge_hitboxes, AssetCache,
 };
 use crate::model::*;
 
@@ -756,6 +756,31 @@ fn draw_node_recursive(
         }
     }
 
+    // 7. Resize handle on selected node's outer edge
+    if is_sel {
+        let rx = if n.resizer_on_left() {
+            x - 5.0
+        } else {
+            x + w - 5.0
+        };
+        let ry = y + h / 2.0 - 8.0;
+        let sel_bg = doc.theme.nodesel_background;
+        let sel_fg = sel_bg.contrast_fg();
+        cr.set_rgba(sel_bg.r, sel_bg.g, sel_bg.b, 0.96);
+        cr.rounded_rect(rx, ry, 10.0, 16.0, 3.0);
+        cr.fill();
+        cr.set_rgba(sel_fg.r, sel_fg.g, sel_fg.b, 0.88);
+        cr.set_line_width(1.2);
+        cr.rounded_rect(rx, ry, 10.0, 16.0, 3.0);
+        cr.stroke();
+        cr.new_path();
+        cr.move_to(rx + 3.5, ry + 4.0);
+        cr.line_to(rx + 3.5, ry + 12.0);
+        cr.move_to(rx + 6.5, ry + 4.0);
+        cr.line_to(rx + 6.5, ry + 12.0);
+        cr.stroke();
+    }
+
     cr.restore();
     }
 
@@ -771,14 +796,19 @@ pub fn prepare_document_for_render(
     assets: &mut AssetCache,
     latex_cache: &LatexCache,
 ) {
-    if doc.layout_dirty || doc.needs_measure {
+    if doc.layout_dirty || doc.needs_measure || doc.dirty_measure_node.is_some() {
         let img_assets: Vec<ImageAsset> = doc.images.values().cloned().collect();
         for asset in img_assets {
             let _ = assets.ensure_asset(&asset);
         }
     }
     if doc.layout_dirty {
+        doc.dirty_measure_node = None;
         relayout_document(doc, assets, latex_cache);
+    } else if let Some(nid) = doc.dirty_measure_node.take() {
+        measure_single_node(doc, nid, assets, latex_cache, false);
+        ensure_all_tree_bboxes(doc);
+        update_badge_hitboxes(doc);
     } else if doc.needs_measure {
         ensure_minimum_node_sizes(doc, assets, latex_cache);
         ensure_all_tree_bboxes(doc);

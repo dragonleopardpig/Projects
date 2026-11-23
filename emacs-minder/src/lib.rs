@@ -278,7 +278,7 @@ unsafe extern "C" fn subr_command(
     if let Err(e) = apply_command(&mut sess.doc, cmd) {
         return env.signal_error(&e);
     }
-    if sess.doc.layout_dirty {
+    if sess.doc.layout_dirty || sess.doc.dirty_measure_node.is_some() {
         crate::render::prepare_document_for_render(&mut sess.doc, &mut sess.assets, &sess.latex);
     }
     let json = serde_json::to_string(&sess.doc.to_state_json()).unwrap_or_else(|_| "{}".into());
@@ -537,6 +537,96 @@ mod tests {
         let hit = hit_test(&sess.doc, sx, sy);
         assert_eq!(hit.kind, "node");
         assert_eq!(hit.node_id, Some(0));
+    }
+
+    #[test]
+    fn test_resize_and_free_move_node() {
+        let mut sess = MinderSession::from_doc(MapDocument::new_empty());
+        let long_text = "This is a deliberately long optical propagation sentence that wraps into multiple lines at narrow box width.";
+        apply_command(
+            &mut sess.doc,
+            EditCommand::AddChild {
+                parent_id: Some(0),
+                text: Some(long_text.into()),
+            },
+        )
+        .unwrap();
+        let cid = sess.doc.selected_node.unwrap();
+        apply_command(
+            &mut sess.doc,
+            EditCommand::ResizeNode {
+                id: Some(cid),
+                width: 180.0,
+                record_undo: true,
+            },
+        )
+        .unwrap();
+        crate::render::prepare_document_for_render(&mut sess.doc, &mut sess.assets, &sess.latex);
+        let narrow_w = sess.doc.nodes[&cid].width;
+        let narrow_h = sess.doc.nodes[&cid].height;
+
+        // Grab resizer hit test on selected node outer edge
+        apply_command(&mut sess.doc, EditCommand::ZoomReset).unwrap();
+        let rx_screen = (sess.doc.nodes[&cid].resizer_bbox.x + 8.0 - sess.doc.origin_x) * sess.doc.scale;
+        let ry_screen = (sess.doc.nodes[&cid].resizer_bbox.y + 11.0 - sess.doc.origin_y) * sess.doc.scale;
+        let r_hit = hit_test(&sess.doc, rx_screen, ry_screen);
+        assert_eq!(r_hit.kind, "resizer");
+        assert_eq!(r_hit.node_id, Some(cid));
+
+        // Widen node to 560px -> width grows, height shrinks as sentence unwraps
+        apply_command(
+            &mut sess.doc,
+            EditCommand::ResizeNode {
+                id: Some(cid),
+                width: 560.0,
+                record_undo: false,
+            },
+        )
+        .unwrap();
+        crate::render::prepare_document_for_render(&mut sess.doc, &mut sess.assets, &sess.latex);
+        let wide_w = sess.doc.nodes[&cid].width;
+        let wide_h = sess.doc.nodes[&cid].height;
+        assert!(wide_w > 500.0 && wide_w > narrow_w);
+        assert!(wide_h < narrow_h);
+
+        // Single undo restores initial AddChild/pre-resize size
+        assert!(sess.doc.undo());
+        crate::render::prepare_document_for_render(&mut sess.doc, &mut sess.assets, &sess.latex);
+        assert!(sess.doc.nodes[&cid].custom_width.is_none());
+
+        // Free-move child across parent to flip side to Left & anchor right edge on left-side resize
+        let orig_x = sess.doc.nodes[&cid].posx;
+        let orig_y = sess.doc.nodes[&cid].posy;
+        apply_command(
+            &mut sess.doc,
+            EditCommand::MoveNode {
+                id: Some(cid),
+                dx: -600.0,
+                dy: 85.0,
+                move_subtree: true,
+                record_undo: true,
+            },
+        )
+        .unwrap();
+        assert_eq!(sess.doc.nodes[&0].layout, LayoutKind::Manual);
+        assert_eq!(sess.doc.nodes[&cid].side, NodeSide::Left);
+        assert!(sess.doc.nodes[&cid].resizer_on_left());
+        assert!((sess.doc.nodes[&cid].posx - (orig_x - 600.0)).abs() < 1e-6);
+        assert!((sess.doc.nodes[&cid].posy - (orig_y + 85.0)).abs() < 1e-6);
+
+        let right_edge = sess.doc.nodes[&cid].posx + sess.doc.nodes[&cid].width;
+        apply_command(
+            &mut sess.doc,
+            EditCommand::ResizeNode {
+                id: Some(cid),
+                width: 420.0,
+                record_undo: false,
+            },
+        )
+        .unwrap();
+        crate::render::prepare_document_for_render(&mut sess.doc, &mut sess.assets, &sess.latex);
+        let new_right = sess.doc.nodes[&cid].posx + sess.doc.nodes[&cid].width;
+        assert!((new_right - right_edge).abs() < 1e-6);
     }
 
     #[test]

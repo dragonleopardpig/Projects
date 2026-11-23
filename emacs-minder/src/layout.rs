@@ -242,6 +242,22 @@ pub fn ensure_minimum_node_sizes(
     measure_all_nodes_inner(doc, assets, latex_cache, true);
 }
 
+pub fn measure_single_node(
+    doc: &mut MapDocument,
+    id: i32,
+    assets: &mut AssetCache,
+    latex_cache: &LatexCache,
+    grow_only: bool,
+) {
+    let Ok(surf) = CairoSurface::new_argb32(1, 1) else {
+        return;
+    };
+    let Ok(cr) = CairoContext::new(&surf) else {
+        return;
+    };
+    measure_single_node_with_cr(doc, &cr, id, assets, latex_cache, grow_only);
+}
+
 fn measure_all_nodes_inner(
     doc: &mut MapDocument,
     assets: &mut AssetCache,
@@ -257,116 +273,143 @@ fn measure_all_nodes_inner(
 
     let ids: Vec<i32> = doc.nodes.keys().copied().collect();
     for id in ids {
-        let n = doc.nodes[&id].clone();
-        let pad = n.style.nodepadding.max(4.0);
-        let max_w = n.maxwidth.max(n.style.nodewidth).max(120.0);
+        measure_single_node_with_cr(doc, &cr, id, assets, latex_cache, grow_only);
+    }
+}
 
-        let text_layout = build_rich_pango_layout(
-            &cr,
-            &n.text,
-            &n.style.nodefont,
-            max_w,
-            doc.theme.foreground,
-            &n.style.nodetextalign,
-            latex_cache,
-        );
-        let (mut tw, mut th) = text_layout.map(|l| l.pixel_size()).unwrap_or((40.0, 20.0));
-        if n.text.trim().is_empty() && (n.image.is_some() || n.table.is_some()) {
-            tw = 0.0;
-            th = 0.0;
-        } else {
-            tw = tw.max(20.0);
-            th = th.max(18.0);
-        }
+fn measure_single_node_with_cr(
+    doc: &mut MapDocument,
+    cr: &CairoContext,
+    id: i32,
+    assets: &mut AssetCache,
+    latex_cache: &LatexCache,
+    grow_only: bool,
+) {
+    let Some(n) = doc.nodes.get(&id).cloned() else {
+        return;
+    };
+    let pad = n.style.nodepadding.max(4.0);
+    let custom_w = n.custom_width;
+    let max_w = custom_w
+        .unwrap_or_else(|| n.maxwidth.max(n.style.nodewidth))
+        .clamp(48.0, 1800.0);
 
-        let mut badge_w = 0.0;
-        if n.task_enabled {
-            badge_w += 22.0;
-        }
-        if let Some(ref kw) = n.todo_keyword {
-            badge_w += (kw.len() as f64) * 7.5 + 14.0;
-        }
-        if n.link.is_some() {
-            badge_w += 18.0;
-        }
-        if !n.note.trim().is_empty() {
-            badge_w += 18.0;
-        }
+    let text_layout = build_rich_pango_layout(
+        cr,
+        &n.text,
+        &n.style.nodefont,
+        max_w,
+        doc.theme.foreground,
+        &n.style.nodetextalign,
+        latex_cache,
+    );
+    let (mut tw, mut th) = text_layout.map(|l| l.pixel_size()).unwrap_or((40.0, 20.0));
+    if n.text.trim().is_empty() && (n.image.is_some() || n.table.is_some()) {
+        tw = 0.0;
+        th = 0.0;
+    } else {
+        tw = tw.max(20.0);
+        th = th.max(18.0);
+    }
 
-        let (mut img_w, mut img_h) = (0.0, 0.0);
-        if let Some(ref img_ref) = n.image {
-            if let Some(asset) = doc.images.get(&img_ref.id).cloned() {
-                if let Some(meta) = assets.ensure_asset(&asset) {
-                    let src_w = if img_ref.crop_w > 0 {
-                        img_ref.crop_w as f64
-                    } else {
-                        meta.width
-                    };
-                    let src_h = if img_ref.crop_h > 0 {
-                        img_ref.crop_h as f64
-                    } else {
-                        meta.height
-                    };
-                    let dw = img_ref.size.max(32.0);
-                    let dh = (dw * src_h / src_w.max(1.0)).max(24.0);
-                    img_w = dw;
-                    img_h = dh;
-                }
+    let mut badge_w = 0.0;
+    if n.task_enabled {
+        badge_w += 22.0;
+    }
+    if let Some(ref kw) = n.todo_keyword {
+        badge_w += (kw.len() as f64) * 7.5 + 14.0;
+    }
+    if n.link.is_some() {
+        badge_w += 18.0;
+    }
+    if !n.note.trim().is_empty() {
+        badge_w += 18.0;
+    }
+
+    let (mut img_w, mut img_h) = (0.0, 0.0);
+    if let Some(ref img_ref) = n.image {
+        if let Some(asset) = doc.images.get(&img_ref.id).cloned() {
+            if let Some(meta) = assets.ensure_asset(&asset) {
+                let src_w = if img_ref.crop_w > 0 {
+                    img_ref.crop_w as f64
+                } else {
+                    meta.width
+                };
+                let src_h = if img_ref.crop_h > 0 {
+                    img_ref.crop_h as f64
+                } else {
+                    meta.height
+                };
+                let dw = img_ref.size.max(32.0);
+                let dh = (dw * src_h / src_w.max(1.0)).max(24.0);
+                img_w = dw;
+                img_h = dh;
             }
         }
+    }
 
-        let (tbl_w, tbl_h) = if let Some(ref tbl) = n.table {
-            let tm = measure_table(&cr, tbl, &n.style.nodefont, latex_cache);
-            (tm.total_w, tm.total_h)
-        } else {
-            (0.0, 0.0)
-        };
+    let (tbl_w, tbl_h) = if let Some(ref tbl) = n.table {
+        let tm = measure_table(cr, tbl, &n.style.nodefont, latex_cache);
+        (tm.total_w, tm.total_h)
+    } else {
+        (0.0, 0.0)
+    };
 
-        let mut content_h = 0.0;
-        if img_h > 0.0 {
-            content_h += img_h;
+    let mut content_h = 0.0;
+    if img_h > 0.0 {
+        content_h += img_h;
+    }
+    if th > 0.0 {
+        if content_h > 0.0 {
+            content_h += 6.0;
         }
-        if th > 0.0 {
-            if content_h > 0.0 {
-                content_h += 6.0;
-            }
-            content_h += th;
+        content_h += th;
+    }
+    if tbl_h > 0.0 {
+        if content_h > 0.0 {
+            content_h += 6.0;
         }
-        if tbl_h > 0.0 {
-            if content_h > 0.0 {
-                content_h += 6.0;
-            }
-            content_h += tbl_h;
-        }
-        if !n.tags.is_empty() {
-            content_h += 18.0;
-        }
-        content_h = content_h.max(22.0);
+        content_h += tbl_h;
+    }
+    if !n.tags.is_empty() {
+        content_h += 18.0;
+    }
+    content_h = content_h.max(22.0);
 
-        let content_w = (tw + badge_w).max(img_w).max(tbl_w).max(28.0);
-        let target_w = content_w + 2.0 * pad;
-        let target_h = content_h + 2.0 * pad;
-        if let Some(node_mut) = doc.nodes.get_mut(&id) {
-            if grow_only {
-                if target_w > node_mut.width {
-                    let dw = target_w - node_mut.width;
-                    if node_mut.is_root() {
-                        node_mut.posx -= dw / 2.0;
-                    } else if node_mut.side == NodeSide::Left {
-                        node_mut.posx -= dw;
-                    }
-                    node_mut.width = target_w;
+    let min_custom = custom_w.unwrap_or(0.0);
+    let content_w = (tw + badge_w)
+        .max(img_w)
+        .max(tbl_w)
+        .max(min_custom)
+        .max(28.0);
+    let target_w = content_w + 2.0 * pad;
+    let target_h = content_h + 2.0 * pad;
+    if let Some(node_mut) = doc.nodes.get_mut(&id) {
+        if grow_only {
+            if target_w > node_mut.width {
+                let dw = target_w - node_mut.width;
+                if node_mut.is_root() {
+                    node_mut.posx -= dw / 2.0;
+                } else if node_mut.side == NodeSide::Left {
+                    node_mut.posx -= dw;
                 }
-                if target_h > node_mut.height {
-                    let dh = target_h - node_mut.height;
-                    if node_mut.is_root() {
-                        node_mut.posy -= dh / 2.0;
-                    }
-                    node_mut.height = target_h;
-                }
-            } else {
                 node_mut.width = target_w;
+            }
+            if target_h > node_mut.height {
+                let dh = target_h - node_mut.height;
+                if node_mut.is_root() {
+                    node_mut.posy -= dh / 2.0;
+                }
                 node_mut.height = target_h;
+            }
+        } else {
+            let old_w = node_mut.width;
+            let old_right = node_mut.posx + old_w;
+            let resizer_left = node_mut.resizer_on_left();
+            node_mut.width = target_w;
+            node_mut.height = target_h;
+            if resizer_left && (target_w - old_w).abs() > 0.01 {
+                node_mut.posx = old_right - target_w;
             }
         }
     }
@@ -633,6 +676,17 @@ pub fn update_badge_hitboxes(doc: &mut MapDocument) {
             } else {
                 Rect::default()
             };
+            let rx = if n.resizer_on_left() {
+                n.posx - 8.0
+            } else {
+                n.posx + n.width - 8.0
+            };
+            n.resizer_bbox = Rect {
+                x: rx,
+                y: n.posy + n.height / 2.0 - 11.0,
+                w: 16.0,
+                h: 22.0,
+            };
         }
     }
 }
@@ -793,7 +847,7 @@ pub fn relayout_document(
     doc.needs_measure = false;
 }
 
-fn shift_subtree(doc: &mut MapDocument, id: i32, dx: f64, dy: f64) {
+pub fn shift_subtree(doc: &mut MapDocument, id: i32, dx: f64, dy: f64) {
     let children = if let Some(n) = doc.nodes.get_mut(&id) {
         n.posx += dx;
         n.posy += dy;
@@ -884,13 +938,31 @@ pub fn center_on_node(doc: &mut MapDocument, id: i32) {
 
 #[derive(serde::Serialize)]
 pub struct HitResult {
-    pub kind: &'static str, // "fold", "task", "node", "none"
+    pub kind: &'static str, // "resizer", "fold", "task", "node", "none"
     pub node_id: Option<i32>,
 }
 
 pub fn hit_test(doc: &MapDocument, screen_x: f64, screen_y: f64) -> HitResult {
     let wx = doc.origin_x + screen_x / doc.scale.max(0.05);
     let wy = doc.origin_y + screen_y / doc.scale.max(0.05);
+
+    if let Some(sel_id) = doc.selected_node {
+        if let Some(sel) = doc.nodes.get(&sel_id) {
+            let pad = 4.0 / doc.scale.max(0.25);
+            let rb = Rect {
+                x: sel.resizer_bbox.x - pad,
+                y: sel.resizer_bbox.y - pad,
+                w: sel.resizer_bbox.w + 2.0 * pad,
+                h: sel.resizer_bbox.h + 2.0 * pad,
+            };
+            if rb.contains(wx, wy) {
+                return HitResult {
+                    kind: "resizer",
+                    node_id: Some(sel_id),
+                };
+            }
+        }
+    }
 
     fn search(doc: &MapDocument, id: i32, wx: f64, wy: f64) -> Option<HitResult> {
         let n = doc.nodes.get(&id)?;

@@ -455,12 +455,18 @@ pub struct Callout {
     pub padding: f64,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Node {
     pub id: i32,
     pub text: String,
     pub note: String,
     pub maxwidth: f64,
+    #[serde(default)]
+    pub custom_width: Option<f64>,
     pub posx: f64,
     pub posy: f64,
     pub width: f64,
@@ -469,6 +475,8 @@ pub struct Node {
     pub tree_bbox: Rect,
     pub fold_bbox: Rect,
     pub task_bbox: Rect,
+    #[serde(default)]
+    pub resizer_bbox: Rect,
     pub side: NodeSide,
     pub fold: bool,
     pub sequence: bool,
@@ -503,6 +511,7 @@ impl Node {
             text,
             note: String::new(),
             maxwidth: 220.0,
+            custom_width: None,
             posx: 0.0,
             posy: 0.0,
             width: 80.0,
@@ -511,6 +520,7 @@ impl Node {
             tree_bbox: Rect::default(),
             fold_bbox: Rect::default(),
             task_bbox: Rect::default(),
+            resizer_bbox: Rect::default(),
             side: NodeSide::Right,
             fold: false,
             sequence: false,
@@ -541,6 +551,10 @@ impl Node {
 
     pub fn is_root(&self) -> bool {
         self.parent.is_none()
+    }
+
+    pub fn resizer_on_left(&self) -> bool {
+        !self.is_root() && self.side == NodeSide::Left
     }
 
     pub fn total_children_count(&self, nodes: &BTreeMap<i32, Node>) -> usize {
@@ -636,6 +650,7 @@ pub struct MapDocument {
     pub dirty: bool,
     pub layout_dirty: bool,
     pub needs_measure: bool,
+    pub dirty_measure_node: Option<i32>,
     pub next_id: i32,
     pub next_image_id: i32,
     pub color_index: usize,
@@ -689,6 +704,7 @@ impl MapDocument {
             dirty: false,
             layout_dirty: true,
             needs_measure: true,
+            dirty_measure_node: None,
             next_id: 1,
             next_image_id: 1,
             color_index: 0,
@@ -749,6 +765,7 @@ impl MapDocument {
         self.color_index = snap.color_index;
         self.layout_dirty = true;
         self.needs_measure = true;
+        self.dirty_measure_node = None;
         self.dirty = true;
     }
 
@@ -895,6 +912,21 @@ pub enum EditCommand {
     SetTags { id: Option<i32>, tags: Vec<String> },
     SetCallout { id: Option<i32>, text: Option<String> },
     Pan { dx: f64, dy: f64 },
+    MoveNode {
+        id: Option<i32>,
+        dx: f64,
+        dy: f64,
+        #[serde(default = "default_true")]
+        move_subtree: bool,
+        #[serde(default = "default_true")]
+        record_undo: bool,
+    },
+    ResizeNode {
+        id: Option<i32>,
+        width: f64,
+        #[serde(default = "default_true")]
+        record_undo: bool,
+    },
     Zoom {
         factor: f64,
         #[serde(default)]
@@ -922,6 +954,7 @@ pub struct NodeStateJson {
     pub width: f64,
     pub height: f64,
     pub side: String,
+    pub resizer_on_left: bool,
     pub fold: bool,
     pub layout: String,
     pub task_enabled: bool,
@@ -985,6 +1018,7 @@ impl MapDocument {
                 width: n.width,
                 height: n.height,
                 side: n.side.as_str().to_string(),
+                resizer_on_left: n.resizer_on_left(),
                 fold: n.fold,
                 layout: n.layout.as_str().to_string(),
                 task_enabled: n.task_enabled,
