@@ -379,11 +379,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795406244,
-        "narHash": "sha256-rAWcdXIemB0Wi68/RIcQADmFZGHuHOtFvW9Y6TR0ioU=",
+        "lastModified": 1795422655,
+        "narHash": "sha256-SaM8QtvNoA8y49k30TFN4I1YjHMwmO2YDmJ3lsqjiPc=",
         "owner": "dragonleopardpig",
         "repo": "noctalia-agent-status",
-        "rev": "6800ee12dc97fc7fcd57ccfef9767efa14511126",
+        "rev": "f206ae6bc7598c560767f5d12598ba4ed3aa294a",
         "type": "github"
       },
       "original": {
