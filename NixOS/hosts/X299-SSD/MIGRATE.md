@@ -92,7 +92,8 @@ Then, in `~/Projects/NixOS`:
    boot comes up in SDDM's Hyprland session, because `prepare` built the host
    before it had `desktop.noctaliaSuite.greeter.enable` (added 2026-11-23), and
    the switch from SDDM to the Noctalia Greeter would log you out mid-rebuild.
-   After the reboot the greeter starts Noctalia Suite on Umbriel.
+   After the reboot the greeter starts Noctalia Suite on Umbriel.  (done
+   2026-11-23: generation 2, `rollback-root` wiped `@root` at boot, `/home` kept)
 
 Once X299 has booted, plug its disk into M90aPro again and run
 `sudo x299-btrfs-migrate release-stage`.  It refuses until the new root holds a
