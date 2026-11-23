@@ -97,8 +97,11 @@ Then, in `~/Projects/NixOS`:
 
 Once X299 has booted, plug its disk into M90aPro again and run
 `sudo x299-btrfs-migrate release-stage`.  It refuses until the new root holds a
-journal written after `install`, then deletes the stage directory.  After that,
-remove the tool from `hosts/M90aPro/default.nix`.
+journal written after `install`, then deletes the stage directory.  It opens the
+root itself: lock it in udiskie first, stop udiskie and put the passphrase into
+`/dev/shm/x299.key` as in step 2.  After that, remove the tool from
+`hosts/M90aPro/default.nix`.  (done 2026-11-23: stage released, tool removed;
+the script and the `x299-migration` check stay, like CRUCIAL's)
 
 ## Rollback
 
