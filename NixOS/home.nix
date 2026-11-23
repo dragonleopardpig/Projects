@@ -3057,6 +3057,12 @@ in
       clone_if_missing flymake-bridge git@github.com:dragonleopardpig/flymake-bridge.git
       clone_if_missing lsp-bridge     git@github.com:dragonleopardpig/lsp-bridge.git
 
+      if [ -f "$proj/emacs-minder/flake.nix" ]; then
+        echo "emacs-bootstrap: building emacs-minder module …"
+        mkdir -p "$HOME/.emacs.d/modules"
+        nix build "$proj/emacs-minder" -o "$HOME/.emacs.d/modules/emacs-minder"
+      fi
+
       echo "emacs-bootstrap: done."
     '';
   };

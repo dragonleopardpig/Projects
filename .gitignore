@@ -4,6 +4,7 @@
 /*/
 !/NixOS/
 !/emacs/
+!/emacs-minder/
 !/org/
 !/.agents/
 

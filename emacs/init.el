@@ -32,6 +32,11 @@
       (when (file-directory-p dir)
         (add-to-list 'load-path dir))))
 
+  (dolist (mdir (list (expand-file-name "emacs-minder/lisp" (file-name-directory (directory-file-name my/emacs-config-dir)))
+                      (expand-file-name "~/.emacs.d/modules/emacs-minder/share/emacs/site-lisp/emacs-minder")))
+    (when (file-directory-p mdir)
+      (add-to-list 'load-path mdir)))
+
   (defun my/add-optional-vc-package (name)
     "Append installed directory for optional VC package NAME to `load-path'.
 Searches `~/.emacs.d/elpa-vc/' first, then legacy `~/.emacs.d/elpa/'.

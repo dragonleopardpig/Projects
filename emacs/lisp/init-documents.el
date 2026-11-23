@@ -69,5 +69,19 @@
 (with-eval-after-load 'pdf-view
   (define-key pdf-view-mode-map (kbd "d") #'pdf-view-follow-minor-mode))
 
+;;;; Native Mind Mapping (`emacs-minder`)
+
+(when (locate-library "emacs-minder")
+  (autoload 'emacs-minder-mode "emacs-minder"
+    "Native Cairo/LaTeX Mind Map major mode." t)
+  (autoload 'emacs-minder-new "emacs-minder"
+    "Create a fresh Mind Map buffer." t)
+  (autoload 'emacs-minder-open-org "emacs-minder"
+    "Open the current Org file as a native Mind Map." t)
+  (add-to-list 'auto-mode-alist '("\\.minder\\'" . emacs-minder-mode))
+  (global-set-key (kbd "C-c M") #'emacs-minder-new)
+  (with-eval-after-load 'org
+    (define-key org-mode-map (kbd "C-c m") #'emacs-minder-open-org)))
+
 (provide 'init-documents)
 ;;; init-documents.el ends here
