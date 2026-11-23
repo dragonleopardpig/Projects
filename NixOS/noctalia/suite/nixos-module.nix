@@ -64,8 +64,12 @@ in {
   } {
     # Let the systemd module assemble these inside its immutable user-units
     # directory. They also apply when Home Manager supplies the base unit.
+    # enableDefaultPath = false: without it the drop-in also sets PATH to NixOS's
+    # five-package default, hiding the session PATH, so AGS died on swaync-client
+    # and hypridle's lock/dpms commands could not be found.
     systemd.user.services = lib.genAttrs [ "ags" "swaync" "hypridle" "hyprpolkitagent" ] (_: {
       overrideStrategy = "asDropin";
+      enableDefaultPath = false;
       unitConfig.ConditionEnvironment = "!XDG_CURRENT_DESKTOP=umbriel";
     });
   } (lib.mkIf cfg.greeter.enable {
