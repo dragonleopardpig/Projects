@@ -255,5 +255,27 @@
             (should (string-match-p "```text\n1\n```" content))))
       (delete-directory tmp-dir t))))
 
+(ert-deftest my/test-org-mode-no-jupyter-kernelspec-error ()
+  "Activating `org-mode' without `jupyter' emits no kernelspec error."
+  (require 'ob-jupyter)
+  (let ((msgs nil))
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (when (stringp fmt)
+                   (push (apply #'format fmt args) msgs)))))
+      (let ((default-directory temporary-file-directory)
+            (exec-path nil))
+        (should-not (my/jupyter-find-executable temporary-file-directory))
+        (with-temp-buffer
+          (org-mode))))
+    (should-not (cl-some (lambda (m)
+                           (string-match-p "Error retrieving kernelspecs" m))
+                         msgs)))
+  (let ((org-jup "/home/thinky/Projects/org/.devenv/state/venv/bin/jupyter"))
+    (when (file-executable-p org-jup)
+      (let ((exec-path nil))
+        (should (equal (my/jupyter-find-executable "/home/thinky/Projects/org")
+                       org-jup))))))
+
 (provide 'emacs-config-tests)
 ;;; emacs-config-tests.el ends here

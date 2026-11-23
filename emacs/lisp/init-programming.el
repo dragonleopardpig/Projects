@@ -262,6 +262,31 @@
   (when (fboundp 'jupyter-repl--send-input)
     (advice-add 'jupyter-repl--send-input :around #'my/jupyter-repl-guard-send)))
 
+(defvar jupyter-executable)
+
+(defun my/jupyter-find-executable (&optional dir)
+  "Locate `jupyter' from `exec-path' or a nearby `.devenv'/`.venv' under DIR."
+  (or (executable-find (if (and (boundp 'jupyter-executable)
+                                (stringp jupyter-executable))
+                           jupyter-executable
+                         "jupyter"))
+      (let* ((start (expand-file-name (or dir default-directory)))
+             (rels '(".devenv/state/venv/bin/jupyter"
+                     ".devenv/profile/bin/jupyter"
+                     ".venv/bin/jupyter"))
+             (root (and (not (file-remote-p start))
+                        (locate-dominating-file
+                         start
+                         (lambda (parent)
+                           (cl-some (lambda (rel)
+                                      (file-executable-p (expand-file-name rel parent)))
+                                    rels))))))
+        (when root
+          (cl-loop for rel in rels
+                   for cand = (expand-file-name rel root)
+                   when (file-executable-p cand)
+                   return cand)))))
+
 (defun my/jupyter-find-devenv-kernels (&optional dir)
   "Return an alist of available Jupyter kernels from `.devenv' or `jupyter'."
   (let* ((start (expand-file-name (or dir default-directory)))
@@ -275,10 +300,7 @@
             (dolist (entry (directory-files kdir t "\\`[^.]"))
               (when (file-directory-p entry)
                 (push (cons (file-name-nondirectory entry) entry) specs)))))))
-    (when-let* ((jup (or (when-let* ((bin (my/devenv-bin-near start)))
-                           (let ((cand (expand-file-name "jupyter" bin)))
-                             (and (file-executable-p cand) cand)))
-                         (executable-find "jupyter"))))
+    (when-let* ((jup (my/jupyter-find-executable start)))
       (ignore-errors
         (let* ((out (with-output-to-string
                       (with-current-buffer standard-output
@@ -291,6 +313,60 @@
               (unless (assoc name specs)
                 (push (cons name resource) specs)))))))
     (nreverse specs)))
+
+(with-eval-after-load 'ob-jupyter
+  (defun my/ob-jupyter-guard-make-local-aliases (orig-fn &rest args)
+    "Skip `org-babel-jupyter-make-local-aliases' unless `jupyter' exists."
+    (if (file-remote-p default-directory)
+        (apply orig-fn args)
+      (when-let* ((jup (my/jupyter-find-executable default-directory)))
+        (let ((jupyter-executable jup))
+          (apply orig-fn args)))))
+
+  (when (fboundp 'org-babel-jupyter-make-local-aliases)
+    (advice-add 'org-babel-jupyter-make-local-aliases
+                :around #'my/ob-jupyter-guard-make-local-aliases))
+
+  (defun my/ob-jupyter-guard-aliases-from-kernelspecs (orig-fn &optional refresh specs)
+    "Skip `jupyter kernelspec' queries when no `jupyter' executable is available."
+    (if (or specs (file-remote-p default-directory))
+        (funcall orig-fn refresh specs)
+      (when-let* ((jup (my/jupyter-find-executable default-directory)))
+        (let ((jupyter-executable jup))
+          (funcall orig-fn refresh specs)))))
+
+  (when (fboundp 'org-babel-jupyter-aliases-from-kernelspecs)
+    (advice-add 'org-babel-jupyter-aliases-from-kernelspecs
+                :around #'my/ob-jupyter-guard-aliases-from-kernelspecs))
+
+  (defun my/ob-jupyter-guard-setup-export (orig-fn backend)
+    "Skip `org-babel-jupyter-setup-export' when no `jupyter' executable exists."
+    (if (file-remote-p default-directory)
+        (funcall orig-fn backend)
+      (when-let* ((jup (my/jupyter-find-executable default-directory)))
+        (let ((jupyter-executable jup))
+          (funcall orig-fn backend)))))
+
+  (when (fboundp 'org-babel-jupyter-setup-export)
+    (advice-add 'org-babel-jupyter-setup-export
+                :around #'my/ob-jupyter-guard-setup-export)))
+
+(with-eval-after-load 'envrc
+  (defun my/envrc-refresh-jupyter-aliases (buf result)
+    "Refresh `ob-jupyter' aliases in Org buffers once `envrc' activates."
+    (when (and (listp result) (buffer-live-p buf))
+      (with-current-buffer buf
+        (when (and (derived-mode-p 'org-mode)
+                   (featurep 'ob-jupyter)
+                   (fboundp 'org-babel-jupyter-aliases-from-kernelspecs)
+                   (executable-find (if (and (boundp 'jupyter-executable)
+                                             (stringp jupyter-executable))
+                                        jupyter-executable
+                                      "jupyter")))
+          (org-babel-jupyter-aliases-from-kernelspecs)))))
+
+  (when (fboundp 'envrc--apply)
+    (advice-add 'envrc--apply :after #'my/envrc-refresh-jupyter-aliases)))
 
 (defun my/jupyter-select-kernel ()
   "Select a Jupyter kernel via `completing-read' for the current Org src block."
