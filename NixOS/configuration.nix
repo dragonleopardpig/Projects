@@ -927,59 +927,119 @@ in
       epkgs: with epkgs; [
         vterm                  # Terminal emulator inside Emacs
         direnv                 # Direnv integration for Emacs
+        envrc                  # Buffer-local direnv integration
         lsp-pyright            # Python LSP client (Pyright)
         zmq                    # ZeroMQ bindings for Jupyter
         pyvenv
         codex-cli
         material-theme
-	      gruvbox-theme
-	      doom-themes
-	      ef-themes
-	      pdf-tools
-	      async
+        gruvbox-theme
+        doom-themes
+        ef-themes
+        heaven-and-hell
+        pdf-tools
+        async
         neotree
         dirvish                # Yazi-like miller-columns Dired with previews
         all-the-icons
+        nerd-icons
+        nerd-icons-completion
         rainbow-delimiters
+        rainbow-mode
         yaml-mode
         dockerfile-mode
         toml-mode
         json-mode
-	      prettier-js
-	      js2-refactor
-	      rjsx-mode
-	      tide
-	      web-mode
-	      emmet-mode
-	      rustic
-	      ox-rst
-	      alert
-	      org-fragtog
-	      ob-nix
-	      latex-preview-pane
-	      org-modern
-	      slime
-	      nix-mode
-	      geiser-mit
-	      pyvenv
-	      # (its home, depp.brause.cc, serves an expired TLS certificate since
-	      # 2026-11: the same commit from the emacsmirror copy, same hash)
-	      (nov.overrideAttrs (old: {
-	        src = old.src.override { url = "https://github.com/emacsmirror/nov.git"; };
-	      }))
-	      markdown-mode
-	      mixed-pitch
-	      smartparens
-	      spice-mode
-	      ob-spice
-	      saveplace-pdf-view
-	      rg
-	      ob-rust
-	      lua-mode
-	      direnv
-	      magik-mode
-	      treemacs
-	      transpose-frame
+        prettier-js
+        js2-refactor
+        rjsx-mode
+        tide
+        web-mode
+        emmet-mode
+        rustic
+        ox-rst
+        alert
+        org-alert
+        org-fragtog
+        ob-nix
+        latex-preview-pane
+        org-modern
+        slime
+        nix-mode
+        geiser-mit
+        # (its home, depp.brause.cc, serves an expired TLS certificate since
+        # 2026-11: the same commit from the emacsmirror copy, same hash)
+        (nov.overrideAttrs (old: {
+          src = old.src.override { url = "https://github.com/emacsmirror/nov.git"; };
+        }))
+        markdown-mode
+        mixed-pitch
+        smartparens
+        spice-mode
+        ob-spice
+        saveplace-pdf-view
+        rg
+        ob-rust
+        lua-mode
+        direnv
+        magik-mode
+        treemacs
+        transpose-frame
+        # Modern completion & help stack (Vertico + Orderless + Marginalia + Consult + Embark)
+        vertico
+        orderless
+        marginalia
+        consult
+        embark
+        embark-consult
+        which-key
+        helpful
+        # Core editing, dashboard, VCS & navigation
+        dashboard
+        projectile
+        magit
+        git-messenger
+        undo-tree
+        yasnippet
+        yasnippet-snippets
+        avy
+        move-text
+        ws-butler
+        lispy
+        aggressive-indent
+        diminish
+        hydra
+        pretty-hydra
+        jinx
+        imenu-list
+        websocket
+        compat
+        transient
+        s
+        dash
+        f
+        ht
+        ov
+        mustache
+        htmlize
+        # Scientific Org, citations & Jupyter
+        org-ref
+        citeproc
+        citar
+        citar-embark
+        biblio
+        parsebib
+        ox-pandoc
+        ox-clip
+        org-ql
+        org-super-agenda
+        jupyter
+        code-cells
+        # AI coding integrations
+        aidermacs
+        agent-shell
+        acp
+        shell-maker
       ]
     ))
     enchant                  # Spell checking meta-library (used by jinx)

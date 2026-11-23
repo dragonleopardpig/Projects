@@ -1,0 +1,100 @@
+#+TEMPLATE: NSF Proposal - Checklist
+#+key: nsf-proposal-checklist
+#+group: proposal
+#+contributor: John Kitchin <jkitchin@andrew.cmu.edu>
+#+default-filename: checklist.org
+
+#+TITLE: NSF Proposal Checklist
+#+LATEX_CLASS: cmu-article
+#+Latex_class_options: [12pt]
+#+OPTIONS: toc:nil
+
+NSF Grant Proposal Guide: https://new.nsf.gov/policies/pappg/24-1
+
+# Obviously some of these directions are specific to CMU.
+
+Proposal Title: <replace: with your title>
+
+Proposal Due Date: <replace: with due date>
+
+Solicitation number: <replace: with number and/or URL>
+
+NSF Division: <replace: with division/program>
+
+PI: <replace: with name>
+
+Co-PIs: <replace: names or delete>
+
+Start date: <replace: date>
+
+Duration: <replace: duration>
+
+* Checklist [0/13]
+
+This is a typical, un-solicited NSF proposal.
+
+- [ ] Budget                       https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2f
+- [ ] Budget Justification         see [[*Budget notes]]
+- [ ] [[elisp:(ox-manuscript-open "nsf-sow")][Statement of Work]]            see [[*Budget notes]]
+- [ ] SPEX signoff
+
+- [ ] Biographical Sketch          https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2hi
+  - [ ] Get from https://www.ncbi.nlm.nih.gov/sciencv/
+- [ ] Current and Pending          https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2hii
+  - [ ] Get from https://www.ncbi.nlm.nih.gov/sciencv/
+- [ ] Collaborators (COA)          https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2hiii
+- [ ] [[elisp:(ox-manuscript-open "nsf-proposal-facilities")][Facilities, equipment]]        https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2g
+
+- [ ] [[elisp:(ox-manuscript-open "nsf-project-summary")][Project Summary]]              https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2b
+- [ ] [[elisp:(ox-manuscript-open "nsf-project-description")][Project Description]]          https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2d
+- [ ] [[*References Cited]]             https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2e
+
+- [ ] [[elisp:(ox-manuscript-open "nsf-proposal-mentoring-plan")][Mentoring Plan]]  https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2i-i
+- [ ] [[elisp:(ox-manuscript-open "nsf-proposal-data-plan")][Data Management plan]]         https://new.nsf.gov/policies/pappg/24-1/ch-2-proposal-preparation#ch2D2i-ii
+
+
+** Budget notes
+
+A business manager typically prepares this. You provide information like this:
+
+Typical items:
+- student tuition, stipend, fees
+- 1 month summer salary
+- travel
+- supplies
+- Other (equipment, etc)
+
+They take care of the preparation
+
+Usually a Justification is required. There is a specific form the University uses.
+
+- Provide the Statement of work (brief summary) for OSP
+- Sign the SPEX form
+
+** Project Summary Notes
+
+(Plain text, 3 sections, about a page)
+You must have an Overview, Intellectual Merit and Broader Impacts section. Send this in plain text and it will be pasted it into boxes on Research.gov.
+
+** References Cited
+
+These must be in a separate file. Each reference must include all authors.
+
+** Project Description Notes
+
+Prior NSF support sections must explicitly identify intellectual merit and broader impacts.
+
+* Build
+
+Refresh all the files with a fresh build.
+
+#+BEGIN_SRC emacs-lisp
+(loop for org-file in '("project-description.org"
+			"project-summary.org"
+			"data-management-plan.org"
+			"facilities.org"
+			"mentoring-plan.org")
+      do
+      (find-file org-file)
+      (ox-manuscript-export-and-build-and-open))
+#+END_SRC

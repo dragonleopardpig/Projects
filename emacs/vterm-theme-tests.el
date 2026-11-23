@@ -5,7 +5,7 @@
 (require 'vterm)
 (add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
 (require 'vterm-theme)
-(load (expand-file-name "heaven-and-hell.el" (file-name-directory (or load-file-name buffer-file-name))))
+(require 'heaven-and-hell)
 
 (defmacro my/vterm-test--with-terminal (&rest body)
   "Create a quiet, isolated native terminal for BODY."
