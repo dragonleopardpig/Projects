@@ -74,5 +74,36 @@
         (should (> (alist-get 'node_count st) 30))
         (should (string-prefix-p "\x89PNG\r\n\x1a\n" png))))))
 
+(ert-deftest emacs-minder-test-middle-mouse-pan ()
+  "Middle mouse button binds live panning and updates origin on drag."
+  (emacs-minder-ensure-module)
+  (should (eq (lookup-key emacs-minder-mode-map [down-mouse-2])
+              #'emacs-minder--mouse-pan-track))
+  (should (eq (lookup-key emacs-minder-mode-map [mouse-2])
+              #'ignore))
+  (should (eq (lookup-key emacs-minder-mode-map [drag-mouse-2])
+              #'emacs-minder--mouse-drag-pan))
+  (with-temp-buffer
+    (setq emacs-minder--handle (emacs-minder-core-new "Pan Test"))
+    (setq emacs-minder--state (emacs-minder--parse-json
+                               (emacs-minder-core-state-json emacs-minder--handle)))
+    (let* ((orig-x (alist-get 'origin_x emacs-minder--state))
+           (orig-y (alist-get 'origin_y emacs-minder--state))
+           (scale (alist-get 'scale emacs-minder--state))
+           (positions (list (cons nil (cons 100 100))
+                            (cons nil (cons 160 140))))
+           (unread-command-events
+            (list (list 'mouse-movement (list (selected-window) 1 '(160 . 140) 0))
+                  (list 'mouse-2 (list (selected-window) 1 '(160 . 140) 0)))))
+      (cl-letf (((symbol-function 'mouse-pixel-position)
+                 (lambda () (or (pop positions) (cons nil (cons 160 140))))))
+        (emacs-minder--mouse-pan-track
+         (list 'down-mouse-2 (list (selected-window) 1 '(100 . 100) 0))))
+      (let ((new-x (alist-get 'origin_x emacs-minder--state))
+            (new-y (alist-get 'origin_y emacs-minder--state)))
+        (should (< (abs (- (- new-x orig-x) (/ -60.0 scale))) 1e-6))
+        (should (< (abs (- (- new-y orig-y) (/ -40.0 scale))) 1e-6))
+        (should (null unread-command-events))))))
+
 (provide 'emacs-minder-tests)
 ;;; emacs-minder-tests.el ends here

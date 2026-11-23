@@ -683,7 +683,7 @@
 (defun emacs-minder-help ()
   "Display keybinding summary for `emacs-minder-mode'."
   (interactive)
-  (message "Nav: arrows/hjkl  Add: TAB(child) o(sib) P(parent) R(root)  Edit: RET N(note) v(table)  Fold: f/F  Layout: L B r b  Zoom: = - 0 z  Image: I M-y  Save: C-x C-s"))
+  (message "Nav: arrows/hjkl  Add: TAB(child) o(sib) P(parent) R(root)  Edit: RET N(note) v(table)  Fold: f/F  Layout: L B r b  Zoom: = - 0 z  Mid-drag: pan  Save: C-x C-s"))
 
 ;;; Mouse interaction
 
@@ -726,6 +726,46 @@
             (dy (- (cdr p1) (cdr p2))))
         (when (> (+ (abs dx) (abs dy)) 3)
           (emacs-minder--cmd `((op . "pan") (dx . ,(float dx)) (dy . ,(float dy)))))))))
+
+(defun emacs-minder--mouse-pan-track (_event)
+  "Live-pan the mind map scene while dragging with the middle mouse button."
+  (interactive "e")
+  (when emacs-minder--handle
+    (let* ((start (cdr (mouse-pixel-position)))
+           (last-x (and (consp start) (numberp (car start)) (car start)))
+           (last-y (and (consp start) (numberp (cdr start)) (cdr start)))
+           (dragging (and last-x last-y t)))
+      (when dragging
+        (track-mouse
+          (while dragging
+            (let ((ev (read-event)))
+              (if (mouse-movement-p ev)
+                  (let ((coalesce t))
+                    (while coalesce
+                      (let ((next-ev (read-event nil nil 0)))
+                        (cond
+                         ((null next-ev)
+                          (setq coalesce nil))
+                         ((mouse-movement-p next-ev)
+                          (setq ev next-ev))
+                         (t
+                          (push next-ev unread-command-events)
+                          (setq coalesce nil)))))
+                    (let* ((cur (cdr (mouse-pixel-position)))
+                           (cx (and (consp cur) (car cur)))
+                           (cy (and (consp cur) (cdr cur))))
+                      (when (and (numberp cx) (numberp cy))
+                        (let ((dx (- last-x cx))
+                              (dy (- last-y cy)))
+                          (when (> (+ (abs dx) (abs dy)) 1)
+                            (setq last-x cx
+                                  last-y cy)
+                            (emacs-minder--cmd `((op . "pan") (dx . ,(float dx)) (dy . ,(float dy))))
+                            (redisplay))))))
+                (when (and (consp ev)
+                           (not (memq (event-basic-type ev) '(mouse-1 mouse-2 mouse-3))))
+                  (push ev unread-command-events))
+                (setq dragging nil)))))))))
 
 ;;; Keymap & Major Mode
 
@@ -815,6 +855,9 @@
     (define-key map [mouse-1]        #'emacs-minder--mouse-click)
     (define-key map [double-mouse-1] #'emacs-minder--mouse-double-click)
     (define-key map [drag-mouse-1]   #'emacs-minder--mouse-drag-pan)
+    (define-key map [down-mouse-2]   #'emacs-minder--mouse-pan-track)
+    (define-key map [mouse-2]        #'ignore)
+    (define-key map [drag-mouse-2]   #'emacs-minder--mouse-drag-pan)
     (define-key map [wheel-up]       #'emacs-minder-zoom-in)
     (define-key map [wheel-down]     #'emacs-minder-zoom-out)
     (define-key map [mouse-4]        #'emacs-minder-zoom-in)
