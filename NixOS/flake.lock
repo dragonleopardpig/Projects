@@ -258,7 +258,7 @@
         "type": "github"
       }
     },
-    "nixpkgs-ags": {
+    "nixpkgs-legacy": {
       "locked": {
         "lastModified": 1777268161,
         "narHash": "sha256-bxrdOn8SCOv8tN4JbTF/TXq7kjo9ag4M+C8yzzIRYbE=",
@@ -370,9 +370,190 @@
         "type": "github"
       }
     },
+    "noctalia-agent-status": {
+      "inputs": {
+        "nixpkgs": [
+          "noctalia-suite",
+          "noctalia",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795406244,
+        "narHash": "sha256-rAWcdXIemB0Wi68/RIcQADmFZGHuHOtFvW9Y6TR0ioU=",
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-agent-status",
+        "rev": "6800ee12dc97fc7fcd57ccfef9767efa14511126",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-agent-status",
+        "type": "github"
+      }
+    },
+    "noctalia-always-on": {
+      "inputs": {
+        "nixpkgs": [
+          "noctalia-suite",
+          "noctalia",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795406247,
+        "narHash": "sha256-IE0AbyFE9fSAfgPc0TDjoHr5F2qfzrZcRJ1DslcjYoY=",
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-always-on",
+        "rev": "8329c2784dffddb5d7db30b1fcda595f50e8056d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-always-on",
+        "type": "github"
+      }
+    },
+    "noctalia-backup-status": {
+      "inputs": {
+        "nixpkgs": [
+          "noctalia-suite",
+          "noctalia",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795406242,
+        "narHash": "sha256-aoVS/+KLmYMRweGm7LYRxr1LtP4mOb71wPPdJCrtWKM=",
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-backup-status",
+        "rev": "026acf13665ca98c538e0aec5928f04bbf1a6b8c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-backup-status",
+        "type": "github"
+      }
+    },
+    "noctalia-gpu-status": {
+      "inputs": {
+        "nixpkgs": [
+          "noctalia-suite",
+          "noctalia",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795406246,
+        "narHash": "sha256-zAlXefPa8WW9x8DpheMNd0bVaSuZWHVGMGk5ES7JNuU=",
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-gpu-status",
+        "rev": "00ecec512c628c0b6801769d1c1dbf2648d81131",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-gpu-status",
+        "type": "github"
+      }
+    },
+    "noctalia-kitty-control": {
+      "inputs": {
+        "nixpkgs": [
+          "noctalia-suite",
+          "noctalia",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795406248,
+        "narHash": "sha256-JqN5VKJJNyYzcPr4J/QFJ74GxhriZnbwXYJF455taeU=",
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-kitty-control",
+        "rev": "e314d4a8bd479edcfa510136dab7357621addb73",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-kitty-control",
+        "type": "github"
+      }
+    },
+    "noctalia-rclone-control": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795406241,
+        "narHash": "sha256-IKjsN7fW7M1CF07SyW7aDB0PMr3pf36k5ieE59Kl7+U=",
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-rclone-control",
+        "rev": "241067aeb36a808cf423de2716ea030ba2b6f244",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-rclone-control",
+        "type": "github"
+      }
+    },
+    "noctalia-rclone-control_2": {
+      "inputs": {
+        "nixpkgs": [
+          "noctalia-suite",
+          "noctalia",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795406241,
+        "narHash": "sha256-IKjsN7fW7M1CF07SyW7aDB0PMr3pf36k5ieE59Kl7+U=",
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-rclone-control",
+        "rev": "241067aeb36a808cf423de2716ea030ba2b6f244",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-rclone-control",
+        "type": "github"
+      }
+    },
+    "noctalia-rsync-status": {
+      "inputs": {
+        "nixpkgs": [
+          "noctalia-suite",
+          "noctalia",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795406236,
+        "narHash": "sha256-6nKGD+PuL8XeVa3ivmXpBRWYvB2yGDJfrdZnjbotfCU=",
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-rsync-status",
+        "rev": "38891ab9f879eb90f9fbd651e6f8cf10a7c8875d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dragonleopardpig",
+        "repo": "noctalia-rsync-status",
+        "type": "github"
+      }
+    },
     "noctalia-suite": {
       "inputs": {
-        "noctalia": "noctalia"
+        "noctalia": "noctalia",
+        "noctalia-agent-status": "noctalia-agent-status",
+        "noctalia-always-on": "noctalia-always-on",
+        "noctalia-backup-status": "noctalia-backup-status",
+        "noctalia-gpu-status": "noctalia-gpu-status",
+        "noctalia-kitty-control": "noctalia-kitty-control",
+        "noctalia-rclone-control": "noctalia-rclone-control_2",
+        "noctalia-rsync-status": "noctalia-rsync-status"
       },
       "locked": {
         "path": "./noctalia",
@@ -450,11 +631,12 @@
         "impermanence": "impermanence",
         "minder-src": "minder-src",
         "nixpkgs": "nixpkgs_4",
+        "nixpkgs-legacy": "nixpkgs-legacy",
+        "noctalia-rclone-control": "noctalia-rclone-control",
         "noctalia-suite": "noctalia-suite",
         "pdf-prep": "pdf-prep",
         "walker": "walker",
-        "winapps": "winapps",
-        "nixpkgs-legacy": "nixpkgs-ags"
+        "winapps": "winapps"
       }
     },
     "systems": {

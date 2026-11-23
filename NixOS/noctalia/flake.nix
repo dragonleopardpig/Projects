@@ -6,13 +6,31 @@
     extra-trusted-public-keys = [ "noctalia.cachix.org-1:pCOR47nnMEo5thcxNDtzWpOxNFQsBRglJzxWPp3dkU4=" ];
   };
 
-  inputs.noctalia.url = "github:noctalia-dev/noctalia/cachix";
+  inputs = {
+    noctalia.url = "github:noctalia-dev/noctalia/cachix";
+    noctalia-agent-status = { url = "github:dragonleopardpig/noctalia-agent-status"; inputs.nixpkgs.follows = "noctalia/nixpkgs"; };
+    noctalia-always-on = { url = "github:dragonleopardpig/noctalia-always-on"; inputs.nixpkgs.follows = "noctalia/nixpkgs"; };
+    noctalia-backup-status = { url = "github:dragonleopardpig/noctalia-backup-status"; inputs.nixpkgs.follows = "noctalia/nixpkgs"; };
+    noctalia-gpu-status = { url = "github:dragonleopardpig/noctalia-gpu-status"; inputs.nixpkgs.follows = "noctalia/nixpkgs"; };
+    noctalia-kitty-control = { url = "github:dragonleopardpig/noctalia-kitty-control"; inputs.nixpkgs.follows = "noctalia/nixpkgs"; };
+    noctalia-rclone-control = { url = "github:dragonleopardpig/noctalia-rclone-control"; inputs.nixpkgs.follows = "noctalia/nixpkgs"; };
+    noctalia-rsync-status = { url = "github:dragonleopardpig/noctalia-rsync-status"; inputs.nixpkgs.follows = "noctalia/nixpkgs"; };
+  };
 
-  outputs = { self, noctalia }:
+  outputs = { self, noctalia, noctalia-agent-status, noctalia-always-on, noctalia-backup-status, noctalia-gpu-status, noctalia-kitty-control, noctalia-rclone-control, noctalia-rsync-status }:
     let
       system = "x86_64-linux";
       pkgs = noctalia.inputs.nixpkgs.legacyPackages.${system};
       lib = pkgs.lib;
+      pluginInputs = {
+        agent-status = noctalia-agent-status;
+        always-on = noctalia-always-on;
+        backup-status = noctalia-backup-status;
+        gpu-status = noctalia-gpu-status;
+        kitty-control = noctalia-kitty-control;
+        rclone-control = noctalia-rclone-control;
+        rsync-status = noctalia-rsync-status;
+      };
       shell = noctalia.packages.${system}.default.overrideAttrs (previous: {
         patches = (previous.patches or [ ]) ++ [
           ./suite/noctalia-umbriel-ipc.patch
@@ -28,7 +46,7 @@
           ./suite/tray-drawer-unpinned-widgets.patch
         ];
       });
-      suite = import ./suite { inherit pkgs shell; };
+      suite = import ./suite { inherit pkgs shell pluginInputs; };
     in {
       packages.${system} = {
         default = suite.suiteSession;
@@ -78,32 +96,33 @@
           force = true;
         };
         xdg.dataFile."noctalia-suite/noctalia/plugins/kitty-control" = {
-          source = ./suite/plugins/kitty-control;
+          source = noctalia-kitty-control.lib.pluginDir;
           force = true;
         };
         xdg.dataFile."noctalia-suite/noctalia/plugins/agent-status" = {
-          source = ./suite/plugins/agent-status;
+          source = noctalia-agent-status.lib.pluginDir;
+          force = true;
         };
         xdg.dataFile."noctalia-suite/noctalia/plugins/gpu-status" = {
-          source = ./suite/plugins/gpu-status;
+          source = noctalia-gpu-status.lib.pluginDir;
           force = true;
         };
         xdg.dataFile."noctalia-suite/noctalia/plugins/always-on" = {
-          source = ./suite/plugins/always-on;
+          source = noctalia-always-on.lib.pluginDir;
           force = true;
         };
         xdg.dataFile."noctalia-suite/noctalia/plugins/rsync-status" = {
-          source = ./suite/plugins/rsync-status;
+          source = noctalia-rsync-status.lib.pluginDir;
           force = true;
         };
         xdg.dataFile."noctalia-suite/noctalia/plugins/rclone-status" = {
-          source = ./suite/plugins/rclone-status;
+          source = noctalia-rclone-control.lib.pluginDir;
           force = true;
         };
         # Its helper, backup-pool, comes with the host's backup (hosts/M90aPro/backup.nix);
         # on hosts without one the icon hides itself.
         xdg.dataFile."noctalia-suite/noctalia/plugins/backup-status" = {
-          source = ./suite/plugins/backup-status;
+          source = noctalia-backup-status.lib.pluginDir;
           force = true;
         };
         home.file.".local/bin/noctalia-agent-status".source = lib.getExe suite.agentStatus;

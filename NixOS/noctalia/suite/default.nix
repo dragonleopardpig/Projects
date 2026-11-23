@@ -1,6 +1,7 @@
-{ pkgs, shell }:
+{ pkgs, shell, pluginInputs }:
 let
   inherit (pkgs) lib;
+  system = pkgs.stdenv.hostPlatform.system;
   toml = pkgs.formats.toml { };
   theme = import ./theme.nix { inherit pkgs; };
   umbriel = pkgs.umbriel.overrideAttrs (previous: {
@@ -85,131 +86,43 @@ let
     runtimeInputs = [ pkgs.procps pkgs.coreutils pkgs.libnotify ];
     text = builtins.readFile ./stop-recording.sh;
   };
-  agentStatus = pkgs.writeShellApplication {
-    name = "noctalia-agent-status";
-    runtimeInputs = [ pkgs.python3 ];
-    text = ''
-      exec python3 ${./agent-status.py} "$@"
-    '';
-  };
-  agentHooks = (pkgs.formats.json { }).generate "noctalia-agent-hooks.json" {
-    noctalia-desktop-status =
-      let
-        handler = event: {
-          type = "command";
-          command = "${lib.getExe agentStatus} hook ${event}";
-          timeout = 2;
-        };
-      in {
-        SessionStart = [ (handler "SessionStart") ];
-        PreInvocation = [ (handler "PreInvocation") ];
-        PreToolUse = [ { matcher = ".*"; hooks = [ (handler "PreToolUse") ]; } ];
-        PostToolUse = [ { matcher = ".*"; hooks = [ (handler "PostToolUse") ]; } ];
-        Stop = [ (handler "Stop") ];
-      };
-  };
-  agentStatusCheck = pkgs.runCommand "noctalia-agent-status-checked" {
-    nativeBuildInputs = [ pkgs.python3 ];
-  } ''
-    python3 ${./test-agent-status.py} ${./agent-status.py}
-    touch $out
-  '';
-  gpuStatus = pkgs.writeShellApplication {
-    name = "noctalia-gpu-status";
-    runtimeInputs = [ umbriel pkgs.python3 ];
-    text = ''
-      exec python3 ${./gpu-status.py} "$@"
-    '';
-  };
-  gpuStatusCheck = pkgs.runCommand "noctalia-gpu-status-checked" {
-    nativeBuildInputs = [ pkgs.python3 ];
-  } ''
-    python3 ${./test-gpu-status.py} ${./gpu-status.py}
-    touch $out
-  '';
-  rsyncStatus = pkgs.writeShellApplication {
-    name = "noctalia-rsync-status";
-    runtimeInputs = [ pkgs.python3 pkgs.coreutils pkgs.less pkgs.rsync pkgs.zenity ];
-    text = ''
-      exec python3 ${./rsync-status.py} "$@"
-    '';
-  };
-  rsyncStatusCheck = pkgs.runCommand "noctalia-rsync-status-checked" {
-    nativeBuildInputs = [ pkgs.python3 ];
-  } ''
-    python3 ${./test-rsync-status.py} ${./rsync-status.py}
-    touch $out
-  '';
-  rsyncStatusPluginCheck = pkgs.runCommand "noctalia-rsync-status-plugin-checked" {
-    nativeBuildInputs = [ pkgs.luau ];
-  } ''
-    for entry in service bar panel; do
-      {
-        printf 'local TEST_ENTRY = "%s"\n' "$entry"
-        cat ${./test-rsync-status-plugin.luau}
-      } | sed -e '/^--@COMMON@$/{r ${./plugins/rsync-status/common.luau}' -e 'd}' \
-              -e "/^--@ENTRY@$/{r ${./plugins/rsync-status}/$entry.luau" -e 'd}' \
-        | sed 's|require("./common\.luau")|commonModule|g' > "test_$entry.luau"
-      luau "test_$entry.luau"
-    done
-    touch $out
-  '';
-  rcloneStatus = pkgs.writeShellApplication {
-    name = "noctalia-rclone-status";
-    runtimeInputs = [ pkgs.python3 pkgs.coreutils pkgs.systemd ];
-    text = ''
-      exec python3 ${./rclone-status.py} "$@"
-    '';
-  };
-  rcloneStatusCheck = pkgs.runCommand "noctalia-rclone-status-checked" {
-    nativeBuildInputs = [ pkgs.python3 ];
-  } ''
-    python3 ${./test-rclone-status.py} ${./rclone-status.py}
-    touch $out
-  '';
-  rcloneStatusPluginCheck = pkgs.runCommand "noctalia-rclone-status-plugin-checked" {
-    nativeBuildInputs = [ pkgs.luau ];
-  } ''
-    for entry in service bar panel; do
-      {
-        printf 'local TEST_ENTRY = "%s"\n' "$entry"
-        cat ${./test-rclone-status-plugin.luau}
-      } | sed -e '/^--@COMMON@$/{r ${./plugins/rclone-status/common.luau}' -e 'd}' \
-              -e "/^--@ENTRY@$/{r ${./plugins/rclone-status}/$entry.luau" -e 'd}' \
-        | sed 's|require("./common\.luau")|commonModule|g' > "test_$entry.luau"
-      luau "test_$entry.luau"
-    done
-    touch $out
-  '';
+  agentStatus = pluginInputs.agent-status.packages.${system}.helper;
+  agentHooks = pluginInputs.agent-status.packages.${system}.hooks;
+  agentStatusCheck = pluginInputs.agent-status.checks.${system}.helper;
+  gpuStatus = pluginInputs.gpu-status.lib.mkHelper { inherit pkgs umbriel; };
+  gpuStatusCheck = pluginInputs.gpu-status.checks.${system}.helper;
+  rsyncStatus = pluginInputs.rsync-status.packages.${system}.helper;
+  rsyncStatusCheck = pluginInputs.rsync-status.checks.${system}.helper;
+  rsyncStatusPluginCheck = pluginInputs.rsync-status.checks.${system}.plugin;
+  rcloneStatus = pluginInputs.rclone-control.packages.${system}.helper;
+  rcloneStatusCheck = pluginInputs.rclone-control.checks.${system}.helper;
+  rcloneStatusPluginCheck = pluginInputs.rclone-control.checks.${system}.plugin;
   # The backup icon (plugins/backup-status): hidden without the helper, the percentage while
   # it runs, Run/Stop/Browse and the settings form call `backup-pool` (scripts/backup-pool.py,
   # tested with the M90aPro backup in the main flake: tests/test-backup-pool.py, m90-backup).
-  backupStatusPluginCheck = pkgs.runCommand "noctalia-backup-status-plugin-checked" {
-    nativeBuildInputs = [ pkgs.luau ];
-  } ''
-    for entry in service bar panel; do
-      {
-        printf 'local TEST_ENTRY = "%s"\n' "$entry"
-        cat ${./test-backup-status-plugin.luau}
-      } | sed -e '/^--@COMMON@$/{r ${./plugins/backup-status/common.luau}' -e 'd}' \
-              -e "/^--@ENTRY@$/{r ${./plugins/backup-status}/$entry.luau" -e 'd}' \
-        | sed 's|require("./common\.luau")|commonModule|g' > "test_$entry.luau"
-      luau "test_$entry.luau"
-    done
-    touch $out
+  backupStatusPluginCheck = pluginInputs.backup-status.checks.${system}.plugin;
+  pluginsDir = pkgs.runCommand "noctalia-local-plugins" { } ''
+    mkdir -p $out
+    cp -r ${pluginInputs.agent-status.lib.pluginDir} $out/agent-status
+    cp -r ${pluginInputs.always-on.lib.pluginDir} $out/always-on
+    cp -r ${pluginInputs.backup-status.lib.pluginDir} $out/backup-status
+    cp -r ${pluginInputs.gpu-status.lib.pluginDir} $out/gpu-status
+    cp -r ${pluginInputs.kitty-control.lib.pluginDir} $out/kitty-control
+    cp -r ${pluginInputs.rclone-control.lib.pluginDir} $out/rclone-status
+    cp -r ${pluginInputs.rsync-status.lib.pluginDir} $out/rsync-status
   '';
   # Noctalia's own lint of every local plugin: a manifest it rejects leaves the plugin
   # silently missing from the bar (a menu panel once lacked max_height).  The
   # self-test first proves such a manifest fails.
   pluginLintCheck = pkgs.runCommand "noctalia-plugin-lint-checked" { } ''
     export HOME="$TMPDIR" XDG_CONFIG_HOME="$TMPDIR/config" XDG_STATE_HOME="$TMPDIR/state"
-    cp -r ${./plugins/backup-status} bad && chmod -R u+w bad
+    cp -r ${pluginsDir}/backup-status bad && chmod -R u+w bad
     sed -i '/^max_height = /d' bad/plugin.toml
     if ${lib.getExe shell} plugins lint bad > bad.log 2>&1; then
       echo "self-test: a panel without max_height passed the lint"; exit 1
     fi
     grep -q 'requires max_height' bad.log
-    ${lib.getExe shell} plugins lint ${./plugins}/*/
+    ${lib.getExe shell} plugins lint ${pluginsDir}/*/
     touch $out
   '';
   # Every bar icon has its own neon colour (no two alike, neighbours clearly apart) and the
@@ -219,7 +132,7 @@ let
     nativeBuildInputs = [ pkgs.python3 ];
   } ''
     icons() {
-      python3 ${./check-bar-icons.py} --plugins ${./plugins} "$@"
+      python3 ${./check-bar-icons.py} --plugins ${pluginsDir} "$@"
     }
     sed 's/^color = "#4DA9FF"$/color = "#CCFF00"/' ${shellConfig} > repeated.toml
     sed 's/^color = "#4DA9FF"$/color = "#2A3BA0"/' ${shellConfig} > dark.toml
@@ -247,26 +160,22 @@ let
         --tabler ${shell}/share/noctalia/assets/fonts/tabler.json \
         --registry ${shell.src}/lib/render/text/glyph_registry.cpp "$@"
     }
-    cp -r ${./plugins} plugins && chmod -R u+w plugins
+    cp -r ${pluginsDir} plugins && chmod -R u+w plugins
     printf 'ui.button({ glyph = "rotate-ccw" })\n' >> plugins/rsync-status/panel.luau
     if glyphs --plugins plugins 2> bad.log; then
       echo "self-test: an unknown glyph was not caught"; exit 1
     fi
     grep -q "unknown glyph 'rotate-ccw'" bad.log
-    glyphs --plugins ${./plugins} ${./settings.nix} ${./gpu-status.py} ${./rsync-status.py} \
-      ${./rclone-status.py} ${./agent-status.py}
+    glyphs --plugins ${pluginsDir} ${./settings.nix} \
+      ${pluginInputs.gpu-status.lib.helperScript} \
+      ${pluginInputs.rsync-status.lib.helperScript} \
+      ${pluginInputs.rclone-control.lib.helperScript} \
+      ${pluginInputs.agent-status.lib.helperScript}
     touch $out
   '';
   # The always-on cup (plugins/always-on): a click shows the new glyph at once, a failed
   # switch puts it back, a terminal `always-on off` reaches it through the status stream.
-  alwaysOnPluginCheck = pkgs.runCommand "noctalia-always-on-plugin-checked" {
-    nativeBuildInputs = [ pkgs.luau ];
-  } ''
-    sed -e '/^--@PLUGIN@$/{r ${./plugins/always-on/bar.luau}' -e 'd}' \
-      ${./test-always-on-plugin.luau} > test.luau
-    luau test.luau
-    touch $out
-  '';
+  alwaysOnPluginCheck = pluginInputs.always-on.checks.${system}.plugin;
   syncPython = pkgs.python3.withPackages (ps: [ ps.tomlkit ]);
   syncSettings = pkgs.writeShellApplication {
     name = "noctalia-sync-settings";

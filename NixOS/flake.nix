@@ -46,6 +46,10 @@
       inputs.elephant.follows = "elephant";
     };
     noctalia-suite.url = "path:./noctalia";
+    noctalia-rclone-control = {
+      url = "github:dragonleopardpig/noctalia-rclone-control";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # Opt-in root wiping (modules/impermanence.nix); only PortableSSD enables it.
     impermanence = {
       url = "github:nix-community/impermanence";
