@@ -2,6 +2,12 @@
 (setq warning-minimum-level :emergency)
 (setq package-enable-at-startup nil)
 
+;; Emacs 31 no longer preloads `info' before `scimax/packages.el' mutates
+;; `Info-directory-list'; initialize it so hosts with an un-pulled scimax
+;; checkout still complete init cleanly.
+(require 'info)
+(info-initialize)
+
 ;; * Dynamic module dlopen on NixOS
 ;; Precompiled .so files from ELPA (jinx-mod.so, pdf-tools, vterm-module,
 ;; tree-sitter shared libs…) call dlopen() at module-load time and look
