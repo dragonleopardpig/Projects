@@ -24,6 +24,7 @@
 (require 'cl-lib)
 (require 'dirvish)
 (require 'face-remap)
+(require 'mwheel)
 (require 'shr)
 (require 'subr-x)
 (require 'enhanced-dirvish-prefs)
@@ -58,8 +59,8 @@
 (defvar enhanced-dirvish-active-preview-file nil
   "Path of file currently previewed in Dirvish.")
 
-(defvar enhanced-dirvish-preview-pdf-page 1
-  "Current 1-based page displayed in PDF preview.")
+(defvar-local enhanced-dirvish-preview--pdf-state nil
+  "File, page, and metadata of the PDF shown in this preview buffer.")
 
 (defvar enhanced-dirvish-media-proc nil "Active headless mpv playback process.")
 (defvar enhanced-dirvish-media-socket nil "Unix domain IPC socket for active mpv playback.")
@@ -253,21 +254,32 @@ previews."
 
 (defun enhanced-dirvish-preview--refresh-now ()
   "Force immediate re-render of active Dirvish or standalone preview buffer."
-  (when-let ((win (enhanced-dirvish-preview--active-window)))
-    (when enhanced-dirvish-active-preview-file
-      ;; Invalidate cached special preview buffers when zooming images/PDFs
-      (when (memq enhanced-dirvish-active-preview-kind '(image pdf))
-        (dolist (b (buffer-list))
-          (when (string-prefix-p " *Dirvish-preview-" (buffer-name b))
-            (kill-buffer b))))
-      (let ((dv (ignore-errors (dirvish-curr))))
-        (enhanced-dirvish-preview--dispatch-dirvish-or-standalone dv enhanced-dirvish-active-preview-file win)))))
+  (when-let* ((win (enhanced-dirvish-preview--active-window)))
+    (if-let* ((pdf (buffer-local-value 'enhanced-dirvish-preview--pdf-state
+                                      (window-buffer win))))
+        (enhanced-dirvish-preview--render-pdf
+         (plist-get pdf :file) win (window-buffer win) (plist-get pdf :page))
+      (when enhanced-dirvish-active-preview-file
+        (when (eq enhanced-dirvish-active-preview-kind 'image)
+          (dolist (b (buffer-list))
+            (when (string-prefix-p " *Dirvish-preview-img-" (buffer-name b))
+              (kill-buffer b))))
+        (let ((dv (ignore-errors (dirvish-curr))))
+          (enhanced-dirvish-preview--dispatch-dirvish-or-standalone
+           dv enhanced-dirvish-active-preview-file win))))))
+
+(defun enhanced-dirvish-preview--zoom-kind ()
+  "Return the preview kind to zoom, using the visible PDF when present."
+  (if (when-let* ((win (enhanced-dirvish-preview--active-window)))
+        (buffer-local-value 'enhanced-dirvish-preview--pdf-state (window-buffer win)))
+      'pdf
+    enhanced-dirvish-active-preview-kind))
 
 (defun enhanced-dirvish-preview-zoom-in ()
   "Zoom in ONLY the currently active preview type (`text', `image', or `pdf')."
   (interactive)
   (let ((p (enhanced-dirvish-prefs)))
-    (pcase enhanced-dirvish-active-preview-kind
+    (pcase (enhanced-dirvish-preview--zoom-kind)
       ('image
        (let ((next (min 4.0 (* (enhanced-dirvish-prefs-preview-image-scale p) 1.2))))
          (setf (enhanced-dirvish-prefs-preview-image-scale p) next)
@@ -291,7 +303,7 @@ previews."
   "Zoom out ONLY the currently active preview type (`text', `image', or `pdf')."
   (interactive)
   (let ((p (enhanced-dirvish-prefs)))
-    (pcase enhanced-dirvish-active-preview-kind
+    (pcase (enhanced-dirvish-preview--zoom-kind)
       ('image
        (let ((next (max 0.25 (/ (enhanced-dirvish-prefs-preview-image-scale p) 1.2))))
          (setf (enhanced-dirvish-prefs-preview-image-scale p) next)
@@ -315,7 +327,7 @@ previews."
   "Reset zoom for the currently active preview type back to 100% / 0."
   (interactive)
   (let ((p (enhanced-dirvish-prefs)))
-    (pcase enhanced-dirvish-active-preview-kind
+    (pcase (enhanced-dirvish-preview--zoom-kind)
       ('image
        (setf (enhanced-dirvish-prefs-preview-image-scale p) 1.0)
        (enhanced-dirvish-prefs-save)
@@ -474,6 +486,9 @@ zoom commands do."
          (let ((inhibit-read-only t))
            (erase-buffer)
            (insert-buffer-substring b))
+         (when-let* ((pdf (buffer-local-value 'enhanced-dirvish-preview--pdf-state b)))
+           (setq enhanced-dirvish-preview--pdf-state pdf)
+           (enhanced-dirvish-preview-pdf-mode 1))
          (setq-local truncate-lines (not (enhanced-dirvish-prefs-preview-text-wrap (enhanced-dirvish-prefs))))
          (goto-char (point-min))))
       (`(shell . ,cmd)
@@ -559,14 +574,18 @@ zoom commands do."
 (defun enhanced-dirvish-scroll-preview-down ()
   "Scroll preview window down (`J')."
   (interactive)
-  (when-let ((win (enhanced-dirvish-preview--active-window)))
-    (with-selected-window win (scroll-up-command 5))))
+  (when-let* ((win (enhanced-dirvish-preview--active-window)))
+    (if (buffer-local-value 'enhanced-dirvish-preview--pdf-state (window-buffer win))
+        (enhanced-dirvish-pdf-page-step 1 win)
+      (with-selected-window win (scroll-up-command 5)))))
 
 (defun enhanced-dirvish-scroll-preview-up ()
   "Scroll preview window up (`K')."
   (interactive)
-  (when-let ((win (enhanced-dirvish-preview--active-window)))
-    (with-selected-window win (scroll-down-command 5))))
+  (when-let* ((win (enhanced-dirvish-preview--active-window)))
+    (if (buffer-local-value 'enhanced-dirvish-preview--pdf-state (window-buffer win))
+        (enhanced-dirvish-pdf-page-step -1 win)
+      (with-selected-window win (scroll-down-command 5)))))
 
 (defun enhanced-dirvish-preview--split-standalone-window (main)
   "Create a normal (non-side) right preview window split from MAIN."
@@ -841,6 +860,7 @@ browser (`SPC')."
   "Scroll read-only preview buffer forward (`SPC')."
   (interactive)
   (cond
+   (enhanced-dirvish-preview--pdf-state (enhanced-dirvish-pdf-page-step 1 (selected-window)))
    ((derived-mode-p 'pdf-view-mode) (call-interactively #'pdf-view-scroll-up-or-next-page))
    ((derived-mode-p 'doc-view-mode) (call-interactively #'doc-view-scroll-up-or-next-page))
    ((derived-mode-p 'image-mode) (call-interactively #'image-scroll-up))
@@ -850,6 +870,7 @@ browser (`SPC')."
   "Scroll read-only preview buffer backward (`DEL' / `S-SPC')."
   (interactive)
   (cond
+   (enhanced-dirvish-preview--pdf-state (enhanced-dirvish-pdf-page-step -1 (selected-window)))
    ((derived-mode-p 'pdf-view-mode) (call-interactively #'pdf-view-scroll-down-or-previous-page))
    ((derived-mode-p 'doc-view-mode) (call-interactively #'doc-view-scroll-down-or-previous-page))
    ((derived-mode-p 'image-mode) (call-interactively #'image-scroll-down))
@@ -1502,39 +1523,100 @@ except Exception as e:
           (goto-char (point-min))))
       `(buffer . ,buf))))
 
+(defun enhanced-dirvish-preview--pdf-info (file)
+  "Read Poppler's metadata for FILE."
+  (when (executable-find "pdfinfo")
+    (let ((process-environment (cons "LC_ALL=C" process-environment)))
+      (with-temp-buffer
+        (when (eq 0 (ignore-errors (process-file "timeout" nil t nil "2" "pdfinfo" file)))
+          (buffer-string))))))
+
+(defun enhanced-dirvish-preview--pdf-raster (file page size png)
+  "Cache FILE's PAGE rendered at SIZE pixels, and return whether PNG exists."
+  (or (file-exists-p png)
+      (progn
+        (make-directory enhanced-dirvish-thumbnail-dir t)
+        (let* ((staging (make-temp-file
+                         (expand-file-name ".pdf-" enhanced-dirvish-thumbnail-dir) t))
+               (base (expand-file-name "page" staging)))
+          (unwind-protect
+              (when (and (eq 0 (ignore-errors
+                                 (process-file "timeout" nil nil nil "3" "pdftoppm"
+                                               "-png" "-singlefile" "-f" (number-to-string page)
+                                               "-scale-to" (number-to-string size) file base)))
+                         (file-exists-p (concat base ".png")))
+                (rename-file (concat base ".png") png t)
+                t)
+            (delete-directory staging t))))))
+
+(defun enhanced-dirvish-preview--render-pdf (file win buf page &optional turning)
+  "Render PAGE of FILE for WIN into BUF.
+When TURNING, retain the current page if Poppler cannot render the new one."
+  (let* ((default-directory temporary-file-directory)
+         (unsafe (enhanced-dirvish-path-unsafe-probe-p file))
+         (attrs (unless unsafe (file-attributes file))))
+    (when (or attrs (and unsafe (eq (enhanced-dirvish-path-mount-kind file) 'removable)))
+      (let* ((old (buffer-local-value 'enhanced-dirvish-preview--pdf-state (window-buffer win)))
+             (revision (when attrs
+                         (list (file-attribute-modification-time attrs) (file-attribute-size attrs))))
+             (info (if (and (equal file (plist-get old :file))
+                            (equal revision (plist-get old :revision)))
+                       (plist-get old :info)
+                     (enhanced-dirvish-preview--pdf-info file)))
+             (count (and info (string-match "^Pages:[ \t]+\\([1-9][0-9]*\\)" info)
+                         (string-to-number (match-string 1 info))))
+             (page (max 1 (if count (min page count) page)))
+             (scale (enhanced-dirvish-prefs-preview-pdf-scale (enhanced-dirvish-prefs)))
+             (size (max 1 (round (* (window-pixel-width win) 0.88 scale))))
+             (png (expand-file-name (format "pdf-%s-%s-p%d-%d.png"
+                                            (md5 file) (md5 (prin1-to-string revision)) page size)
+                                    enhanced-dirvish-thumbnail-dir))
+             (rendered (enhanced-dirvish-preview--pdf-raster file page size png)))
+        (when (or rendered (not turning))
+          (with-current-buffer buf
+            (let ((inhibit-read-only t))
+              (erase-buffer)
+              (insert (propertize
+                       (format "  %s PDF Page %d%s · Zoom %.0f%%\n\n"
+                               (enhanced-dirvish-icon-glyph 'file-pdf 'enhanced-dirvish-header-accent)
+                               page (if count (format " of %d" count) "") (* 100 scale))
+                       'face 'enhanced-dirvish-header-accent))
+              (if rendered
+                  (when (display-graphic-p (window-frame win))
+                    (when-let* ((img (create-image png 'png nil :max-width size)))
+                      (insert "  ")
+                      (insert-image img "[pdf page]")
+                      (insert "\n\n")))
+                (insert "  Could not render this PDF page.\n\n"))
+              (when info (insert info))
+              (setq enhanced-dirvish-preview--pdf-state
+                    (list :file file :revision revision :info info :count count :page page))
+              (setq-local enhanced-dirvish-preview--file file
+                          buffer-read-only t
+                          truncate-lines (not (enhanced-dirvish-prefs-preview-text-wrap
+                                               (enhanced-dirvish-prefs))))
+              (enhanced-dirvish-preview-pdf-mode 1)
+              (goto-char (point-min))
+              (set-buffer-modified-p nil)
+              (when (eq (window-buffer win) buf)
+                (set-window-point win (point-min))
+                (set-window-start win (point-min))
+                (set-window-vscroll win 0))))
+          t)))))
+
 (dirvish-define-preview enhanced-dirvish-rich-pdf (file ext preview-window _dv)
-  "Enhanced Dirvish PDF preview honoring independent `preview-pdf-scale' & page metadata."
+  "Display FILE's PDF page and its metadata in PREVIEW-WINDOW."
   (when (and file (string= (downcase (or ext "")) "pdf") (executable-find "pdftoppm"))
-    (setq enhanced-dirvish-active-preview-file file
-          enhanced-dirvish-active-preview-kind 'pdf)
-    (let* ((scale (enhanced-dirvish-prefs-preview-pdf-scale (enhanced-dirvish-prefs)))
-           (base-w (round (* (window-pixel-width preview-window) 0.88 scale)))
-           (base (expand-file-name (format "pdf-%s-p%d-%d" (md5 file) enhanced-dirvish-preview-pdf-page (round (* 100 scale)))
-                                   enhanced-dirvish-thumbnail-dir))
-           (png (concat base ".png"))
-           (buf (enhanced-dirvish-preview--make-buffer (format " *Dirvish-preview-pdf-%s*" (md5 file)) 'pdf)))
-      (make-directory enhanced-dirvish-thumbnail-dir t)
-      (unless (file-exists-p png)
-        (ignore-errors
-          (process-file "timeout" nil nil nil "3" "pdftoppm" "-png" "-singlefile"
-                        "-f" (number-to-string enhanced-dirvish-preview-pdf-page)
-                        "-scale-to" (number-to-string base-w)
-                        file base)))
-      (with-current-buffer buf
-        (let ((inhibit-read-only t))
-          (insert (propertize (format "  %s PDF Page %d · Zoom %.0f%%  ([C-+/C--/C-0] · [M-PgUp/Dn] Page)\n\n"
-                                      (enhanced-dirvish-icon-glyph 'file-pdf 'enhanced-dirvish-header-accent)
-                                      enhanced-dirvish-preview-pdf-page (* 100 scale))
-                              'face 'enhanced-dirvish-header-accent))
-          (when (and (display-graphic-p) (file-exists-p png))
-            (when-let ((img (create-image png 'png nil :max-width base-w)))
-              (insert "  ")
-              (insert-image img "[pdf page]")
-              (insert "\n\n")))
-          (when (executable-find "pdfinfo")
-            (process-file "timeout" nil t nil "2" "pdfinfo" file))
-          (goto-char (point-min))))
-      `(buffer . ,buf))))
+    (let* ((old (buffer-local-value 'enhanced-dirvish-preview--pdf-state
+                                    (window-buffer preview-window)))
+           (page (if (equal file (plist-get old :file)) (plist-get old :page) 1))
+           (buf (get-buffer-create (format " *Dirvish-preview-pdf-%s*" (md5 file)))))
+      (when (enhanced-dirvish-preview--render-pdf file preview-window buf page)
+        (setq enhanced-dirvish-active-preview-file file
+              enhanced-dirvish-active-preview-kind 'pdf)
+        (with-current-buffer buf
+          (enhanced-dirvish-preview--sync-text-scale))
+        `(buffer . ,buf)))))
 
 (dirvish-define-preview enhanced-dirvish-rich-document (file ext _preview-window _dv)
   "Render Markdown, Org, HTML, DOCX, ODT, RTF, CSV, XLSX, Fonts, 3D/Routes & Archives."
@@ -1601,12 +1683,45 @@ except Exception as e:
         (setq enhanced-dirvish-active-preview-file file enhanced-dirvish-active-preview-kind 'text)
         nil)))))
 
-(defun enhanced-dirvish-pdf-page-step (delta)
-  "Turn PDF preview page by DELTA."
+(defun enhanced-dirvish-pdf-page-step (delta &optional window)
+  "Turn the PDF preview in WINDOW by DELTA pages."
   (interactive "p")
-  (setq enhanced-dirvish-preview-pdf-page (max 1 (+ enhanced-dirvish-preview-pdf-page delta)))
-  (enhanced-dirvish-preview--refresh-now)
-  (message "PDF preview page %d" enhanced-dirvish-preview-pdf-page))
+  (when-let* ((win (or window (enhanced-dirvish-preview--active-window)))
+              (buf (and (window-live-p win) (window-buffer win)))
+              (pdf (buffer-local-value 'enhanced-dirvish-preview--pdf-state buf)))
+    (let* ((current (plist-get pdf :page))
+           (count (plist-get pdf :count))
+           (target (max 1 (+ current delta)))
+           (page (if count (min count target) target)))
+      (unless (= page current)
+        (enhanced-dirvish-preview--render-pdf (plist-get pdf :file) win buf page t)))))
+
+(defun enhanced-dirvish-preview--pdf-wheel (event)
+  "Turn a PDF page at EVENT's window, or pan when zoomed in."
+  (interactive "e")
+  (let ((win (posn-window (event-start event))))
+    (if (and (window-live-p win)
+             (buffer-local-value 'enhanced-dirvish-preview--pdf-state (window-buffer win))
+             (<= (enhanced-dirvish-prefs-preview-pdf-scale (enhanced-dirvish-prefs)) 1.0))
+        (enhanced-dirvish-pdf-page-step
+         (if (memq (event-basic-type event) '(wheel-up mouse-4)) -1 1) win)
+      (let ((mouse-wheel-follow-mouse t))
+        (mwheel-scroll event)))))
+
+(defvar enhanced-dirvish-preview-pdf-mode-map
+  (let ((map (make-sparse-keymap)))
+    (dolist (key '("<up>" "<prior>" "M-<prior>"))
+      (define-key map (kbd key) (lambda () (interactive) (enhanced-dirvish-pdf-page-step -1))))
+    (dolist (key '("<down>" "<next>" "M-<next>"))
+      (define-key map (kbd key) (lambda () (interactive) (enhanced-dirvish-pdf-page-step 1))))
+    (dolist (key '("<wheel-up>" "<wheel-down>" "<mouse-4>" "<mouse-5>"))
+      (define-key map (kbd key) #'enhanced-dirvish-preview--pdf-wheel))
+    map)
+  "Page navigation bindings local to rasterized PDF previews.")
+
+(define-minor-mode enhanced-dirvish-preview-pdf-mode
+  "Turn pages in an Enhanced Dirvish PDF preview."
+  :keymap enhanced-dirvish-preview-pdf-mode-map)
 
 ;;;; Headless MPV IPC Playback Controls for Audio & Video Previews
 

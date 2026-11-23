@@ -283,6 +283,50 @@ sidebar (28 -> 14 columns), because the split halved the whole browser."
               ;; Closing/maximizing a pane must not kill its file browser.
               (should (buffer-live-p buffer)))))))))
 
+(ert-deftest enhanced-dirvish-test-window-pdf-preview-page-keys-and-wheel ()
+  "Scroll a two-page PDF using the actual preview bindings in each layout."
+  (skip-unless (and (executable-find "pdfinfo") (executable-find "pdftoppm")
+                    (executable-find "timeout")))
+  (dolist (mode '(columns compact))
+    (ert-info ((symbol-name mode))
+      (enhanced-dirvish-window-test--with-browser mode
+        (let ((file (expand-file-name "pages.pdf" directory))
+              (enhanced-dirvish-thumbnail-dir (expand-file-name "previews" enhanced-dirvish-state-dir)))
+          (with-temp-file file
+            (insert "%PDF-1.4\n"
+                    "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+                    "2 0 obj\n<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>\nendobj\n"
+                    "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Resources << >> >>\nendobj\n"
+                    "4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << >> >>\nendobj\n"
+                    "trailer\n<< /Size 5 /Root 1 0 R >>\n%%EOF\n"))
+          (enhanced-dirvish-refresh-active-view)
+          (should (enhanced-dirvish-goto-file file))
+          (execute-kbd-macro (kbd "SPC"))
+          (let* ((preview (enhanced-dirvish-preview--active-window))
+                 (buf (window-buffer preview))
+                 (page (lambda ()
+                         (plist-get (buffer-local-value 'enhanced-dirvish-preview--pdf-state buf)
+                                    :page))))
+            (should (eq (selected-window) main))
+            (should (= (funcall page) 1))
+            (execute-kbd-macro (vector (list 'wheel-down (list preview 1 '(8 . 8) 0))))
+            (should (= (funcall page) 2))
+            (should (eq (selected-window) main))
+            (execute-kbd-macro (kbd "<right>"))
+            (should (eq (selected-window) preview))
+            (execute-kbd-macro (kbd "<down>"))
+            (should (= (funcall page) 2))
+            (execute-kbd-macro (kbd "<prior>"))
+            (should (= (funcall page) 1))
+            (execute-kbd-macro (kbd "SPC"))
+            (should (= (funcall page) 2))
+            (execute-kbd-macro (kbd "<up>"))
+            (should (= (funcall page) 1))
+            (execute-kbd-macro (kbd "<next> C-+"))
+            (should (= (funcall page) 2))
+            (should (string-match-p "PDF Page 2 of 2" (with-current-buffer buf (buffer-string))))
+            (should (directory-files enhanced-dirvish-thumbnail-dir nil "-p2-.*\\.png\\'"))))))))
+
 (ert-deftest enhanced-dirvish-test-window-preview-zoom-survives-return-and-refresh ()
   "Keyboard zoom persists after leaving/rebuilding previews in every layout."
   (dolist (mode '(compact icons list columns))
