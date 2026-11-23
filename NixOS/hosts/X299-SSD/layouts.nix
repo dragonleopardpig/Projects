@@ -1,6 +1,6 @@
 # Root filesystem layouts for X299-SSD (the same as hosts/Crucial-SSD/layouts.nix).
 #
-#   btrfs -- after hosts/X299-SSD/MIGRATE.md: btrfs subvolumes inside the LUKS
+#   btrfs -- the disk since 2026-11-22 (MIGRATE.md): btrfs subvolumes inside the LUKS
 #            container, / wiped on every boot (modules/impermanence.nix), dev
 #            artifacts AND dependency environments cleaned (this disk is a spare
 #            and the Projects mirror; nothing on it needs a warm devenv).
@@ -29,7 +29,7 @@ in
 {
   options.custom.x299Layout = lib.mkOption {
     type = lib.types.enum [ "ext4" "btrfs" ];
-    default = "ext4";
+    default = "btrfs";
     description = "Root filesystem layout of the X299-SSD disk (see hosts/X299-SSD/MIGRATE.md).";
   };
 

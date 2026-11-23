@@ -314,14 +314,14 @@ prepared_system() {
 phase_prepare() {
   need_root
   run mkdir -p "$STAGE"
-  say "Building nixosConfigurations.X299-SSD-btrfs (kept alive by $STAGE/system)"
-  run nix build --impure "path:$REPO#nixosConfigurations.X299-SSD-btrfs.config.system.build.toplevel" \
+  say "Building nixosConfigurations.X299-SSD (kept alive by $STAGE/system)"
+  run nix build --impure "path:$REPO#nixosConfigurations.X299-SSD.config.system.build.toplevel" \
     --out-link "$STAGE/system"
   say "Listing the paths the btrfs system persists"
   local list
   # shellcheck disable=SC2016  # Nix code, not shell
   list=$(nix eval --impure --raw \
-    "path:$REPO#nixosConfigurations.X299-SSD-btrfs.config.environment.persistence" \
+    "path:$REPO#nixosConfigurations.X299-SSD.config.environment.persistence" \
     --apply 'p: let x = p."/persist"; in builtins.concatStringsSep "\n"
       (map (d: "dir ${d.dirPath}") x.directories ++ map (f: "file ${f.filePath}") x.files) + "\n"')
   if [ "$DRY" = 1 ]; then printf '%s\n' "$list"; else printf '%s\n' "$list" > "$STAGE/persist.txt"; fi

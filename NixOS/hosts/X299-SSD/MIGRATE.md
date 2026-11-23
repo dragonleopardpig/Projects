@@ -59,7 +59,7 @@ reads that image through dm-crypt.  The passphrase lives only in a RAM file.
    destructive one asks for a typed word first:
 
    ```bash
-   sudo x299-btrfs-migrate prepare   # build X299-SSD-btrfs, list what it persists
+   sudo x299-btrfs-migrate prepare   # build X299-SSD (btrfs), list what it persists
    sudo x299-btrfs-migrate check     # disk, layout (old), phases
    sudo x299-btrfs-migrate stage     # unmount + lock the root; GPT, first sectors,
                                      # ESP files, raw root -> /mnt/backup/x299-migration
@@ -86,8 +86,8 @@ ls /canary ~/canary         # /canary gone, ~/canary kept
 ```
 
 Then, in `~/Projects/NixOS`:
-1. Set the `custom.x299Layout` default in `layouts.nix` to `"btrfs"`.
-2. Remove the temporary `X299-SSD-btrfs` output from `flake.nix`.
+1. Set the `custom.x299Layout` default in `layouts.nix` to `"btrfs"`. (done 2026-11-23)
+2. Remove the temporary `X299-SSD-btrfs` output from `flake.nix`. (done 2026-11-23)
 3. Run `rebuild.sh switch` on X299 and push.
 
 Once X299 has booted, plug its disk into M90aPro again and run

@@ -93,7 +93,8 @@ When all is well, make the btrfs layout the default and push:
 default = "btrfs";
 ```
 and remove the `CRUCIAL-SSD-btrfs` output from `flake.nix`.  Rebuild as usual
-(`sudo nixos-rebuild switch --flake .#Crucial-SSD --impure`).  Do this
+(`sudo nixos-rebuild switch --flake .#CRUCIAL-SSD --impure`; the `.#Crucial-SSD` alias was
+removed 2026-11-23).  Do this
 commit right after the checks: until then `.#Crucial-SSD` still means the
 ext4 layout, and every rebuild of it (yours or an agent's) is refused by the
 impermanence pre-switch check; `.#CRUCIAL-SSD-btrfs` works meanwhile.

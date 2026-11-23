@@ -1,4 +1,4 @@
-# Unified flake.nix for M90aPro, X299-SSD, Crucial-SSD, and PortableSSD
+# Unified flake.nix for the four hosts, all btrfs: CRUCIAL-SSD, X299-SSD, M90aPro, PortableSSD
 {
   description = "NixOS configuration";
 
@@ -663,19 +663,11 @@
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
       };
 
-      # X299 Desktop (external SSD clone)
+      # X299 Desktop (external SSD clone); btrfs since 2026-11-22 (hosts/X299-SSD/MIGRATE.md)
       nixosConfigurations.X299-SSD = mkSystem ./hosts/X299-SSD;
-      # The same disk after hosts/X299-SSD/MIGRATE.md (btrfs, impermanent): what
-      # `x299-btrfs-migrate prepare` builds.  Dropped once layouts.nix defaults to btrfs.
-      nixosConfigurations.X299-SSD-btrfs = mkSystem {
-        imports = [ ./hosts/X299-SSD ];
-        custom.x299Layout = "btrfs";
-      };
 
-      # Crucial 1TB External SSD (identical to X299-SSD)
+      # Crucial 1TB External SSD (identical to X299-SSD); btrfs since 2026-11-20
       nixosConfigurations.CRUCIAL-SSD = mkSystem ./hosts/Crucial-SSD;
-      # Compatibility with existing commands using the original flake name.
-      nixosConfigurations.Crucial-SSD = mkSystem ./hosts/Crucial-SSD;
 
       # M90aPro Laptop Configuration
       nixosConfigurations.M90aPro = mkSystem ./hosts/M90aPro;

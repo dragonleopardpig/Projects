@@ -962,7 +962,11 @@ in
 	      nix-mode
 	      geiser-mit
 	      pyvenv
-	      nov
+	      # (its home, depp.brause.cc, serves an expired TLS certificate since
+	      # 2026-11: the same commit from the emacsmirror copy, same hash)
+	      (nov.overrideAttrs (old: {
+	        src = old.src.override { url = "https://github.com/emacsmirror/nov.git"; };
+	      }))
 	      markdown-mode
 	      mixed-pitch
 	      smartparens

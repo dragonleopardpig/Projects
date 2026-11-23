@@ -35,6 +35,6 @@
     '';
   };
 
-  # Root filesystem + swap: layouts.nix (custom.x299Layout, "ext4" until the
-  # disk is migrated per MIGRATE.md).
+  # Root filesystem + swap: layouts.nix (custom.x299Layout, "btrfs" since the
+  # disk was migrated per MIGRATE.md on 2026-11-22).
 }
