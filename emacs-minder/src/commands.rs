@@ -838,16 +838,22 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
             doc.origin_x += dx / s;
             doc.origin_y += dy / s;
         }
-        EditCommand::Zoom { factor } => {
-            let old = doc.scale;
+        EditCommand::Zoom {
+            factor,
+            anchor_x,
+            anchor_y,
+        } => {
+            let old = doc.scale.max(0.05);
             let new_scale = (old * factor).clamp(0.15, 4.0);
-            let vw = doc.viewport_w as f64;
-            let vh = doc.viewport_h as f64;
-            let cx = doc.origin_x + (vw / 2.0) / old;
-            let cy = doc.origin_y + (vh / 2.0) / old;
+            let vw = (doc.viewport_w as f64).max(1.0);
+            let vh = (doc.viewport_h as f64).max(1.0);
+            let ax = anchor_x.unwrap_or(vw / 2.0).clamp(0.0, vw);
+            let ay = anchor_y.unwrap_or(vh / 2.0).clamp(0.0, vh);
+            let wx = doc.origin_x + ax / old;
+            let wy = doc.origin_y + ay / old;
             doc.scale = new_scale;
-            doc.origin_x = cx - (vw / 2.0) / new_scale;
-            doc.origin_y = cy - (vh / 2.0) / new_scale;
+            doc.origin_x = wx - ax / new_scale;
+            doc.origin_y = wy - ay / new_scale;
         }
         EditCommand::ZoomReset => {
             doc.scale = 1.0;

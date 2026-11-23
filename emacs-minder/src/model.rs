@@ -635,6 +635,7 @@ pub struct MapDocument {
     pub viewport_h: i32,
     pub dirty: bool,
     pub layout_dirty: bool,
+    pub needs_measure: bool,
     pub next_id: i32,
     pub next_image_id: i32,
     pub color_index: usize,
@@ -687,6 +688,7 @@ impl MapDocument {
             viewport_h: 800,
             dirty: false,
             layout_dirty: true,
+            needs_measure: true,
             next_id: 1,
             next_image_id: 1,
             color_index: 0,
@@ -746,6 +748,7 @@ impl MapDocument {
         self.next_id = snap.next_id;
         self.color_index = snap.color_index;
         self.layout_dirty = true;
+        self.needs_measure = true;
         self.dirty = true;
     }
 
@@ -892,7 +895,13 @@ pub enum EditCommand {
     SetTags { id: Option<i32>, tags: Vec<String> },
     SetCallout { id: Option<i32>, text: Option<String> },
     Pan { dx: f64, dy: f64 },
-    Zoom { factor: f64 },
+    Zoom {
+        factor: f64,
+        #[serde(default)]
+        anchor_x: Option<f64>,
+        #[serde(default)]
+        anchor_y: Option<f64>,
+    },
     ZoomReset,
     ZoomFit,
     CenterOnSelected,

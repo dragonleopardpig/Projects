@@ -1,8 +1,11 @@
 #![allow(non_camel_case_types, dead_code)]
 
+use flate2::{write::ZlibEncoder, Compression};
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
+use std::io::Write;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 pub const CAIRO_FORMAT_ARGB32: c_int = 0;
 pub const CAIRO_STATUS_SUCCESS: c_int = 0;
@@ -103,6 +106,17 @@ pub struct RsvgRectangle {
     pub height: f64,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CairoMatrix {
+    pub xx: f64,
+    pub yx: f64,
+    pub xy: f64,
+    pub yy: f64,
+    pub x0: f64,
+    pub y0: f64,
+}
+
 extern "C" {
     // Cairo
     fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> *mut CairoSurfaceRaw;
@@ -160,6 +174,7 @@ extern "C" {
     fn cairo_clip(cr: *mut CairoTRaw);
     fn cairo_reset_clip(cr: *mut CairoTRaw);
     fn cairo_get_current_point(cr: *mut CairoTRaw, x: *mut f64, y: *mut f64);
+    fn cairo_get_matrix(cr: *mut CairoTRaw, matrix: *mut CairoMatrix);
 
     // Pango & PangoCairo
     fn pango_cairo_create_layout(cr: *mut CairoTRaw) -> *mut PangoLayoutRaw;
@@ -344,6 +359,88 @@ impl CairoSurface {
             return Err(format!("cairo_surface_write_to_png_stream failed: {status}"));
         }
         Ok(buf)
+    }
+
+    /// Fast RGBA8 PNG encoder using zlib level 1 + filter type 0 for responsive interactive pans.
+    pub fn write_to_png_fast(&self) -> Result<Vec<u8>, String> {
+        unsafe { cairo_surface_flush(self.raw) };
+        let w = self.width.max(1) as usize;
+        let h = self.height.max(1) as usize;
+        let src_ptr = unsafe { cairo_image_surface_get_data(self.raw) };
+        let stride = unsafe { cairo_image_surface_get_stride(self.raw) } as usize;
+        if src_ptr.is_null() {
+            return Err("cairo_image_surface_get_data returned null".to_string());
+        }
+
+        let mut encoder = ZlibEncoder::new(Vec::with_capacity(w * h / 2), Compression::fast());
+        let mut row_buf = vec![0u8; 1 + w * 4];
+        row_buf[0] = 0; // filter None
+
+        for y in 0..h {
+            let src_row = unsafe {
+                std::slice::from_raw_parts(src_ptr.add(y * stride) as *const u32, w)
+            };
+            let dst = &mut row_buf[1..];
+            for (x, &px) in src_row.iter().enumerate() {
+                let di = x * 4;
+                if px == 0 {
+                    dst[di] = 0;
+                    dst[di + 1] = 0;
+                    dst[di + 2] = 0;
+                    dst[di + 3] = 0;
+                } else {
+                    let a = (px >> 24) & 0xff;
+                    let r = (px >> 16) & 0xff;
+                    let g = (px >> 8) & 0xff;
+                    let b = px & 0xff;
+                    if a == 255 {
+                        dst[di] = r as u8;
+                        dst[di + 1] = g as u8;
+                        dst[di + 2] = b as u8;
+                        dst[di + 3] = 255;
+                    } else {
+                        let half = a >> 1;
+                        dst[di] = ((r * 255 + half) / a).min(255) as u8;
+                        dst[di + 1] = ((g * 255 + half) / a).min(255) as u8;
+                        dst[di + 2] = ((b * 255 + half) / a).min(255) as u8;
+                        dst[di + 3] = a as u8;
+                    }
+                }
+            }
+            encoder
+                .write_all(&row_buf)
+                .map_err(|e| format!("png zlib write: {e}"))?;
+        }
+        let idat = encoder
+            .finish()
+            .map_err(|e| format!("png zlib finish: {e}"))?;
+
+        let mut out = Vec::with_capacity(64 + idat.len());
+        out.extend_from_slice(b"\x89PNG\r\n\x1a\n");
+
+        let mut ihdr = [0u8; 13];
+        ihdr[0..4].copy_from_slice(&(w as u32).to_be_bytes());
+        ihdr[4..8].copy_from_slice(&(h as u32).to_be_bytes());
+        ihdr[8] = 8; // bit depth
+        ihdr[9] = 6; // RGBA
+        ihdr[10] = 0;
+        ihdr[11] = 0;
+        ihdr[12] = 0;
+
+        fn push_chunk(out: &mut Vec<u8>, tag: &[u8; 4], data: &[u8]) {
+            out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+            out.extend_from_slice(tag);
+            out.extend_from_slice(data);
+            let mut hasher = crc32fast::Hasher::new();
+            hasher.update(tag);
+            hasher.update(data);
+            out.extend_from_slice(&hasher.finalize().to_be_bytes());
+        }
+
+        push_chunk(&mut out, b"IHDR", &ihdr);
+        push_chunk(&mut out, b"IDAT", &idat);
+        push_chunk(&mut out, b"IEND", &[]);
+        Ok(out)
     }
 
     pub fn from_pixbuf_bytes(bytes: &[u8]) -> Result<Self, String> {
@@ -647,6 +744,7 @@ impl PangoFontDesc {
 #[derive(Clone)]
 pub struct InlineSvgShape {
     pub svg_bytes: Arc<Vec<u8>>,
+    pub svg_hash: u64,
     pub width_px: f64,
     pub ascent_px: f64,
     pub descent_px: f64,
@@ -724,6 +822,13 @@ impl Drop for PangoLayout {
     }
 }
 
+static SVG_RASTER_CACHE: OnceLock<Mutex<HashMap<(u64, u32, i32, i32), Arc<CairoSurface>>>> =
+    OnceLock::new();
+
+fn svg_raster_cache() -> &'static Mutex<HashMap<(u64, u32, i32, i32), Arc<CairoSurface>>> {
+    SVG_RASTER_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 unsafe extern "C" fn svg_shape_renderer(
     cr: *mut CairoTRaw,
     attr: *mut PangoAttrShape,
@@ -742,27 +847,73 @@ unsafe extern "C" fn svg_shape_renderer(
     let mut cy = 0.0f64;
     cairo_get_current_point(cr, &mut cx, &mut cy);
 
-    if let Ok(doc) = RsvgDoc::from_bytes(&payload.svg_bytes, 96.0) {
-        let r = (payload.color[0] * 255.0).round().clamp(0.0, 255.0) as u8;
-        let g = (payload.color[1] * 255.0).round().clamp(0.0, 255.0) as u8;
-        let b = (payload.color[2] * 255.0).round().clamp(0.0, 255.0) as u8;
+    let mut mat = CairoMatrix::default();
+    cairo_get_matrix(cr, &mut mat);
+    let sx = (mat.xx * mat.xx + mat.yx * mat.yx).sqrt().max(0.1);
+    let sy = (mat.xy * mat.xy + mat.yy * mat.yy).sqrt().max(0.1);
+
+    let w_log = payload.width_px.max(1.0);
+    let h_log = (payload.ascent_px + payload.descent_px).max(1.0);
+    let dev_w = (w_log * sx).ceil().clamp(1.0, 2048.0) as i32;
+    let dev_h = (h_log * sy).ceil().clamp(1.0, 2048.0) as i32;
+
+    let r = (payload.color[0] * 255.0).round().clamp(0.0, 255.0) as u8;
+    let g = (payload.color[1] * 255.0).round().clamp(0.0, 255.0) as u8;
+    let b = (payload.color[2] * 255.0).round().clamp(0.0, 255.0) as u8;
+    let a_u8 = (payload.color[3] * 255.0).round().clamp(0.0, 255.0) as u8;
+    let rgba_u32 = ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a_u8 as u32);
+    let cache_key = (payload.svg_hash, rgba_u32, dev_w, dev_h);
+
+    let cached_hit = {
+        let map = svg_raster_cache().lock().unwrap();
+        map.get(&cache_key).cloned()
+    };
+
+    let surf = if let Some(hit) = cached_hit {
+        Some(hit)
+    } else if let Ok(doc) = RsvgDoc::from_bytes(&payload.svg_bytes, 96.0) {
         let css = format!(
             "svg {{ color: rgb({r},{g},{b}); }} \
              [fill=\"#000\"], [fill=\"#000000\"], [fill=\"black\"] {{ fill: rgb({r},{g},{b}) !important; }} \
              [stroke=\"#000\"], [stroke=\"#000000\"], [stroke=\"black\"] {{ stroke: rgb({r},{g},{b}) !important; }}"
         );
         let _ = doc.set_stylesheet(&css);
-        let viewport = RsvgRectangle {
-            x: cx,
-            y: cy - payload.ascent_px,
-            width: payload.width_px,
-            height: payload.ascent_px + payload.descent_px,
-        };
-        let mut err: *mut GError = std::ptr::null_mut();
-        let ok = rsvg_handle_render_document(doc.raw, cr, &viewport, &mut err);
-        if ok == 0 && !err.is_null() {
-            let _ = take_gerror(err);
+        if let Ok(surf) = CairoSurface::new_argb32(dev_w, dev_h) {
+            if let Ok(sub_cr) = CairoContext::new(&surf) {
+                sub_cr.clear();
+                let viewport = RsvgRectangle {
+                    x: 0.0,
+                    y: 0.0,
+                    width: dev_w as f64,
+                    height: dev_h as f64,
+                };
+                let mut err: *mut GError = std::ptr::null_mut();
+                let ok = rsvg_handle_render_document(doc.raw, sub_cr.raw(), &viewport, &mut err);
+                if ok == 0 && !err.is_null() {
+                    let _ = take_gerror(err);
+                }
+            }
+            let arc = Arc::new(surf);
+            let mut map = svg_raster_cache().lock().unwrap();
+            if map.len() >= 512 {
+                map.clear();
+            }
+            map.insert(cache_key, Arc::clone(&arc));
+            Some(arc)
+        } else {
+            None
         }
+    } else {
+        None
+    };
+
+    if let Some(cached) = surf {
+        cairo_save(cr);
+        cairo_translate(cr, cx, cy - payload.ascent_px);
+        cairo_scale(cr, w_log / (dev_w as f64), h_log / (dev_h as f64));
+        cairo_set_source_surface(cr, cached.raw(), 0.0, 0.0);
+        cairo_paint(cr);
+        cairo_restore(cr);
     }
 }
 

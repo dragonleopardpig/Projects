@@ -15,6 +15,7 @@ pub struct DecodedAsset {
 pub struct AssetCache {
     meta: HashMap<i32, DecodedAsset>,
     surfaces: HashMap<i32, Arc<CairoSurface>>,
+    svgs: HashMap<i32, Arc<RsvgDoc>>,
 }
 
 impl Default for AssetCache {
@@ -28,6 +29,7 @@ impl AssetCache {
         Self {
             meta: HashMap::new(),
             surfaces: HashMap::new(),
+            svgs: HashMap::new(),
         }
     }
 
@@ -44,13 +46,14 @@ impl AssetCache {
         if is_svg {
             if let Ok(doc) = RsvgDoc::from_bytes(&asset.data, 96.0) {
                 let (w, h) = doc.intrinsic_size_px().unwrap_or((120.0, 90.0));
+                self.svgs.insert(asset.id, Arc::new(doc));
                 self.meta.insert(
                     asset.id,
                     DecodedAsset {
                         width: w.max(1.0),
                         height: h.max(1.0),
                         is_svg: true,
-                        raw_bytes: asset.data.clone(),
+                        raw_bytes: Vec::new(),
                     },
                 );
                 return self.meta.get(&asset.id);
@@ -76,6 +79,10 @@ impl AssetCache {
 
     pub fn get_surface(&self, id: i32) -> Option<&CairoSurface> {
         self.surfaces.get(&id).map(|s| s.as_ref())
+    }
+
+    pub fn get_svg(&self, id: i32) -> Option<&RsvgDoc> {
+        self.svgs.get(&id).map(|s| s.as_ref())
     }
 
     pub fn get_meta(&self, id: i32) -> Option<&DecodedAsset> {
@@ -133,6 +140,7 @@ pub fn build_rich_pango_layout(
                         end,
                         InlineSvgShape {
                             svg_bytes: compiled.svg,
+                            svg_hash: compiled.hash,
                             width_px: compiled.metrics.width_px * latex_scale,
                             ascent_px: compiled.metrics.ascent_px * latex_scale,
                             descent_px: compiled.metrics.descent_px * latex_scale,
@@ -583,6 +591,13 @@ pub fn compute_tree_bbox(doc: &mut MapDocument, id: i32) -> Rect {
     rect
 }
 
+pub fn ensure_all_tree_bboxes(doc: &mut MapDocument) {
+    let root_ids = doc.root_ids.clone();
+    for rid in root_ids {
+        compute_tree_bbox(doc, rid);
+    }
+}
+
 pub fn update_badge_hitboxes(doc: &mut MapDocument) {
     let ids: Vec<i32> = doc.nodes.keys().copied().collect();
     for id in ids {
@@ -775,6 +790,7 @@ pub fn relayout_document(
 
     update_badge_hitboxes(doc);
     doc.layout_dirty = false;
+    doc.needs_measure = false;
 }
 
 fn shift_subtree(doc: &mut MapDocument, id: i32, dx: f64, dy: f64) {

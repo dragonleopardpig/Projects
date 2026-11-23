@@ -105,5 +105,72 @@
         (should (< (abs (- (- new-y orig-y) (/ -40.0 scale))) 1e-6))
         (should (null unread-command-events))))))
 
+(ert-deftest emacs-minder-test-mouse-scroll-and-ctrl-zoom ()
+  "Mouse wheel pans view; Ctrl+wheel zooms around pointer."
+  (emacs-minder-ensure-module)
+  (should (eq (lookup-key emacs-minder-mode-map [wheel-up])
+              #'emacs-minder-mouse-scroll-up))
+  (should (eq (lookup-key emacs-minder-mode-map [wheel-down])
+              #'emacs-minder-mouse-scroll-down))
+  (should (eq (lookup-key emacs-minder-mode-map [mouse-4])
+              #'emacs-minder-mouse-scroll-up))
+  (should (eq (lookup-key emacs-minder-mode-map [mouse-5])
+              #'emacs-minder-mouse-scroll-down))
+  (should (eq (lookup-key emacs-minder-mode-map [C-wheel-up])
+              #'emacs-minder-mouse-zoom-in))
+  (should (eq (lookup-key emacs-minder-mode-map [C-wheel-down])
+              #'emacs-minder-mouse-zoom-out))
+  (should (eq (lookup-key emacs-minder-mode-map [C-mouse-4])
+              #'emacs-minder-mouse-zoom-in))
+  (should (eq (lookup-key emacs-minder-mode-map [C-mouse-5])
+              #'emacs-minder-mouse-zoom-out))
+  (with-temp-buffer
+    (setq emacs-minder--handle (emacs-minder-core-new "Scroll Zoom Test"))
+    (setq emacs-minder--state (emacs-minder--parse-json
+                               (emacs-minder-core-state-json emacs-minder--handle)))
+    (let ((orig-y (alist-get 'origin_y emacs-minder--state))
+          (orig-scale (alist-get 'scale emacs-minder--state))
+          (ev-down (list 'wheel-down (list (selected-window) 1 '(200 . 200) 0)))
+          (ev-ctrl-up (list 'C-wheel-up (list (selected-window) 1 '(300 . 250) 0))))
+      (emacs-minder-mouse-scroll-down ev-down)
+      (should (> (alist-get 'origin_y emacs-minder--state) orig-y))
+      (should (< (abs (- (alist-get 'scale emacs-minder--state) orig-scale)) 1e-6))
+      (emacs-minder-mouse-zoom-in ev-ctrl-up)
+      (should (> (alist-get 'scale emacs-minder--state) orig-scale)))))
+
+(ert-deftest emacs-minder-test-inline-edit-commit-and-cancel ()
+  "Inline editor keymap binds RET/S-RET/TAB/ESC and updates handle text."
+  (emacs-minder-ensure-module)
+  (should (eq (lookup-key emacs-minder-inline-edit-mode-map (kbd "RET"))
+              #'emacs-minder-inline-edit-commit))
+  (should (eq (lookup-key emacs-minder-inline-edit-mode-map (kbd "S-<return>"))
+              #'newline))
+  (should (eq (lookup-key emacs-minder-inline-edit-mode-map (kbd "TAB"))
+              #'emacs-minder-inline-edit-commit-and-add-child))
+  (should (eq (lookup-key emacs-minder-inline-edit-mode-map (kbd "<escape>"))
+              #'emacs-minder-inline-edit-cancel))
+  (should (eq (lookup-key emacs-minder-inline-edit-mode-map (kbd "C-g"))
+              #'emacs-minder-inline-edit-cancel))
+  (let ((src (generate-new-buffer " *minder-inline-src*"))
+        (edit (generate-new-buffer " *minder-inline-edit*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer src
+            (setq emacs-minder--handle (emacs-minder-core-new "Initial Title"))
+            (setq emacs-minder--state (emacs-minder--parse-json
+                                       (emacs-minder-core-state-json emacs-minder--handle))))
+          (with-current-buffer edit
+            (insert "Updated $E=mc^2$")
+            (emacs-minder-inline-edit-mode)
+            (setq emacs-minder--source-buffer src
+                  emacs-minder--target-node-id 0
+                  emacs-minder--inline-was-new nil)
+            (emacs-minder-inline-edit-commit))
+          (with-current-buffer src
+            (let ((sel (alist-get 'selected emacs-minder--state)))
+              (should (equal (alist-get 'text sel) "Updated $E=mc^2$")))))
+      (ignore-errors (kill-buffer src))
+      (ignore-errors (kill-buffer edit)))))
+
 (provide 'emacs-minder-tests)
 ;;; emacs-minder-tests.el ends here

@@ -578,6 +578,7 @@ pub fn load_minder_bytes(bytes: &[u8], file_path: Option<&str>) -> Result<MapDoc
     doc.selected_node = doc.root_ids.first().copied();
     // Preserve layout geometry loaded from file, but recompute missing coords if needed
     doc.layout_dirty = doc.nodes.values().all(|n| n.posx == 0.0 && n.posy == 0.0);
+    doc.needs_measure = true;
     doc.dirty = false;
     Ok(doc)
 }

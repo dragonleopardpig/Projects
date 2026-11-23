@@ -55,6 +55,11 @@
   :type 'boolean
   :group 'emacs-minder)
 
+(defcustom emacs-minder-inline-edit-use-child-frame t
+  "When non-nil in GUI Emacs, edit node text in a floating inline child frame."
+  :type 'boolean
+  :group 'emacs-minder)
+
 (defvar emacs-minder--loaded nil)
 
 (defvar-local emacs-minder--handle nil)
@@ -64,9 +69,12 @@
 (defvar-local emacs-minder--timer nil)
 (defvar-local emacs-minder--last-size nil)
 (defvar-local emacs-minder--render-in-progress nil)
+(defvar-local emacs-minder--inline-frame nil)
+(defvar-local emacs-minder--inline-buffer nil)
 
 (defvar-local emacs-minder--source-buffer nil)
 (defvar-local emacs-minder--target-node-id nil)
+(defvar-local emacs-minder--inline-was-new nil)
 
 (defun emacs-minder--find-module ()
   "Locate `libemacs_minder.so'."
@@ -149,7 +157,7 @@
 (defun emacs-minder--cmd (alist)
   "Execute EditCommand ALIST and re-render the canvas."
   (emacs-minder--cmd-raw alist)
-  (emacs-minder--render)
+  (emacs-minder--render t)
   emacs-minder--state)
 
 (defun emacs-minder--viewport-pixels ()
@@ -177,8 +185,9 @@
                   fmt theme (round (* 100 scale)) nodes short-title
                   (if conn-from (format " [CONNECTING from %d]" conn-from) "")))))
 
-(defun emacs-minder--render ()
-  "Render current canvas PNG bytes cleanly into the buffer."
+(defun emacs-minder--render (&optional skip-state-refresh)
+  "Render current canvas PNG bytes cleanly into the buffer.
+When SKIP-STATE-REFRESH is non-nil, reuse `emacs-minder--state'."
   (when (and emacs-minder--handle (not emacs-minder--render-in-progress))
     (let ((emacs-minder--render-in-progress t)
           (inhibit-read-only t))
@@ -186,12 +195,16 @@
         (setq emacs-minder--last-size (cons w h))
         (let* ((png (emacs-minder-core-render-png emacs-minder--handle w h))
                (img (create-image png 'png t :scale 1.0))
-               (st (emacs-minder--parse-json (emacs-minder-core-state-json emacs-minder--handle))))
+               (st (if (and skip-state-refresh emacs-minder--state)
+                       emacs-minder--state
+                     (emacs-minder--parse-json (emacs-minder-core-state-json emacs-minder--handle)))))
           (setq emacs-minder--state st)
           (set-buffer-modified-p (and (alist-get 'dirty st) t))
           (emacs-minder--update-header)
-          (erase-buffer)
-          (insert (propertize " " 'display img 'pointer 'arrow))
+          (if (= (buffer-size) 1)
+              (put-text-property (point-min) (point-max) 'display img)
+            (erase-buffer)
+            (insert (propertize " " 'display img 'pointer 'arrow)))
           (goto-char (point-min)))))))
 
 (defun emacs-minder--poll-tick (buf)
@@ -226,10 +239,16 @@
         (emacs-minder--render)))))
 
 (defun emacs-minder--cleanup-buffer ()
-  "Stop buffer-local polling timer when killing a mind map buffer."
+  "Stop buffer-local polling timer and close any inline edit frame."
   (when (timerp emacs-minder--timer)
     (cancel-timer emacs-minder--timer)
-    (setq emacs-minder--timer nil)))
+    (setq emacs-minder--timer nil))
+  (when (frame-live-p emacs-minder--inline-frame)
+    (ignore-errors (delete-frame emacs-minder--inline-frame t))
+    (setq emacs-minder--inline-frame nil))
+  (when (buffer-live-p emacs-minder--inline-buffer)
+    (ignore-errors (kill-buffer emacs-minder--inline-buffer))
+    (setq emacs-minder--inline-buffer nil)))
 
 (defun emacs-minder--backing-file ()
   "Return the file path associated with the current mind map buffer, if any."
@@ -289,33 +308,213 @@
 (defun emacs-minder-nav-parent () (interactive) (emacs-minder--cmd '((op . "select_relative") (dir . "parent"))))
 (defun emacs-minder-nav-next-root () (interactive) (emacs-minder--cmd '((op . "select_relative") (dir . "next_root"))))
 
-(defun emacs-minder-add-child ()
-  "Create a child node under the selected node and prompt for its text."
+(defvar emacs-minder-inline-edit-mode-map
+  (let ((m (make-sparse-keymap)))
+    (define-key m (kbd "RET")        #'emacs-minder-inline-edit-commit)
+    (define-key m (kbd "<return>")   #'emacs-minder-inline-edit-commit)
+    (define-key m (kbd "C-c C-c")    #'emacs-minder-inline-edit-commit)
+    (define-key m (kbd "S-<return>") #'newline)
+    (define-key m (kbd "M-RET")      #'newline)
+    (define-key m (kbd "C-j")        #'newline)
+    (define-key m (kbd "TAB")        #'emacs-minder-inline-edit-commit-and-add-child)
+    (define-key m (kbd "<tab>")      #'emacs-minder-inline-edit-commit-and-add-child)
+    (define-key m (kbd "<escape>")   #'emacs-minder-inline-edit-cancel)
+    (define-key m (kbd "C-g")        #'emacs-minder-inline-edit-cancel)
+    (define-key m (kbd "C-c C-k")    #'emacs-minder-inline-edit-cancel)
+    m)
+  "Keymap for floating inline node text editing.")
+
+(define-derived-mode emacs-minder-inline-edit-mode text-mode "MinderNode"
+  "Major mode for inline floating node text editing in `emacs-minder'."
+  :keymap emacs-minder-inline-edit-mode-map
+  (setq-local mode-line-format nil
+              header-line-format nil
+              truncate-lines nil)
+  (visual-line-mode 1))
+
+(defun emacs-minder--node-screen-box ()
+  "Compute floating editor `(LEFT TOP WIDTH HEIGHT)' in parent-frame pixels."
+  (let* ((st emacs-minder--state)
+         (sel (alist-get 'selected st))
+         (win (or (get-buffer-window (current-buffer) 'visible)
+                  (selected-window)))
+         (edges (and (window-live-p win) (window-inside-pixel-edges win)))
+         (wx0 (or (nth 0 edges) 0))
+         (wy0 (or (nth 1 edges) 0))
+         (wx1 (or (nth 2 edges) (+ wx0 1200)))
+         (wy1 (or (nth 3 edges) (+ wy0 800)))
+         (scale (or (alist-get 'scale st) 1.0))
+         (ox (or (alist-get 'origin_x st) 0.0))
+         (oy (or (alist-get 'origin_y st) 0.0))
+         (nx (or (and sel (alist-get 'posx sel)) 0.0))
+         (ny (or (and sel (alist-get 'posy sel)) 0.0))
+         (nw (or (and sel (alist-get 'width sel)) 180.0))
+         (nh (or (and sel (alist-get 'height sel)) 38.0))
+         (sx (+ wx0 (round (* (- nx ox) scale))))
+         (sy (+ wy0 (round (* (- ny oy) scale))))
+         (sw (min 680 (max 280 (round (* nw scale)))))
+         (sh (min 240 (max 42 (round (* nh scale)))))
+         (left (max wx0 (min sx (- wx1 sw 12))))
+         (top (max wy0 (min sy (- wy1 sh 12)))))
+    (list left top sw sh)))
+
+(defun emacs-minder--inline-close (&optional frame)
+  "Close floating inline editor FRAME and restore focus to its source buffer."
+  (let* ((src emacs-minder--source-buffer)
+         (fr (or frame (selected-frame))))
+    (when (and (buffer-live-p src))
+      (with-current-buffer src
+        (when (frame-live-p emacs-minder--inline-frame)
+          (setq fr emacs-minder--inline-frame))
+        (setq emacs-minder--inline-frame nil)
+        (when (buffer-live-p emacs-minder--inline-buffer)
+          (let ((b emacs-minder--inline-buffer))
+            (setq emacs-minder--inline-buffer nil)
+            (when (frame-live-p fr)
+              (delete-frame fr t))
+            (kill-buffer b)))
+        (when-let* ((win (get-buffer-window src 'visible)))
+          (let ((pf (window-frame win)))
+            (select-window win)
+            (when (frame-live-p pf)
+              (select-frame-set-input-focus pf))))))
+    (when (frame-live-p fr)
+      (ignore-errors (delete-frame fr t)))))
+
+(defun emacs-minder--inline-grow (&rest _ignored)
+  "Grow floating child frame height gently as multi-line content changes."
+  (when-let* ((src emacs-minder--source-buffer)
+              (fr (and (buffer-live-p src)
+                       (buffer-local-value 'emacs-minder--inline-frame src))))
+    (when (frame-live-p fr)
+      (let* ((lines (max 1 (min 8 (count-lines (point-min) (point-max)))))
+             (want-h (max 42 (+ 14 (* lines (frame-char-height fr))))))
+        (set-frame-height fr want-h nil t)))))
+
+(defun emacs-minder-inline-edit-commit ()
+  "Commit inline node text back into the mind map node and close editor."
   (interactive)
-  (let ((txt (read-string "Child node text: ")))
-    (emacs-minder--cmd `((op . "add_child")
-                         (text . ,(if (string-empty-p txt) "New Node" txt))))))
+  (let* ((src emacs-minder--source-buffer)
+         (nid emacs-minder--target-node-id)
+         (was-new emacs-minder--inline-was-new)
+         (raw (string-trim-right (buffer-substring-no-properties (point-min) (point-max))))
+         (text (if (and was-new (string-empty-p raw)) "New Node" raw)))
+    (emacs-minder--inline-close)
+    (when (buffer-live-p src)
+      (with-current-buffer src
+        (when nid
+          (emacs-minder--cmd `((op . "set_text") (id . ,nid) (text . ,text))))))))
+
+(defun emacs-minder-inline-edit-commit-and-add-child ()
+  "Commit current inline node text and immediately add/edit a child node."
+  (interactive)
+  (let ((src emacs-minder--source-buffer))
+    (emacs-minder-inline-edit-commit)
+    (when (buffer-live-p src)
+      (with-current-buffer src
+        (emacs-minder-add-child)))))
+
+(defun emacs-minder-inline-edit-cancel ()
+  "Cancel inline node text editing; discard newly created empty node if blank."
+  (interactive)
+  (let* ((src emacs-minder--source-buffer)
+         (was-new emacs-minder--inline-was-new)
+         (cur (string-trim (buffer-substring-no-properties (point-min) (point-max)))))
+    (emacs-minder--inline-close)
+    (when (and was-new (string-empty-p cur) (buffer-live-p src))
+      (with-current-buffer src
+        (emacs-minder--cmd '((op . "undo")))))))
+
+(defun emacs-minder--open-inline-editor (node-id initial-text &optional is-new)
+  "Open a floating child-frame editor over NODE-ID with INITIAL-TEXT.
+When IS-NEW is non-nil, cancelling with empty text undoes the new node."
+  (if (and emacs-minder-inline-edit-use-child-frame
+           (display-graphic-p)
+           (window-live-p (get-buffer-window (current-buffer) 'visible)))
+      (pcase-let* ((src (current-buffer))
+                   (win (get-buffer-window src 'visible))
+                   (pf (window-frame win))
+                   (`(,left ,top ,w ,h) (emacs-minder--node-screen-box))
+                   (accent (emacs-minder--color-hex 'font-lock-keyword-face :foreground "#64baff"))
+                   (bg (emacs-minder--color-hex 'default :background "#20242c"))
+                   (fg (emacs-minder--color-hex 'default :foreground "#eceff4"))
+                   (buf (get-buffer-create (format " *Minder Inline [%s]*" node-id))))
+        (when (frame-live-p emacs-minder--inline-frame)
+          (ignore-errors (delete-frame emacs-minder--inline-frame t))
+          (setq emacs-minder--inline-frame nil))
+        (with-current-buffer buf
+          (erase-buffer)
+          (insert (or initial-text ""))
+          (emacs-minder-inline-edit-mode)
+          (setq emacs-minder--source-buffer src
+                emacs-minder--target-node-id node-id
+                emacs-minder--inline-was-new is-new)
+          (add-hook 'after-change-functions #'emacs-minder--inline-grow nil t)
+          (goto-char (point-max)))
+        (let ((fr (make-frame
+                   `((parent-frame . ,pf)
+                     (undecorated . t)
+                     (minibuffer . nil)
+                     (left . ,left)
+                     (top . ,top)
+                     (width . (text-pixels . ,w))
+                     (height . (text-pixels . ,h))
+                     (internal-border-width . 2)
+                     (left-fringe . 4)
+                     (right-fringe . 4)
+                     (vertical-scroll-bars . nil)
+                     (horizontal-scroll-bars . nil)
+                     (menu-bar-lines . 0)
+                     (tool-bar-lines . 0)
+                     (tab-bar-lines . 0)
+                     (cursor-type . bar)
+                     (no-accept-focus . nil)))))
+          (set-face-background 'internal-border accent fr)
+          (set-frame-parameter fr 'background-color bg)
+          (set-frame-parameter fr 'foreground-color fg)
+          (let ((cwin (frame-selected-window fr)))
+            (set-window-buffer cwin buf)
+            (set-window-dedicated-p cwin t))
+          (setq emacs-minder--inline-frame fr
+                emacs-minder--inline-buffer buf)
+          (select-frame-set-input-focus fr)))
+    (let* ((prompt (if is-new "New node text (LaTeX OK): " "Node text (LaTeX OK): "))
+           (updated (read-string prompt (or initial-text "")))
+           (final (if (and is-new (string-empty-p updated)) "New Node" updated)))
+      (emacs-minder--cmd `((op . "set_text") (id . ,node-id) (text . ,final))))))
+
+(defun emacs-minder--add-node-and-edit (op fallback-text)
+  "Create a new node with OP, render it, and open the inline editor."
+  (if (and emacs-minder-inline-edit-use-child-frame
+           (display-graphic-p)
+           (window-live-p (get-buffer-window (current-buffer) 'visible)))
+      (let* ((st (emacs-minder--cmd `((op . ,op) (text . ""))))
+             (nid (alist-get 'selected_node st)))
+        (when nid
+          (emacs-minder--open-inline-editor nid "" t)))
+    (let ((txt (read-string "Node text (LaTeX OK): ")))
+      (emacs-minder--cmd `((op . ,op)
+                           (text . ,(if (string-empty-p txt) fallback-text txt)))))))
+
+(defun emacs-minder-add-child ()
+  "Create a child node under the selected node and edit it in place."
+  (interactive)
+  (emacs-minder--add-node-and-edit "add_child" "New Node"))
 
 (defun emacs-minder-add-sibling ()
-  "Create a sibling node next to the selected node and prompt for its text."
+  "Create a sibling node next to the selected node and edit it in place."
   (interactive)
-  (let ((txt (read-string "Sibling node text: ")))
-    (emacs-minder--cmd `((op . "add_sibling")
-                         (text . ,(if (string-empty-p txt) "Sibling Node" txt))))))
+  (emacs-minder--add-node-and-edit "add_sibling" "Sibling Node"))
 
 (defun emacs-minder-add-parent ()
-  "Insert a new parent wrapper node above the selected node."
+  "Insert a new parent wrapper node above selected node and edit in place."
   (interactive)
-  (let ((txt (read-string "Parent topic text: ")))
-    (emacs-minder--cmd `((op . "add_parent")
-                         (text . ,(if (string-empty-p txt) "Parent Topic" txt))))))
+  (emacs-minder--add-node-and-edit "add_parent" "Parent Topic"))
 
 (defun emacs-minder-add-root ()
-  "Add a new root topic."
+  "Add a new root topic and edit it in place."
   (interactive)
-  (let ((txt (read-string "Root topic text: ")))
-    (emacs-minder--cmd `((op . "add_root")
-                         (text . ,(if (string-empty-p txt) "Main Idea" txt))))))
+  (emacs-minder--add-node-and-edit "add_root" "Main Idea"))
 
 (defun emacs-minder-delete-selected ()
   "Delete the currently selected node subtree."
@@ -323,12 +522,13 @@
   (emacs-minder--cmd '((op . "delete_selected"))))
 
 (defun emacs-minder-edit-node-text ()
-  "Edit the selected node title (supports LaTeX `$...$' and `\\(...\\)')."
+  "Edit the selected node title in place (supports LaTeX `$...$' and `\\(...\\)')."
   (interactive)
   (let* ((sel (alist-get 'selected emacs-minder--state))
-         (cur (or (and sel (alist-get 'text sel)) ""))
-         (updated (read-string "Node text (LaTeX OK): " cur)))
-    (emacs-minder--cmd `((op . "set_text") (text . ,updated)))))
+         (nid (and sel (alist-get 'id sel)))
+         (cur (or (and sel (alist-get 'text sel)) "")))
+    (when nid
+      (emacs-minder--open-inline-editor nid cur nil))))
 
 (defvar emacs-minder-subedit-mode-map
   (let ((m (make-sparse-keymap)))
@@ -683,9 +883,80 @@
 (defun emacs-minder-help ()
   "Display keybinding summary for `emacs-minder-mode'."
   (interactive)
-  (message "Nav: arrows/hjkl  Add: TAB(child) o(sib) P(parent) R(root)  Edit: RET N(note) v(table)  Fold: f/F  Layout: L B r b  Zoom: = - 0 z  Mid-drag: pan  Save: C-x C-s"))
+  (message "Nav: arrows/hjkl  Add: TAB(child) o(sib) P(parent) R(root)  Edit: RET N(note) v(table)  Fold: f/F  Layout: L B r b  Scroll: pan  C-Scroll: zoom  Mid-drag: pan  Save: C-x C-s"))
 
 ;;; Mouse interaction
+
+(defun emacs-minder--coalesce-wheel (event)
+  "Drain consecutive queued wheel events matching EVENT and return tick count."
+  (let ((basic (event-basic-type event))
+        (mods (event-modifiers event))
+        (count 1)
+        (coalesce t))
+    (while coalesce
+      (let ((next-ev (read-event nil nil 0)))
+        (cond
+         ((null next-ev)
+          (setq coalesce nil))
+         ((and (eq (event-basic-type next-ev) basic)
+               (equal (event-modifiers next-ev) mods))
+          (setq count (1+ count)))
+         (t
+          (push next-ev unread-command-events)
+          (setq coalesce nil)))))
+    count))
+
+(defun emacs-minder-mouse-scroll-up (event)
+  "Scroll/pan the mind map upward cleanly on mouse wheel EVENT."
+  (interactive "e")
+  (let ((n (emacs-minder--coalesce-wheel event)))
+    (emacs-minder--cmd `((op . "pan") (dx . 0.0) (dy . ,(* -80.0 n))))))
+
+(defun emacs-minder-mouse-scroll-down (event)
+  "Scroll/pan the mind map downward cleanly on mouse wheel EVENT."
+  (interactive "e")
+  (let ((n (emacs-minder--coalesce-wheel event)))
+    (emacs-minder--cmd `((op . "pan") (dx . 0.0) (dy . ,(* 80.0 n))))))
+
+(defun emacs-minder-mouse-scroll-left (event)
+  "Scroll/pan the mind map left on horizontal/shift mouse wheel EVENT."
+  (interactive "e")
+  (let ((n (emacs-minder--coalesce-wheel event)))
+    (emacs-minder--cmd `((op . "pan") (dx . ,(* -80.0 n)) (dy . 0.0)))))
+
+(defun emacs-minder-mouse-scroll-right (event)
+  "Scroll/pan the mind map right on horizontal/shift mouse wheel EVENT."
+  (interactive "e")
+  (let ((n (emacs-minder--coalesce-wheel event)))
+    (emacs-minder--cmd `((op . "pan") (dx . ,(* 80.0 n)) (dy . 0.0)))))
+
+(defun emacs-minder-mouse-zoom-in (event)
+  "Zoom in anchored at pointer position for Ctrl+wheel EVENT."
+  (interactive "e")
+  (let* ((n (emacs-minder--coalesce-wheel event))
+         (pos (event-start event))
+         (xy (or (posn-object-x-y pos) (posn-x-y pos)))
+         (factor (expt 1.15 n)))
+    (if (and xy (numberp (car xy)) (numberp (cdr xy)))
+        (emacs-minder--cmd `((op . "zoom")
+                             (factor . ,factor)
+                             (anchor_x . ,(float (car xy)))
+                             (anchor_y . ,(float (cdr xy)))))
+      (emacs-minder--cmd `((op . "zoom") (factor . ,factor))))))
+
+(defun emacs-minder-mouse-zoom-out (event)
+  "Zoom out anchored at pointer position for Ctrl+wheel EVENT."
+  (interactive "e")
+  (let* ((n (emacs-minder--coalesce-wheel event))
+         (pos (event-start event))
+         (xy (or (posn-object-x-y pos) (posn-x-y pos)))
+         (factor (expt 0.8695652 n)))
+    (if (and xy (numberp (car xy)) (numberp (cdr xy)))
+        (emacs-minder--cmd `((op . "zoom")
+                             (factor . ,factor)
+                             (anchor_x . ,(float (car xy)))
+                             (anchor_y . ,(float (cdr xy)))))
+      (emacs-minder--cmd `((op . "zoom") (factor . ,factor))))))
 
 (defun emacs-minder--mouse-click (event)
   "Select/toggle node under mouse click EVENT."
@@ -858,10 +1129,22 @@
     (define-key map [down-mouse-2]   #'emacs-minder--mouse-pan-track)
     (define-key map [mouse-2]        #'ignore)
     (define-key map [drag-mouse-2]   #'emacs-minder--mouse-drag-pan)
-    (define-key map [wheel-up]       #'emacs-minder-zoom-in)
-    (define-key map [wheel-down]     #'emacs-minder-zoom-out)
-    (define-key map [mouse-4]        #'emacs-minder-zoom-in)
-    (define-key map [mouse-5]        #'emacs-minder-zoom-out)
+    (define-key map [wheel-up]       #'emacs-minder-mouse-scroll-up)
+    (define-key map [wheel-down]     #'emacs-minder-mouse-scroll-down)
+    (define-key map [mouse-4]        #'emacs-minder-mouse-scroll-up)
+    (define-key map [mouse-5]        #'emacs-minder-mouse-scroll-down)
+    (define-key map [wheel-left]     #'emacs-minder-mouse-scroll-left)
+    (define-key map [wheel-right]    #'emacs-minder-mouse-scroll-right)
+    (define-key map [mouse-6]        #'emacs-minder-mouse-scroll-left)
+    (define-key map [mouse-7]        #'emacs-minder-mouse-scroll-right)
+    (define-key map [S-wheel-up]     #'emacs-minder-mouse-scroll-left)
+    (define-key map [S-wheel-down]   #'emacs-minder-mouse-scroll-right)
+    (define-key map [S-mouse-4]      #'emacs-minder-mouse-scroll-left)
+    (define-key map [S-mouse-5]      #'emacs-minder-mouse-scroll-right)
+    (define-key map [C-wheel-up]     #'emacs-minder-mouse-zoom-in)
+    (define-key map [C-wheel-down]   #'emacs-minder-mouse-zoom-out)
+    (define-key map [C-mouse-4]      #'emacs-minder-mouse-zoom-in)
+    (define-key map [C-mouse-5]      #'emacs-minder-mouse-zoom-out)
     map)
   "Keymap for `emacs-minder-mode'.")
 
@@ -872,7 +1155,8 @@
   (setq buffer-read-only t
         truncate-lines t
         cursor-type nil)
-  (setq-local show-trailing-whitespace nil)
+  (setq-local show-trailing-whitespace nil
+              buffer-undo-list t)
   (let ((file (and (emacs-minder--backing-file)
                    (expand-file-name (emacs-minder--backing-file)))))
     (setq emacs-minder--handle

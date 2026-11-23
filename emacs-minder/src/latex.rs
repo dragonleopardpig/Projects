@@ -14,6 +14,7 @@ pub struct LatexMetrics {
 pub struct CompiledLatex {
     pub svg: Arc<Vec<u8>>,
     pub metrics: LatexMetrics,
+    pub hash: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -209,13 +210,17 @@ pub fn split_latex_spans(source: &str) -> Vec<SpanPart> {
     out
 }
 
-fn fnv1a_hash(s: &str) -> String {
+fn fnv1a_u64(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
-    for b in s.as_bytes() {
+    for b in bytes {
         h ^= *b as u64;
         h = h.wrapping_mul(0x100000001b3);
     }
-    format!("{h:016x}")
+    h
+}
+
+fn fnv1a_hash(s: &str) -> String {
+    format!("{:016x}", fnv1a_u64(s.as_bytes()))
 }
 
 fn cache_dir() -> PathBuf {
@@ -261,6 +266,7 @@ pub fn compile_latex_sync(expr: &str) -> Result<CompiledLatex, String> {
         if let (Ok(svg), Ok(mstr)) = (std::fs::read(&svg_cache), std::fs::read_to_string(&met_cache)) {
             let nums: Vec<f64> = mstr.split_whitespace().filter_map(|p| p.parse().ok()).collect();
             if nums.len() == 3 && !svg.is_empty() {
+                let hash = fnv1a_u64(&svg);
                 return Ok(CompiledLatex {
                     svg: Arc::new(svg),
                     metrics: LatexMetrics {
@@ -268,6 +274,7 @@ pub fn compile_latex_sync(expr: &str) -> Result<CompiledLatex, String> {
                         ascent_px: nums[1],
                         descent_px: nums[2],
                     },
+                    hash,
                 });
             }
         }
@@ -346,9 +353,11 @@ pub fn compile_latex_sync(expr: &str) -> Result<CompiledLatex, String> {
         );
     }
 
+    let hash = fnv1a_u64(&svg);
     Ok(CompiledLatex {
         svg: Arc::new(svg),
         metrics,
+        hash,
     })
 }
 
@@ -447,6 +456,7 @@ impl LatexCache {
             if let (Ok(svg), Ok(mstr)) = (std::fs::read(&svg_cache), std::fs::read_to_string(&met_cache)) {
                 let nums: Vec<f64> = mstr.split_whitespace().filter_map(|p| p.parse().ok()).collect();
                 if nums.len() == 3 && !svg.is_empty() {
+                    let hash = fnv1a_u64(&svg);
                     let compiled = CompiledLatex {
                         svg: Arc::new(svg),
                         metrics: LatexMetrics {
@@ -454,6 +464,7 @@ impl LatexCache {
                             ascent_px: nums[1],
                             descent_px: nums[2],
                         },
+                        hash,
                     };
                     let mut guard = lock.lock().unwrap();
                     guard.cache.insert(normalized_expr.to_string(), Some(compiled.clone()));

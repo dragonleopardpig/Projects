@@ -343,6 +343,7 @@ unsafe extern "C" fn subr_poll_updates(
     if cur_gen != sess.last_latex_gen {
         sess.last_latex_gen = cur_gen;
         sess.doc.layout_dirty = true;
+        sess.doc.needs_measure = true;
         env.t()
     } else {
         env.nil()
@@ -368,6 +369,7 @@ unsafe extern "C" fn subr_wait_latex(
     if cur_gen != sess.last_latex_gen {
         sess.last_latex_gen = cur_gen;
         sess.doc.layout_dirty = true;
+        sess.doc.needs_measure = true;
         env.t()
     } else {
         env.nil()
@@ -522,6 +524,9 @@ mod tests {
                 .expect("PNG render");
             assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
             assert!(png.len() > 200);
+            let decoded = crate::ffi::CairoSurface::from_pixbuf_bytes(&png).expect("fast PNG decode");
+            assert_eq!(decoded.width, 640);
+            assert_eq!(decoded.height, 420);
         }
 
         // Hit-test root center at zoom reset

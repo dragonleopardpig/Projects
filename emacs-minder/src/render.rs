@@ -1,10 +1,36 @@
 use crate::ffi::*;
 use crate::latex::LatexCache;
 use crate::layout::{
-    build_rich_pango_layout, document_bounds, ensure_minimum_node_sizes, measure_table,
-    relayout_document, update_badge_hitboxes, AssetCache,
+    build_rich_pango_layout, document_bounds, ensure_all_tree_bboxes, ensure_minimum_node_sizes,
+    measure_table, relayout_document, update_badge_hitboxes, AssetCache,
 };
 use crate::model::*;
+
+fn rects_intersect(a: &Rect, b: &Rect) -> bool {
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+}
+
+fn expand_rect(r: &Rect, margin: f64) -> Rect {
+    Rect {
+        x: r.x - margin,
+        y: r.y - margin,
+        w: r.w + 2.0 * margin,
+        h: r.h + 2.0 * margin,
+    }
+}
+
+fn merge_rects(a: &Rect, b: &Rect) -> Rect {
+    let min_x = a.x.min(b.x);
+    let min_y = a.y.min(b.y);
+    let max_x = (a.x + a.w).max(b.x + b.w);
+    let max_y = (a.y + a.h).max(b.y + b.h);
+    Rect {
+        x: min_x,
+        y: min_y,
+        w: max_x - min_x,
+        h: max_y - min_y,
+    }
+}
 
 fn set_dash_from_style(cr: &CairoContext, dash: &str, width: f64) {
     let w = width.max(1.0);
@@ -181,7 +207,12 @@ fn draw_branch_link(cr: &CairoContext, doc: &MapDocument, parent: &Node, child: 
     cr.restore();
 }
 
-fn draw_connections(cr: &CairoContext, doc: &MapDocument, latex_cache: &LatexCache) {
+fn draw_connections(
+    cr: &CairoContext,
+    doc: &MapDocument,
+    latex_cache: &LatexCache,
+    view_world: Option<&Rect>,
+) {
     for (idx, conn) in doc.connections.iter().enumerate() {
         let Some(from_n) = doc.nodes.get(&conn.from_id) else {
             continue;
@@ -204,6 +235,22 @@ fn draw_connections(cr: &CairoContext, doc: &MapDocument, latex_cache: &LatexCac
         } else {
             (conn.drag_x, conn.drag_y)
         };
+
+        if let Some(vw) = view_world {
+            let min_x = x1.min(x2).min(cx) - 160.0;
+            let min_y = y1.min(y2).min(cy) - 120.0;
+            let max_x = x1.max(x2).max(cx) + 160.0;
+            let max_y = y1.max(y2).max(cy) + 120.0;
+            let cb = Rect {
+                x: min_x,
+                y: min_y,
+                w: max_x - min_x,
+                h: max_y - min_y,
+            };
+            if !rects_intersect(&cb, vw) {
+                continue;
+            }
+        }
 
         let col = conn.color.unwrap_or(doc.theme.connection_background);
         let selected = doc.selected_connection == Some(idx);
@@ -338,18 +385,56 @@ fn draw_node_recursive(
     id: i32,
     assets: &AssetCache,
     latex_cache: &LatexCache,
+    view_world: Option<&Rect>,
 ) {
     let Some(n) = doc.nodes.get(&id) else {
         return;
     };
 
+    if let Some(vw) = view_world {
+        if n.tree_bbox.w > 0.0 && !rects_intersect(&expand_rect(&n.tree_bbox, 80.0), vw) {
+            return;
+        }
+    }
+
+    let node_rect = Rect {
+        x: n.posx,
+        y: n.posy,
+        w: n.width,
+        h: n.height,
+    };
+
     if !n.fold {
         for &cid in &n.children {
             if let Some(ch) = doc.nodes.get(&cid) {
-                draw_branch_link(cr, doc, n, ch);
+                let draw_link = match view_world {
+                    None => true,
+                    Some(vw) => {
+                        let cbox = if ch.tree_bbox.w > 0.0 {
+                            &ch.tree_bbox
+                        } else {
+                            &Rect {
+                                x: ch.posx,
+                                y: ch.posy,
+                                w: ch.width,
+                                h: ch.height,
+                            }
+                        };
+                        rects_intersect(&expand_rect(&merge_rects(&node_rect, cbox), 48.0), vw)
+                    }
+                };
+                if draw_link {
+                    draw_branch_link(cr, doc, n, ch);
+                }
             }
         }
     }
+
+    let draw_self = match view_world {
+        None => true,
+        Some(vw) => rects_intersect(&expand_rect(&node_rect, 80.0), vw),
+    };
+    if draw_self {
 
     let is_sel = doc.selected_node == Some(id);
     let is_connect_src = doc.connect_from == Some(id);
@@ -495,7 +580,7 @@ fn draw_node_recursive(
             cr.rounded_rect(ix, cursor_y, dw, dh, 4.0);
             cr.clip();
             if meta.is_svg {
-                if let Ok(svg_doc) = RsvgDoc::from_bytes(&meta.raw_bytes, 96.0) {
+                if let Some(svg_doc) = assets.get_svg(img_ref.id) {
                     let _ = svg_doc.render(cr, ix, cursor_y, dw, dh);
                 }
             } else if let Some(surf) = assets.get_surface(img_ref.id) {
@@ -672,10 +757,11 @@ fn draw_node_recursive(
     }
 
     cr.restore();
+    }
 
     if !n.fold {
         for &cid in &n.children {
-            draw_node_recursive(cr, doc, cid, assets, latex_cache);
+            draw_node_recursive(cr, doc, cid, assets, latex_cache, view_world);
         }
     }
 }
@@ -685,16 +771,21 @@ pub fn prepare_document_for_render(
     assets: &mut AssetCache,
     latex_cache: &LatexCache,
 ) {
-    let img_assets: Vec<ImageAsset> = doc.images.values().cloned().collect();
-    for asset in img_assets {
-        let _ = assets.ensure_asset(&asset);
+    if doc.layout_dirty || doc.needs_measure {
+        let img_assets: Vec<ImageAsset> = doc.images.values().cloned().collect();
+        for asset in img_assets {
+            let _ = assets.ensure_asset(&asset);
+        }
     }
     if doc.layout_dirty {
         relayout_document(doc, assets, latex_cache);
-    } else {
+    } else if doc.needs_measure {
         ensure_minimum_node_sizes(doc, assets, latex_cache);
+        ensure_all_tree_bboxes(doc);
         update_badge_hitboxes(doc);
     }
+    doc.layout_dirty = false;
+    doc.needs_measure = false;
 }
 
 pub fn render_viewport_png(
@@ -727,13 +818,19 @@ pub fn render_viewport_png(
     cr.scale(s, s);
     cr.translate(-doc.origin_x, -doc.origin_y);
 
-    draw_connections(&cr, doc, latex_cache);
+    let view_world = Rect {
+        x: doc.origin_x - 32.0 / s,
+        y: doc.origin_y - 32.0 / s,
+        w: (w as f64 + 64.0) / s,
+        h: (h as f64 + 64.0) / s,
+    };
+    draw_connections(&cr, doc, latex_cache, Some(&view_world));
     for &rid in &doc.root_ids {
-        draw_node_recursive(&cr, doc, rid, assets, latex_cache);
+        draw_node_recursive(&cr, doc, rid, assets, latex_cache, Some(&view_world));
     }
 
     cr.restore();
-    surface.write_to_png()
+    surface.write_to_png_fast()
 }
 
 pub fn render_full_map_png(
@@ -761,9 +858,9 @@ pub fn render_full_map_png(
     cr.save();
     cr.scale(scale, scale);
     cr.translate(-b.x, -b.y);
-    draw_connections(&cr, doc, latex_cache);
+    draw_connections(&cr, doc, latex_cache, None);
     for &rid in &doc.root_ids {
-        draw_node_recursive(&cr, doc, rid, assets, latex_cache);
+        draw_node_recursive(&cr, doc, rid, assets, latex_cache, None);
     }
     cr.restore();
     surface.write_to_png()

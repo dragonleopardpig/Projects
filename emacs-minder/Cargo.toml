@@ -10,6 +10,7 @@ name = "emacs_minder"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+crc32fast = "1"
 flate2 = "1"
 roxmltree = "0.20"
 serde = { version = "1", features = ["derive"] }
