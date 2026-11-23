@@ -11,6 +11,11 @@
     ../../modules/winapps.nix
   ];
 
+  # Noctalia Greeter in place of SDDM, landing in Noctalia Suite on Umbriel, as on
+  # CRUCIAL-SSD, M90aPro and PortableSSD.  Going from SDDM to the greeter needs
+  # `rebuild.sh boot` + reboot: a switch restarts the display manager mid-rebuild.
+  desktop.noctaliaSuite.greeter.enable = true;
+
   networking.hostName = "X299-SSD";
 
   fileSystems."/mnt/winapps" = {

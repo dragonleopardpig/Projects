@@ -88,7 +88,11 @@ ls /canary ~/canary         # /canary gone, ~/canary kept
 Then, in `~/Projects/NixOS`:
 1. Set the `custom.x299Layout` default in `layouts.nix` to `"btrfs"`. (done 2026-11-23)
 2. Remove the temporary `X299-SSD-btrfs` output from `flake.nix`. (done 2026-11-23)
-3. Run `rebuild.sh switch` on X299 and push.
+3. Run `rebuild.sh boot` on X299, reboot, and push.  Not `switch`: the first
+   boot comes up in SDDM's Hyprland session, because `prepare` built the host
+   before it had `desktop.noctaliaSuite.greeter.enable` (added 2026-11-23), and
+   the switch from SDDM to the Noctalia Greeter would log you out mid-rebuild.
+   After the reboot the greeter starts Noctalia Suite on Umbriel.
 
 Once X299 has booted, plug its disk into M90aPro again and run
 `sudo x299-btrfs-migrate release-stage`.  It refuses until the new root holds a
