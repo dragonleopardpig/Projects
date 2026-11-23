@@ -21,7 +21,7 @@
   (when-let* ((entry (assq 'dvisvgm org-preview-latex-process-alist)))
     (plist-put (cdr entry) :image-size-adjust '(1.0 . 1.0))
     (plist-put (cdr entry) :image-converter
-               '("dvisvgm %f --no-fonts --exact-bbox --currentcolor --scale=%S --output=%O"))))
+               '("dvisvgm %f --no-fonts --exact-bbox --bbox=1pt --currentcolor --scale=%S --output=%O"))))
 
 (setq org-format-latex-options
       (let ((opts (copy-sequence org-format-latex-options)))
@@ -240,7 +240,24 @@
 (advice-add 'load-theme :after #'my/org-refresh-svg-previews-on-theme-change)
 (advice-add 'enable-theme :after #'my/org-refresh-svg-previews-on-theme-change)
 
-;; Optional inline `.svg' white-canvas neutralization via Emacs 31 SVG `:css'
+;; Alpha-background transparency for SVG LaTeX preview overlays
+(defun my/org-svg-preview-enable-alpha-mask (beg _end _image &optional imagetype)
+  "Attach `:mask \\='heuristic' to SVG Org LaTeX preview overlays.
+Emacs's C `svg_load_image' flattens SVGs to opaque RGB24 unless masked;
+`:mask heuristic' builds an ARGB32 alpha mask so `alpha-background' shows through."
+  (when (and imagetype (member imagetype '("svg" svg)))
+    (dolist (ov (overlays-at beg))
+      (when (eq (overlay-get ov 'org-overlay-type) 'org-latex-overlay)
+        (let ((disp (overlay-get ov 'display)))
+          (when (and (consp disp) (eq (car disp) 'image))
+            (overlay-put ov 'display
+                         (cons 'image
+                               (plist-put (copy-sequence (cdr disp))
+                                          :mask 'heuristic)))))))))
+
+(advice-add 'org--make-preview-overlay :after #'my/org-svg-preview-enable-alpha-mask)
+
+;; Optional inline `.svg' white-canvas neutralization & alpha mask via Emacs 31 `:css'
 (defcustom my/org-svg-strip-white-background t
   "When non-nil, neutralize opaque white `<rect>' backdrops in inline Org SVGs."
   :type 'boolean
@@ -251,19 +268,22 @@
   "CSS injected into inline Org SVG image descriptors to strip white backdrops.")
 
 (defun my/org-inline-svg-transparent-bg (img)
-  "Inject transparent-backdrop CSS into SVG image descriptors returned by `org--create-inline-image'."
+  "Inject transparent-backdrop CSS and alpha mask into inline SVG image descriptors."
   (if (and my/org-svg-strip-white-background
            (consp img)
            (eq (car img) 'image))
       (let* ((props (cdr img))
              (type (plist-get props :type))
              (file (plist-get props :file)))
-        (if (and (or (eq type 'svg)
-                     (and (stringp file)
-                          (string-match-p "\\.svgz?\\'" file)))
-                 (not (plist-get props :css)))
-            (cons 'image
-                  (plist-put (copy-sequence props) :css my/org-inline-svg-transparent-css))
+        (if (or (eq type 'svg)
+                (and (stringp file)
+                     (string-match-p "\\.svgz?\\'" file)))
+            (let ((new-props (copy-sequence props)))
+              (unless (plist-get new-props :css)
+                (setq new-props (plist-put new-props :css my/org-inline-svg-transparent-css)))
+              (unless (plist-get new-props :mask)
+                (setq new-props (plist-put new-props :mask 'heuristic)))
+              (cons 'image new-props))
           img))
     img))
 

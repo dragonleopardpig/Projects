@@ -180,7 +180,8 @@
   (should (equal (plist-get org-format-latex-options :background) "Transparent"))
   (let* ((dvisvgm-info (cdr (assq 'dvisvgm org-preview-latex-process-alist)))
          (conv (plist-get dvisvgm-info :image-converter)))
-    (should (cl-some (lambda (cmd) (string-match-p "--currentcolor" cmd)) conv)))
+    (should (cl-some (lambda (cmd) (string-match-p "--currentcolor" cmd)) conv))
+    (should (cl-some (lambda (cmd) (string-match-p "--bbox=1pt" cmd)) conv)))
   (when (and (executable-find "latex") (executable-find "dvisvgm"))
     (let* ((out (make-temp-file "org-math-currentcolor-" nil ".svg"))
            (opts org-format-latex-options))
@@ -191,12 +192,24 @@
                          (insert-file-contents out)
                          (buffer-string))))
               (should (string-match-p "fill=['\"]currentColor['\"]" svg))
-              (should-not (string-match-p "<rect\\b" svg))))
+              (should-not (string-match-p "<rect\\b" svg)))
+            (with-temp-buffer
+              (org-mode)
+              (insert "$E = mc^2$")
+              (org--make-preview-overlay (point-min) (point-max) out "svg")
+              (let* ((ov (cl-find-if (lambda (o)
+                                       (eq (overlay-get o 'org-overlay-type)
+                                           'org-latex-overlay))
+                                     (overlays-at (point-min))))
+                     (disp (and ov (overlay-get ov 'display))))
+                (should ov)
+                (should (eq (car-safe disp) 'image))
+                (should (eq (plist-get (cdr disp) :mask) 'heuristic)))))
         (when (file-exists-p out)
           (delete-file out))))))
 
 (ert-deftest my/test-org-inline-svg-transparent-css ()
-  "`org--create-inline-image' injects transparent-rect CSS only on SVG images."
+  "`org--create-inline-image' injects transparent-rect CSS and mask only on SVG images."
   (let* ((tmp-dir (make-temp-file "org-inline-svg-" t))
          (svg-file (expand-file-name "sample.svg" tmp-dir))
          (png-file (expand-file-name "sample.png" tmp-dir)))
@@ -216,8 +229,10 @@
             (should (stringp (plist-get (cdr svg-img) :css)))
             (should (string-match-p "fill: transparent !important"
                                     (plist-get (cdr svg-img) :css)))
+            (should (eq (plist-get (cdr svg-img) :mask) 'heuristic))
             (should (eq (car-safe png-img) 'image))
-            (should-not (plist-get (cdr png-img) :css))))
+            (should-not (plist-get (cdr png-img) :css))
+            (should-not (plist-get (cdr png-img) :mask))))
       (delete-directory tmp-dir t))))
 
 (ert-deftest my/test-ipynb-to-markdown ()
