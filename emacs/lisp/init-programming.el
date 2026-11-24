@@ -21,8 +21,58 @@
 
 ;;;; Environment & Project PATH (`envrc` + `.devenv` helpers)
 
+(defconst my/envrc-excluded-modes
+  '(dired-mode
+    dirvish-directory-view-mode
+    dirvish-special-preview-mode
+    enhanced-dirvish-compact-mode
+    enhanced-dirvish-icons-mode
+    enhanced-dirvish-computer-mode
+    enhanced-dirvish-trash-mode
+    enhanced-dirvish-recent-mode
+    enhanced-dirvish-network-mode
+    enhanced-dirvish-sidebar-mode
+    enhanced-dirvish-global-search-mode
+    archive-mode
+    tar-mode
+    image-mode
+    pdf-view-mode
+    doc-view-mode)
+  "Major modes where `envrc-global-mode' should not invoke `direnv'.")
+
+(defun my/envrc-allow-buffer-p (&rest _)
+  "Return non-nil when `envrc-global-mode' may activate in the current buffer.
+Skips directory browsers, internal temp buffers, and preview buffers."
+  (let ((name (buffer-name)))
+    (not (or (minibufferp)
+             (string-prefix-p " " name)
+             (string-prefix-p "PREVIEW :: " name)
+             (string-prefix-p "*Enhanced Dirvish" name)
+             (string-prefix-p "*dirvish-preview@" name)
+             (bound-and-true-p enhanced-dirvish-preview-read-mode)
+             (bound-and-true-p enhanced-dirvish-preview-pdf-mode)
+             (and (fboundp 'enhanced-dirvish-preview--preview-buffer-p)
+                  (enhanced-dirvish-preview--preview-buffer-p (current-buffer)))
+             (apply #'derived-mode-p my/envrc-excluded-modes)))))
+
+(defun my/envrc-mode-guard (orig-fn &optional arg)
+  "Skip auto-enabling `envrc-mode' inside browser or preview buffers."
+  (if (or (called-interactively-p 'any)
+          (and (numberp arg) (<= arg 0))
+          (eq arg 'toggle)
+          (my/envrc-allow-buffer-p))
+      (funcall orig-fn arg)
+    (when (bound-and-true-p envrc-mode)
+      (funcall orig-fn -1))))
+
 (use-package envrc
+  :init
+  (setq envrc-async t
+        envrc-global-modes (cons 'not my/envrc-excluded-modes))
   :config
+  (advice-add 'envrc-global-mode-enable-in-buffer
+              :before-while #'my/envrc-allow-buffer-p)
+  (advice-add 'envrc-mode :around #'my/envrc-mode-guard)
   (when (executable-find "direnv")
     (envrc-global-mode 1)))
 
