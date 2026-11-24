@@ -12,6 +12,7 @@ pub const CAIRO_STATUS_SUCCESS: c_int = 0;
 pub const CAIRO_OPERATOR_CLEAR: c_int = 0;
 pub const CAIRO_OPERATOR_SOURCE: c_int = 1;
 pub const CAIRO_OPERATOR_OVER: c_int = 2;
+pub const CAIRO_HINT_METRICS_OFF: c_int = 1;
 pub const CAIRO_LINE_CAP_BUTT: c_int = 0;
 pub const CAIRO_LINE_CAP_ROUND: c_int = 1;
 pub const CAIRO_LINE_CAP_SQUARE: c_int = 2;
@@ -30,6 +31,10 @@ pub struct CairoSurfaceRaw {
 }
 #[repr(C)]
 pub struct CairoTRaw {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct CairoFontOptionsRaw {
     _private: [u8; 0],
 }
 #[repr(C)]
@@ -176,12 +181,26 @@ extern "C" {
     fn cairo_reset_clip(cr: *mut CairoTRaw);
     fn cairo_get_current_point(cr: *mut CairoTRaw, x: *mut f64, y: *mut f64);
     fn cairo_get_matrix(cr: *mut CairoTRaw, matrix: *mut CairoMatrix);
+    fn cairo_font_options_create() -> *mut CairoFontOptionsRaw;
+    fn cairo_font_options_destroy(options: *mut CairoFontOptionsRaw);
+    fn cairo_font_options_set_hint_metrics(
+        options: *mut CairoFontOptionsRaw,
+        hint_metrics: c_int,
+    );
 
     // Pango & PangoCairo
     fn pango_cairo_create_layout(cr: *mut CairoTRaw) -> *mut PangoLayoutRaw;
     fn pango_cairo_update_layout(cr: *mut CairoTRaw, layout: *mut PangoLayoutRaw);
     fn pango_cairo_show_layout(cr: *mut CairoTRaw, layout: *mut PangoLayoutRaw);
     fn pango_layout_get_context(layout: *mut PangoLayoutRaw) -> *mut PangoContextRaw;
+    fn pango_cairo_context_set_font_options(
+        context: *mut PangoContextRaw,
+        options: *const CairoFontOptionsRaw,
+    );
+    fn pango_context_set_round_glyph_positions(
+        context: *mut PangoContextRaw,
+        round_positions: c_int,
+    );
     fn pango_cairo_context_set_shape_renderer(
         context: *mut PangoContextRaw,
         func: Option<unsafe extern "C" fn(*mut CairoTRaw, *mut PangoAttrShape, c_int, *mut c_void)>,
@@ -202,6 +221,11 @@ extern "C" {
         layout: *mut PangoLayoutRaw,
         width: *mut c_int,
         height: *mut c_int,
+    );
+    fn pango_layout_get_pixel_extents(
+        layout: *mut PangoLayoutRaw,
+        ink_rect: *mut PangoRectangle,
+        logical_rect: *mut PangoRectangle,
     );
     fn pango_layout_get_baseline(layout: *mut PangoLayoutRaw) -> c_int;
     fn pango_layout_get_line_count(layout: *mut PangoLayoutRaw) -> c_int;
@@ -959,6 +983,13 @@ impl PangoLayout {
         }
         unsafe {
             let ctx = pango_layout_get_context(raw);
+            let fopts = cairo_font_options_create();
+            if !fopts.is_null() {
+                cairo_font_options_set_hint_metrics(fopts, CAIRO_HINT_METRICS_OFF);
+                pango_cairo_context_set_font_options(ctx, fopts);
+                cairo_font_options_destroy(fopts);
+            }
+            pango_context_set_round_glyph_positions(ctx, 0);
             pango_cairo_context_set_shape_renderer(
                 ctx,
                 Some(svg_shape_renderer),
@@ -1016,6 +1047,19 @@ impl PangoLayout {
         let mut h = 0;
         unsafe { pango_layout_get_pixel_size(self.raw, &mut w, &mut h) };
         (w as f64, h as f64)
+    }
+
+    pub fn visual_size(&self) -> (f64, f64) {
+        let mut ink = PangoRectangle::default();
+        let mut logical = PangoRectangle::default();
+        unsafe { pango_layout_get_pixel_extents(self.raw, &mut ink, &mut logical) };
+        let w = logical.width.max(ink.x + ink.width).max(0) as f64;
+        let h = logical.height.max(ink.y + ink.height).max(0) as f64;
+        (w, h)
+    }
+
+    pub fn line_count(&self) -> i32 {
+        unsafe { pango_layout_get_line_count(self.raw) }
     }
 
     pub fn baseline_px(&self) -> f64 {

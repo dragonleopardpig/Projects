@@ -2,8 +2,8 @@ use crate::ffi::*;
 use crate::latex::LatexCache;
 use crate::layout::{
     build_rich_pango_layout, document_bounds, ensure_all_tree_bboxes, ensure_minimum_node_sizes,
-    measure_single_node, measure_table, relayout_document, shift_subtree, update_badge_hitboxes,
-    update_single_badge_hitbox, AssetCache,
+    measure_single_node, measure_table, node_badge_widths, relayout_document, shift_subtree,
+    update_badge_hitboxes, update_single_badge_hitbox, AssetCache,
 };
 use crate::model::*;
 use std::collections::HashSet;
@@ -639,7 +639,8 @@ fn draw_single_node_only(
     }
 
     if !n.text.trim().is_empty() {
-        let draw_w = (inner_w - (text_x - inner_x)).max(20.0);
+        let (_, right_badge_w) = node_badge_widths(n);
+        let draw_w = (inner_w - (text_x - inner_x) - right_badge_w).max(20.0);
         if let Ok(layout) = build_rich_pango_layout(
             cr,
             &n.text,
@@ -649,7 +650,7 @@ fn draw_single_node_only(
             &n.style.nodetextalign,
             latex_cache,
         ) {
-            let (_pw, ph) = layout.pixel_size();
+            let (_pw, ph) = layout.visual_size();
             cr.set_rgba(text_fg.r, text_fg.g, text_fg.b, 1.0);
             layout.update_and_show(cr, text_x, cursor_y);
             cursor_y += ph + 4.0;
@@ -1685,6 +1686,135 @@ pub fn drag_end(
             }
         }
     }
+}
+
+pub fn pan_fast<'a>(
+    doc: &mut MapDocument,
+    assets: &mut AssetCache,
+    latex_cache: &LatexCache,
+    bufs: &'a mut RenderBuffers,
+    dx: f64,
+    dy: f64,
+    w: i32,
+    h: i32,
+    rw: i32,
+    rh: i32,
+) -> Result<&'a [u8], String> {
+    let w = w.clamp(64, 4096);
+    let h = h.clamp(64, 4096);
+    let rw = rw.clamp(64, 4096);
+    let rh = rh.clamp(64, 4096);
+    doc.viewport_w = w;
+    doc.viewport_h = h;
+
+    if doc.layout_dirty || doc.needs_measure || doc.dirty_measure_node.is_some() {
+        prepare_document_for_render(doc, assets, latex_cache);
+    }
+
+    let s = doc.scale.max(0.1);
+    doc.origin_x += dx / s;
+    doc.origin_y += dy / s;
+    let eff_scale = (doc.scale.clamp(0.05, 8.0) * (rw as f64 / w as f64)).clamp(0.025, 8.0);
+
+    let cover = bufs
+        .pan_cache
+        .as_ref()
+        .and_then(|c| pan_cache_covers(c, doc, eff_scale, rw, rh));
+    if let Some((off_x, off_y)) = cover {
+        if let Some(ref pan) = bufs.pan_cache {
+            let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+            blit_pan_surface(vp, pan, off_x, off_y)?;
+        }
+    } else {
+        bufs.pan_cache = build_pan_cache(doc, assets, latex_cache, eff_scale, rw, rh)?;
+        let cover2 = bufs
+            .pan_cache
+            .as_ref()
+            .and_then(|c| pan_cache_covers(c, doc, eff_scale, rw, rh));
+        let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+        if let (Some(ref pan), Some((off_x, off_y))) = (&bufs.pan_cache, cover2) {
+            blit_pan_surface(vp, pan, off_x, off_y)?;
+        } else {
+            paint_scene_to_surface(
+                vp,
+                doc,
+                assets,
+                latex_cache,
+                doc.origin_x,
+                doc.origin_y,
+                eff_scale,
+                None,
+            )?;
+        }
+    }
+
+    bufs.last_origin_x = doc.origin_x;
+    bufs.last_origin_y = doc.origin_y;
+    bufs.last_scale = doc.scale.clamp(0.05, 8.0);
+    bufs.last_scene_version = doc.scene_version;
+
+    let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+    vp.write_to_png_fast_into(&mut bufs.png_raw_scratch, &mut bufs.png_out_buf)?;
+    Ok(&bufs.png_out_buf)
+}
+
+pub fn zoom_fast<'a>(
+    doc: &mut MapDocument,
+    assets: &mut AssetCache,
+    latex_cache: &LatexCache,
+    bufs: &'a mut RenderBuffers,
+    factor: f64,
+    anchor_x: Option<f64>,
+    anchor_y: Option<f64>,
+    w: i32,
+    h: i32,
+    rw: i32,
+    rh: i32,
+) -> Result<&'a [u8], String> {
+    let w = w.clamp(64, 4096);
+    let h = h.clamp(64, 4096);
+    let rw = rw.clamp(64, 4096);
+    let rh = rh.clamp(64, 4096);
+    doc.viewport_w = w;
+    doc.viewport_h = h;
+
+    if doc.layout_dirty || doc.needs_measure || doc.dirty_measure_node.is_some() {
+        prepare_document_for_render(doc, assets, latex_cache);
+    }
+
+    let old = doc.scale.max(0.05);
+    let new_scale = (old * factor).clamp(0.15, 4.0);
+    let vw = w as f64;
+    let vh = h as f64;
+    let ax = anchor_x.unwrap_or(vw / 2.0).clamp(0.0, vw);
+    let ay = anchor_y.unwrap_or(vh / 2.0).clamp(0.0, vh);
+    let wx = doc.origin_x + ax / old;
+    let wy = doc.origin_y + ay / old;
+    doc.scale = new_scale;
+    doc.origin_x = wx - ax / new_scale;
+    doc.origin_y = wy - ay / new_scale;
+    doc.scene_version = doc.scene_version.wrapping_add(1);
+
+    let eff_scale = (doc.scale.clamp(0.05, 8.0) * (rw as f64 / w as f64)).clamp(0.025, 8.0);
+    let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+    paint_scene_to_surface(
+        vp,
+        doc,
+        assets,
+        latex_cache,
+        doc.origin_x,
+        doc.origin_y,
+        eff_scale,
+        None,
+    )?;
+
+    bufs.last_origin_x = doc.origin_x;
+    bufs.last_origin_y = doc.origin_y;
+    bufs.last_scale = doc.scale.clamp(0.05, 8.0);
+    bufs.last_scene_version = doc.scene_version;
+
+    vp.write_to_png_fast_into(&mut bufs.png_raw_scratch, &mut bufs.png_out_buf)?;
+    Ok(&bufs.png_out_buf)
 }
 
 pub fn render_full_map_png(

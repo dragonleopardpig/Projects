@@ -16,7 +16,8 @@ use crate::minder_io::{load_minder_file, save_minder_file};
 use crate::model::{EditCommand, MapDocument, SourceFormat};
 use crate::org_io::{load_org_file, save_org_file};
 use crate::render::{
-    drag_begin, drag_end, drag_step, render_full_map_png, render_viewport_png_cached, RenderBuffers,
+    drag_begin, drag_end, drag_step, pan_fast, render_full_map_png, render_viewport_png_cached,
+    zoom_fast, RenderBuffers,
 };
 use std::os::raw::c_int;
 use std::path::Path;
@@ -501,6 +502,96 @@ unsafe extern "C" fn subr_drag_end(
     env.make_string(&json)
 }
 
+unsafe extern "C" fn subr_pan_fast(
+    raw_env: *mut EmacsEnv,
+    nargs: isize,
+    args: *mut EmacsValue,
+    _data: *mut std::ffi::c_void,
+) -> EmacsValue {
+    let env = Env::from_raw(raw_env);
+    if nargs < 7 {
+        return env.signal_error("emacs-minder-core-pan-fast requires HANDLE DX DY W H RW RH");
+    }
+    let slice = std::slice::from_raw_parts(args, nargs as usize);
+    let sess = match env.get_user_ptr::<MinderSession>(slice[0]) {
+        Ok(s) => s,
+        Err(e) => return env.signal_error(&e),
+    };
+    let dx = env.extract_float_or_int(slice[1]).unwrap_or(0.0);
+    let dy = env.extract_float_or_int(slice[2]).unwrap_or(0.0);
+    let w = env.extract_integer(slice[3]).unwrap_or(1200) as i32;
+    let h = env.extract_integer(slice[4]).unwrap_or(800) as i32;
+    let rw = env.extract_integer(slice[5]).unwrap_or(w as i64) as i32;
+    let rh = env.extract_integer(slice[6]).unwrap_or(h as i64) as i32;
+
+    match pan_fast(
+        &mut sess.doc,
+        &mut sess.assets,
+        &sess.latex,
+        &mut sess.bufs,
+        dx,
+        dy,
+        w,
+        h,
+        rw,
+        rh,
+    ) {
+        Ok(png) => env.make_unibyte_string(png),
+        Err(e) => env.signal_error(&e),
+    }
+}
+
+unsafe extern "C" fn subr_zoom_fast(
+    raw_env: *mut EmacsEnv,
+    nargs: isize,
+    args: *mut EmacsValue,
+    _data: *mut std::ffi::c_void,
+) -> EmacsValue {
+    let env = Env::from_raw(raw_env);
+    if nargs < 8 {
+        return env.signal_error(
+            "emacs-minder-core-zoom-fast requires HANDLE FACTOR ANCHOR-X ANCHOR-Y W H RW RH",
+        );
+    }
+    let slice = std::slice::from_raw_parts(args, nargs as usize);
+    let sess = match env.get_user_ptr::<MinderSession>(slice[0]) {
+        Ok(s) => s,
+        Err(e) => return env.signal_error(&e),
+    };
+    let factor = env.extract_float_or_int(slice[1]).unwrap_or(1.0);
+    let anchor_x = if env.is_not_nil(slice[2]) {
+        env.extract_float_or_int(slice[2]).ok()
+    } else {
+        None
+    };
+    let anchor_y = if env.is_not_nil(slice[3]) {
+        env.extract_float_or_int(slice[3]).ok()
+    } else {
+        None
+    };
+    let w = env.extract_integer(slice[4]).unwrap_or(1200) as i32;
+    let h = env.extract_integer(slice[5]).unwrap_or(800) as i32;
+    let rw = env.extract_integer(slice[6]).unwrap_or(w as i64) as i32;
+    let rh = env.extract_integer(slice[7]).unwrap_or(h as i64) as i32;
+
+    match zoom_fast(
+        &mut sess.doc,
+        &mut sess.assets,
+        &sess.latex,
+        &mut sess.bufs,
+        factor,
+        anchor_x,
+        anchor_y,
+        w,
+        h,
+        rw,
+        rh,
+    ) {
+        Ok(png) => env.make_unibyte_string(png),
+        Err(e) => env.signal_error(&e),
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn emacs_module_init(runtime: *mut EmacsRuntime) -> c_int {
     let raw_env = ((*runtime).get_environment)(runtime);
@@ -603,6 +694,20 @@ pub unsafe extern "C" fn emacs_module_init(runtime: *mut EmacsRuntime) -> c_int 
         1,
         subr_drag_end,
         "Finalize cached drag session on HANDLE and return state JSON.",
+    );
+    env.defun(
+        "emacs-minder-core-pan-fast",
+        7,
+        7,
+        subr_pan_fast,
+        "Pan HANDLE using overscanned PanCache and return fast PNG bytes.",
+    );
+    env.defun(
+        "emacs-minder-core-zoom-fast",
+        8,
+        8,
+        subr_zoom_fast,
+        "Cursor-anchored zoom on HANDLE and return fast PNG bytes.",
     );
 
     let sym = env.intern("emacs-minder-core");
@@ -1104,5 +1209,98 @@ mod tests {
             &org_sess.latex,
         );
         assert!((org_sess.doc.nodes[&child_a].width - orig_w).abs() < 2.0);
+    }
+
+    #[test]
+    fn test_zoom_invariant_text_and_fast_wheel() {
+        let optics_path = "/home/thinky/Projects/org/optics.org";
+        let mut sess = if Path::new(optics_path).exists() {
+            let mut doc = load_org_file(optics_path).expect("load optics.org");
+            doc.layout_dirty = true;
+            MinderSession::from_doc(doc)
+        } else {
+            let doc = load_org_str("* OPTICS\n** Tasks\n** Multiline Equation\n", None).unwrap();
+            MinderSession::from_doc(doc)
+        };
+        crate::render::prepare_document_for_render(
+            &mut sess.doc,
+            &mut sess.assets,
+            &sess.latex,
+        );
+
+        let surf = crate::ffi::CairoSurface::new_argb32(64, 64).unwrap();
+        let cr = crate::ffi::CairoContext::new(&surf).unwrap();
+        for title in ["OPTICS", "Tasks", "Multiline Equation"] {
+            if let Some(node) = sess.doc.nodes.values().find(|n| n.text == title) {
+                let pad = node.style.nodepadding.max(4.0);
+                let (left_bw, right_bw) = crate::layout::node_badge_widths(node);
+                let draw_w = (node.width - 2.0 * pad - left_bw - right_bw).max(20.0);
+                for sc in [1.0f64, 0.72, 0.21] {
+                    cr.save();
+                    cr.scale(sc, sc);
+                    let layout = crate::layout::build_rich_pango_layout(
+                        &cr,
+                        &node.text,
+                        &node.style.nodefont,
+                        draw_w,
+                        Rgba::rgb(0.0, 0.0, 0.0),
+                        &node.style.nodetextalign,
+                        &sess.latex,
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        layout.line_count(),
+                        1,
+                        "Expected '{}' to remain 1 line at scale {sc} (draw_w={draw_w}, width={})",
+                        title,
+                        node.width
+                    );
+                    cr.restore();
+                }
+            }
+        }
+
+        // Verify pan_fast and zoom_fast subr backends
+        apply_command(&mut sess.doc, EditCommand::ZoomReset).unwrap();
+        let ox0 = sess.doc.origin_x;
+        let oy0 = sess.doc.origin_y;
+        let sc0 = sess.doc.scale;
+        let p_pan = pan_fast(
+            &mut sess.doc,
+            &mut sess.assets,
+            &sess.latex,
+            &mut sess.bufs,
+            -30.0,
+            45.0,
+            1280,
+            720,
+            800,
+            450,
+        )
+        .unwrap()
+        .to_vec();
+        assert!(p_pan.starts_with(b"\x89PNG\r\n\x1a\n"));
+        let dec1 = crate::ffi::CairoSurface::from_pixbuf_bytes(&p_pan).unwrap();
+        assert_eq!((dec1.width, dec1.height), (800, 450));
+        assert!((sess.doc.origin_x - (ox0 - 30.0 / sc0)).abs() < 1e-6);
+        assert!((sess.doc.origin_y - (oy0 + 45.0 / sc0)).abs() < 1e-6);
+
+        let p_zoom = zoom_fast(
+            &mut sess.doc,
+            &mut sess.assets,
+            &sess.latex,
+            &mut sess.bufs,
+            1.25,
+            Some(640.0),
+            Some(360.0),
+            1280,
+            720,
+            800,
+            450,
+        )
+        .unwrap()
+        .to_vec();
+        assert!(p_zoom.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert!((sess.doc.scale - sc0 * 1.25).abs() < 1e-6);
     }
 }

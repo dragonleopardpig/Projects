@@ -302,5 +302,36 @@
       (emacs-minder-undo)
       (should (< (abs (- (alist-get 'width (alist-get 'selected emacs-minder--state)) orig-w)) 1.0)))))
 
+(ert-deftest emacs-minder-test-smooth-wheel-api ()
+  "Fast wheel pan/zoom core subrs and eased scroll ticks work cleanly."
+  (emacs-minder-ensure-module)
+  (should (fboundp 'emacs-minder-core-pan-fast))
+  (should (fboundp 'emacs-minder-core-zoom-fast))
+  (with-temp-buffer
+    (setq emacs-minder--handle (emacs-minder-core-new "Wheel Smooth"))
+    (emacs-minder--cmd '((op . "add_child") (text . "Node A")))
+    (emacs-minder--cmd '((op . "zoom_reset")))
+    (unwind-protect
+        (let* ((st0 emacs-minder--state)
+               (ox0 (alist-get 'origin_x st0))
+               (oy0 (alist-get 'origin_y st0))
+               (sc0 (alist-get 'scale st0))
+               (p-pan (emacs-minder-core-pan-fast emacs-minder--handle 0.0 90.0 960 540 640 360)))
+          (should (string-prefix-p "\x89PNG\r\n\x1a\n" p-pan))
+          (let ((st1 (emacs-minder--parse-json (emacs-minder-core-state-json emacs-minder--handle))))
+            (should (< (abs (- (alist-get 'origin_y st1) (+ oy0 (/ 90.0 sc0)))) 1e-6))
+            (should (< (abs (- (alist-get 'origin_x st1) ox0)) 1e-6)))
+          (let ((p-zoom (emacs-minder-core-zoom-fast emacs-minder--handle 1.15 480.0 270.0 960 540 640 360)))
+            (should (string-prefix-p "\x89PNG\r\n\x1a\n" p-zoom)))
+          (let ((st2 (emacs-minder--parse-json (emacs-minder-core-state-json emacs-minder--handle))))
+            (should (> (alist-get 'scale st2) sc0)))
+          ;; Eased scroll tick decrements remaining delta and updates display image
+          (setq emacs-minder--scroll-rem-x 0.0
+                emacs-minder--scroll-rem-y 60.0)
+          (emacs-minder--scroll-tick (current-buffer))
+          (should (< emacs-minder--scroll-rem-y 60.0))
+          (should (eq (car-safe (get-text-property (point-min) 'display)) 'image)))
+      (emacs-minder--cancel-smooth-timers))))
+
 (provide 'emacs-minder-tests)
 ;;; emacs-minder-tests.el ends here

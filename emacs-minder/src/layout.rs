@@ -277,6 +277,24 @@ fn measure_all_nodes_inner(
     }
 }
 
+pub fn node_badge_widths(n: &Node) -> (f64, f64) {
+    let mut left_w = 0.0;
+    if n.task_enabled {
+        left_w += 20.0;
+    }
+    if let Some(ref kw) = n.todo_keyword {
+        left_w += (kw.len() as f64) * 7.2 + 14.0;
+    }
+    let mut right_w = 0.0;
+    if !n.note.trim().is_empty() {
+        right_w += 16.0;
+    }
+    if n.link.is_some() {
+        right_w += 16.0;
+    }
+    (left_w, right_w)
+}
+
 fn measure_single_node_with_cr(
     doc: &mut MapDocument,
     cr: &CairoContext,
@@ -293,37 +311,29 @@ fn measure_single_node_with_cr(
     let max_w = custom_w
         .unwrap_or_else(|| n.maxwidth.max(n.style.nodewidth))
         .clamp(48.0, 1800.0);
+    let (left_badge_w, right_badge_w) = node_badge_widths(&n);
+    let text_wrap_w = if let Some(cw) = custom_w {
+        (cw - left_badge_w - right_badge_w).max(48.0)
+    } else {
+        max_w
+    };
 
     let text_layout = build_rich_pango_layout(
         cr,
         &n.text,
         &n.style.nodefont,
-        max_w,
+        text_wrap_w,
         doc.theme.foreground,
         &n.style.nodetextalign,
         latex_cache,
     );
-    let (mut tw, mut th) = text_layout.map(|l| l.pixel_size()).unwrap_or((40.0, 20.0));
+    let (mut tw, mut th) = text_layout.map(|l| l.visual_size()).unwrap_or((40.0, 20.0));
     if n.text.trim().is_empty() && (n.image.is_some() || n.table.is_some()) {
         tw = 0.0;
         th = 0.0;
     } else {
         tw = tw.max(20.0);
         th = th.max(18.0);
-    }
-
-    let mut badge_w = 0.0;
-    if n.task_enabled {
-        badge_w += 22.0;
-    }
-    if let Some(ref kw) = n.todo_keyword {
-        badge_w += (kw.len() as f64) * 7.5 + 14.0;
-    }
-    if n.link.is_some() {
-        badge_w += 18.0;
-    }
-    if !n.note.trim().is_empty() {
-        badge_w += 18.0;
     }
 
     let (mut img_w, mut img_h) = (0.0, 0.0);
@@ -377,13 +387,23 @@ fn measure_single_node_with_cr(
     content_h = content_h.max(22.0);
 
     let min_custom = custom_w.unwrap_or(0.0);
-    let content_w = (tw + badge_w)
+    let text_total_w = if tw > 0.0 {
+        tw + 6.0 + left_badge_w + right_badge_w
+    } else {
+        left_badge_w + right_badge_w
+    };
+    let content_w = text_total_w
         .max(img_w)
         .max(tbl_w)
         .max(min_custom)
         .max(28.0);
+    let underline_extra = if n.style.nodeborder == NodeBorder::Underlined && !n.is_root() {
+        (n.style.linkwidth.clamp(1.5, 5.0) * 0.5).ceil() + 3.0
+    } else {
+        0.0
+    };
     let target_w = content_w + 2.0 * pad;
-    let target_h = content_h + 2.0 * pad;
+    let target_h = content_h + 2.0 * pad + underline_extra;
     if let Some(node_mut) = doc.nodes.get_mut(&id) {
         if grow_only {
             if target_w > node_mut.width {

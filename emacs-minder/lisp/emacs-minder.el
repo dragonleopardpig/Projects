@@ -31,6 +31,8 @@
 (declare-function emacs-minder-core-drag-begin "emacs-minder-core" (handle kind node-id move-subtree w h rw rh))
 (declare-function emacs-minder-core-drag-step "emacs-minder-core" (handle dx dy width w h rw rh))
 (declare-function emacs-minder-core-drag-end "emacs-minder-core" (handle))
+(declare-function emacs-minder-core-pan-fast "emacs-minder-core" (handle dx dy w h rw rh))
+(declare-function emacs-minder-core-zoom-fast "emacs-minder-core" (handle factor anchor-x anchor-y w h rw rh))
 (declare-function org-table-align "org-table" (&optional no-shrink))
 
 (defgroup emacs-minder nil
@@ -69,6 +71,16 @@
                  (number :tag "Fixed scale (0.35..1.0)"))
   :group 'emacs-minder)
 
+(defcustom emacs-minder-smooth-wheel t
+  "When non-nil in GUI frames, interpolate wheel panning and settle to 1.0x."
+  :type 'boolean
+  :group 'emacs-minder)
+
+(defcustom emacs-minder-wheel-step 90.0
+  "Pixel pan delta per mouse wheel tick."
+  :type 'number
+  :group 'emacs-minder)
+
 (defvar emacs-minder--loaded nil)
 
 (defvar-local emacs-minder--handle nil)
@@ -78,6 +90,10 @@
 (defvar-local emacs-minder--timer nil)
 (defvar-local emacs-minder--last-size nil)
 (defvar-local emacs-minder--last-image nil)
+(defvar-local emacs-minder--scroll-rem-x 0.0)
+(defvar-local emacs-minder--scroll-rem-y 0.0)
+(defvar-local emacs-minder--scroll-timer nil)
+(defvar-local emacs-minder--settle-timer nil)
 (defvar-local emacs-minder--render-in-progress nil)
 (defvar-local emacs-minder--inline-frame nil)
 (defvar-local emacs-minder--inline-buffer nil)
@@ -166,6 +182,7 @@
 
 (defun emacs-minder--cmd (alist)
   "Execute EditCommand ALIST and re-render the canvas."
+  (emacs-minder--cancel-smooth-timers)
   (emacs-minder--cmd-raw alist)
   (emacs-minder--render t)
   emacs-minder--state)
@@ -256,8 +273,20 @@ When SKIP-STATE-REFRESH is non-nil, reuse `emacs-minder--state'."
         (emacs-minder--sync-theme-to-core)
         (emacs-minder--render)))))
 
+(defun emacs-minder--cancel-smooth-timers ()
+  "Stop any active smooth-scroll or crisp-settle timers in the current buffer."
+  (when (timerp emacs-minder--scroll-timer)
+    (cancel-timer emacs-minder--scroll-timer)
+    (setq emacs-minder--scroll-timer nil))
+  (when (timerp emacs-minder--settle-timer)
+    (cancel-timer emacs-minder--settle-timer)
+    (setq emacs-minder--settle-timer nil))
+  (setq emacs-minder--scroll-rem-x 0.0
+        emacs-minder--scroll-rem-y 0.0))
+
 (defun emacs-minder--cleanup-buffer ()
   "Stop buffer-local polling timer and close any inline edit frame."
+  (emacs-minder--cancel-smooth-timers)
   (when (timerp emacs-minder--timer)
     (cancel-timer emacs-minder--timer)
     (setq emacs-minder--timer nil))
@@ -943,57 +972,147 @@ When IS-NEW is non-nil, cancelling with empty text undoes the new node."
           (setq coalesce nil)))))
     count))
 
+(defun emacs-minder--schedule-settle ()
+  "Schedule a crisp 1.0x native render shortly after wheel scrolling or zooming."
+  (when (timerp emacs-minder--settle-timer)
+    (cancel-timer emacs-minder--settle-timer)
+    (setq emacs-minder--settle-timer nil))
+  (let ((buf (current-buffer)))
+    (setq emacs-minder--settle-timer
+          (run-with-timer
+           0.09 nil
+           (lambda ()
+             (when (buffer-live-p buf)
+               (with-current-buffer buf
+                 (setq emacs-minder--settle-timer nil)
+                 (when (and emacs-minder--handle
+                            (get-buffer-window buf 'visible))
+                   (setq emacs-minder--state
+                         (emacs-minder--parse-json
+                          (emacs-minder-core-state-json emacs-minder--handle)))
+                   (emacs-minder--render t)))))))))
+
+(defun emacs-minder--scroll-tick (buf)
+  "Advance eased smooth wheel scrolling for BUF by one frame."
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (if (or (not emacs-minder--handle)
+              (and (not noninteractive) (not (get-buffer-window buf 'visible))))
+          (emacs-minder--cancel-smooth-timers)
+        (let ((rx emacs-minder--scroll-rem-x)
+              (ry emacs-minder--scroll-rem-y))
+          (if (and (< (abs rx) 0.5) (< (abs ry) 0.5))
+              (progn
+                (setq emacs-minder--scroll-rem-x 0.0
+                      emacs-minder--scroll-rem-y 0.0)
+                (when (timerp emacs-minder--scroll-timer)
+                  (cancel-timer emacs-minder--scroll-timer)
+                  (setq emacs-minder--scroll-timer nil))
+                (emacs-minder--schedule-settle))
+            (let* ((step-x (if (< (abs rx) 2.5) rx (* rx 0.38)))
+                   (step-y (if (< (abs ry) 2.5) ry (* ry 0.38)))
+                   (vp (emacs-minder--viewport-pixels))
+                   (w (car vp))
+                   (h (cdr vp)))
+              (setq emacs-minder--scroll-rem-x (- rx step-x)
+                    emacs-minder--scroll-rem-y (- ry step-y))
+              (pcase-let ((`(,rw ,rh ,disp-scale) (emacs-minder--drag-dimensions w h)))
+                (let ((png (emacs-minder-core-pan-fast
+                            emacs-minder--handle step-x step-y w h rw rh)))
+                  (emacs-minder--display-png png disp-scale))
+                (when (and (not noninteractive) (display-graphic-p))
+                  (redisplay)))
+              (when (and (< (abs emacs-minder--scroll-rem-x) 0.5)
+                         (< (abs emacs-minder--scroll-rem-y) 0.5))
+                (setq emacs-minder--scroll-rem-x 0.0
+                      emacs-minder--scroll-rem-y 0.0)
+                (when (timerp emacs-minder--scroll-timer)
+                  (cancel-timer emacs-minder--scroll-timer)
+                  (setq emacs-minder--scroll-timer nil))
+                (emacs-minder--schedule-settle)))))))))
+
+(defun emacs-minder--wheel-pan (dx dy)
+  "Pan by (DX, DY) using eased 60 FPS wheel interpolation in GUI frames."
+  (when emacs-minder--handle
+    (if (or noninteractive (not emacs-minder-smooth-wheel) (not (display-graphic-p)))
+        (emacs-minder--cmd `((op . "pan") (dx . ,(float dx)) (dy . ,(float dy))))
+      (when (timerp emacs-minder--settle-timer)
+        (cancel-timer emacs-minder--settle-timer)
+        (setq emacs-minder--settle-timer nil))
+      (setq emacs-minder--scroll-rem-x (+ emacs-minder--scroll-rem-x (float dx))
+            emacs-minder--scroll-rem-y (+ emacs-minder--scroll-rem-y (float dy)))
+      (emacs-minder--scroll-tick (current-buffer))
+      (when (and (not (timerp emacs-minder--scroll-timer))
+                 (or (>= (abs emacs-minder--scroll-rem-x) 0.5)
+                     (>= (abs emacs-minder--scroll-rem-y) 0.5)))
+        (let ((buf (current-buffer)))
+          (setq emacs-minder--scroll-timer
+                (run-with-timer 0.016 0.016 #'emacs-minder--scroll-tick buf)))))))
+
+(defun emacs-minder--wheel-zoom (event factor)
+  "Zoom by FACTOR anchored at EVENT pointer, snapping crisply after settle."
+  (when emacs-minder--handle
+    (let* ((pos (event-start event))
+           (xy (or (posn-object-x-y pos) (posn-x-y pos)))
+           (ax (and xy (numberp (car xy)) (float (car xy))))
+           (ay (and xy (numberp (cdr xy)) (float (cdr xy)))))
+      (if (or noninteractive (not emacs-minder-smooth-wheel) (not (display-graphic-p)))
+          (if (and ax ay)
+              (emacs-minder--cmd `((op . "zoom")
+                                   (factor . ,factor)
+                                   (anchor_x . ,ax)
+                                   (anchor_y . ,ay)))
+            (emacs-minder--cmd `((op . "zoom") (factor . ,factor))))
+        (when (timerp emacs-minder--scroll-timer)
+          (cancel-timer emacs-minder--scroll-timer)
+          (setq emacs-minder--scroll-timer nil))
+        (setq emacs-minder--scroll-rem-x 0.0
+              emacs-minder--scroll-rem-y 0.0)
+        (let* ((vp (emacs-minder--viewport-pixels))
+               (w (car vp))
+               (h (cdr vp)))
+          (pcase-let ((`(,rw ,rh ,disp-scale) (emacs-minder--drag-dimensions w h)))
+            (let ((png (emacs-minder-core-zoom-fast
+                        emacs-minder--handle factor ax ay w h rw rh)))
+              (emacs-minder--display-png png disp-scale))
+            (redisplay)
+            (emacs-minder--schedule-settle)))))))
+
 (defun emacs-minder-mouse-scroll-up (event)
-  "Scroll/pan the mind map upward cleanly on mouse wheel EVENT."
+  "Scroll/pan the mind map upward smoothly on mouse wheel EVENT."
   (interactive "e")
   (let ((n (emacs-minder--coalesce-wheel event)))
-    (emacs-minder--cmd `((op . "pan") (dx . 0.0) (dy . ,(* -80.0 n))))))
+    (emacs-minder--wheel-pan 0.0 (* (- emacs-minder-wheel-step) n))))
 
 (defun emacs-minder-mouse-scroll-down (event)
-  "Scroll/pan the mind map downward cleanly on mouse wheel EVENT."
+  "Scroll/pan the mind map downward smoothly on mouse wheel EVENT."
   (interactive "e")
   (let ((n (emacs-minder--coalesce-wheel event)))
-    (emacs-minder--cmd `((op . "pan") (dx . 0.0) (dy . ,(* 80.0 n))))))
+    (emacs-minder--wheel-pan 0.0 (* emacs-minder-wheel-step n))))
 
 (defun emacs-minder-mouse-scroll-left (event)
   "Scroll/pan the mind map left on horizontal/shift mouse wheel EVENT."
   (interactive "e")
   (let ((n (emacs-minder--coalesce-wheel event)))
-    (emacs-minder--cmd `((op . "pan") (dx . ,(* -80.0 n)) (dy . 0.0)))))
+    (emacs-minder--wheel-pan (* (- emacs-minder-wheel-step) n) 0.0)))
 
 (defun emacs-minder-mouse-scroll-right (event)
   "Scroll/pan the mind map right on horizontal/shift mouse wheel EVENT."
   (interactive "e")
   (let ((n (emacs-minder--coalesce-wheel event)))
-    (emacs-minder--cmd `((op . "pan") (dx . ,(* 80.0 n)) (dy . 0.0)))))
+    (emacs-minder--wheel-pan (* emacs-minder-wheel-step n) 0.0)))
 
 (defun emacs-minder-mouse-zoom-in (event)
   "Zoom in anchored at pointer position for Ctrl+wheel EVENT."
   (interactive "e")
-  (let* ((n (emacs-minder--coalesce-wheel event))
-         (pos (event-start event))
-         (xy (or (posn-object-x-y pos) (posn-x-y pos)))
-         (factor (expt 1.15 n)))
-    (if (and xy (numberp (car xy)) (numberp (cdr xy)))
-        (emacs-minder--cmd `((op . "zoom")
-                             (factor . ,factor)
-                             (anchor_x . ,(float (car xy)))
-                             (anchor_y . ,(float (cdr xy)))))
-      (emacs-minder--cmd `((op . "zoom") (factor . ,factor))))))
+  (let ((n (emacs-minder--coalesce-wheel event)))
+    (emacs-minder--wheel-zoom event (expt 1.15 n))))
 
 (defun emacs-minder-mouse-zoom-out (event)
   "Zoom out anchored at pointer position for Ctrl+wheel EVENT."
   (interactive "e")
-  (let* ((n (emacs-minder--coalesce-wheel event))
-         (pos (event-start event))
-         (xy (or (posn-object-x-y pos) (posn-x-y pos)))
-         (factor (expt 0.8695652 n)))
-    (if (and xy (numberp (car xy)) (numberp (cdr xy)))
-        (emacs-minder--cmd `((op . "zoom")
-                             (factor . ,factor)
-                             (anchor_x . ,(float (car xy)))
-                             (anchor_y . ,(float (cdr xy)))))
-      (emacs-minder--cmd `((op . "zoom") (factor . ,factor))))))
+  (let ((n (emacs-minder--coalesce-wheel event)))
+    (emacs-minder--wheel-zoom event (expt 0.8695652 n))))
 
 (defun emacs-minder--event-image-xy (event)
   "Extract pixel coordinates `(X . Y)' for mouse EVENT."
@@ -1055,6 +1174,7 @@ When IS-NEW is non-nil, cancelling with empty text undoes the new node."
 RESIZE-INIT is `(START-WIDTH . SIGN)' when KIND is \"resize\".
 Return non-nil if any drag movement occurred."
   (when emacs-minder--handle
+    (emacs-minder--cancel-smooth-timers)
     (let* ((p0 (cdr (mouse-pixel-position)))
            (start-x (and (consp p0) (numberp (car p0)) (car p0)))
            (start-y (and (consp p0) (numberp (cdr p0)) (cdr p0)))
