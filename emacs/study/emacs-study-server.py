@@ -420,6 +420,11 @@ def make_handler(study: Study):
             if route == "/api/open-sioyek":
                 study.emit("open_sioyek", file=data.get("file"), page=data.get("page"))
                 return self._json({"ok": True})
+            if route == "/api/focus":
+                study.emit("focus_pane",
+                           select=bool(data.get("select", True)),
+                           editing=bool(data.get("editing", False)))
+                return self._json({"ok": True})
             if route == "/api/zoom":
                 with study.lock:
                     study.zoom = int(data.get("zoom", 100))

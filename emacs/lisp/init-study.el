@@ -21,6 +21,8 @@
 
 (declare-function xwidget-webkit-browse-url "xwidget" (url &optional new-session))
 (declare-function xwidget-webkit-last-session "xwidget" ())
+(declare-function xwidget-webkit-edit-mode "xwidget" (&optional arg))
+(declare-function xwidget-webkit-pass-command-event "xwidget" ())
 (declare-function xwidget-buffer "xwidget.c" (xwidget))
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-current-level "org" ())
@@ -165,6 +167,7 @@
     ("choose_org_file"
      (run-at-time 0 nil (lambda ()
                           (call-interactively #'my/study-choose-target-org))))
+    ("focus_pane" (my/study--on-focus event))
     ("open_sioyek"
      (when-let* ((file (alist-get 'file event)))
        (my/study-open-in-sioyek file (alist-get 'page event))))
@@ -438,9 +441,32 @@ dragging, then restore and resize them once the drag completes."
           (unless handed-off
             (my/study--restore-xwidgets frame)))))))
 
+(defun my/study--on-focus (event)
+  "Focus the Study AI window and sync `xwidget-webkit-edit-mode' from EVENT."
+  (when (buffer-live-p my/study--webkit-buffer)
+    (when (alist-get 'select event)
+      (when-let* ((win (get-buffer-window my/study--webkit-buffer t)))
+        (select-window win)))
+    (when (fboundp 'xwidget-webkit-edit-mode)
+      (with-current-buffer my/study--webkit-buffer
+        (let ((target (if (alist-get 'editing event) 1 0)))
+          (unless (eq (not (zerop target))
+                      (bound-and-true-p xwidget-webkit-edit-mode))
+            (xwidget-webkit-edit-mode target)))))))
+
+(defvar xwidget-webkit-edit-mode-map)
+
+(defun my/study--configure-webkit-edit-keys ()
+  "Pass standard editing navigation keys through during `xwidget-webkit-edit-mode'."
+  (when (boundp 'xwidget-webkit-edit-mode-map)
+    (dolist (key '([delete] [C-delete] [home] [end] [S-home] [S-end]))
+      (define-key xwidget-webkit-edit-mode-map key
+                  #'xwidget-webkit-pass-command-event))))
+
 (with-eval-after-load 'xwidget
   (advice-add 'xwidget-webkit-adjust-size-in-frame
-              :around #'my/study--around-adjust-size-in-frame))
+              :around #'my/study--around-adjust-size-in-frame)
+  (my/study--configure-webkit-edit-keys))
 (advice-add 'mouse-drag-line :around #'my/study--around-mouse-drag-line)
 
 ;;;###autoload

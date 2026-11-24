@@ -276,6 +276,19 @@ $('question').addEventListener('input', (e) => {
   e.target.style.height = 'auto';
   e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
 });
+let lastFocusSent = {editing: null, at: 0};
+function notifyFocus(select, editing) {
+  const now = performance.now();
+  if (!select && lastFocusSent.editing === editing && now - lastFocusSent.at < 80) return;
+  lastFocusSent = {editing: !!editing, at: now};
+  api('/api/focus', {select: !!select, editing: !!editing}).catch(() => {});
+}
+document.addEventListener('mousedown', (e) => {
+  const editing = !!(e.target && e.target.closest('textarea, input'));
+  notifyFocus(true, editing);
+}, true);
+$('question').addEventListener('focus', () => notifyFocus(true, true));
+$('question').addEventListener('blur', () => notifyFocus(false, false));
 $('agent').onchange = (e) => api('/api/agent', {agent: e.target.value});
 $('chooseOrg').onclick = () => api('/api/choose-org', {});
 $('newChat').onclick = () => api('/api/reset', {});

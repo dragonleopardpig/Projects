@@ -224,6 +224,28 @@ class ServerTests(unittest.TestCase):
         self.get_json("/api/reset", {})
         self.assertEqual(self.get_json("/api/state")["turns"], [])
 
+    def test_focus_endpoint_emits_focus_pane(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = os.path.join(tmp, "rt.json")
+            cmd = [sys.executable, str(HERE / "emacs-study-server.py"),
+                   "--mock-agent", "--runtime-file", runtime]
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True)
+            try:
+                ready = json.loads(proc.stdout.readline())
+                self.assertEqual(ready["event"], "ready")
+                base = "http://127.0.0.1:%d" % ready["port"]
+                _, raw = request(base, "/api/focus", ready["token"],
+                                 {"select": True, "editing": True})
+                self.assertTrue(json.loads(raw)["ok"])
+                ev = json.loads(proc.stdout.readline())
+                self.assertEqual(ev, {"event": "focus_pane", "select": True, "editing": True})
+            finally:
+                proc.stdin.close()
+                proc.stdout.close()
+                proc.stderr.close()
+                proc.wait(timeout=10)
+
     def test_stop_removes_runtime_file(self):
         self.proc.terminate()
         self.proc.wait(timeout=10)

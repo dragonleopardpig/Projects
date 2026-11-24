@@ -543,5 +543,33 @@
         (setq my/study--drag-suspended nil)
         (when (buffer-live-p wb) (kill-buffer wb))))))
 
+(ert-deftest my/test-study-focus-pane-selects-window-and-edit-mode ()
+  "Clicking into the Study AI chat input selects its window and toggles edit mode."
+  (save-window-excursion
+    (set-frame-size (selected-frame) 180 40)
+    (delete-other-windows)
+    (let* ((left (selected-window))
+           (right (split-window-right))
+           (wb (generate-new-buffer " *test-study-focus*"))
+           (my/study--webkit-buffer wb)
+           (edit-state nil))
+      (unwind-protect
+          (progn
+            (set-window-buffer right wb)
+            (select-window left)
+            (cl-letf (((symbol-function 'xwidget-webkit-edit-mode)
+                       (lambda (&optional arg)
+                         (setq edit-state (not (eql arg 0)))
+                         (setq-local xwidget-webkit-edit-mode edit-state))))
+              (my/study--handle-event '((event . "focus_pane") (select . t) (editing . t)))
+              (should (eq (selected-window) right))
+              (should (eq edit-state t))
+              ;; Blur without select leaves left window selected when user switched away.
+              (select-window left)
+              (my/study--handle-event '((event . "focus_pane") (select) (editing)))
+              (should (eq (selected-window) left))
+              (should (eq edit-state nil))))
+        (when (buffer-live-p wb) (kill-buffer wb))))))
+
 (provide 'emacs-config-tests)
 ;;; emacs-config-tests.el ends here
