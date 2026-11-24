@@ -167,8 +167,9 @@ static int copy_wayland(GdkPixbuf *image, gboolean ready) {
     return 0;
 }
 
-static void on_owner_change(GtkClipboard *clipboard, GdkEvent *event, gpointer data) {
-    gtk_main_quit();
+static void on_owner_change(GtkClipboard *clipboard, GdkEventOwnerChange *event, gpointer owner) {
+    if (event->owner != owner)
+        gtk_main_quit();
 }
 
 int main(int argc, char *argv[]) {
@@ -190,9 +191,12 @@ int main(int argc, char *argv[]) {
     }
     GtkClipboard *clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
     gtk_clipboard_set_image(clipboard, image);
-    gdk_display_flush(gdk_display_get_default());
     g_object_unref(image);
-    g_signal_connect(clipboard, "owner-change", G_CALLBACK(on_owner_change), NULL);
+    GdkDisplay *display = gdk_display_get_default();
+    GdkWindow *owner = gdk_selection_owner_get_for_display(display, GDK_SELECTION_CLIPBOARD);
+    if (!owner)
+        return 1;
+    g_signal_connect(clipboard, "owner-change", G_CALLBACK(on_owner_change), owner);
     signal_ready(ready);
     gtk_main();
     return 0;
