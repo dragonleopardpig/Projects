@@ -309,6 +309,140 @@
                  (not (get-buffer-window my/study--webkit-buffer t)))
         (set-window-buffer win my/study--webkit-buffer))))))
 
+(declare-function get-buffer-xwidgets "xwidget.c" (buffer))
+(declare-function xwidget-view-lookup "xwidget.c" (xwidget &optional window))
+(declare-function delete-xwidget-view "xwidget.c" (xwidget-view))
+(declare-function xwidget-webkit-adjust-size-in-frame "xwidget" (frame))
+
+(defvar my/study--drag-suspended nil
+  "List of (WINDOW BUFFER POINT) saved while dragging dividers near xwidgets.")
+
+(defconst my/study--resize-placeholder-name " *Study AI (resizing)*"
+  "Hidden placeholder buffer name used while dragging window dividers.")
+
+(defun my/study--resize-placeholder-buffer ()
+  "Return the placeholder buffer shown during divider drags."
+  (let ((buf (get-buffer my/study--resize-placeholder-name)))
+    (unless (buffer-live-p buf)
+      (setq buf (get-buffer-create my/study--resize-placeholder-name))
+      (with-current-buffer buf
+        (setq-local buffer-read-only t
+                    buffer-undo-list t
+                    cursor-type nil
+                    mode-line-format '("  Study AI (resizing...)"))
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (propertize "\n  Study AI paused while resizing divider...\n"
+                              'face 'shadow)))))
+    buf))
+
+(defun my/study--xwidget-windows (frame)
+  "Return non-minibuffer `xwidget-webkit-mode' windows on FRAME."
+  (let (wins)
+    (dolist (w (window-list frame 'no-minibuf))
+      (when (eq (buffer-local-value 'major-mode (window-buffer w))
+                'xwidget-webkit-mode)
+        (push w wins)))
+    (nreverse wins)))
+
+(defun my/study--suspend-xwidgets (frame)
+  "Detach live xwidget views on FRAME during divider drags."
+  (unless my/study--drag-suspended
+    (let ((ph (my/study--resize-placeholder-buffer))
+          (saved nil))
+      (dolist (w (my/study--xwidget-windows frame))
+        (let ((buf (window-buffer w))
+              (pt (window-point w)))
+          (push (list w buf pt) saved)
+          (when (and (fboundp 'get-buffer-xwidgets)
+                     (fboundp 'xwidget-view-lookup)
+                     (fboundp 'delete-xwidget-view))
+            (dolist (xw (get-buffer-xwidgets buf))
+              (when-let* ((view (xwidget-view-lookup xw w)))
+                (ignore-errors (delete-xwidget-view view)))))
+          (set-window-buffer w ph)))
+      (setq my/study--drag-suspended (nreverse saved)))))
+
+(defun my/study--restore-xwidgets (&optional frame)
+  "Restore any `xwidget-webkit-mode' windows suspended for divider dragging."
+  (when my/study--drag-suspended
+    (let ((entries my/study--drag-suspended)
+          (ph (get-buffer my/study--resize-placeholder-name))
+          (selected (selected-window))
+          (frames nil))
+      (setq my/study--drag-suspended nil)
+      (dolist (entry entries)
+        (pcase-let ((`(,w ,buf ,pt) entry))
+          (when (and (window-live-p w)
+                     (buffer-live-p buf)
+                     (or (null ph) (eq (window-buffer w) ph)))
+            (set-window-buffer w buf)
+            (let ((pmin (with-current-buffer buf (point-min)))
+                  (pmax (with-current-buffer buf (point-max))))
+              (set-window-point w (max pmin (min pt pmax)))
+              (set-window-start w pmin))
+            (cl-pushnew (window-frame w) frames :test #'eq))))
+      (when (and (null frames) (frame-live-p frame))
+        (setq frames (list frame)))
+      (when (fboundp 'xwidget-webkit-adjust-size-in-frame)
+        (dolist (f frames)
+          (when (frame-live-p f)
+            (xwidget-webkit-adjust-size-in-frame f))))
+      (when (window-live-p selected)
+        (select-window selected t)))))
+
+(defun my/study--around-adjust-size-in-frame (orig-fn frame)
+  "Skip xwidget WebKit resizes while a window divider drag is active."
+  (unless my/study--drag-suspended
+    (funcall orig-fn frame)))
+
+(defun my/study--around-mouse-drag-line (orig-fn start-event line)
+  "Keep `mouse-drag-line' smooth when an `xwidget-webkit-mode' pane shows.
+Native `WebKitWebView' child widgets absorb GTK pointer motion events as soon
+as the cursor crosses into the widget, causing divider drags to move one step
+and stall.  Temporarily swap xwidget windows to a lightweight placeholder while
+dragging, then restore and resize them once the drag completes."
+  (let* ((start (event-start start-event))
+         (win (posn-window start))
+         (frame (and (window-live-p win) (window-frame win)))
+         (area (posn-area start)))
+    (if (not (and frame (display-graphic-p frame) (my/study--xwidget-windows frame)))
+        (funcall orig-fn start-event line)
+      (when my/study--drag-suspended
+        (my/study--restore-xwidgets frame))
+      (let ((orig-stm (symbol-function 'set-transient-map))
+            (handed-off nil))
+        (unwind-protect
+            (cl-letf (((symbol-function 'set-transient-map)
+                       (lambda (map &optional keep-pred on-exit message timeout)
+                         (let ((orig-move (lookup-key map [mouse-movement])))
+                           (when (and (not my/study--drag-suspended)
+                                      (functionp orig-move))
+                             (define-key map [mouse-movement]
+                               (lambda (ev)
+                                 (interactive "e")
+                                 (unless my/study--drag-suspended
+                                   (my/study--suspend-xwidgets frame))
+                                 (funcall orig-move ev))))
+                           (let ((wrapped-exit
+                                  (lambda ()
+                                    (unwind-protect
+                                        (when on-exit (funcall on-exit))
+                                      (my/study--restore-xwidgets frame)))))
+                             (setq handed-off t)
+                             (funcall orig-stm map keep-pred wrapped-exit message timeout))))))
+              (when (or (eq line 'vertical)
+                        (memq area '(right-divider bottom-divider vertical-line)))
+                (my/study--suspend-xwidgets frame))
+              (funcall orig-fn start-event line))
+          (unless handed-off
+            (my/study--restore-xwidgets frame)))))))
+
+(with-eval-after-load 'xwidget
+  (advice-add 'xwidget-webkit-adjust-size-in-frame
+              :around #'my/study--around-adjust-size-in-frame))
+(advice-add 'mouse-drag-line :around #'my/study--around-mouse-drag-line)
+
 ;;;###autoload
 (defun my/study-open ()
   "Open the Study AI pane beside the current window."

@@ -51,7 +51,8 @@
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
 (fringe-mode -1)
-(setq window-divider-default-places t
+(setq window-resize-pixelwise t
+      window-divider-default-places t
       window-divider-default-right-width 4
       window-divider-default-bottom-width 4)
 (window-divider-mode 1)
