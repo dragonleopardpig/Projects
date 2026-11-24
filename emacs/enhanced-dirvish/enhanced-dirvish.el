@@ -77,11 +77,13 @@
       (setq-local dired-auto-revert-buffer nil
                   auto-revert-use-notify nil)
     (kill-local-variable 'dired-auto-revert-buffer)
-    (kill-local-variable 'auto-revert-use-notify)))
+    (kill-local-variable 'auto-revert-use-notify))
+  (enhanced-dirvish-view--set-browser-text-scale))
 
 (defun enhanced-dirvish--enable-in-browser ()
   "Enable `enhanced-dirvish-mode' in Enhanced Dirvish browser buffers cleanly."
   (enhanced-dirvish--sync-auto-revert)
+  (enhanced-dirvish-view--install-browser-text-zoom)
   (when (and (derived-mode-p 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode)
              (fboundp 'enhanced-dirvish--enforce-no-wrap))
     (enhanced-dirvish--enforce-no-wrap))
@@ -221,7 +223,8 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
         (when (file-directory-p pdir)
           (setq-local default-directory (file-name-as-directory pdir))))
       (dirvish-prop :attrs
-        (dirvish--attrs-expand '(enhanced-dirvish-icon enhanced-dirvish-dir-mouse enhanced-dirvish-color))))
+        (dirvish--attrs-expand '(enhanced-dirvish-icon enhanced-dirvish-dir-mouse enhanced-dirvish-color)))
+      (enhanced-dirvish-view--install-browser-text-zoom))
     (when (fboundp 'enhanced-dirvish-watch-sync)
       (enhanced-dirvish-watch-sync buf)))
   buf)
@@ -280,7 +283,8 @@ Dashboard adds a variable-pitch space; it can be too narrow for Nerd glyphs."
   "Ensure `dirvish-directory-view-mode' panes expose icons & clickable dirs."
   (unless (dirvish-prop :attrs)
     (dirvish-prop :attrs
-      (dirvish--attrs-expand '(enhanced-dirvish-icon enhanced-dirvish-dir-mouse enhanced-dirvish-color)))))
+      (dirvish--attrs-expand '(enhanced-dirvish-icon enhanced-dirvish-dir-mouse enhanced-dirvish-color))))
+  (enhanced-dirvish-view--install-browser-text-zoom))
 
 (defun enhanced-dirvish--on-frame-created (&optional frame)
   "Refresh icon font cache and dashboard buttons when GUI FRAME opens."

@@ -24,6 +24,7 @@
 (require 'dirvish-subtree nil t)
 (require 'dirvish-collapse nil t)
 (require 'dirvish-emerge nil t)
+(require 'face-remap)
 (require 'subr-x)
 (require 'enhanced-dirvish-prefs)
 (require 'enhanced-dirvish-devices)
@@ -83,6 +84,64 @@
 
 (defvar-local enhanced-dirvish-visual-anchor nil
   "File path where 10xer visual selection started.")
+
+(defvar enhanced-dirvish-view--applying-text-zoom nil
+  "Non-nil while restoring saved browser text zoom onto a directory buffer.")
+
+(defun enhanced-dirvish-view--browser-zoom-buffer-p (&optional buffer)
+  "Return non-nil when BUFFER is an Enhanced Dirvish directory browser buffer."
+  (with-current-buffer (or buffer (current-buffer))
+    (and (derived-mode-p 'dired-mode
+                         'dirvish-directory-view-mode
+                         'enhanced-dirvish-compact-mode
+                         'enhanced-dirvish-icons-mode
+                         'enhanced-dirvish-computer-mode
+                         'enhanced-dirvish-trash-mode
+                         'enhanced-dirvish-recent-mode)
+         (not (bound-and-true-p enhanced-dirvish-preview-read-mode))
+         (not (bound-and-true-p enhanced-dirvish-preview-edit-mode))
+         (not (string-prefix-p "*Enhanced Dirvish Preview" (buffer-name))))))
+
+(defun enhanced-dirvish-view--set-browser-text-scale ()
+  "Apply saved `browser-text-scale' to the current browser buffer."
+  (when (enhanced-dirvish-view--browser-zoom-buffer-p)
+    (let* ((target (or (enhanced-dirvish-prefs-browser-text-scale (enhanced-dirvish-prefs)) 0))
+           (current (if (bound-and-true-p text-scale-mode)
+                        (or (bound-and-true-p text-scale-mode-amount) 0)
+                      0))
+           (enhanced-dirvish-view--applying-text-zoom t))
+      (unless (= current target)
+        (text-scale-set target)))))
+
+(defun enhanced-dirvish-view--sync-live-browser-text-scales (&optional exclude-buf)
+  "Sync `browser-text-scale' across live directory browser buffers.
+Skip EXCLUDE-BUF when non-nil."
+  (let ((enhanced-dirvish-view--applying-text-zoom t))
+    (dolist (buf (buffer-list))
+      (when (and (buffer-live-p buf)
+                 (not (eq buf exclude-buf))
+                 (enhanced-dirvish-view--browser-zoom-buffer-p buf))
+        (with-current-buffer buf
+          (enhanced-dirvish-view--set-browser-text-scale))))))
+
+(defun enhanced-dirvish-view--remember-browser-text-scale ()
+  "Persist native Emacs text zoom changes made inside any browser view."
+  (when (and (not enhanced-dirvish-view--applying-text-zoom)
+             (enhanced-dirvish-view--browser-zoom-buffer-p))
+    (let* ((p (enhanced-dirvish-prefs))
+           (scale (if (bound-and-true-p text-scale-mode)
+                      (or (bound-and-true-p text-scale-mode-amount) 0)
+                    0)))
+      (unless (= scale (or (enhanced-dirvish-prefs-browser-text-scale p) 0))
+        (setf (enhanced-dirvish-prefs-browser-text-scale p) scale)
+        (enhanced-dirvish-prefs-save)
+        (enhanced-dirvish-view--sync-live-browser-text-scales (current-buffer))))))
+
+(defun enhanced-dirvish-view--install-browser-text-zoom ()
+  "Hook and apply persisted browser text zoom in the current buffer."
+  (when (enhanced-dirvish-view--browser-zoom-buffer-p)
+    (add-hook 'text-scale-mode-hook #'enhanced-dirvish-view--remember-browser-text-scale nil t)
+    (enhanced-dirvish-view--set-browser-text-scale)))
 
 ;;;; File Selection & Cursor Introspection Across All 4 Views
 
@@ -1195,6 +1254,7 @@ Columns run left to right and scroll sideways."
               '(:eval (enhanced-dirvish-view-header-line)))
   (setq-local mode-line-format
               '(:eval (dirvish-enhanced-dirvish-footer-ml)))
+  (enhanced-dirvish-view--install-browser-text-zoom)
   (add-hook 'post-command-hook #'enhanced-dirvish-view--sync-preview-on-move nil t))
 
 (defun enhanced-dirvish-view--sync-preview-on-move ()
@@ -1254,13 +1314,14 @@ In Columns, List, Compact and Icons views."
                                     cell)
                cell))
            entries))
-         (rows (max 6 (- (window-body-height) 2)))
+         (rows (max 6 (- (window-body-height nil 'remap) 2)))
          ;; Full names must fit the stride too; capping only the spacing lets
          ;; a long name push every later cell on its row out of alignment.
          (cell-w (if full-p
                      (if cells (+ 2 (apply #'max (mapcar #'string-width cells))) 21)
                    26))
          (ncols (max 1 (ceiling (max 1 (length entries)) (float rows))))
+         (scale-align-p (and (display-graphic-p) (bound-and-true-p text-scale-mode)))
          (inhibit-read-only t)
          (cur (enhanced-dirvish-current-file)))
     (setq enhanced-dirvish-view-directory d
@@ -1273,9 +1334,11 @@ In Columns, List, Compact and Icons views."
         (let ((idx (+ (* c rows) r)))
           (when (< idx (length entries))
             (let* ((cell (nth idx cells))
-                   (pad (max 1 (- cell-w (string-width cell)))))
+                   (pad (max 1 (- cell-w (string-width cell))))
+                   (col (* (1+ c) cell-w))
+                   (align (if scale-align-p (cons col 'width) col)))
               (insert cell (propertize (make-string pad ?\s)
-                                      'display `(space :align-to ,(* (1+ c) cell-w))))))))
+                                      'display `(space :align-to ,align)))))))
       (insert "\n"))
     (goto-char (point-min))
     (cond
@@ -1371,6 +1434,7 @@ In Columns, List, Compact and Icons views."
               '(:eval (enhanced-dirvish-view-header-line)))
   (setq-local mode-line-format
               '(:eval (dirvish-enhanced-dirvish-footer-ml)))
+  (enhanced-dirvish-view--install-browser-text-zoom)
   (add-hook 'post-command-hook #'enhanced-dirvish-icons--post-command-hook nil t)
   (add-hook 'window-size-change-functions #'enhanced-dirvish-icons--on-window-size-change nil t))
 
@@ -1449,7 +1513,7 @@ Its font family and tint are kept."
          (thumb-px (max 32 (min 256 (or (enhanced-dirvish-prefs-icons-thumbnail-size p) 64))))
          (graphic-p (display-graphic-p))
          (win (selected-window))
-         (char-w (max 6 (frame-char-width)))
+         (char-w (max 6 (if graphic-p (window-font-width win) (frame-char-width))))
          (win-raw (window-body-width win graphic-p))
          (tile-chars (max 18 (+ 6 (ceiling thumb-px char-w))))
          (max-lbl-chars (- tile-chars 2))
@@ -3099,6 +3163,8 @@ folder cannot itself become the drop target."
     ;; Set this on the displayed buffer after switching.  Setting it on the
     ;; source buffer leaves stale labels when Dired is reused from another view.
     (setq-local enhanced-dirvish-local-view-mode mode)
+    (enhanced-dirvish-view--install-browser-text-zoom)
+    (enhanced-dirvish-view--sync-live-browser-text-scales (current-buffer))
     (when (fboundp 'enhanced-dirvish-panes--set-active-view)
       (enhanced-dirvish-panes--set-active-view (current-buffer) (selected-window)))
     (force-mode-line-update t)

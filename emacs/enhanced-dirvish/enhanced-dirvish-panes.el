@@ -443,6 +443,8 @@ Esc to cancel): Emacs would otherwise freeze on its first look inside."
           (user-error "Location does not exist: %s" resolved)))))
     (setf (enhanced-dirvish-pane-state-buffer pane) (current-buffer)
           (enhanced-dirvish-pane-state-window pane) (selected-window))
+    (enhanced-dirvish-view--install-browser-text-zoom)
+    (enhanced-dirvish-view--sync-live-browser-text-scales (current-buffer))
     (ignore record-history)
     (enhanced-dirvish-tabs-save)
     (unless (enhanced-dirvish-sidebar-ensure)

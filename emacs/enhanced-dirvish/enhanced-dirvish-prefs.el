@@ -82,6 +82,7 @@ everywhere; copy/cut/paste remain bound cleanly to `C-c c', `C-c x', `C-c v',
   (single-click-previews t)
 
   ;; Previews & independent per-type zoom
+  (browser-text-scale 0)           ; integer steps for directory views
   (icons-thumbnail-size 64)
   (show-thumbnails t)
   (render-documents-by-default t)
@@ -303,6 +304,8 @@ Returns an alist mapping section string (\"\" for root) to an alist of
                                  (enhanced-dirvish-prefs-preview-autoplay p)))
         (setf (enhanced-dirvish-prefs-preview-muted p)
               (enhanced-dirvish-toml--bool (getk "preview_muted") (enhanced-dirvish-prefs-preview-muted p)))
+        (when (numberp (getk "browser_text_scale"))
+          (setf (enhanced-dirvish-prefs-browser-text-scale p) (getk "browser_text_scale")))
         (when (numberp (getk "icons_thumbnail_size"))
           (setf (enhanced-dirvish-prefs-icons-thumbnail-size p) (getk "icons_thumbnail_size")))
         (setf (enhanced-dirvish-prefs-show-thumbnails p)
@@ -363,7 +366,8 @@ Returns an alist mapping section string (\"\" for root) to an alist of
                      sort-key sort-direction folders-first natural-sort case-sensitive-sort
                      group-by-type show-hidden date-format unit-system compact-full-names
                      browser-density columns-mirror-selection columns-show-sizes
-                     folder-peeking single-click-previews icons-thumbnail-size show-thumbnails
+                     folder-peeking single-click-previews browser-text-scale
+                     icons-thumbnail-size show-thumbnails
                      render-documents-by-default preview-text-wrap preview-autoplay
                      preview-muted preview-volume preview-text-scale preview-image-scale
                      preview-pdf-scale sidebar-expanded sidebar-compact

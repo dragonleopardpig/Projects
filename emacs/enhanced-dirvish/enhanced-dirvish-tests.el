@@ -4521,6 +4521,63 @@ after the folder, so the second pane must not reuse the first one's."
         (should (member "Unpin from Sidebar" labels))
         (should-not (member "Pin to Sidebar" labels))))))
 
+(ert-deftest enhanced-dirvish-test-browser-text-zoom-persists-independently ()
+  "Native text zoom persists for browser views and stays out of ordinary buffers."
+  (let* ((root (make-temp-file "enhanced-dirvish-browser-zoom-" t))
+         (sub (expand-file-name "sub" root))
+         (enhanced-dirvish-state-dir (expand-file-name "state" root))
+         (enhanced-dirvish-state-file (expand-file-name "prefs.eld" enhanced-dirvish-state-dir))
+         (enhanced-dirvish-prefs-current (enhanced-dirvish-prefs--create)))
+    (unwind-protect
+        (progn
+          (make-directory sub t)
+          (write-region "alpha\n" nil (expand-file-name "alpha.txt" root) nil 'silent)
+          ;; Ordinary non-browser buffers must not alter `browser-text-scale'.
+          (with-temp-buffer
+            (text-scale-set 3)
+            (should (= (enhanced-dirvish-prefs-browser-text-scale (enhanced-dirvish-prefs)) 0)))
+          (let ((b1 (generate-new-buffer "*Enhanced Dirvish Compact: zoom-root*"))
+                (b2 (generate-new-buffer "*Enhanced Dirvish Icons: zoom-sub*"))
+                (b3 (dired-noselect root)))
+            (unwind-protect
+                (progn
+                  (with-current-buffer b1
+                    (enhanced-dirvish-compact-mode)
+                    (enhanced-dirvish-compact-render root)
+                    (text-scale-set 3)
+                    (should (= (enhanced-dirvish-prefs-browser-text-scale (enhanced-dirvish-prefs)) 3))
+                    (should (= (enhanced-dirvish-prefs-preview-text-scale (enhanced-dirvish-prefs)) 0))
+                    ;; Guarded restoration does not clobber the saved zoom.
+                    (let ((enhanced-dirvish-view--applying-text-zoom t))
+                      (text-scale-set 0))
+                    (enhanced-dirvish-view--set-browser-text-scale)
+                    (should (= text-scale-mode-amount 3))
+                    ;; On graphic frames, zoomed Compact columns use remapped height & `width' alignment.
+                    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                              ((symbol-function 'window-body-height)
+                               (lambda (&optional _w px) (if (eq px 'remap) 10 20))))
+                      (enhanced-dirvish-compact-render root)
+                      (should (= enhanced-dirvish-compact-rows 8))
+                      (goto-char (point-min))
+                      (let ((disp (get-text-property (1- (line-end-position)) 'display)))
+                        (should (equal (car-safe disp) 'space))
+                        (should (eq (cdr (plist-get (cdr disp) :align-to)) 'width)))))
+                  ;; Re-entering `enhanced-dirvish-icons-mode' and Dired restores saved zoom.
+                  (with-current-buffer b2
+                    (enhanced-dirvish-icons-mode)
+                    (should (= text-scale-mode-amount 3))
+                    ;; Re-running the major mode (`kill-all-local-variables') retains zoom.
+                    (enhanced-dirvish-icons-mode)
+                    (should (= text-scale-mode-amount 3)))
+                  (with-current-buffer b3
+                    (enhanced-dirvish-view--install-browser-text-zoom)
+                    (should (= text-scale-mode-amount 3)))
+                  (should (= (enhanced-dirvish-prefs-browser-text-scale (enhanced-dirvish-prefs-load)) 3))
+                  (should (= (enhanced-dirvish-prefs-preview-text-scale (enhanced-dirvish-prefs)) 0)))
+              (dolist (b (list b1 b2 b3))
+                (when (buffer-live-p b) (kill-buffer b))))))
+      (ignore-errors (delete-directory root t)))))
+
 (require 'enhanced-dirvish-window-tests)
 
 (provide 'enhanced-dirvish-tests)
