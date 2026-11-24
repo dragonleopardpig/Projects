@@ -186,6 +186,7 @@
             # Built-in copy_screenshot_to_clipboard offered only image/png;
             # also offer image/bmp for Windows RDP (WinApps) / Wine compatibility.
             ./patches/sioyek-clipboard-bmp.patch
+            ./patches/sioyek-outline-title-padding.patch
             ./patches/sioyek-ask-ai.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
