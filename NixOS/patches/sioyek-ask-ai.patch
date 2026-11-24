@@ -633,7 +633,7 @@ index 279bc94..bdd0c67 100644
      register_command<GotoTableOfContentsCommand>();
      register_command<GotoHighlightCommand>();
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index ced4a61..cfc9f4a 100644
+index ced4a61..541778d 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
 @@ -14,6 +14,7 @@
@@ -703,7 +703,7 @@ index ced4a61..cfc9f4a 100644
      main_document_view->toggle_two_page();
      if (NUM_CACHED_PAGES < 6) {
          if (main_document_view->is_two_page_mode()) {
-@@ -12728,6 +12752,81 @@ void MainWidget::handle_toggle_two_page_mode() {
+@@ -12728,6 +12752,83 @@ void MainWidget::handle_toggle_two_page_mode() {
      }
  }
  
@@ -751,6 +751,7 @@ index ced4a61..cfc9f4a 100644
 +    }
 +    if (!ai_panel) {
 +        ai_panel = new AiPanel(this);
++        setAnimated(false);
 +        addDockWidget(Qt::RightDockWidgetArea, ai_panel);
 +        connect(ai_panel, &AiPanel::closed, this, [this] {
 +            QTimer::singleShot(0, this, [this] {
@@ -772,6 +773,7 @@ index ced4a61..cfc9f4a 100644
 +}
 +
 +void MainWidget::update_ai_layout() {
++    layout()->activate();
 +    const auto viewport = opengl_widget->size();
 +    main_window_width = central_widget->width();
 +    status_label->resize(main_window_width, get_status_bar_height());
@@ -785,7 +787,7 @@ index ced4a61..cfc9f4a 100644
  
  void MainWidget::ensure_zero_interval_timer(){
      validation_interval_timer->setInterval(INTERVAL_TIME);
-@@ -13014,6 +13113,10 @@ QMenuBar* MainWidget::create_main_menu_bar(){
+@@ -13014,6 +13115,10 @@ QMenuBar* MainWidget::create_main_menu_bar(){
              new MenuNode{ "toggle_presentation_mode", "", {} },
              new MenuNode{ "-", "", {} },
              new MenuNode{ "toggle_two_page_mode", "", {} },
