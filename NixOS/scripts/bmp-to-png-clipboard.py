@@ -4,12 +4,9 @@ Windows RDP / VM BMP-to-PNG Clipboard Bridge.
 Converts incoming Windows clipboard bitmaps (image/bmp) to standard Wayland
 image/png so GTK4 applications (like Pinta) and Linux desktop tools can paste them.
 
-Crucial implementation details:
-1. Never invoke `wl-paste` inside this handler. Re-entrant clipboard queries
-   from a child of `wl-paste --watch` cause a protocol deadlock with the compositor.
-2. FreeRDP / Wayland pipes do not send EOF immediately. Instead of waiting for EOF,
-   we extract the exact BMP byte count from the 14-byte BMP header (offset [2:6],
-   little-endian uint32) and read exactly those bytes using non-blocking select().
+FreeRDP / Wayland pipes do not send EOF immediately. Read the byte count from
+the BMP header and close the transfer before querying the current MIME types.
+Clipboard offers that already include PNG keep their other formats.
 """
 
 import os
@@ -56,14 +53,29 @@ def read_bmp_from_stream(stream, timeout=2.0):
         print(f"[bmp-to-png] Stream read error: {e}", file=sys.stderr)
         return None
 
+
+def clipboard_needs_png():
+    result = subprocess.run(
+        ["wl-paste", "--list-types"],
+        capture_output=True,
+        timeout=2,
+        check=False,
+    )
+    types = set(result.stdout.splitlines())
+    return result.returncode == 0 and b"image/bmp" in types and b"image/png" not in types
+
+
 def main():
-    raw = read_bmp_from_stream(sys.stdin.buffer)
+    with sys.stdin.buffer as stream:
+        raw = read_bmp_from_stream(stream)
     if not raw or len(raw) < 54 or not raw.startswith(b"BM"):
         return
 
     bmp_path = None
     png_path = None
     try:
+        if not clipboard_needs_png():
+            return
         with tempfile.NamedTemporaryFile(suffix=".bmp", delete=False) as f_bmp:
             f_bmp.write(raw)
             bmp_path = f_bmp.name
@@ -78,7 +90,8 @@ def main():
             timeout=10,
         )
 
-        if res.returncode == 0 and os.path.isfile(png_path) and os.path.getsize(png_path) > 0:
+        if (res.returncode == 0 and os.path.isfile(png_path)
+                and os.path.getsize(png_path) > 0 and clipboard_needs_png()):
             with open(png_path, "rb") as f_png:
                 subprocess.run(
                     ["wl-copy", "-t", "image/png"],

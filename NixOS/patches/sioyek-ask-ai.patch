@@ -895,7 +895,7 @@ index 279bc94..f24be45 100644
      register_command<GotoTableOfContentsCommand>();
      register_command<GotoHighlightCommand>();
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index ced4a61..fc15873 100644
+index ced4a61..1b0bef3 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
 @@ -14,6 +14,7 @@
@@ -1002,7 +1002,7 @@ index ced4a61..fc15873 100644
      main_document_view->toggle_two_page();
      if (NUM_CACHED_PAGES < 6) {
          if (main_document_view->is_two_page_mode()) {
-@@ -12728,6 +12775,160 @@ void MainWidget::handle_toggle_two_page_mode() {
+@@ -12728,6 +12775,161 @@ void MainWidget::handle_toggle_two_page_mode() {
      }
  }
  
@@ -1058,7 +1058,8 @@ index ced4a61..fc15873 100644
 +        if (error == QProcess::FailedToStart)
 +            finish(false);
 +    });
-+    process->start(QStringLiteral("sioyek-snip"), {rectangle, document});
++    const QString helper = qEnvironmentVariable("SIOYEK_SNIP_BINARY", "sioyek-snip");
++    process->start(helper, {rectangle, document});
 +}
 +
 +void MainWidget::ask_ai(std::optional<AbsoluteRect> region, bool choose_agent) {
@@ -1163,7 +1164,7 @@ index ced4a61..fc15873 100644
  
  void MainWidget::ensure_zero_interval_timer(){
      validation_interval_timer->setInterval(INTERVAL_TIME);
-@@ -13014,6 +13215,10 @@ QMenuBar* MainWidget::create_main_menu_bar(){
+@@ -13014,6 +13216,10 @@ QMenuBar* MainWidget::create_main_menu_bar(){
              new MenuNode{ "toggle_presentation_mode", "", {} },
              new MenuNode{ "-", "", {} },
              new MenuNode{ "toggle_two_page_mode", "", {} },

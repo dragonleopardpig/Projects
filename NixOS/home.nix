@@ -1034,6 +1034,7 @@ in
     text = ''
       #!/bin/sh
       export SIOYEK_BINARY="${pkgs.sioyek}/bin/sioyek"
+      export SIOYEK_SNIP_BINARY="/run/current-system/sw/bin/sioyek-snip"
       exec ${pkgs.python3}/bin/python3 ${./scripts/sioyek-offline.py} "$@"
     '';
   };

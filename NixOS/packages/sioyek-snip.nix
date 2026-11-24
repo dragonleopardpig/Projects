@@ -28,6 +28,7 @@ let
     import io
     import math
     import os
+    import selectors
     import shutil
     import subprocess
     import sys
@@ -75,6 +76,38 @@ let
             return page_image.crop((left, top, right, bottom))
 
 
+    def copy_snapshot(path):
+        owner = subprocess.Popen(
+            ["${wlCopyImage}/bin/wl-copy-image", "--ready", path],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True,
+        )
+        with owner.stdout, selectors.DefaultSelector() as selector:
+            selector.register(owner.stdout, selectors.EVENT_READ)
+            if selector.select(timeout=3) and owner.stdout.readline() == b"ready\n":
+                return " and copied to the clipboard"
+        if owner.poll() is None:
+            owner.terminate()
+        try:
+            owner.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            owner.kill()
+            owner.wait()
+
+        if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("WAYLAND_SOCKET"):
+            try:
+                with open(path, "rb") as image:
+                    result = subprocess.run(
+                        ["${wl-clipboard}/bin/wl-copy", "--type", "image/png"], stdin=image,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3,
+                        check=False,
+                    )
+                if result.returncode == 0:
+                    return " and copied to the clipboard as PNG"
+            except subprocess.TimeoutExpired:
+                pass
+        return ""
+
+
     def main():
         if len(sys.argv) < 3:
             sys.exit("usage: sioyek-snip <page,x0,y0,x1,y1> <document>")
@@ -113,23 +146,7 @@ let
                            % (stem, page_index + 1, time.strftime("%Y%m%d-%H%M%S")))
         pix.save(out)
 
-        copied = ""
-        if shutil.which("wl-copy-image"):
-            # wl-copy-image uses GTK to offer image/png, image/bmp, image/tiff, etc.
-            # simultaneously on Wayland. WinApps / FreeRDP / Wine require CF_DIB via
-            # image/bmp to paste into Windows, while Linux apps expect image/png.
-            subprocess.Popen(["wl-copy-image", out],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             start_new_session=True)
-            copied = " and copied to the clipboard"
-        elif shutil.which("wl-copy"):
-            # Do not wait on wl-copy: on Wayland the copier has to stay resident to
-            # serve the selection, so waiting for it never returns.
-            with open(out, "rb") as fh:
-                subprocess.Popen(["wl-copy", "-t", "image/png"], stdin=fh,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                 start_new_session=True)
-            copied = " and copied to the clipboard"
+        copied = copy_snapshot(out)
 
         notify("Snipped page %d" % (page_index + 1),
                "%dx%d px at %d dpi%s" % (pix.width, pix.height, DPI, copied))
@@ -145,8 +162,6 @@ writeShellApplication {
   runtimeInputs = [
     (python3.withPackages (ps: with ps; [ pillow pymupdf ]))
     djvulibre
-    wlCopyImage
-    wl-clipboard
     libnotify
   ];
   text = ''
