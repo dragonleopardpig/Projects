@@ -106,6 +106,24 @@
     (should (eq (key-binding (kbd "C-c b")) #'scimax-ob/body))
     (should (eq (key-binding (kbd "C-c M-v")) #'emacs-minder-paste-clipboard-latex))))
 
+(ert-deftest my/test-pdf-tools-opens-pdf ()
+  "Opening a PDF activates `pdf-view-mode' via `pdf-tools' instead of `doc-view'."
+  (let ((pdf (expand-file-name "~/.local/share/sioyek/tutorial.pdf"))
+        (buf nil))
+    (should (locate-library "pdf-tools"))
+    (should (fboundp 'pdf-loader-install))
+    (when (file-exists-p pdf)
+      (unwind-protect
+          (progn
+            (setq buf (find-file-noselect pdf))
+            (with-current-buffer buf
+              (should (derived-mode-p 'pdf-view-mode))
+              (should (eq (key-binding (kbd "d")) #'pdf-view-follow-minor-mode))
+              (should (= (pdf-cache-number-of-pages) 6))
+              (should (= pdf-view-resize-factor 1.02))))
+        (when (buffer-live-p buf)
+          (kill-buffer buf))))))
+
 (ert-deftest my/test-zero-arg-startup-dashboard ()
   "Running `dashboard-open' creates and displays `*dashboard*' cleanly."
   (should (memq #'my/dashboard-open-if-scratch emacs-startup-hook))

@@ -9,6 +9,17 @@
 
 (require 'cl-lib)
 
+(defvar pdf-view-resize-factor)
+(defvar pdf-view-continuous)
+(defvar pdf-view-mode-map)
+(defvar org-mode-map)
+(declare-function pdf-loader-install "pdf-loader"
+                  (&optional no-query-p skip-dependencies-p no-error-p force-dependencies-p))
+(declare-function emacs-minder-mode "emacs-minder" ())
+(declare-function emacs-minder-new "emacs-minder" (&optional title))
+(declare-function emacs-minder-open-org "emacs-minder" (&optional file))
+(declare-function emacs-minder-paste-clipboard-latex "emacs-minder" (&optional arg))
+
 ;;;; EPUB Reader (`nov`)
 
 (use-package nov
@@ -17,11 +28,10 @@
 ;;;; PDF Reader (`pdf-tools` + `saveplace-pdf-view` + Two-Page Spread)
 
 (when (locate-library "pdf-tools")
-  (require 'pdf-tools nil t)
-  (when (and (not noninteractive) (fboundp 'pdf-loader-install))
-    (ignore-errors (pdf-loader-install t)))
-  (setq pdf-view-resize-factor 1.02
-        pdf-view-continuous nil))
+  (load "pdf-tools-autoloads" t t)
+  (require 'pdf-loader nil t)
+  (when (fboundp 'pdf-loader-install)
+    (pdf-loader-install t t t)))
 
 (require 'saveplace-pdf-view nil t)
 
@@ -67,6 +77,8 @@
     (setq my/pdf-follow-partner-window nil)))
 
 (with-eval-after-load 'pdf-view
+  (setq pdf-view-resize-factor 1.02
+        pdf-view-continuous nil)
   (define-key pdf-view-mode-map (kbd "d") #'pdf-view-follow-minor-mode))
 
 ;;;; Native Mind Mapping (`emacs-minder`)
