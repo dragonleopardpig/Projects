@@ -4157,6 +4157,43 @@ after the folder, so the second pane must not reuse the first one's."
           (should (enhanced-dirvish-current-file))
           (should-not enhanced-dirvish--empty-click-p))))))
 
+(ert-deftest enhanced-dirvish-test-icons-empty-click-keeps-viewport-and-hides-cursor ()
+  "Blank clicks in Icons view keep scroll position, hide cursor, and stay off EOB."
+  (enhanced-dirvish-test--with-selection-view 'icons
+    (dotimes (i 96)
+      (make-directory (expand-file-name (format "folder-%02d" i) enhanced-dirvish-test--dir)))
+    (enhanced-dirvish-icons-refresh)
+    (should-not cursor-type)
+    (let ((entries (enhanced-dirvish-view--entry-order))
+          (win (selected-window)))
+      (dolist (kind '(mouse-1 native mouse-3))
+        (enhanced-dirvish-goto-file (car entries))
+        ;; Scroll down while `point' stays at item 0, just like wheel-scrolling.
+        (set-window-start win (save-excursion (goto-char (point-min)) (forward-line 4) (point)) t)
+        (redisplay t)
+        (let* ((start (window-start win))
+               (posn (list win (point-max) '(800 . 200) 0)))
+          (pcase kind
+            ('native (enhanced-dirvish-test--play-events (list 'down-mouse-1 posn 1)
+                                              (list 'mouse-1 posn 1)))
+            ('mouse-3
+             (cl-letf (((symbol-function 'display-popup-menus-p) (lambda (&rest _) t))
+                       ((symbol-function 'popup-menu) #'ignore))
+               (enhanced-dirvish-mouse-context-menu (list kind posn 1))))
+            (_ (enhanced-dirvish-mouse-click-entry (list kind posn 1))))
+          (let ((this-command 'enhanced-dirvish-mouse-click-entry)) (run-hooks 'post-command-hook))
+          (redisplay t)
+          (should (= (window-start win) start))
+          (should-not (eobp))
+          (should-not cursor-type)
+          (should-not (enhanced-dirvish-current-file))
+          (should-not (enhanced-dirvish-marked-files-only))
+          (should-not enhanced-dirvish--selection-overlays)
+          ;; Same-directory async thumbnail refresh retains cleared selection & viewport.
+          (enhanced-dirvish-icons-refresh)
+          (should (= (window-start win) start))
+          (should-not (enhanced-dirvish-current-file)))))))
+
 (ert-deftest enhanced-dirvish-test-delete-keeps-adjacent-file-in-all-views ()
   "Trash and permanent delete focus one surviving neighbour in listing order."
   (dolist (view '(columns list compact icons))

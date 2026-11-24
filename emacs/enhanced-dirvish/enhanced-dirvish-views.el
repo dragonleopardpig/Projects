@@ -1186,6 +1186,38 @@ Return the snapshot, if any."
 (defvar-local enhanced-dirvish-compact-col-width 28 "Current column stride in Compact view.")
 (defvar-local enhanced-dirvish-compact-rows 20 "Row count per vertical column in Compact view.")
 
+(defun enhanced-dirvish-view--viewport-snapshot (win &optional fallback-pt require-visible)
+  "Return visible viewport snapshot for WIN, keeping point off `point-max'.
+When REQUIRE-VISIBLE is non-nil, require `window-point' or FALLBACK-PT to
+pass `pos-visible-in-window-p'."
+  (when (window-live-p win)
+    (with-current-buffer (window-buffer win)
+      (let* ((start (window-start win))
+             (wpt (window-point win))
+             (ok-p (lambda (pt)
+                     (and (integerp pt)
+                          (>= pt start)
+                          (< pt (point-max))
+                          (or (not require-visible)
+                              (pos-visible-in-window-p pt win)))))
+             (safe-pt (cond ((funcall ok-p wpt) wpt)
+                            ((funcall ok-p fallback-pt) fallback-pt)
+                            (t start))))
+        (list safe-pt start (window-hscroll win) (window-vscroll win t) win)))))
+
+(defun enhanced-dirvish-view--same-dir-viewport (dir)
+  "Capture visible viewport for DIR when re-rendering an empty-click state."
+  (when (and enhanced-dirvish-view-directory
+             (equal (directory-file-name (expand-file-name enhanced-dirvish-view-directory))
+                    (directory-file-name (expand-file-name dir)))
+             (enhanced-dirvish-view--empty-selection-p))
+    (let* ((sel (selected-window))
+           (win (if (and (window-live-p sel)
+                         (eq (window-buffer sel) (current-buffer)))
+                    sel
+                  (get-buffer-window (current-buffer) t))))
+      (enhanced-dirvish-view--viewport-snapshot win))))
+
 (defun enhanced-dirvish-view--buffer (label dir)
   "Return the LABEL (\"Compact\" or \"Icons\") view buffer for DIR.
 The buffer is for the selected window.  A view buffer is named after its
@@ -1410,6 +1442,7 @@ In Columns, List, Compact and Icons views."
          (ncols (max 1 (ceiling (max 1 (length entries)) (float rows))))
          (scale-align-p (and (display-graphic-p) (bound-and-true-p text-scale-mode)))
          (inhibit-read-only t)
+         (saved-view (enhanced-dirvish-view--same-dir-viewport d))
          (cur (enhanced-dirvish-current-file)))
     (setq enhanced-dirvish-view-directory d
           default-directory (file-name-as-directory d)
@@ -1429,6 +1462,7 @@ In Columns, List, Compact and Icons views."
       (insert "\n"))
     (goto-char (point-min))
     (cond
+     (saved-view (enhanced-dirvish-mouse--clear-focus saved-view))
      ((and cur (enhanced-dirvish-goto-file cur)))
      (entries (enhanced-dirvish-goto-file (plist-get (car entries) :path)))
      (t (enhanced-dirvish-view--update-selection-highlight)))
@@ -1514,7 +1548,8 @@ In Columns, List, Compact and Icons views."
 (define-derived-mode enhanced-dirvish-icons-mode special-mode "Enhanced-Dirvish-Icons"
   "Enhanced Dirvish Icons thumbnail grid view with live thumbnail caching."
   (enhanced-dirvish--enforce-no-wrap)
-  (setq-local line-spacing 3)
+  (setq-local line-spacing 3
+              cursor-type nil)
   (add-hook 'visual-line-mode-hook #'enhanced-dirvish--enforce-no-wrap nil t)
   (add-hook 'after-change-major-mode-hook #'enhanced-dirvish--enforce-no-wrap 90 t)
   (setq-local header-line-format
@@ -1617,6 +1652,7 @@ Its font family and tint are kept."
                            (floor (+ (- avail-px left-px) gap-px) stride-px)
                          (floor (+ avail-cols gap-chars) stride-chars))))
          (inhibit-read-only t)
+         (saved-view (enhanced-dirvish-view--same-dir-viewport d))
          (cur (enhanced-dirvish-current-file))
          (buf (current-buffer))
          (cards nil)
@@ -1731,6 +1767,7 @@ Its font family and tint are kept."
             (insert "\n")))))
     (goto-char (point-min))
     (cond
+     (saved-view (enhanced-dirvish-mouse--clear-focus saved-view))
      ((and cur (enhanced-dirvish-goto-file cur)))
      ((> enhanced-dirvish-icons--count 0) (enhanced-dirvish-icons--goto-index 0))
      (t (enhanced-dirvish-icons--update-selection-highlight)))
@@ -2070,24 +2107,30 @@ With ADDITIVE, retain marks that preceded this range."
     (enhanced-dirvish-panes--sync-active-pane-from-window (selected-window))))
 
 (defun enhanced-dirvish-mouse--compact-position (posn)
-  "Capture the visible Compact viewport before moving point to mouse POSN."
-  (when-let ((win (and (consp posn) (posn-window posn))))
-    (when (and (window-live-p win)
-               (with-current-buffer (window-buffer win) (derived-mode-p 'enhanced-dirvish-compact-mode)))
-      (list (window-point win) (window-start win)
-            (window-hscroll win) (window-vscroll win t)))))
+  "Capture the visible Compact or Icons viewport before moving point."
+  (when-let* ((win (and (consp posn) (posn-window posn)))
+              ((window-live-p win))
+              ((with-current-buffer (window-buffer win)
+                 (derived-mode-p 'enhanced-dirvish-compact-mode 'enhanced-dirvish-icons-mode))))
+    (enhanced-dirvish-view--viewport-snapshot win (posn-point posn) t)))
 
 (defun enhanced-dirvish-mouse--clear-focus (&optional compact-position)
-  "Deselect without scrolling Compact view away from COMPACT-POSITION."
+  "Deselect without scrolling Compact or Icons view away from COMPACT-POSITION."
   (if compact-position
-      (progn
+      (let* ((max-pt (if (> (point-max) (point-min)) (1- (point-max)) (point-min)))
+             (pt (max (point-min) (min (car compact-position) max-pt)))
+             (start (max (point-min) (min (nth 1 compact-position) max-pt)))
+             (win (or (nth 4 compact-position) (selected-window))))
         ;; EOB can fall below the last fully visible row in a GUI font.
-        ;; Parking point there makes redisplay recenter and hide early folders.
-        (goto-char (min (car compact-position) (point-max)))
-        (set-window-start nil (min (nth 1 compact-position) (point-max)) t)
-        (set-window-hscroll nil (nth 2 compact-position))
-        (set-window-vscroll nil (nth 3 compact-position) t)
-        (setq enhanced-dirvish--empty-click-position (point)))
+        ;; Parking point there makes redisplay recenter and hide early items.
+        (goto-char pt)
+        (when (and (window-live-p win)
+                   (eq (window-buffer win) (current-buffer)))
+          (set-window-point win pt)
+          (set-window-start win start t)
+          (set-window-hscroll win (nth 2 compact-position))
+          (set-window-vscroll win (nth 3 compact-position) t))
+        (setq enhanced-dirvish--empty-click-position pt))
     (goto-char (point-max))
     (setq enhanced-dirvish--empty-click-position nil))
   (setq enhanced-dirvish--empty-click-p t)
