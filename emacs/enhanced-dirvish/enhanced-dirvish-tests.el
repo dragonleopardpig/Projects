@@ -4294,6 +4294,68 @@ after the folder, so the second pane must not reuse the first one's."
           (should (equal (enhanced-dirvish-current-file) (car (last files))))
           (should (equal (enhanced-dirvish-marked-files-only) (list next))))))))
 
+(ert-deftest enhanced-dirvish-test-columns-arrow-down-steps-sequentially ()
+  "Arrow down and up in Columns view step one entry at a time and scale right attrs."
+  (enhanced-dirvish-test--with-selection-view 'columns
+    (enhanced-dirvish-setup)
+    (should (advice-member-p #'enhanced-dirvish--dired-trivial-next-line-around
+                             'dired--trivial-next-line))
+    (should (advice-member-p #'enhanced-dirvish--render-attrs-scaled-1
+                             'dirvish--render-attrs-1))
+    (should (advice-member-p #'enhanced-dirvish--render-attrs-align-scaled
+                             'dirvish--render-attrs))
+    (write-region "a" nil (expand-file-name "01-very-long-name-that-reaches-column-edge.txt" enhanced-dirvish-test--dir) nil 'silent)
+    (write-region "b" nil (expand-file-name "02-short.txt" enhanced-dirvish-test--dir) nil 'silent)
+    (write-region "c" nil (expand-file-name "03-middle.txt" enhanced-dirvish-test--dir) nil 'silent)
+    (dired-sort-other dired-listing-switches)
+    (let* ((files (enhanced-dirvish-view--entry-order))
+           (down-seq nil)
+           (up-seq nil))
+      (should (>= (length files) 3))
+      (enhanced-dirvish-goto-file (car files))
+      (dotimes (_ (1+ (length files)))
+        (push (enhanced-dirvish-current-file) down-seq)
+        (call-interactively #'dired-next-line))
+      (should (equal (nreverse down-seq) (append files (last files))))
+      (dotimes (_ (1- (length files)))
+        (call-interactively #'dired-previous-line)
+        (push (enhanced-dirvish-current-file) up-seq))
+      (should (equal up-seq (butlast files)))
+      (let ((hdr (make-overlay (point-min)
+                               (save-excursion
+                                 (goto-char (point-min))
+                                 (line-beginning-position 2)))))
+        (unwind-protect
+            (progn
+              (overlay-put hdr 'invisible t)
+              (call-interactively #'dired-previous-line)
+              (should (equal (enhanced-dirvish-current-file) (car files))))
+          (delete-overlay hdr)))
+      ;; Scaled font alignment rewrites dirvish-r-ov from unscaled chars to pixel offset.
+      (save-excursion
+        (goto-char (point-min))
+        (forward-line 1)
+        (let* ((eol (line-end-position))
+               (ov (make-overlay eol eol))
+               (spc (propertize " " 'display '(space :align-to (- right-fringe 25 0))))
+               (str (concat spc "     1 B   Nov 24         ")))
+          (unwind-protect
+              (progn
+                (overlay-put ov 'dirvish-r-ov t)
+                (overlay-put ov 'after-string str)
+                (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                          ((symbol-function 'window-font-width) (lambda (&rest _) 11))
+                          ((symbol-function 'frame-char-width) (lambda (&rest _) 8))
+                          ((symbol-function 'window-body-width) (lambda (&rest _) 546)))
+                  (enhanced-dirvish--render-attrs-align-scaled (selected-window))
+                  (let* ((after (overlay-get ov 'after-string))
+                         (disp (get-text-property 0 'display after))
+                         (off (car-safe (caddr (plist-get (cdr disp) :align-to)))))
+                    (should (eq (car disp) 'space))
+                    (should (listp (caddr (plist-get (cdr disp) :align-to))))
+                    (should (> off 250)))))
+            (delete-overlay ov)))))))
+
 (ert-deftest enhanced-dirvish-test-control-arrows-compact-column-boundaries ()
   "Ctrl+Left/Right move between real Compact columns and stop at their edges."
   (enhanced-dirvish-test--with-selection-view 'compact

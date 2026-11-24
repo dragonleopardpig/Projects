@@ -944,6 +944,44 @@ Return the snapshot, if any."
     (add-face-text-property 0 (length out) (or hl-face 'dirvish-file-time) t out)
     `(right . ,out)))
 
+(defun enhanced-dirvish--render-attrs-scaled-1
+    (orig height width pos remote fns align-to hl w-width)
+  "Scale WIDTH and W-WIDTH passed to `dirvish--render-attrs-1' on zoomed text."
+  (let* ((fw (max 1 (window-font-width)))
+         (fcw (max 1 (frame-char-width)))
+         (scaled-p (and (display-graphic-p) (/= fw fcw)))
+         (sww (if scaled-p (max 10 (window-width nil 'remap)) w-width))
+         (left-used (max 0 (- w-width width)))
+         (sw (if scaled-p (max 10 (- sww left-used)) width)))
+    (funcall orig height sw pos remote fns align-to hl sww)))
+
+(defun enhanced-dirvish--render-attrs-align-scaled (window &optional _selected)
+  "Align `dirvish-r-ov' overlays by pixel width when WINDOW is text-zoomed."
+  (when (and (window-live-p window) (display-graphic-p))
+    (with-current-buffer (window-buffer window)
+      (let* ((fw (max 1 (window-font-width window)))
+             (fcw (max 1 (frame-char-width (window-frame window))))
+             (win-px (window-body-width window t)))
+        (when (and (/= fw fcw) (> win-px 16))
+          (dolist (ov (overlays-in (point-min) (point-max)))
+            (when (overlay-get ov 'dirvish-r-ov)
+              (let* ((s (overlay-get ov 'after-string))
+                     (sp (and (stringp s) (> (length s) 1)
+                              (get-text-property 0 'display s))))
+                (when (and (listp sp) (eq (car sp) 'space))
+                  (let* ((txt (substring s 1))
+                         (align-spec (plist-get (cdr sp) :align-to))
+                         (pad-ch (or (car-safe (last align-spec)) 0))
+                         (nch (+ (string-width txt) (if (numberp pad-ch) pad-ch 0)))
+                         (px (+ (* nch fw) (ceiling (* nch 3) 4) 4))
+                         (off (min (- win-px 16) px))
+                         (ns (copy-sequence s)))
+                    (put-text-property
+                     0 1 'display
+                     `(space :align-to (- right-fringe (,off)))
+                     ns)
+                    (overlay-put ov 'after-string ns)))))))))))
+
 ;;;; Dirvish Header Breadcrumbs & Enhanced Dirvish Footer Mode-Line
 
 (defvar enhanced-dirvish-sort-header-map
@@ -1861,6 +1899,38 @@ Its font family and tint are kept."
            (cur (or (enhanced-dirvish-icons--current-index) 0)))
       (when (>= (- cur ncols) 0)
         (enhanced-dirvish-icons--goto-index (- cur ncols))))))
+
+(defun enhanced-dirvish--dired-line-visible-p ()
+  "Return non-nil when the current Dired buffer line is visible."
+  (and (not (eobp))
+       (not (invisible-p (line-end-position)))))
+
+(defun enhanced-dirvish--dired-trivial-next-line-around (orig-fn arg)
+  "Move ARG visible lines in Dired without overlay-overflow line skips."
+  (if (or (not (derived-mode-p 'dired-mode))
+          (not (integerp arg))
+          (= arg 0)
+          (not (or (bound-and-true-p enhanced-dirvish-mode)
+                   (ignore-errors (dirvish-curr)))))
+      (funcall orig-fn arg)
+    (let ((dir (if (> arg 0) 1 -1))
+          (rem (abs arg)))
+      (while (> rem 0)
+        (let ((start-pt (point))
+              (found nil))
+          (if (> dir 0)
+              (while (and (not found) (= (forward-line 1) 0))
+                (when (enhanced-dirvish--dired-line-visible-p)
+                  (setq found t)))
+            (forward-line 0)
+            (while (and (not found) (= (forward-line -1) 0))
+              (when (enhanced-dirvish--dired-line-visible-p)
+                (setq found t))))
+          (unless found
+            (goto-char start-pt)
+            (setq rem 1)))
+        (setq rem (1- rem))))
+    (dired-move-to-filename)))
 
 (defun enhanced-dirvish-nav-next-line ()
   "Move down one visual item/row across List, Columns, Compact, and Icons views."
