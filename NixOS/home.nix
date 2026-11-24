@@ -3026,6 +3026,13 @@ in
     '';
   };
 
+  # Native Rust/Cairo/LaTeX dynamic module + Elisp for `emacs-minder', built
+  # declaratively so all hosts get matching `libemacs_minder.so' and Elisp on rebuild.
+  home.file.".emacs.d/modules/emacs-minder" = {
+    source = inputs.emacs-minder.packages.${pkgs.stdenv.hostPlatform.system}.default;
+    force = true;
+  };
+
   # lsp-bridge's backend interpreter (see lspBridgePython above).  A named
   # wrapper rather than a profile package, so it cannot collide with the
   # other python3 environments on PATH.
@@ -3058,7 +3065,7 @@ in
       clone_if_missing flymake-bridge git@github.com:dragonleopardpig/flymake-bridge.git
       clone_if_missing lsp-bridge     git@github.com:dragonleopardpig/lsp-bridge.git
 
-      if [ -f "$proj/emacs-minder/flake.nix" ]; then
+      if [ ! -e "$HOME/.emacs.d/modules/emacs-minder/lib/libemacs_minder.so" ] && [ -f "$proj/emacs-minder/flake.nix" ]; then
         echo "emacs-bootstrap: building emacs-minder module …"
         mkdir -p "$HOME/.emacs.d/modules"
         nix build "$proj/emacs-minder" -o "$HOME/.emacs.d/modules/emacs-minder"

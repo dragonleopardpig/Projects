@@ -59,6 +59,28 @@
         "type": "github"
       }
     },
+    "emacs-minder": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "dir": "emacs-minder",
+        "lastModified": 1795484434,
+        "narHash": "sha256-BJ9uteR7Ug26TKKcd2ssdFdiwUOyPYpjs74UX3enmmk=",
+        "owner": "dragonleopardpig",
+        "repo": "Projects",
+        "rev": "4c35a6612bfcfc1746d7cdc2c4faf091329a7588",
+        "type": "github"
+      },
+      "original": {
+        "dir": "emacs-minder",
+        "owner": "dragonleopardpig",
+        "repo": "Projects",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "locked": {
         "lastModified": 1733328505,
@@ -624,6 +646,7 @@
         "disko": "disko",
         "djvu2pdf": "djvu2pdf",
         "elephant": "elephant",
+        "emacs-minder": "emacs-minder",
         "formulaocr-offline": "formulaocr-offline",
         "grub2-themes": "grub2-themes",
         "home-manager": "home-manager",

@@ -40,6 +40,10 @@
       url = "github:dragonleopardpig/formulaocr-offline";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    emacs-minder = {
+      url = "github:dragonleopardpig/Projects?dir=emacs-minder";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     elephant.url = "github:abenz1267/elephant";
     walker = {
       url = "github:abenz1267/walker";
