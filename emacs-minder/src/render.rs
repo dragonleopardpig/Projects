@@ -2,9 +2,11 @@ use crate::ffi::*;
 use crate::latex::LatexCache;
 use crate::layout::{
     build_rich_pango_layout, document_bounds, ensure_all_tree_bboxes, ensure_minimum_node_sizes,
-    measure_single_node, measure_table, relayout_document, update_badge_hitboxes, AssetCache,
+    measure_single_node, measure_table, relayout_document, shift_subtree, update_badge_hitboxes,
+    update_single_badge_hitbox, AssetCache,
 };
 use crate::model::*;
+use std::collections::HashSet;
 
 fn rects_intersect(a: &Rect, b: &Rect) -> bool {
     a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
@@ -207,105 +209,143 @@ fn draw_branch_link(cr: &CairoContext, doc: &MapDocument, parent: &Node, child: 
     cr.restore();
 }
 
+fn draw_single_connection(
+    cr: &CairoContext,
+    doc: &MapDocument,
+    idx: usize,
+    conn: &Connection,
+    latex_cache: &LatexCache,
+    view_world: Option<&Rect>,
+) {
+    let Some(from_n) = doc.nodes.get(&conn.from_id) else {
+        return;
+    };
+    let Some(to_n) = doc.nodes.get(&conn.to_id) else {
+        return;
+    };
+    let x1 = from_n.posx + from_n.width / 2.0;
+    let y1 = from_n.posy + from_n.height / 2.0;
+    let x2 = to_n.posx + to_n.width / 2.0;
+    let y2 = to_n.posy + to_n.height / 2.0;
+
+    let (cx, cy) = if conn.drag_x == 0.0 && conn.drag_y == 0.0 {
+        let mx = (x1 + x2) / 2.0;
+        let my = (y1 + y2) / 2.0;
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+        (mx - dy / dist * 40.0, my + dx / dist * 40.0)
+    } else {
+        (conn.drag_x, conn.drag_y)
+    };
+
+    if let Some(vw) = view_world {
+        let min_x = x1.min(x2).min(cx) - 160.0;
+        let min_y = y1.min(y2).min(cy) - 120.0;
+        let max_x = x1.max(x2).max(cx) + 160.0;
+        let max_y = y1.max(y2).max(cy) + 120.0;
+        let cb = Rect {
+            x: min_x,
+            y: min_y,
+            w: max_x - min_x,
+            h: max_y - min_y,
+        };
+        if !rects_intersect(&cb, vw) {
+            return;
+        }
+    }
+
+    let col = conn.color.unwrap_or(doc.theme.connection_background);
+    let selected = doc.selected_connection == Some(idx);
+
+    cr.save();
+    cr.set_rgba(col.r, col.g, col.b, if selected { 1.0 } else { 0.85 });
+    let lw = conn.style.connectionlwidth.max(2.0);
+    cr.set_line_width(lw);
+    set_dash_from_style(cr, &conn.style.connectiondash, lw);
+
+    cr.new_path();
+    cr.move_to(x1, y1);
+    let c1x = x1 + (2.0 / 3.0) * (cx - x1);
+    let c1y = y1 + (2.0 / 3.0) * (cy - y1);
+    let c2x = x2 + (2.0 / 3.0) * (cx - x2);
+    let c2y = y2 + (2.0 / 3.0) * (cy - y2);
+    cr.curve_to(c1x, c1y, c2x, c2y, x2, y2);
+    cr.stroke();
+
+    cr.set_dash(&[], 0.0);
+    let arrow = conn.style.connectionarrow.as_str();
+    if arrow.contains("to") {
+        let angle = (y2 - c2y).atan2(x2 - c2x);
+        draw_arrow_head(cr, x2, y2, angle, 2.2);
+    }
+    if arrow.contains("from") {
+        let angle = (y1 - c1y).atan2(x1 - c1x);
+        draw_arrow_head(cr, x1, y1, angle, 2.2);
+    }
+
+    if !conn.title.trim().is_empty() {
+        let mx = 0.25 * x1 + 0.5 * cx + 0.25 * x2;
+        let my = 0.25 * y1 + 0.5 * cy + 0.25 * y2;
+        let fg = col.contrast_fg();
+        if let Ok(layout) = build_rich_pango_layout(
+            cr,
+            &conn.title,
+            &conn.style.connectionfont,
+            conn.style.connectiontwidth.max(180.0),
+            fg,
+            "center",
+            latex_cache,
+        ) {
+            let (pw, ph) = layout.pixel_size();
+            let pad = 6.0;
+            let bx = mx - pw / 2.0 - pad;
+            let by = my - ph / 2.0 - pad;
+            cr.set_rgba(col.r, col.g, col.b, 0.94);
+            cr.rounded_rect(bx, by, pw + 2.0 * pad, ph + 2.0 * pad, 6.0);
+            cr.fill();
+            cr.set_rgba(fg.r, fg.g, fg.b, 1.0);
+            layout.update_and_show(cr, mx - pw / 2.0, my - ph / 2.0);
+        }
+    }
+    cr.restore();
+}
+
 fn draw_connections(
     cr: &CairoContext,
     doc: &MapDocument,
     latex_cache: &LatexCache,
     view_world: Option<&Rect>,
+    skip_nodes: Option<&HashSet<i32>>,
 ) {
     for (idx, conn) in doc.connections.iter().enumerate() {
-        let Some(from_n) = doc.nodes.get(&conn.from_id) else {
-            continue;
-        };
-        let Some(to_n) = doc.nodes.get(&conn.to_id) else {
-            continue;
-        };
-        let x1 = from_n.posx + from_n.width / 2.0;
-        let y1 = from_n.posy + from_n.height / 2.0;
-        let x2 = to_n.posx + to_n.width / 2.0;
-        let y2 = to_n.posy + to_n.height / 2.0;
-
-        let (cx, cy) = if conn.drag_x == 0.0 && conn.drag_y == 0.0 {
-            let mx = (x1 + x2) / 2.0;
-            let my = (y1 + y2) / 2.0;
-            let dx = x2 - x1;
-            let dy = y2 - y1;
-            let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-            (mx - dy / dist * 40.0, my + dx / dist * 40.0)
-        } else {
-            (conn.drag_x, conn.drag_y)
-        };
-
-        if let Some(vw) = view_world {
-            let min_x = x1.min(x2).min(cx) - 160.0;
-            let min_y = y1.min(y2).min(cy) - 120.0;
-            let max_x = x1.max(x2).max(cx) + 160.0;
-            let max_y = y1.max(y2).max(cy) + 120.0;
-            let cb = Rect {
-                x: min_x,
-                y: min_y,
-                w: max_x - min_x,
-                h: max_y - min_y,
-            };
-            if !rects_intersect(&cb, vw) {
+        if let Some(skip) = skip_nodes {
+            if skip.contains(&conn.from_id) || skip.contains(&conn.to_id) {
                 continue;
             }
         }
+        draw_single_connection(cr, doc, idx, conn, latex_cache, view_world);
+    }
+}
 
-        let col = conn.color.unwrap_or(doc.theme.connection_background);
-        let selected = doc.selected_connection == Some(idx);
-
-        cr.save();
-        cr.set_rgba(col.r, col.g, col.b, if selected { 1.0 } else { 0.85 });
-        let lw = conn.style.connectionlwidth.max(2.0);
-        cr.set_line_width(lw);
-        set_dash_from_style(cr, &conn.style.connectiondash, lw);
-
-        cr.new_path();
-        cr.move_to(x1, y1);
-        let c1x = x1 + (2.0 / 3.0) * (cx - x1);
-        let c1y = y1 + (2.0 / 3.0) * (cy - y1);
-        let c2x = x2 + (2.0 / 3.0) * (cx - x2);
-        let c2y = y2 + (2.0 / 3.0) * (cy - y2);
-        cr.curve_to(c1x, c1y, c2x, c2y, x2, y2);
-        cr.stroke();
-
-        cr.set_dash(&[], 0.0);
-        let arrow = conn.style.connectionarrow.as_str();
-        if arrow.contains("to") {
-            let angle = (y2 - c2y).atan2(x2 - c2x);
-            draw_arrow_head(cr, x2, y2, angle, 2.2);
+fn draw_connections_for_nodes(
+    cr: &CairoContext,
+    doc: &MapDocument,
+    latex_cache: &LatexCache,
+    node_ids: &HashSet<i32>,
+    exclude_internal: bool,
+    view_world: Option<&Rect>,
+) {
+    for (idx, conn) in doc.connections.iter().enumerate() {
+        let from_in = node_ids.contains(&conn.from_id);
+        let to_in = node_ids.contains(&conn.to_id);
+        if !from_in && !to_in {
+            continue;
         }
-        if arrow.contains("from") {
-            let angle = (y1 - c1y).atan2(x1 - c1x);
-            draw_arrow_head(cr, x1, y1, angle, 2.2);
+        if exclude_internal && from_in && to_in {
+            continue;
         }
-
-        if !conn.title.trim().is_empty() {
-            let mx = 0.25 * x1 + 0.5 * cx + 0.25 * x2;
-            let my = 0.25 * y1 + 0.5 * cy + 0.25 * y2;
-            let fg = col.contrast_fg();
-            if let Ok(layout) = build_rich_pango_layout(
-                cr,
-                &conn.title,
-                &conn.style.connectionfont,
-                conn.style.connectiontwidth.max(180.0),
-                fg,
-                "center",
-                latex_cache,
-            ) {
-                let (pw, ph) = layout.pixel_size();
-                let pad = 6.0;
-                let bx = mx - pw / 2.0 - pad;
-                let by = my - ph / 2.0 - pad;
-                cr.set_rgba(col.r, col.g, col.b, 0.94);
-                cr.rounded_rect(bx, by, pw + 2.0 * pad, ph + 2.0 * pad, 6.0);
-                cr.fill();
-                cr.set_rgba(fg.r, fg.g, fg.b, 1.0);
-                layout.update_and_show(cr, mx - pw / 2.0, my - ph / 2.0);
-            }
-        }
-        cr.restore();
+        draw_single_connection(cr, doc, idx, conn, latex_cache, view_world);
     }
 }
 
@@ -379,62 +419,16 @@ fn draw_node_table(
     cr.restore();
 }
 
-fn draw_node_recursive(
+fn draw_single_node_only(
     cr: &CairoContext,
     doc: &MapDocument,
     id: i32,
     assets: &AssetCache,
     latex_cache: &LatexCache,
-    view_world: Option<&Rect>,
 ) {
     let Some(n) = doc.nodes.get(&id) else {
         return;
     };
-
-    if let Some(vw) = view_world {
-        if n.tree_bbox.w > 0.0 && !rects_intersect(&expand_rect(&n.tree_bbox, 80.0), vw) {
-            return;
-        }
-    }
-
-    let node_rect = Rect {
-        x: n.posx,
-        y: n.posy,
-        w: n.width,
-        h: n.height,
-    };
-
-    if !n.fold {
-        for &cid in &n.children {
-            if let Some(ch) = doc.nodes.get(&cid) {
-                let draw_link = match view_world {
-                    None => true,
-                    Some(vw) => {
-                        let cbox = if ch.tree_bbox.w > 0.0 {
-                            &ch.tree_bbox
-                        } else {
-                            &Rect {
-                                x: ch.posx,
-                                y: ch.posy,
-                                w: ch.width,
-                                h: ch.height,
-                            }
-                        };
-                        rects_intersect(&expand_rect(&merge_rects(&node_rect, cbox), 48.0), vw)
-                    }
-                };
-                if draw_link {
-                    draw_branch_link(cr, doc, n, ch);
-                }
-            }
-        }
-    }
-
-    let draw_self = match view_world {
-        None => true,
-        Some(vw) => rects_intersect(&expand_rect(&node_rect, 80.0), vw),
-    };
-    if draw_self {
 
     let is_sel = doc.selected_node == Some(id);
     let is_connect_src = doc.connect_from == Some(id);
@@ -782,13 +776,349 @@ fn draw_node_recursive(
     }
 
     cr.restore();
+}
+
+fn draw_node_recursive(
+    cr: &CairoContext,
+    doc: &MapDocument,
+    id: i32,
+    assets: &AssetCache,
+    latex_cache: &LatexCache,
+    view_world: Option<&Rect>,
+    skip_nodes: Option<&HashSet<i32>>,
+) {
+    let Some(n) = doc.nodes.get(&id) else {
+        return;
+    };
+
+    if let Some(vw) = view_world {
+        if n.tree_bbox.w > 0.0 && !rects_intersect(&expand_rect(&n.tree_bbox, 80.0), vw) {
+            return;
+        }
+    }
+
+    let self_skipped = skip_nodes.map_or(false, |s| s.contains(&id));
+    let node_rect = Rect {
+        x: n.posx,
+        y: n.posy,
+        w: n.width,
+        h: n.height,
+    };
+
+    if !n.fold {
+        for &cid in &n.children {
+            if self_skipped || skip_nodes.map_or(false, |s| s.contains(&cid)) {
+                continue;
+            }
+            if let Some(ch) = doc.nodes.get(&cid) {
+                let draw_link = match view_world {
+                    None => true,
+                    Some(vw) => {
+                        let cbox = if ch.tree_bbox.w > 0.0 {
+                            &ch.tree_bbox
+                        } else {
+                            &Rect {
+                                x: ch.posx,
+                                y: ch.posy,
+                                w: ch.width,
+                                h: ch.height,
+                            }
+                        };
+                        rects_intersect(&expand_rect(&merge_rects(&node_rect, cbox), 48.0), vw)
+                    }
+                };
+                if draw_link {
+                    draw_branch_link(cr, doc, n, ch);
+                }
+            }
+        }
+    }
+
+    if !self_skipped {
+        let draw_self = match view_world {
+            None => true,
+            Some(vw) => rects_intersect(&expand_rect(&node_rect, 80.0), vw),
+        };
+        if draw_self {
+            draw_single_node_only(cr, doc, id, assets, latex_cache);
+        }
     }
 
     if !n.fold {
         for &cid in &n.children {
-            draw_node_recursive(cr, doc, cid, assets, latex_cache, view_world);
+            draw_node_recursive(cr, doc, cid, assets, latex_cache, view_world, skip_nodes);
         }
     }
+}
+
+pub struct PanCache {
+    pub surface: CairoSurface,
+    pub origin_x: f64,
+    pub origin_y: f64,
+    pub eff_scale: f64,
+    pub scene_version: u64,
+    pub transparent_bg: bool,
+}
+
+pub enum DragKind {
+    Pan,
+    MoveNode {
+        node_id: i32,
+        move_subtree: bool,
+        moved_ids: HashSet<i32>,
+        static_bg: CairoSurface,
+        drag_fg: Option<CairoSurface>,
+        fg_world_x: f64,
+        fg_world_y: f64,
+        fg_pad_world: f64,
+        cached_side: NodeSide,
+    },
+    ResizeNode {
+        node_id: i32,
+        static_bg: CairoSurface,
+        needs_final_relayout: bool,
+    },
+}
+
+pub struct DragCache {
+    pub kind: DragKind,
+    pub w: i32,
+    pub h: i32,
+    pub rw: i32,
+    pub rh: i32,
+    pub undo_recorded: bool,
+}
+
+#[derive(Default)]
+pub struct RenderBuffers {
+    pub viewport_surface: Option<CairoSurface>,
+    pub png_raw_scratch: Vec<u8>,
+    pub png_out_buf: Vec<u8>,
+    pub pan_cache: Option<PanCache>,
+    pub drag_cache: Option<DragCache>,
+    pub last_origin_x: f64,
+    pub last_origin_y: f64,
+    pub last_scale: f64,
+    pub last_scene_version: u64,
+}
+
+fn ensure_viewport_surface(
+    slot: &mut Option<CairoSurface>,
+    rw: i32,
+    rh: i32,
+) -> Result<&CairoSurface, String> {
+    let rebuild = match slot {
+        Some(s) => s.width != rw || s.height != rh,
+        None => true,
+    };
+    if rebuild {
+        *slot = Some(CairoSurface::new_argb32(rw, rh)?);
+    }
+    slot.as_ref().ok_or_else(|| "missing viewport surface".to_string())
+}
+
+fn paint_scene_to_surface(
+    surface: &CairoSurface,
+    doc: &MapDocument,
+    assets: &AssetCache,
+    latex_cache: &LatexCache,
+    origin_x: f64,
+    origin_y: f64,
+    eff_scale: f64,
+    skip_nodes: Option<&HashSet<i32>>,
+) -> Result<(), String> {
+    let cr = CairoContext::new(surface)?;
+    if doc.transparent_bg {
+        cr.clear();
+    } else {
+        let bg = doc.theme.background;
+        cr.save();
+        cr.set_operator_source();
+        cr.set_rgba(bg.r, bg.g, bg.b, bg.a);
+        cr.paint();
+        cr.restore();
+    }
+    cr.save();
+    let s = eff_scale.clamp(0.025, 8.0);
+    cr.scale(s, s);
+    cr.translate(-origin_x, -origin_y);
+    let view_world = Rect {
+        x: origin_x - 32.0 / s,
+        y: origin_y - 32.0 / s,
+        w: (surface.width as f64 + 64.0) / s,
+        h: (surface.height as f64 + 64.0) / s,
+    };
+    draw_connections(&cr, doc, latex_cache, Some(&view_world), skip_nodes);
+    for &rid in &doc.root_ids {
+        draw_node_recursive(&cr, doc, rid, assets, latex_cache, Some(&view_world), skip_nodes);
+    }
+    cr.restore();
+    Ok(())
+}
+
+fn pan_cache_covers(
+    cache: &PanCache,
+    doc: &MapDocument,
+    eff_scale: f64,
+    rw: i32,
+    rh: i32,
+) -> Option<(f64, f64)> {
+    if cache.scene_version != doc.scene_version
+        || cache.transparent_bg != doc.transparent_bg
+        || (cache.eff_scale - eff_scale).abs() > 1e-6
+    {
+        return None;
+    }
+    let off_x = (doc.origin_x - cache.origin_x) * eff_scale;
+    let off_y = (doc.origin_y - cache.origin_y) * eff_scale;
+    if off_x >= 0.0
+        && off_y >= 0.0
+        && off_x + (rw as f64) <= cache.surface.width as f64 + 0.5
+        && off_y + (rh as f64) <= cache.surface.height as f64 + 0.5
+    {
+        let max_x = (cache.surface.width - rw).max(0) as f64;
+        let max_y = (cache.surface.height - rh).max(0) as f64;
+        Some((off_x.clamp(0.0, max_x), off_y.clamp(0.0, max_y)))
+    } else {
+        None
+    }
+}
+
+fn build_pan_cache(
+    doc: &MapDocument,
+    assets: &AssetCache,
+    latex_cache: &LatexCache,
+    eff_scale: f64,
+    rw: i32,
+    rh: i32,
+) -> Result<Option<PanCache>, String> {
+    let pad_x = ((rw / 2).clamp(128, 256)).min((4096 - rw) / 2);
+    let pad_y = ((rh / 2).clamp(128, 256)).min((4096 - rh) / 2);
+    if pad_x < 64 || pad_y < 64 {
+        return Ok(None);
+    }
+    let cw = (rw + 2 * pad_x).min(4096);
+    let ch = (rh + 2 * pad_y).min(4096);
+    let c_origin_x = doc.origin_x - (pad_x as f64) / eff_scale;
+    let c_origin_y = doc.origin_y - (pad_y as f64) / eff_scale;
+    let surface = CairoSurface::new_argb32(cw, ch)?;
+    paint_scene_to_surface(
+        &surface,
+        doc,
+        assets,
+        latex_cache,
+        c_origin_x,
+        c_origin_y,
+        eff_scale,
+        None,
+    )?;
+    Ok(Some(PanCache {
+        surface,
+        origin_x: c_origin_x,
+        origin_y: c_origin_y,
+        eff_scale,
+        scene_version: doc.scene_version,
+        transparent_bg: doc.transparent_bg,
+    }))
+}
+
+fn blit_pan_surface(vp: &CairoSurface, cache: &PanCache, off_x: f64, off_y: f64) -> Result<(), String> {
+    let cr = CairoContext::new(vp)?;
+    cr.set_operator_source();
+    cr.set_source_surface(&cache.surface, -off_x, -off_y);
+    cr.paint();
+    cr.set_operator_over();
+    Ok(())
+}
+
+fn collect_moved_ids(doc: &MapDocument, id: i32, move_subtree: bool, out: &mut HashSet<i32>) {
+    out.insert(id);
+    if !move_subtree {
+        return;
+    }
+    if let Some(n) = doc.nodes.get(&id) {
+        for &cid in &n.children {
+            collect_moved_ids(doc, cid, true, out);
+        }
+    }
+}
+
+fn visible_subtree_bounds(
+    doc: &MapDocument,
+    id: i32,
+    recurse: bool,
+    bounds: &mut (f64, f64, f64, f64, bool),
+) {
+    let Some(n) = doc.nodes.get(&id) else {
+        return;
+    };
+    bounds.0 = bounds.0.min(n.posx);
+    bounds.1 = bounds.1.min(n.posy);
+    bounds.2 = bounds.2.max(n.posx + n.width);
+    bounds.3 = bounds.3.max(n.posy + n.height);
+    if n.callout.is_some() {
+        bounds.4 = true;
+    }
+    if recurse && !n.fold {
+        for &cid in &n.children {
+            visible_subtree_bounds(doc, cid, true, bounds);
+        }
+    }
+}
+
+fn build_drag_fg(
+    doc: &MapDocument,
+    assets: &AssetCache,
+    latex_cache: &LatexCache,
+    node_id: i32,
+    move_subtree: bool,
+    moved_ids: &HashSet<i32>,
+    eff_scale: f64,
+) -> (Option<CairoSurface>, f64, f64, f64) {
+    let mut bounds = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, false);
+    visible_subtree_bounds(doc, node_id, move_subtree, &mut bounds);
+    if !bounds.0.is_finite() {
+        return (None, 0.0, 0.0, 36.0);
+    }
+    let pad = if bounds.4 { 130.0 } else { 36.0 };
+    let fg_x0 = bounds.0 - pad;
+    let fg_y0 = bounds.1 - pad;
+    let fg_w = (bounds.2 - bounds.0) + 2.0 * pad;
+    let fg_h = (bounds.3 - bounds.1) + 2.0 * pad;
+    let px_w = (fg_w * eff_scale).ceil() as i32;
+    let px_h = (fg_h * eff_scale).ceil() as i32;
+    if !(1..=2048).contains(&px_w) || !(1..=2048).contains(&px_h) {
+        return (None, fg_x0, fg_y0, pad);
+    }
+    let Ok(surf) = CairoSurface::new_argb32(px_w, px_h) else {
+        return (None, fg_x0, fg_y0, pad);
+    };
+    let Ok(cr) = CairoContext::new(&surf) else {
+        return (None, fg_x0, fg_y0, pad);
+    };
+    cr.clear();
+    cr.save();
+    cr.scale(eff_scale, eff_scale);
+    cr.translate(-fg_x0, -fg_y0);
+    if move_subtree {
+        for (idx, conn) in doc.connections.iter().enumerate() {
+            if moved_ids.contains(&conn.from_id) && moved_ids.contains(&conn.to_id) {
+                draw_single_connection(&cr, doc, idx, conn, latex_cache, None);
+            }
+        }
+        draw_node_recursive(&cr, doc, node_id, assets, latex_cache, None, None);
+    } else {
+        draw_single_node_only(&cr, doc, node_id, assets, latex_cache);
+    }
+    cr.restore();
+    (Some(surf), fg_x0, fg_y0, pad)
+}
+
+fn find_root_id(doc: &MapDocument, mut id: i32) -> i32 {
+    while let Some(pid) = doc.nodes.get(&id).and_then(|n| n.parent) {
+        id = pid;
+    }
+    id
 }
 
 pub fn prepare_document_for_render(
@@ -796,6 +1126,7 @@ pub fn prepare_document_for_render(
     assets: &mut AssetCache,
     latex_cache: &LatexCache,
 ) {
+    let mut changed = false;
     if doc.layout_dirty || doc.needs_measure || doc.dirty_measure_node.is_some() {
         let img_assets: Vec<ImageAsset> = doc.images.values().cloned().collect();
         for asset in img_assets {
@@ -805,17 +1136,75 @@ pub fn prepare_document_for_render(
     if doc.layout_dirty {
         doc.dirty_measure_node = None;
         relayout_document(doc, assets, latex_cache);
+        changed = true;
     } else if let Some(nid) = doc.dirty_measure_node.take() {
         measure_single_node(doc, nid, assets, latex_cache, false);
         ensure_all_tree_bboxes(doc);
         update_badge_hitboxes(doc);
+        changed = true;
     } else if doc.needs_measure {
         ensure_minimum_node_sizes(doc, assets, latex_cache);
         ensure_all_tree_bboxes(doc);
         update_badge_hitboxes(doc);
+        changed = true;
     }
     doc.layout_dirty = false;
     doc.needs_measure = false;
+    if changed {
+        doc.scene_version = doc.scene_version.wrapping_add(1);
+    }
+}
+
+pub fn render_viewport_png_cached<'a>(
+    doc: &mut MapDocument,
+    assets: &mut AssetCache,
+    latex_cache: &LatexCache,
+    bufs: &'a mut RenderBuffers,
+    width: i32,
+    height: i32,
+) -> Result<&'a [u8], String> {
+    let w = width.clamp(64, 4096);
+    let h = height.clamp(64, 4096);
+    doc.viewport_w = w;
+    doc.viewport_h = h;
+
+    prepare_document_for_render(doc, assets, latex_cache);
+
+    let s = doc.scale.clamp(0.05, 8.0);
+    let origin_shifted = bufs.last_scene_version == doc.scene_version
+        && (bufs.last_scale - s).abs() < 1e-6
+        && ((bufs.last_origin_x - doc.origin_x).abs() > 1e-3
+            || (bufs.last_origin_y - doc.origin_y).abs() > 1e-3);
+    bufs.last_origin_x = doc.origin_x;
+    bufs.last_origin_y = doc.origin_y;
+    bufs.last_scale = s;
+    bufs.last_scene_version = doc.scene_version;
+
+    if let Some(ref cache) = bufs.pan_cache {
+        if let Some((off_x, off_y)) = pan_cache_covers(cache, doc, s, w, h) {
+            let vp = ensure_viewport_surface(&mut bufs.viewport_surface, w, h)?;
+            blit_pan_surface(vp, cache, off_x, off_y)?;
+            vp.write_to_png_fast_into(&mut bufs.png_raw_scratch, &mut bufs.png_out_buf)?;
+            return Ok(&bufs.png_out_buf);
+        }
+    }
+
+    if origin_shifted {
+        if let Some(cache) = build_pan_cache(doc, assets, latex_cache, s, w, h)? {
+            if let Some((off_x, off_y)) = pan_cache_covers(&cache, doc, s, w, h) {
+                let vp = ensure_viewport_surface(&mut bufs.viewport_surface, w, h)?;
+                blit_pan_surface(vp, &cache, off_x, off_y)?;
+                bufs.pan_cache = Some(cache);
+                vp.write_to_png_fast_into(&mut bufs.png_raw_scratch, &mut bufs.png_out_buf)?;
+                return Ok(&bufs.png_out_buf);
+            }
+        }
+    }
+
+    let vp = ensure_viewport_surface(&mut bufs.viewport_surface, w, h)?;
+    paint_scene_to_surface(vp, doc, assets, latex_cache, doc.origin_x, doc.origin_y, s, None)?;
+    vp.write_to_png_fast_into(&mut bufs.png_raw_scratch, &mut bufs.png_out_buf)?;
+    Ok(&bufs.png_out_buf)
 }
 
 pub fn render_viewport_png(
@@ -825,42 +1214,477 @@ pub fn render_viewport_png(
     width: i32,
     height: i32,
 ) -> Result<Vec<u8>, String> {
-    let w = width.clamp(64, 4096);
-    let h = height.clamp(64, 4096);
+    let mut bufs = RenderBuffers::default();
+    let bytes = render_viewport_png_cached(doc, assets, latex_cache, &mut bufs, width, height)?;
+    Ok(bytes.to_vec())
+}
+
+pub fn drag_begin(
+    doc: &mut MapDocument,
+    assets: &mut AssetCache,
+    latex_cache: &LatexCache,
+    bufs: &mut RenderBuffers,
+    kind: &str,
+    node_id: Option<i32>,
+    move_subtree: bool,
+    w: i32,
+    h: i32,
+    rw: i32,
+    rh: i32,
+) -> Result<(), String> {
+    let w = w.clamp(64, 4096);
+    let h = h.clamp(64, 4096);
+    let rw = rw.clamp(64, 4096);
+    let rh = rh.clamp(64, 4096);
     doc.viewport_w = w;
     doc.viewport_h = h;
 
     prepare_document_for_render(doc, assets, latex_cache);
+    let eff_scale = (doc.scale.clamp(0.05, 8.0) * (rw as f64 / w as f64)).clamp(0.025, 8.0);
 
-    let surface = CairoSurface::new_argb32(w, h)?;
-    let cr = CairoContext::new(&surface)?;
-
-    if doc.transparent_bg {
-        cr.clear();
-    } else {
-        let bg = doc.theme.background;
-        cr.set_rgba(bg.r, bg.g, bg.b, bg.a);
-        cr.paint();
-    }
-
-    cr.save();
-    let s = doc.scale.clamp(0.05, 8.0);
-    cr.scale(s, s);
-    cr.translate(-doc.origin_x, -doc.origin_y);
-
-    let view_world = Rect {
-        x: doc.origin_x - 32.0 / s,
-        y: doc.origin_y - 32.0 / s,
-        w: (w as f64 + 64.0) / s,
-        h: (h as f64 + 64.0) / s,
+    let drag_kind = match kind {
+        "pan" => {
+            let need_rebuild = bufs
+                .pan_cache
+                .as_ref()
+                .and_then(|c| pan_cache_covers(c, doc, eff_scale, rw, rh))
+                .is_none();
+            if need_rebuild {
+                bufs.pan_cache = build_pan_cache(doc, assets, latex_cache, eff_scale, rw, rh)?;
+            }
+            DragKind::Pan
+        }
+        "move" => {
+            let nid = node_id
+                .or(doc.selected_node)
+                .ok_or_else(|| "Move drag requires node id".to_string())?;
+            if !doc.nodes.contains_key(&nid) {
+                return Err(format!("Unknown node id {nid}"));
+            }
+            let mut moved_ids = HashSet::new();
+            collect_moved_ids(doc, nid, move_subtree, &mut moved_ids);
+            let static_bg = CairoSurface::new_argb32(rw, rh)?;
+            paint_scene_to_surface(
+                &static_bg,
+                doc,
+                assets,
+                latex_cache,
+                doc.origin_x,
+                doc.origin_y,
+                eff_scale,
+                Some(&moved_ids),
+            )?;
+            let (drag_fg, fg_world_x, fg_world_y, fg_pad_world) = build_drag_fg(
+                doc,
+                assets,
+                latex_cache,
+                nid,
+                move_subtree,
+                &moved_ids,
+                eff_scale,
+            );
+            let cached_side = doc.nodes[&nid].side;
+            DragKind::MoveNode {
+                node_id: nid,
+                move_subtree,
+                moved_ids,
+                static_bg,
+                drag_fg,
+                fg_world_x,
+                fg_world_y,
+                fg_pad_world,
+                cached_side,
+            }
+        }
+        "resize" => {
+            let nid = node_id
+                .or(doc.selected_node)
+                .ok_or_else(|| "Resize drag requires node id".to_string())?;
+            if !doc.nodes.contains_key(&nid) {
+                return Err(format!("Unknown node id {nid}"));
+            }
+            let mut skip = HashSet::new();
+            skip.insert(nid);
+            let static_bg = CairoSurface::new_argb32(rw, rh)?;
+            paint_scene_to_surface(
+                &static_bg,
+                doc,
+                assets,
+                latex_cache,
+                doc.origin_x,
+                doc.origin_y,
+                eff_scale,
+                Some(&skip),
+            )?;
+            let root_id = find_root_id(doc, nid);
+            let is_manual = doc
+                .nodes
+                .get(&root_id)
+                .map(|r| r.layout == LayoutKind::Manual)
+                .unwrap_or(false);
+            let needs_final_relayout = doc.source_format == SourceFormat::Org && !is_manual;
+            DragKind::ResizeNode {
+                node_id: nid,
+                static_bg,
+                needs_final_relayout,
+            }
+        }
+        other => return Err(format!("Unknown drag kind: {other}")),
     };
-    draw_connections(&cr, doc, latex_cache, Some(&view_world));
-    for &rid in &doc.root_ids {
-        draw_node_recursive(&cr, doc, rid, assets, latex_cache, Some(&view_world));
-    }
 
-    cr.restore();
-    surface.write_to_png_fast()
+    bufs.drag_cache = Some(DragCache {
+        kind: drag_kind,
+        w,
+        h,
+        rw,
+        rh,
+        undo_recorded: false,
+    });
+    Ok(())
+}
+
+pub fn drag_step<'a>(
+    doc: &mut MapDocument,
+    assets: &mut AssetCache,
+    latex_cache: &LatexCache,
+    bufs: &'a mut RenderBuffers,
+    dx: f64,
+    dy: f64,
+    width: f64,
+    w: i32,
+    h: i32,
+    rw: i32,
+    rh: i32,
+) -> Result<&'a [u8], String> {
+    let w = w.clamp(64, 4096);
+    let h = h.clamp(64, 4096);
+    let rw = rw.clamp(64, 4096);
+    let rh = rh.clamp(64, 4096);
+    doc.viewport_w = w;
+    doc.viewport_h = h;
+
+    let eff_scale = (doc.scale.clamp(0.05, 8.0) * (rw as f64 / w as f64)).clamp(0.025, 8.0);
+    let mut cache = bufs
+        .drag_cache
+        .take()
+        .ok_or_else(|| "No active drag session".to_string())?;
+    cache.w = w;
+    cache.h = h;
+    cache.rw = rw;
+    cache.rh = rh;
+
+    let res: Result<(), String> = (|| {
+        match &mut cache.kind {
+            DragKind::Pan => {
+                let s = doc.scale.max(0.1);
+                doc.origin_x += dx / s;
+                doc.origin_y += dy / s;
+                let cover = bufs
+                    .pan_cache
+                    .as_ref()
+                    .and_then(|c| pan_cache_covers(c, doc, eff_scale, rw, rh));
+                if let Some((off_x, off_y)) = cover {
+                    if let Some(ref pan) = bufs.pan_cache {
+                        let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+                        blit_pan_surface(vp, pan, off_x, off_y)?;
+                    }
+                } else {
+                    bufs.pan_cache = build_pan_cache(doc, assets, latex_cache, eff_scale, rw, rh)?;
+                    let cover2 = bufs
+                        .pan_cache
+                        .as_ref()
+                        .and_then(|c| pan_cache_covers(c, doc, eff_scale, rw, rh));
+                    let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+                    if let (Some(ref pan), Some((off_x, off_y))) = (&bufs.pan_cache, cover2) {
+                        blit_pan_surface(vp, pan, off_x, off_y)?;
+                    } else {
+                        paint_scene_to_surface(
+                            vp,
+                            doc,
+                            assets,
+                            latex_cache,
+                            doc.origin_x,
+                            doc.origin_y,
+                            eff_scale,
+                            None,
+                        )?;
+                    }
+                }
+            }
+            DragKind::MoveNode {
+                node_id,
+                move_subtree,
+                moved_ids,
+                static_bg,
+                drag_fg,
+                fg_world_x,
+                fg_world_y,
+                fg_pad_world: _,
+                cached_side,
+            } => {
+                let nid = *node_id;
+                let sub = *move_subtree;
+                if dx != 0.0 || dy != 0.0 {
+                    if !cache.undo_recorded {
+                        doc.push_undo();
+                        cache.undo_recorded = true;
+                    }
+                    let root_id = find_root_id(doc, nid);
+                    if let Some(r) = doc.nodes.get_mut(&root_id) {
+                        r.layout = LayoutKind::Manual;
+                    }
+                    let s = doc.scale.max(0.05);
+                    let wx = dx / s;
+                    let wy = dy / s;
+                    if sub {
+                        shift_subtree(doc, nid, wx, wy);
+                    } else if let Some(n) = doc.nodes.get_mut(&nid) {
+                        n.posx += wx;
+                        n.posy += wy;
+                    }
+                    *fg_world_x += wx;
+                    *fg_world_y += wy;
+                    if let Some(pid) = doc.nodes.get(&nid).and_then(|n| n.parent) {
+                        if let (Some(n), Some(p)) = (doc.nodes.get(&nid), doc.nodes.get(&pid)) {
+                            let child_cx = n.posx + n.width / 2.0;
+                            let parent_cx = p.posx + p.width / 2.0;
+                            let new_side = if child_cx < parent_cx {
+                                NodeSide::Left
+                            } else {
+                                NodeSide::Right
+                            };
+                            if let Some(nm) = doc.nodes.get_mut(&nid) {
+                                if nm.side != new_side {
+                                    nm.side = new_side;
+                                    update_single_badge_hitbox(nm);
+                                }
+                            }
+                        }
+                    }
+                    doc.dirty = true;
+                    doc.scene_version = doc.scene_version.wrapping_add(1);
+
+                    let cur_side = doc.nodes.get(&nid).map(|n| n.side).unwrap_or(*cached_side);
+                    if drag_fg.is_some() && cur_side != *cached_side {
+                        *cached_side = cur_side;
+                        let (new_fg, nx, ny, _) =
+                            build_drag_fg(doc, assets, latex_cache, nid, sub, moved_ids, eff_scale);
+                        *drag_fg = new_fg;
+                        *fg_world_x = nx;
+                        *fg_world_y = ny;
+                    }
+                }
+
+                if static_bg.width != rw || static_bg.height != rh {
+                    *static_bg = CairoSurface::new_argb32(rw, rh)?;
+                    paint_scene_to_surface(
+                        static_bg,
+                        doc,
+                        assets,
+                        latex_cache,
+                        doc.origin_x,
+                        doc.origin_y,
+                        eff_scale,
+                        Some(moved_ids),
+                    )?;
+                }
+
+                let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+                let cr = CairoContext::new(vp)?;
+                cr.set_operator_source();
+                cr.set_source_surface(static_bg, 0.0, 0.0);
+                cr.paint();
+                cr.set_operator_over();
+
+                cr.save();
+                cr.scale(eff_scale, eff_scale);
+                cr.translate(-doc.origin_x, -doc.origin_y);
+                let view_world = Rect {
+                    x: doc.origin_x - 32.0 / eff_scale,
+                    y: doc.origin_y - 32.0 / eff_scale,
+                    w: (rw as f64 + 64.0) / eff_scale,
+                    h: (rh as f64 + 64.0) / eff_scale,
+                };
+                draw_connections_for_nodes(
+                    &cr,
+                    doc,
+                    latex_cache,
+                    moved_ids,
+                    drag_fg.is_some() && sub,
+                    Some(&view_world),
+                );
+                if let Some(n) = doc.nodes.get(&nid) {
+                    if let Some(pid) = n.parent {
+                        if let Some(p) = doc.nodes.get(&pid) {
+                            if !p.fold {
+                                draw_branch_link(&cr, doc, p, n);
+                            }
+                        }
+                    }
+                    if !sub && !n.fold {
+                        for &cid in &n.children {
+                            if let Some(ch) = doc.nodes.get(&cid) {
+                                draw_branch_link(&cr, doc, n, ch);
+                            }
+                        }
+                    }
+                }
+                if drag_fg.is_none() {
+                    if sub {
+                        draw_node_recursive(
+                            &cr,
+                            doc,
+                            nid,
+                            assets,
+                            latex_cache,
+                            Some(&view_world),
+                            None,
+                        );
+                    } else {
+                        draw_single_node_only(&cr, doc, nid, assets, latex_cache);
+                    }
+                }
+                cr.restore();
+
+                if let Some(ref fg) = drag_fg {
+                    let fg_px_x = (*fg_world_x - doc.origin_x) * eff_scale;
+                    let fg_px_y = (*fg_world_y - doc.origin_y) * eff_scale;
+                    cr.set_source_surface(fg, fg_px_x, fg_px_y);
+                    cr.paint();
+                }
+            }
+            DragKind::ResizeNode {
+                node_id,
+                static_bg,
+                needs_final_relayout: _,
+            } => {
+                let nid = *node_id;
+                let new_outer = width.clamp(68.0, 1800.0);
+                if doc.nodes.contains_key(&nid) {
+                    if !cache.undo_recorded {
+                        doc.push_undo();
+                        cache.undo_recorded = true;
+                    }
+                    let pad = doc
+                        .nodes
+                        .get(&nid)
+                        .map(|n| n.style.nodepadding.max(4.0))
+                        .unwrap_or(6.0);
+                    let inner_w = (new_outer - 2.0 * pad).max(48.0);
+                    if let Some(n) = doc.nodes.get_mut(&nid) {
+                        n.maxwidth = inner_w;
+                        n.style.nodewidth = inner_w;
+                        n.custom_width = Some(inner_w);
+                        if let Some(ref mut img) = n.image {
+                            img.size = inner_w;
+                        }
+                    }
+                    measure_single_node(doc, nid, assets, latex_cache, false);
+                    if let Some(n) = doc.nodes.get_mut(&nid) {
+                        update_single_badge_hitbox(n);
+                    }
+                    doc.dirty = true;
+                    doc.scene_version = doc.scene_version.wrapping_add(1);
+                }
+
+                if static_bg.width != rw || static_bg.height != rh {
+                    let mut skip = HashSet::new();
+                    skip.insert(nid);
+                    *static_bg = CairoSurface::new_argb32(rw, rh)?;
+                    paint_scene_to_surface(
+                        static_bg,
+                        doc,
+                        assets,
+                        latex_cache,
+                        doc.origin_x,
+                        doc.origin_y,
+                        eff_scale,
+                        Some(&skip),
+                    )?;
+                }
+
+                let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+                let cr = CairoContext::new(vp)?;
+                cr.set_operator_source();
+                cr.set_source_surface(static_bg, 0.0, 0.0);
+                cr.paint();
+                cr.set_operator_over();
+
+                cr.save();
+                cr.scale(eff_scale, eff_scale);
+                cr.translate(-doc.origin_x, -doc.origin_y);
+                let view_world = Rect {
+                    x: doc.origin_x - 32.0 / eff_scale,
+                    y: doc.origin_y - 32.0 / eff_scale,
+                    w: (rw as f64 + 64.0) / eff_scale,
+                    h: (rh as f64 + 64.0) / eff_scale,
+                };
+                let mut only_nid = HashSet::new();
+                only_nid.insert(nid);
+                draw_connections_for_nodes(&cr, doc, latex_cache, &only_nid, false, Some(&view_world));
+                if let Some(n) = doc.nodes.get(&nid) {
+                    if let Some(pid) = n.parent {
+                        if let Some(p) = doc.nodes.get(&pid) {
+                            if !p.fold {
+                                draw_branch_link(&cr, doc, p, n);
+                            }
+                        }
+                    }
+                    if !n.fold {
+                        for &cid in &n.children {
+                            if let Some(ch) = doc.nodes.get(&cid) {
+                                draw_branch_link(&cr, doc, n, ch);
+                            }
+                        }
+                    }
+                }
+                draw_single_node_only(&cr, doc, nid, assets, latex_cache);
+                cr.restore();
+            }
+        }
+        let vp = ensure_viewport_surface(&mut bufs.viewport_surface, rw, rh)?;
+        vp.write_to_png_fast_into(&mut bufs.png_raw_scratch, &mut bufs.png_out_buf)
+    })();
+
+    bufs.drag_cache = Some(cache);
+    res?;
+    Ok(&bufs.png_out_buf)
+}
+
+pub fn drag_end(
+    doc: &mut MapDocument,
+    assets: &mut AssetCache,
+    latex_cache: &LatexCache,
+    bufs: &mut RenderBuffers,
+) {
+    let Some(cache) = bufs.drag_cache.take() else {
+        return;
+    };
+    match cache.kind {
+        DragKind::Pan => {}
+        DragKind::MoveNode { .. } => {
+            if cache.undo_recorded {
+                bufs.pan_cache = None;
+                ensure_all_tree_bboxes(doc);
+                update_badge_hitboxes(doc);
+            }
+        }
+        DragKind::ResizeNode {
+            needs_final_relayout,
+            ..
+        } => {
+            if cache.undo_recorded {
+                bufs.pan_cache = None;
+                if needs_final_relayout {
+                    doc.layout_dirty = true;
+                    prepare_document_for_render(doc, assets, latex_cache);
+                } else {
+                    ensure_all_tree_bboxes(doc);
+                    update_badge_hitboxes(doc);
+                }
+            }
+        }
+    }
 }
 
 pub fn render_full_map_png(
@@ -888,9 +1712,9 @@ pub fn render_full_map_png(
     cr.save();
     cr.scale(scale, scale);
     cr.translate(-b.x, -b.y);
-    draw_connections(&cr, doc, latex_cache, None);
+    draw_connections(&cr, doc, latex_cache, None, None);
     for &rid in &doc.root_ids {
-        draw_node_recursive(&cr, doc, rid, assets, latex_cache, None);
+        draw_node_recursive(&cr, doc, rid, assets, latex_cache, None, None);
     }
     cr.restore();
     surface.write_to_png()

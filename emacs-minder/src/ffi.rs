@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 pub const CAIRO_FORMAT_ARGB32: c_int = 0;
 pub const CAIRO_STATUS_SUCCESS: c_int = 0;
 pub const CAIRO_OPERATOR_CLEAR: c_int = 0;
+pub const CAIRO_OPERATOR_SOURCE: c_int = 1;
 pub const CAIRO_OPERATOR_OVER: c_int = 2;
 pub const CAIRO_LINE_CAP_BUTT: c_int = 0;
 pub const CAIRO_LINE_CAP_ROUND: c_int = 1;
@@ -312,6 +313,22 @@ impl Drop for CairoSurface {
     }
 }
 
+pub const UNPREMUL_RECIP: [u32; 256] = {
+    let mut tbl = [0u32; 256];
+    let mut a = 1u32;
+    while a <= 255 {
+        tbl[a as usize] = ((255u32 << 16) + (a - 1)) / a;
+        a += 1;
+    }
+    tbl
+};
+
+#[inline(always)]
+pub fn unpremul_channel(c: u32, a: u32) -> u8 {
+    let recip = UNPREMUL_RECIP[(a & 0xff) as usize];
+    (((c * recip) + 0x8000) >> 16).min(255) as u8
+}
+
 impl CairoSurface {
     pub fn new_argb32(width: i32, height: i32) -> Result<Self, String> {
         let w = width.max(1);
@@ -361,8 +378,12 @@ impl CairoSurface {
         Ok(buf)
     }
 
-    /// Fast RGBA8 PNG encoder using zlib level 1 + filter type 0 for responsive interactive pans.
-    pub fn write_to_png_fast(&self) -> Result<Vec<u8>, String> {
+    /// Fast RGBA8 PNG encoder using zlib level 1 + filter type 0 and reusable buffers.
+    pub fn write_to_png_fast_into(
+        &self,
+        raw_scratch: &mut Vec<u8>,
+        out: &mut Vec<u8>,
+    ) -> Result<(), String> {
         unsafe { cairo_surface_flush(self.raw) };
         let w = self.width.max(1) as usize;
         let h = self.height.max(1) as usize;
@@ -372,50 +393,49 @@ impl CairoSurface {
             return Err("cairo_image_surface_get_data returned null".to_string());
         }
 
-        let mut encoder = ZlibEncoder::new(Vec::with_capacity(w * h / 2), Compression::fast());
-        let mut row_buf = vec![0u8; 1 + w * 4];
-        row_buf[0] = 0; // filter None
+        let row_bytes = 1 + w * 4;
+        let total_raw = h * row_bytes;
+        if raw_scratch.len() != total_raw {
+            raw_scratch.resize(total_raw, 0);
+        }
 
         for y in 0..h {
             let src_row = unsafe {
                 std::slice::from_raw_parts(src_ptr.add(y * stride) as *const u32, w)
             };
-            let dst = &mut row_buf[1..];
+            let row = &mut raw_scratch[y * row_bytes..(y + 1) * row_bytes];
+            row[0] = 0; // filter None
+            let dst = &mut row[1..];
             for (x, &px) in src_row.iter().enumerate() {
                 let di = x * 4;
                 if px == 0 {
-                    dst[di] = 0;
-                    dst[di + 1] = 0;
-                    dst[di + 2] = 0;
-                    dst[di + 3] = 0;
+                    dst[di..di + 4].copy_from_slice(&[0, 0, 0, 0]);
+                } else if (px >> 24) == 0xff {
+                    let rgba_le = (px & 0xFF00_FF00)
+                        | ((px & 0x00FF_0000) >> 16)
+                        | ((px & 0x0000_00FF) << 16);
+                    dst[di..di + 4].copy_from_slice(&rgba_le.to_le_bytes());
                 } else {
                     let a = (px >> 24) & 0xff;
-                    let r = (px >> 16) & 0xff;
-                    let g = (px >> 8) & 0xff;
-                    let b = px & 0xff;
-                    if a == 255 {
-                        dst[di] = r as u8;
-                        dst[di + 1] = g as u8;
-                        dst[di + 2] = b as u8;
-                        dst[di + 3] = 255;
-                    } else {
-                        let half = a >> 1;
-                        dst[di] = ((r * 255 + half) / a).min(255) as u8;
-                        dst[di + 1] = ((g * 255 + half) / a).min(255) as u8;
-                        dst[di + 2] = ((b * 255 + half) / a).min(255) as u8;
-                        dst[di + 3] = a as u8;
-                    }
+                    dst[di] = unpremul_channel((px >> 16) & 0xff, a);
+                    dst[di + 1] = unpremul_channel((px >> 8) & 0xff, a);
+                    dst[di + 2] = unpremul_channel(px & 0xff, a);
+                    dst[di + 3] = a as u8;
                 }
             }
-            encoder
-                .write_all(&row_buf)
-                .map_err(|e| format!("png zlib write: {e}"))?;
         }
+
+        let mut encoder =
+            ZlibEncoder::new(Vec::with_capacity((total_raw / 32).max(16 * 1024)), Compression::fast());
+        encoder
+            .write_all(&raw_scratch[..total_raw])
+            .map_err(|e| format!("png zlib write: {e}"))?;
         let idat = encoder
             .finish()
             .map_err(|e| format!("png zlib finish: {e}"))?;
 
-        let mut out = Vec::with_capacity(64 + idat.len());
+        out.clear();
+        out.reserve(64 + idat.len());
         out.extend_from_slice(b"\x89PNG\r\n\x1a\n");
 
         let mut ihdr = [0u8; 13];
@@ -437,9 +457,17 @@ impl CairoSurface {
             out.extend_from_slice(&hasher.finalize().to_be_bytes());
         }
 
-        push_chunk(&mut out, b"IHDR", &ihdr);
-        push_chunk(&mut out, b"IDAT", &idat);
-        push_chunk(&mut out, b"IEND", &[]);
+        push_chunk(out, b"IHDR", &ihdr);
+        push_chunk(out, b"IDAT", &idat);
+        push_chunk(out, b"IEND", &[]);
+        Ok(())
+    }
+
+    /// Fast RGBA8 PNG encoder using zlib level 1 + filter type 0 for responsive interactive pans.
+    pub fn write_to_png_fast(&self) -> Result<Vec<u8>, String> {
+        let mut scratch = Vec::new();
+        let mut out = Vec::new();
+        self.write_to_png_fast_into(&mut scratch, &mut out)?;
         Ok(out)
     }
 
@@ -555,6 +583,12 @@ impl CairoContext {
             cairo_paint(self.raw);
             cairo_restore(self.raw);
         }
+    }
+    pub fn set_operator_source(&self) {
+        unsafe { cairo_set_operator(self.raw, CAIRO_OPERATOR_SOURCE) };
+    }
+    pub fn set_operator_over(&self) {
+        unsafe { cairo_set_operator(self.raw, CAIRO_OPERATOR_OVER) };
     }
     pub fn set_rgba(&self, r: f64, g: f64, b: f64, a: f64) {
         unsafe { cairo_set_source_rgba(self.raw, r, g, b, a) };

@@ -651,6 +651,7 @@ pub struct MapDocument {
     pub layout_dirty: bool,
     pub needs_measure: bool,
     pub dirty_measure_node: Option<i32>,
+    pub scene_version: u64,
     pub next_id: i32,
     pub next_image_id: i32,
     pub color_index: usize,
@@ -705,6 +706,7 @@ impl MapDocument {
             layout_dirty: true,
             needs_measure: true,
             dirty_measure_node: None,
+            scene_version: 1,
             next_id: 1,
             next_image_id: 1,
             color_index: 0,
@@ -767,6 +769,7 @@ impl MapDocument {
         self.needs_measure = true;
         self.dirty_measure_node = None;
         self.dirty = true;
+        self.scene_version = self.scene_version.wrapping_add(1);
     }
 
     pub fn undo(&mut self) -> bool {

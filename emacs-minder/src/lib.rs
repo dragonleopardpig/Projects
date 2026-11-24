@@ -15,7 +15,9 @@ use crate::layout::{center_on_node, hit_test, zoom_fit, AssetCache};
 use crate::minder_io::{load_minder_file, save_minder_file};
 use crate::model::{EditCommand, MapDocument, SourceFormat};
 use crate::org_io::{load_org_file, save_org_file};
-use crate::render::{render_full_map_png, render_viewport_png};
+use crate::render::{
+    drag_begin, drag_end, drag_step, render_full_map_png, render_viewport_png_cached, RenderBuffers,
+};
 use std::os::raw::c_int;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -34,6 +36,7 @@ pub struct MinderSession {
     pub assets: AssetCache,
     pub latex: Arc<LatexCache>,
     pub last_latex_gen: u64,
+    pub bufs: RenderBuffers,
 }
 
 impl MinderSession {
@@ -47,6 +50,7 @@ impl MinderSession {
             assets,
             latex,
             last_latex_gen: gen,
+            bufs: RenderBuffers::default(),
         }
     }
 }
@@ -182,8 +186,15 @@ unsafe extern "C" fn subr_render_png(
     let w = env.extract_integer(slice[1]).unwrap_or(1200) as i32;
     let h = env.extract_integer(slice[2]).unwrap_or(800) as i32;
 
-    match render_viewport_png(&mut sess.doc, &mut sess.assets, &sess.latex, w, h) {
-        Ok(png) => env.make_unibyte_string(&png),
+    match render_viewport_png_cached(
+        &mut sess.doc,
+        &mut sess.assets,
+        &sess.latex,
+        &mut sess.bufs,
+        w,
+        h,
+    ) {
+        Ok(png) => env.make_unibyte_string(png),
         Err(e) => env.signal_error(&e),
     }
 }
@@ -344,6 +355,7 @@ unsafe extern "C" fn subr_poll_updates(
         sess.last_latex_gen = cur_gen;
         sess.doc.layout_dirty = true;
         sess.doc.needs_measure = true;
+        sess.doc.scene_version = sess.doc.scene_version.wrapping_add(1);
         env.t()
     } else {
         env.nil()
@@ -370,10 +382,123 @@ unsafe extern "C" fn subr_wait_latex(
         sess.last_latex_gen = cur_gen;
         sess.doc.layout_dirty = true;
         sess.doc.needs_measure = true;
+        sess.doc.scene_version = sess.doc.scene_version.wrapping_add(1);
         env.t()
     } else {
         env.nil()
     }
+}
+
+unsafe extern "C" fn subr_drag_begin(
+    raw_env: *mut EmacsEnv,
+    nargs: isize,
+    args: *mut EmacsValue,
+    _data: *mut std::ffi::c_void,
+) -> EmacsValue {
+    let env = Env::from_raw(raw_env);
+    if nargs < 8 {
+        return env.signal_error(
+            "emacs-minder-core-drag-begin requires HANDLE KIND NODE-ID MOVE-SUBTREE W H RW RH",
+        );
+    }
+    let slice = std::slice::from_raw_parts(args, nargs as usize);
+    let sess = match env.get_user_ptr::<MinderSession>(slice[0]) {
+        Ok(s) => s,
+        Err(e) => return env.signal_error(&e),
+    };
+    let kind = match env.extract_string(slice[1]) {
+        Ok(s) => s,
+        Err(e) => return env.signal_error(&e),
+    };
+    let node_id = if env.is_not_nil(slice[2]) {
+        Some(env.extract_integer(slice[2]).unwrap_or(0) as i32)
+    } else {
+        None
+    };
+    let move_subtree = env.is_not_nil(slice[3]);
+    let w = env.extract_integer(slice[4]).unwrap_or(1200) as i32;
+    let h = env.extract_integer(slice[5]).unwrap_or(800) as i32;
+    let rw = env.extract_integer(slice[6]).unwrap_or(w as i64) as i32;
+    let rh = env.extract_integer(slice[7]).unwrap_or(h as i64) as i32;
+
+    match drag_begin(
+        &mut sess.doc,
+        &mut sess.assets,
+        &sess.latex,
+        &mut sess.bufs,
+        &kind,
+        node_id,
+        move_subtree,
+        w,
+        h,
+        rw,
+        rh,
+    ) {
+        Ok(()) => env.t(),
+        Err(e) => env.signal_error(&e),
+    }
+}
+
+unsafe extern "C" fn subr_drag_step(
+    raw_env: *mut EmacsEnv,
+    nargs: isize,
+    args: *mut EmacsValue,
+    _data: *mut std::ffi::c_void,
+) -> EmacsValue {
+    let env = Env::from_raw(raw_env);
+    if nargs < 8 {
+        return env.signal_error(
+            "emacs-minder-core-drag-step requires HANDLE DX DY WIDTH W H RW RH",
+        );
+    }
+    let slice = std::slice::from_raw_parts(args, nargs as usize);
+    let sess = match env.get_user_ptr::<MinderSession>(slice[0]) {
+        Ok(s) => s,
+        Err(e) => return env.signal_error(&e),
+    };
+    let dx = env.extract_float_or_int(slice[1]).unwrap_or(0.0);
+    let dy = env.extract_float_or_int(slice[2]).unwrap_or(0.0);
+    let width = env.extract_float_or_int(slice[3]).unwrap_or(180.0);
+    let w = env.extract_integer(slice[4]).unwrap_or(1200) as i32;
+    let h = env.extract_integer(slice[5]).unwrap_or(800) as i32;
+    let rw = env.extract_integer(slice[6]).unwrap_or(w as i64) as i32;
+    let rh = env.extract_integer(slice[7]).unwrap_or(h as i64) as i32;
+
+    match drag_step(
+        &mut sess.doc,
+        &mut sess.assets,
+        &sess.latex,
+        &mut sess.bufs,
+        dx,
+        dy,
+        width,
+        w,
+        h,
+        rw,
+        rh,
+    ) {
+        Ok(png) => env.make_unibyte_string(png),
+        Err(e) => env.signal_error(&e),
+    }
+}
+
+unsafe extern "C" fn subr_drag_end(
+    raw_env: *mut EmacsEnv,
+    nargs: isize,
+    args: *mut EmacsValue,
+    _data: *mut std::ffi::c_void,
+) -> EmacsValue {
+    let env = Env::from_raw(raw_env);
+    if nargs < 1 {
+        return env.signal_error("emacs-minder-core-drag-end requires HANDLE");
+    }
+    let sess = match env.get_user_ptr::<MinderSession>(*args) {
+        Ok(s) => s,
+        Err(e) => return env.signal_error(&e),
+    };
+    drag_end(&mut sess.doc, &mut sess.assets, &sess.latex, &mut sess.bufs);
+    let json = serde_json::to_string(&sess.doc.to_state_json()).unwrap_or_else(|_| "{}".into());
+    env.make_string(&json)
 }
 
 #[no_mangle]
@@ -458,6 +583,27 @@ pub unsafe extern "C" fn emacs_module_init(runtime: *mut EmacsRuntime) -> c_int 
         subr_wait_latex,
         "Wait for queued LaTeX compiles on HANDLE to finish and return non-nil if updated.",
     );
+    env.defun(
+        "emacs-minder-core-drag-begin",
+        8,
+        8,
+        subr_drag_begin,
+        "Begin cached interactive drag session on HANDLE.",
+    );
+    env.defun(
+        "emacs-minder-core-drag-step",
+        8,
+        8,
+        subr_drag_step,
+        "Advance cached drag session on HANDLE and return fast PNG bytes.",
+    );
+    env.defun(
+        "emacs-minder-core-drag-end",
+        1,
+        1,
+        subr_drag_end,
+        "Finalize cached drag session on HANDLE and return state JSON.",
+    );
 
     let sym = env.intern("emacs-minder-core");
     let mut args = [sym];
@@ -474,6 +620,7 @@ mod tests {
     use crate::minder_io::load_minder_bytes;
     use crate::model::*;
     use crate::org_io::{load_org_str, serialize_org};
+    use crate::render::render_viewport_png;
 
     #[test]
     fn test_latex_span_parser_and_normalization() {
@@ -779,5 +926,183 @@ mod tests {
             assert!(res.metrics.width_px > 20.0);
             assert!(res.svg.windows(4).any(|w| w == b"<svg"));
         }
+    }
+
+    #[test]
+    fn test_unpremul_lut_exact() {
+        for a in 1u32..=255 {
+            for c in 0u32..=a {
+                let exact = ((c * 255 + (a >> 1)) / a).min(255) as u8;
+                let lut = crate::ffi::unpremul_channel(c, a);
+                assert_eq!(lut, exact, "mismatch for c={c}, a={a}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_fast_drag_session_pan_move_resize() {
+        let mut sess = MinderSession::from_doc(MapDocument::new_empty());
+        apply_command(
+            &mut sess.doc,
+            EditCommand::AddChild {
+                parent_id: Some(0),
+                text: Some("Long optical wavefront propagation note for drag wrapping test.".into()),
+            },
+        )
+        .unwrap();
+        let cid = sess.doc.selected_node.unwrap();
+        apply_command(
+            &mut sess.doc,
+            EditCommand::AddChild {
+                parent_id: Some(cid),
+                text: Some("Grandchild".into()),
+            },
+        )
+        .unwrap();
+        apply_command(&mut sess.doc, EditCommand::SelectNode { id: cid }).unwrap();
+        apply_command(&mut sess.doc, EditCommand::ZoomReset).unwrap();
+
+        // 1. Pan drag with adaptive raster dimensions (800x500 -> 640x400)
+        let ox0 = sess.doc.origin_x;
+        let oy0 = sess.doc.origin_y;
+        drag_begin(
+            &mut sess.doc,
+            &mut sess.assets,
+            &sess.latex,
+            &mut sess.bufs,
+            "pan",
+            None,
+            true,
+            800,
+            500,
+            640,
+            400,
+        )
+        .unwrap();
+        assert!(sess.bufs.pan_cache.is_some());
+        let png_pan = drag_step(
+            &mut sess.doc,
+            &mut sess.assets,
+            &sess.latex,
+            &mut sess.bufs,
+            -45.0,
+            25.0,
+            0.0,
+            800,
+            500,
+            640,
+            400,
+        )
+        .unwrap()
+        .to_vec();
+        assert!(png_pan.starts_with(b"\x89PNG\r\n\x1a\n"));
+        let dec_pan = crate::ffi::CairoSurface::from_pixbuf_bytes(&png_pan).unwrap();
+        assert_eq!(dec_pan.width, 640);
+        assert_eq!(dec_pan.height, 400);
+        drag_end(&mut sess.doc, &mut sess.assets, &sess.latex, &mut sess.bufs);
+        assert!((sess.doc.origin_x - (ox0 - 45.0)).abs() < 1e-6);
+        assert!((sess.doc.origin_y - (oy0 + 25.0)).abs() < 1e-6);
+
+        // 2. Subtree Move drag with side flip & single undo
+        let gcid = sess.doc.nodes[&cid].children[0];
+        let orig_cx = sess.doc.nodes[&cid].posx;
+        let orig_gx = sess.doc.nodes[&gcid].posx;
+        drag_begin(
+            &mut sess.doc,
+            &mut sess.assets,
+            &sess.latex,
+            &mut sess.bufs,
+            "move",
+            Some(cid),
+            true,
+            800,
+            500,
+            640,
+            400,
+        )
+        .unwrap();
+        let png_mv = drag_step(
+            &mut sess.doc,
+            &mut sess.assets,
+            &sess.latex,
+            &mut sess.bufs,
+            -550.0,
+            60.0,
+            0.0,
+            800,
+            500,
+            640,
+            400,
+        )
+        .unwrap()
+        .to_vec();
+        assert!(png_mv.starts_with(b"\x89PNG\r\n\x1a\n"));
+        drag_end(&mut sess.doc, &mut sess.assets, &sess.latex, &mut sess.bufs);
+        assert_eq!(sess.doc.nodes[&0].layout, LayoutKind::Manual);
+        assert_eq!(sess.doc.nodes[&cid].side, NodeSide::Left);
+        assert!((sess.doc.nodes[&cid].posx - (orig_cx - 550.0)).abs() < 1e-6);
+        assert!((sess.doc.nodes[&gcid].posx - (orig_gx - 550.0)).abs() < 1e-6);
+        assert!(sess.doc.undo());
+        assert!((sess.doc.nodes[&cid].posx - orig_cx).abs() < 1e-6);
+
+        // 3. Resize drag on Org document (defers full relayout until drag_end)
+        let org_doc = load_org_str(
+            "* Root\n** Child A wraps cleanly when resized wider or narrower interactively\n** Child B\n",
+            None,
+        )
+        .unwrap();
+        let mut org_sess = MinderSession::from_doc(org_doc);
+        let child_a = org_sess
+            .doc
+            .nodes
+            .values()
+            .find(|n| n.text.contains("Child A"))
+            .unwrap()
+            .id;
+        let orig_w = org_sess.doc.nodes[&child_a].width;
+        drag_begin(
+            &mut org_sess.doc,
+            &mut org_sess.assets,
+            &org_sess.latex,
+            &mut org_sess.bufs,
+            "resize",
+            Some(child_a),
+            true,
+            800,
+            500,
+            640,
+            400,
+        )
+        .unwrap();
+        let png_rs = drag_step(
+            &mut org_sess.doc,
+            &mut org_sess.assets,
+            &org_sess.latex,
+            &mut org_sess.bufs,
+            0.0,
+            0.0,
+            460.0,
+            800,
+            500,
+            640,
+            400,
+        )
+        .unwrap()
+        .to_vec();
+        assert!(png_rs.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert!(org_sess.doc.nodes[&child_a].width > 420.0);
+        drag_end(
+            &mut org_sess.doc,
+            &mut org_sess.assets,
+            &org_sess.latex,
+            &mut org_sess.bufs,
+        );
+        assert!(org_sess.doc.undo());
+        crate::render::prepare_document_for_render(
+            &mut org_sess.doc,
+            &mut org_sess.assets,
+            &org_sess.latex,
+        );
+        assert!((org_sess.doc.nodes[&child_a].width - orig_w).abs() < 2.0);
     }
 }

@@ -28,6 +28,9 @@
 (declare-function emacs-minder-core-state-json "emacs-minder-core" (handle))
 (declare-function emacs-minder-core-poll-updates "emacs-minder-core" (handle))
 (declare-function emacs-minder-core-wait-latex "emacs-minder-core" (handle))
+(declare-function emacs-minder-core-drag-begin "emacs-minder-core" (handle kind node-id move-subtree w h rw rh))
+(declare-function emacs-minder-core-drag-step "emacs-minder-core" (handle dx dy width w h rw rh))
+(declare-function emacs-minder-core-drag-end "emacs-minder-core" (handle))
 (declare-function org-table-align "org-table" (&optional no-shrink))
 
 (defgroup emacs-minder nil
@@ -60,6 +63,12 @@
   :type 'boolean
   :group 'emacs-minder)
 
+(defcustom emacs-minder-drag-render-scale 'auto
+  "Raster resolution factor during active mouse drags (`auto' or 0.35..1.0)."
+  :type '(choice (const :tag "Auto (~0.8 MP adaptive)" auto)
+                 (number :tag "Fixed scale (0.35..1.0)"))
+  :group 'emacs-minder)
+
 (defvar emacs-minder--loaded nil)
 
 (defvar-local emacs-minder--handle nil)
@@ -68,6 +77,7 @@
 (defvar-local emacs-minder--state nil)
 (defvar-local emacs-minder--timer nil)
 (defvar-local emacs-minder--last-size nil)
+(defvar-local emacs-minder--last-image nil)
 (defvar-local emacs-minder--render-in-progress nil)
 (defvar-local emacs-minder--inline-frame nil)
 (defvar-local emacs-minder--inline-buffer nil)
@@ -185,27 +195,35 @@
                   fmt theme (round (* 100 scale)) nodes short-title
                   (if conn-from (format " [CONNECTING from %d]" conn-from) "")))))
 
+(defun emacs-minder--display-png (png &optional scale)
+  "Display PNG bytes in the current canvas buffer and evict previous image."
+  (let ((inhibit-read-only t)
+        (img (create-image png 'png t :scale (or scale 1.0)))
+        (prev emacs-minder--last-image))
+    (setq emacs-minder--last-image img)
+    (if (= (buffer-size) 1)
+        (put-text-property (point-min) (point-max) 'display img)
+      (erase-buffer)
+      (insert (propertize " " 'display img 'pointer 'arrow)))
+    (goto-char (point-min))
+    (when (and prev (not (eq prev img)))
+      (ignore-errors (image-flush prev)))))
+
 (defun emacs-minder--render (&optional skip-state-refresh)
   "Render current canvas PNG bytes cleanly into the buffer.
 When SKIP-STATE-REFRESH is non-nil, reuse `emacs-minder--state'."
   (when (and emacs-minder--handle (not emacs-minder--render-in-progress))
-    (let ((emacs-minder--render-in-progress t)
-          (inhibit-read-only t))
+    (let ((emacs-minder--render-in-progress t))
       (pcase-let ((`(,w . ,h) (emacs-minder--viewport-pixels)))
         (setq emacs-minder--last-size (cons w h))
         (let* ((png (emacs-minder-core-render-png emacs-minder--handle w h))
-               (img (create-image png 'png t :scale 1.0))
                (st (if (and skip-state-refresh emacs-minder--state)
                        emacs-minder--state
                      (emacs-minder--parse-json (emacs-minder-core-state-json emacs-minder--handle)))))
           (setq emacs-minder--state st)
           (set-buffer-modified-p (and (alist-get 'dirty st) t))
           (emacs-minder--update-header)
-          (if (= (buffer-size) 1)
-              (put-text-property (point-min) (point-max) 'display img)
-            (erase-buffer)
-            (insert (propertize " " 'display img 'pointer 'arrow)))
-          (goto-char (point-min)))))))
+          (emacs-minder--display-png png 1.0))))))
 
 (defun emacs-minder--poll-tick (buf)
   "Check whether background LaTeX compiles completed for BUF."
@@ -248,7 +266,10 @@ When SKIP-STATE-REFRESH is non-nil, reuse `emacs-minder--state'."
     (setq emacs-minder--inline-frame nil))
   (when (buffer-live-p emacs-minder--inline-buffer)
     (ignore-errors (kill-buffer emacs-minder--inline-buffer))
-    (setq emacs-minder--inline-buffer nil)))
+    (setq emacs-minder--inline-buffer nil))
+  (when emacs-minder--last-image
+    (ignore-errors (image-flush emacs-minder--last-image))
+    (setq emacs-minder--last-image nil)))
 
 (defun emacs-minder--backing-file ()
   "Return the file path associated with the current mind map buffer, if any."
@@ -1014,6 +1035,113 @@ When IS-NEW is non-nil, cancelling with empty text undoes the new node."
           (emacs-minder--cmd `((op . "select_node") (id . ,nid)))
           (emacs-minder-edit-node-text))))))
 
+(defun emacs-minder--drag-dimensions (w h)
+  "Return `(RW RH DISP-SCALE)' for interactive drag over logical W x H pixels."
+  (let* ((area (float (max 1 (* w h))))
+         (raw-scale (cond
+                     ((eq emacs-minder-drag-render-scale 'auto)
+                      (min 1.0 (max 0.35 (sqrt (/ 800000.0 area)))))
+                     ((numberp emacs-minder-drag-render-scale)
+                      (min 1.0 (max 0.35 (float emacs-minder-drag-render-scale))))
+                     (t 1.0)))
+         (rw (max 64 (round (* w raw-scale))))
+         (exact (/ (float rw) (float (max 1 w))))
+         (rh (max 64 (round (* h exact))))
+         (disp-scale (/ (float (max 1 w)) (float rw))))
+    (list rw rh disp-scale)))
+
+(defun emacs-minder--run-drag-loop (kind nid move-subtree threshold &optional resize-init)
+  "Run smooth layer-cached mouse drag for KIND on NID.
+RESIZE-INIT is `(START-WIDTH . SIGN)' when KIND is \"resize\".
+Return non-nil if any drag movement occurred."
+  (when emacs-minder--handle
+    (let* ((p0 (cdr (mouse-pixel-position)))
+           (start-x (and (consp p0) (numberp (car p0)) (car p0)))
+           (start-y (and (consp p0) (numberp (cdr p0)) (cdr p0)))
+           (last-x start-x)
+           (last-y start-y)
+           (scale (max 0.1 (or (alist-get 'scale emacs-minder--state) 1.0)))
+           (vp (emacs-minder--viewport-pixels))
+           (w (car vp))
+           (h (cdr vp))
+           (began nil)
+           (dragging (and start-x start-y t)))
+      (pcase-let ((`(,rw ,rh ,disp-scale) (emacs-minder--drag-dimensions w h)))
+        (when dragging
+          (let ((mouse-fine-grained-tracking t)
+                (gc-cons-threshold (max gc-cons-threshold (* 128 1024 1024))))
+            (unwind-protect
+                (track-mouse
+                  (setq track-mouse 'dragging)
+                  (while dragging
+                    (let ((ev (read-event)))
+                      (if (mouse-movement-p ev)
+                          (let ((coalesce t))
+                            (while coalesce
+                              (let ((next-ev (read-event nil nil 0)))
+                                (cond
+                                 ((null next-ev) (setq coalesce nil))
+                                 ((mouse-movement-p next-ev) (setq ev next-ev))
+                                 (t
+                                  (push next-ev unread-command-events)
+                                  (setq coalesce nil)))))
+                            (let* ((cur (cdr (mouse-pixel-position)))
+                                   (cx (and (consp cur) (car cur)))
+                                   (cy (and (consp cur) (cdr cur))))
+                              (when (and (numberp cx) (numberp cy)
+                                         (or began
+                                             (> (+ (abs (- cx start-x)) (abs (- cy start-y)))
+                                                threshold)))
+                                (let ((dx 0.0)
+                                      (dy 0.0)
+                                      (width 180.0)
+                                      (changed nil))
+                                  (cond
+                                   ((equal kind "resize")
+                                    (when (/= cx last-x)
+                                      (let ((start-w (or (car resize-init) 180.0))
+                                            (sign (or (cdr resize-init) 1.0)))
+                                        (setq width
+                                              (min 1800.0
+                                                   (max 68.0
+                                                        (+ start-w (* sign (/ (float (- cx start-x)) scale)))))
+                                              changed t))))
+                                   ((equal kind "pan")
+                                    (setq dx (float (- last-x cx))
+                                          dy (float (- last-y cy))
+                                          changed (or (/= dx 0.0) (/= dy 0.0))))
+                                   (t
+                                    (setq dx (float (- cx last-x))
+                                          dy (float (- cy last-y))
+                                          changed (or (/= dx 0.0) (/= dy 0.0)))))
+                                  (when changed
+                                    (setq last-x cx
+                                          last-y cy)
+                                    (let ((frame-t0 (float-time)))
+                                      (unless began
+                                        (setq began t)
+                                        (emacs-minder-core-drag-begin
+                                         emacs-minder--handle kind nid move-subtree w h rw rh))
+                                      (let ((png (emacs-minder-core-drag-step
+                                                  emacs-minder--handle dx dy width w h rw rh)))
+                                        (emacs-minder--display-png png disp-scale))
+                                      (redisplay)
+                                      (when (and (not noninteractive) (display-graphic-p))
+                                        (let* ((elapsed (- (float-time) frame-t0))
+                                               (wait (max 0.002 (- 0.015 elapsed))))
+                                          (sleep-for wait)))))))))
+                        (when (and (consp ev)
+                                   (not (memq (event-basic-type ev)
+                                              '(mouse-1 mouse-2 mouse-3 drag-mouse-1 drag-mouse-2))))
+                          (push ev unread-command-events))
+                        (setq dragging nil)))))
+              (when (and began emacs-minder--handle)
+                (setq emacs-minder--state
+                      (emacs-minder--parse-json
+                       (emacs-minder-core-drag-end emacs-minder--handle)))
+                (emacs-minder--render t))))))
+      began)))
+
 (defun emacs-minder--mouse-down-1 (event)
   "Handle left mouse press: resize handle, toggle badge, free-move node, or pan."
   (interactive "e")
@@ -1043,139 +1171,16 @@ When IS-NEW is non-nil, cancelling with empty text undoes the new node."
           (let* ((sel (alist-get 'selected emacs-minder--state))
                  (start-w (or (and sel (alist-get 'width sel)) 180.0))
                  (on-left (and sel (alist-get 'resizer_on_left sel)))
-                 (sign (if on-left -1.0 1.0))
-                 (scale (max 0.1 (or (alist-get 'scale emacs-minder--state) 1.0)))
-                 (p0 (cdr (mouse-pixel-position)))
-                 (start-x (and (consp p0) (numberp (car p0)) (car p0)))
-                 (last-cx start-x)
-                 (first-undo t)
-                 (dragging (numberp start-x)))
-            (when dragging
-              (track-mouse
-                (while dragging
-                  (let ((ev (read-event)))
-                    (if (mouse-movement-p ev)
-                        (let ((coalesce t))
-                          (while coalesce
-                            (let ((next-ev (read-event nil nil 0)))
-                              (cond
-                               ((null next-ev) (setq coalesce nil))
-                               ((mouse-movement-p next-ev) (setq ev next-ev))
-                               (t
-                                (push next-ev unread-command-events)
-                                (setq coalesce nil)))))
-                          (let* ((cur (cdr (mouse-pixel-position)))
-                                 (cx (and (consp cur) (car cur))))
-                            (when (and (numberp cx) (/= cx last-cx))
-                              (setq last-cx cx)
-                              (let ((new-w (min 1800.0
-                                                (max 68.0
-                                                     (+ start-w (* sign (/ (float (- cx start-x)) scale)))))))
-                                (emacs-minder--cmd
-                                 `((op . "resize_node")
-                                   (id . ,nid)
-                                   (width . ,new-w)
-                                   (record_undo . ,(if first-undo t :json-false))))
-                                (setq first-undo nil)
-                                (redisplay)))))
-                      (when (and (consp ev)
-                                 (not (memq (event-basic-type ev)
-                                            '(mouse-1 mouse-2 mouse-3 drag-mouse-1))))
-                        (push ev unread-command-events))
-                      (setq dragging nil))))))))
+                 (sign (if on-left -1.0 1.0)))
+            (emacs-minder--run-drag-loop "resize" nid t 0 (cons start-w sign))))
          ((equal kind "node")
           (unless (eql nid (alist-get 'selected_node emacs-minder--state))
             (emacs-minder--cmd `((op . "select_node") (id . ,nid)))
             (redisplay))
-          (let* ((p0 (cdr (mouse-pixel-position)))
-                 (start-x (and (consp p0) (numberp (car p0)) (car p0)))
-                 (start-y (and (consp p0) (numberp (cdr p0)) (cdr p0)))
-                 (last-x start-x)
-                 (last-y start-y)
-                 (moved nil)
-                 (first-undo t)
-                 (dragging (and (numberp start-x) (numberp start-y))))
-            (when dragging
-              (track-mouse
-                (while dragging
-                  (let ((ev (read-event)))
-                    (if (mouse-movement-p ev)
-                        (let ((coalesce t))
-                          (while coalesce
-                            (let ((next-ev (read-event nil nil 0)))
-                              (cond
-                               ((null next-ev) (setq coalesce nil))
-                               ((mouse-movement-p next-ev) (setq ev next-ev))
-                               (t
-                                (push next-ev unread-command-events)
-                                (setq coalesce nil)))))
-                          (let* ((cur (cdr (mouse-pixel-position)))
-                                 (cx (and (consp cur) (car cur)))
-                                 (cy (and (consp cur) (cdr cur))))
-                            (when (and (numberp cx) (numberp cy))
-                              (when (or moved (> (+ (abs (- cx start-x)) (abs (- cy start-y))) 4))
-                                (let ((dx (- cx last-x))
-                                      (dy (- cy last-y)))
-                                  (when (> (+ (abs dx) (abs dy)) 0)
-                                    (setq moved t
-                                          last-x cx
-                                          last-y cy)
-                                    (emacs-minder--cmd
-                                     `((op . "move_node")
-                                       (id . ,nid)
-                                       (dx . ,(float dx))
-                                       (dy . ,(float dy))
-                                       (move_subtree . ,(if shift-held :json-false t))
-                                       (record_undo . ,(if first-undo t :json-false))))
-                                    (setq first-undo nil)
-                                    (redisplay)))))))
-                      (when (and (consp ev)
-                                 (not (memq (event-basic-type ev)
-                                            '(mouse-1 mouse-2 mouse-3 drag-mouse-1))))
-                        (push ev unread-command-events))
-                      (setq dragging nil))))))))
+          (emacs-minder--run-drag-loop "move" nid (not shift-held) 4))
          (t
-          (let* ((p0 (cdr (mouse-pixel-position)))
-                 (start-x (and (consp p0) (numberp (car p0)) (car p0)))
-                 (start-y (and (consp p0) (numberp (cdr p0)) (cdr p0)))
-                 (last-x start-x)
-                 (last-y start-y)
-                 (panned nil)
-                 (dragging (and (numberp start-x) (numberp start-y))))
-            (when dragging
-              (track-mouse
-                (while dragging
-                  (let ((ev (read-event)))
-                    (if (mouse-movement-p ev)
-                        (let ((coalesce t))
-                          (while coalesce
-                            (let ((next-ev (read-event nil nil 0)))
-                              (cond
-                               ((null next-ev) (setq coalesce nil))
-                               ((mouse-movement-p next-ev) (setq ev next-ev))
-                               (t
-                                (push next-ev unread-command-events)
-                                (setq coalesce nil)))))
-                          (let* ((cur (cdr (mouse-pixel-position)))
-                                 (cx (and (consp cur) (car cur)))
-                                 (cy (and (consp cur) (cdr cur))))
-                            (when (and (numberp cx) (numberp cy))
-                              (when (or panned (> (+ (abs (- cx start-x)) (abs (- cy start-y))) 4))
-                                (let ((dx (- last-x cx))
-                                      (dy (- last-y cy)))
-                                  (when (> (+ (abs dx) (abs dy)) 0)
-                                    (setq panned t
-                                          last-x cx
-                                          last-y cy)
-                                    (emacs-minder--cmd `((op . "pan") (dx . ,(float dx)) (dy . ,(float dy))))
-                                    (redisplay)))))))
-                      (when (and (consp ev)
-                                 (not (memq (event-basic-type ev)
-                                            '(mouse-1 mouse-2 mouse-3 drag-mouse-1))))
-                        (push ev unread-command-events))
-                      (setq dragging nil)))))
-              (unless panned
-                (emacs-minder--cmd '((op . "select_clear"))))))))))))
+          (unless (emacs-minder--run-drag-loop "pan" nil t 4)
+            (emacs-minder--cmd '((op . "select_clear"))))))))))
 
 (defun emacs-minder--mouse-drag-pan (event)
   "Pan canvas when dragging on background."
@@ -1191,42 +1196,7 @@ When IS-NEW is non-nil, cancelling with empty text undoes the new node."
 (defun emacs-minder--mouse-pan-track (_event)
   "Live-pan the mind map scene while dragging with the middle mouse button."
   (interactive "e")
-  (when emacs-minder--handle
-    (let* ((start (cdr (mouse-pixel-position)))
-           (last-x (and (consp start) (numberp (car start)) (car start)))
-           (last-y (and (consp start) (numberp (cdr start)) (cdr start)))
-           (dragging (and last-x last-y t)))
-      (when dragging
-        (track-mouse
-          (while dragging
-            (let ((ev (read-event)))
-              (if (mouse-movement-p ev)
-                  (let ((coalesce t))
-                    (while coalesce
-                      (let ((next-ev (read-event nil nil 0)))
-                        (cond
-                         ((null next-ev)
-                          (setq coalesce nil))
-                         ((mouse-movement-p next-ev)
-                          (setq ev next-ev))
-                         (t
-                          (push next-ev unread-command-events)
-                          (setq coalesce nil)))))
-                    (let* ((cur (cdr (mouse-pixel-position)))
-                           (cx (and (consp cur) (car cur)))
-                           (cy (and (consp cur) (cdr cur))))
-                      (when (and (numberp cx) (numberp cy))
-                        (let ((dx (- last-x cx))
-                              (dy (- last-y cy)))
-                          (when (> (+ (abs dx) (abs dy)) 1)
-                            (setq last-x cx
-                                  last-y cy)
-                            (emacs-minder--cmd `((op . "pan") (dx . ,(float dx)) (dy . ,(float dy))))
-                            (redisplay))))))
-                (when (and (consp ev)
-                           (not (memq (event-basic-type ev) '(mouse-1 mouse-2 mouse-3))))
-                  (push ev unread-command-events))
-                (setq dragging nil)))))))))
+  (emacs-minder--run-drag-loop "pan" nil t 1))
 
 ;;; Keymap & Major Mode
 

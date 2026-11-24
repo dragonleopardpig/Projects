@@ -170,6 +170,8 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
         _ => doc.selected_node,
     };
 
+    let bump_scene = !matches!(&cmd, EditCommand::Pan { .. });
+
     match cmd {
         EditCommand::SelectNode { id } => {
             if doc.nodes.contains_key(&id) {
@@ -1012,6 +1014,9 @@ pub fn apply_command(doc: &mut MapDocument, cmd: EditCommand) -> Result<(), Stri
                 center_on_node(doc, id);
             }
         }
+    }
+    if bump_scene {
+        doc.scene_version = doc.scene_version.wrapping_add(1);
     }
     Ok(())
 }

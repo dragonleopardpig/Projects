@@ -260,5 +260,47 @@
             (should (< (abs (- (alist-get 'posx sel4) nx2)) 1.0))
             (should (< (abs (- (alist-get 'posy sel4) ny2)) 1.0))))))))
 
+(ert-deftest emacs-minder-test-fast-drag-core-api ()
+  "Fast layer-cached drag core subrs (`drag-begin/step/end') handle pan, move, resize."
+  (emacs-minder-ensure-module)
+  (should (fboundp 'emacs-minder-core-drag-begin))
+  (should (fboundp 'emacs-minder-core-drag-step))
+  (should (fboundp 'emacs-minder-core-drag-end))
+  (pcase-let ((`(,rw ,rh ,dscale) (emacs-minder--drag-dimensions 1920 1080)))
+    (should (< rw 1920))
+    (should (< rh 1080))
+    (should (> dscale 1.0)))
+  (with-temp-buffer
+    (setq emacs-minder--handle (emacs-minder-core-new "Drag Core"))
+    (emacs-minder--cmd '((op . "add_child") (text . "Long draggable child box for smooth testing")))
+    (emacs-minder--cmd '((op . "zoom_reset")))
+    (let* ((st0 emacs-minder--state)
+           (sel0 (alist-get 'selected st0))
+           (cid (alist-get 'id sel0))
+           (orig-x (alist-get 'posx sel0))
+           (orig-w (alist-get 'width sel0)))
+      ;; Pan via core drag subrs
+      (should (emacs-minder-core-drag-begin emacs-minder--handle "pan" nil t 960 540 640 360))
+      (let ((png (emacs-minder-core-drag-step emacs-minder--handle -40.0 20.0 0.0 960 540 640 360)))
+        (should (string-prefix-p "\x89PNG\r\n\x1a\n" png)))
+      (let ((st1 (emacs-minder--parse-json (emacs-minder-core-drag-end emacs-minder--handle))))
+        (should (< (abs (- (alist-get 'origin_x st1) (- (alist-get 'origin_x st0) 40.0))) 1e-6)))
+      ;; Move via core drag subrs + single-step undo
+      (should (emacs-minder-core-drag-begin emacs-minder--handle "move" cid t 960 540 640 360))
+      (let ((png (emacs-minder-core-drag-step emacs-minder--handle 75.0 30.0 0.0 960 540 640 360)))
+        (should (string-prefix-p "\x89PNG\r\n\x1a\n" png)))
+      (let ((st2 (emacs-minder--parse-json (emacs-minder-core-drag-end emacs-minder--handle))))
+        (should (< (abs (- (alist-get 'posx (alist-get 'selected st2)) (+ orig-x 75.0))) 1e-6)))
+      (emacs-minder-undo)
+      (should (< (abs (- (alist-get 'posx (alist-get 'selected emacs-minder--state)) orig-x)) 1e-6))
+      ;; Resize via core drag subrs + single-step undo
+      (should (emacs-minder-core-drag-begin emacs-minder--handle "resize" cid t 960 540 640 360))
+      (let ((png (emacs-minder-core-drag-step emacs-minder--handle 0.0 0.0 420.0 960 540 640 360)))
+        (should (string-prefix-p "\x89PNG\r\n\x1a\n" png)))
+      (let ((st3 (emacs-minder--parse-json (emacs-minder-core-drag-end emacs-minder--handle))))
+        (should (> (alist-get 'width (alist-get 'selected st3)) 400.0)))
+      (emacs-minder-undo)
+      (should (< (abs (- (alist-get 'width (alist-get 'selected emacs-minder--state)) orig-w)) 1.0)))))
+
 (provide 'emacs-minder-tests)
 ;;; emacs-minder-tests.el ends here

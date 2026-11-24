@@ -641,52 +641,56 @@ pub fn ensure_all_tree_bboxes(doc: &mut MapDocument) {
     }
 }
 
+pub fn update_single_badge_hitbox(n: &mut Node) {
+    let pad = n.style.nodepadding.max(4.0);
+    n.task_bbox = if n.task_enabled {
+        Rect {
+            x: n.posx + pad - 2.0,
+            y: n.posy + n.height / 2.0 - 10.0,
+            w: 20.0,
+            h: 20.0,
+        }
+    } else {
+        Rect::default()
+    };
+    n.fold_bbox = if !n.children.is_empty() {
+        let fx = match n.side {
+            NodeSide::Left => n.posx - 18.0,
+            NodeSide::Right => n.posx + n.width + 2.0,
+            NodeSide::Top | NodeSide::Bottom => n.posx + n.width / 2.0 - 8.0,
+        };
+        let fy = match n.side {
+            NodeSide::Top => n.posy - 18.0,
+            NodeSide::Bottom => n.posy + n.height + 2.0,
+            NodeSide::Left | NodeSide::Right => n.posy + n.height / 2.0 - 8.0,
+        };
+        Rect {
+            x: fx,
+            y: fy,
+            w: 16.0,
+            h: 16.0,
+        }
+    } else {
+        Rect::default()
+    };
+    let rx = if n.resizer_on_left() {
+        n.posx - 8.0
+    } else {
+        n.posx + n.width - 8.0
+    };
+    n.resizer_bbox = Rect {
+        x: rx,
+        y: n.posy + n.height / 2.0 - 11.0,
+        w: 16.0,
+        h: 22.0,
+    };
+}
+
 pub fn update_badge_hitboxes(doc: &mut MapDocument) {
     let ids: Vec<i32> = doc.nodes.keys().copied().collect();
     for id in ids {
         if let Some(n) = doc.nodes.get_mut(&id) {
-            let pad = n.style.nodepadding.max(4.0);
-            n.task_bbox = if n.task_enabled {
-                Rect {
-                    x: n.posx + pad - 2.0,
-                    y: n.posy + n.height / 2.0 - 10.0,
-                    w: 20.0,
-                    h: 20.0,
-                }
-            } else {
-                Rect::default()
-            };
-            n.fold_bbox = if !n.children.is_empty() {
-                let fx = match n.side {
-                    NodeSide::Left => n.posx - 18.0,
-                    NodeSide::Right => n.posx + n.width + 2.0,
-                    NodeSide::Top | NodeSide::Bottom => n.posx + n.width / 2.0 - 8.0,
-                };
-                let fy = match n.side {
-                    NodeSide::Top => n.posy - 18.0,
-                    NodeSide::Bottom => n.posy + n.height + 2.0,
-                    NodeSide::Left | NodeSide::Right => n.posy + n.height / 2.0 - 8.0,
-                };
-                Rect {
-                    x: fx,
-                    y: fy,
-                    w: 16.0,
-                    h: 16.0,
-                }
-            } else {
-                Rect::default()
-            };
-            let rx = if n.resizer_on_left() {
-                n.posx - 8.0
-            } else {
-                n.posx + n.width - 8.0
-            };
-            n.resizer_bbox = Rect {
-                x: rx,
-                y: n.posy + n.height / 2.0 - 11.0,
-                w: 16.0,
-                h: 22.0,
-            };
+            update_single_badge_hitbox(n);
         }
     }
 }
