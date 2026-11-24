@@ -182,6 +182,7 @@
             # Built-in copy_screenshot_to_clipboard offered only image/png;
             # also offer image/bmp for Windows RDP (WinApps) / Wine compatibility.
             ./patches/sioyek-clipboard-bmp.patch
+            ./patches/sioyek-ask-ai.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
           # final, not prev: the jkqtplotter below is patched in this same
