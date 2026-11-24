@@ -46,6 +46,9 @@
 (declare-function enhanced-dirvish-panes--window-dir "enhanced-dirvish-panes" (&optional win))
 (declare-function enhanced-dirvish-pane-state-id "enhanced-dirvish-panes" (cl-x) t)
 (declare-function enhanced-dirvish-pane-state-buffer "enhanced-dirvish-panes" (cl-x) t)
+(declare-function enhanced-dirvish-panes--get-zoom "enhanced-dirvish-panes" (pane &optional parent-p))
+(declare-function enhanced-dirvish-panes--set-zoom "enhanced-dirvish-panes" (pane scale &optional parent-p))
+(declare-function enhanced-dirvish-tabs-save "enhanced-dirvish-panes" ())
 (declare-function enhanced-dirvish-pane-state-history-back "enhanced-dirvish-panes" (cl-x) t)
 (declare-function enhanced-dirvish-pane-state-history-fwd "enhanced-dirvish-panes" (cl-x) t)
 (declare-function enhanced-dirvish-tab-state-pane1 "enhanced-dirvish-panes" (cl-x) t)
@@ -53,6 +56,8 @@
 (declare-function enhanced-dirvish-split-active-p "enhanced-dirvish-panes" ())
 (declare-function enhanced-dirvish--flatten-layout "enhanced-dirvish-panes" ())
 (declare-function enhanced-dirvish-panes--set-active-view "enhanced-dirvish-panes" (buffer window))
+(defvar enhanced-dirvish-workspace-tabs)
+(defvar enhanced-dirvish-active-tab-index)
 (declare-function enhanced-dirvish-pane-clipboard-summary "enhanced-dirvish-ops" ())
 (declare-function enhanced-dirvish--transfer-files "enhanced-dirvish-ops" (files dest-dir mode &optional keep-both-default replace-default))
 (declare-function enhanced-dirvish-clear-all-marks "enhanced-dirvish-keys" ())
@@ -88,6 +93,10 @@
 (defvar enhanced-dirvish-view--applying-text-zoom nil
   "Non-nil while restoring saved browser text zoom onto a directory buffer.")
 
+(defvar-local enhanced-dirvish-view--local-text-scale 0
+  "Fallback text zoom level preserved across major-mode resets in a buffer.")
+(put 'enhanced-dirvish-view--local-text-scale 'permanent-local t)
+
 (defun enhanced-dirvish-view--browser-zoom-buffer-p (&optional buffer)
   "Return non-nil when BUFFER is an Enhanced Dirvish directory browser buffer."
   (with-current-buffer (or buffer (current-buffer))
@@ -102,46 +111,124 @@
          (not (bound-and-true-p enhanced-dirvish-preview-edit-mode))
          (not (string-prefix-p "*Enhanced Dirvish Preview" (buffer-name))))))
 
-(defun enhanced-dirvish-view--set-browser-text-scale ()
-  "Apply saved `browser-text-scale' to the current browser buffer."
+(defun enhanced-dirvish-view--pane-for-buffer (buf win)
+  "Find the `enhanced-dirvish-pane-state' owning BUF in WIN, or nil."
+  (or (when (and (window-live-p win) (fboundp 'enhanced-dirvish-panes--pane-for-window))
+        (enhanced-dirvish-panes--pane-for-window win))
+      (when (boundp 'enhanced-dirvish-workspace-tabs)
+        (cl-loop for tab in enhanced-dirvish-workspace-tabs
+                 thereis (cl-find-if
+                          (lambda (pane)
+                            (and pane (eq buf (enhanced-dirvish-pane-state-buffer pane))))
+                          (list (enhanced-dirvish-tab-state-pane1 tab)
+                                (enhanced-dirvish-tab-state-pane2 tab)))))))
+
+(defun enhanced-dirvish-view--dirview-pane (buf win)
+  "Find the owning `enhanced-dirvish-pane-state' for parent-column BUF in WIN."
+  (or (when (window-live-p win) (window-parameter win 'enhanced-dirvish-window-pane))
+      (with-current-buffer buf
+        (when-let* ((dv (or (ignore-errors (dirvish-curr))
+                            (and (boundp 'dirvish--sessions)
+                                 (hash-table-p dirvish--sessions)
+                                 (gethash (dirvish-prop :dv) dirvish--sessions))))
+                    (root (dv-root-window dv))
+                    ((window-live-p root))
+                    ((fboundp 'enhanced-dirvish-panes--pane-for-window)))
+          (enhanced-dirvish-panes--pane-for-window root)))))
+
+(defun enhanced-dirvish-view--zoom-target (&optional buffer window)
+  "Return the per-pane zoom storage key for BUFFER in WINDOW."
+  (let* ((buf (or buffer (current-buffer)))
+         (win (or window
+                  (when (eq buf (window-buffer (selected-window)))
+                    (selected-window))
+                  (get-buffer-window buf t))))
+    (if (with-current-buffer buf (derived-mode-p 'dirvish-directory-view-mode))
+        (if-let* ((pane (enhanced-dirvish-view--dirview-pane buf win)))
+            (cons 'parent pane)
+          (if (window-live-p win) (cons 'parent-window win) (cons 'buffer buf)))
+      (if-let* ((pane (enhanced-dirvish-view--pane-for-buffer buf win)))
+          (cons 'pane pane)
+        (if (window-live-p win) (cons 'window win) (cons 'buffer buf))))))
+
+(defun enhanced-dirvish-view--get-zoom (target)
+  "Read saved integer text zoom step for TARGET."
+  (pcase target
+    (`(pane . ,pane) (enhanced-dirvish-panes--get-zoom pane))
+    (`(parent . ,pane) (enhanced-dirvish-panes--get-zoom pane t))
+    (`(window . ,win) (or (window-parameter win 'enhanced-dirvish-browser-text-scale) 0))
+    (`(parent-window . ,win) (or (window-parameter win 'enhanced-dirvish-parent-text-scale) 0))
+    (`(buffer . ,buf) (or (buffer-local-value 'enhanced-dirvish-view--local-text-scale buf) 0))
+    (_ 0)))
+
+(defun enhanced-dirvish-view--store-zoom (target scale)
+  "Store SCALE onto zoom TARGET without affecting any other pane."
+  (pcase target
+    (`(pane . ,pane)
+     (let* ((primary-p (eql (enhanced-dirvish-pane-state-id pane) 1))
+            (active-tab (and primary-p (fboundp 'enhanced-dirvish-active-tab)
+                             (bound-and-true-p enhanced-dirvish-workspace-tabs)
+                             (enhanced-dirvish-active-tab))))
+       (enhanced-dirvish-panes--set-zoom pane scale)
+       (when (and primary-p
+                  (or (null active-tab)
+                      (eq pane (enhanced-dirvish-tab-state-pane1 active-tab))))
+         (let ((p (enhanced-dirvish-prefs)))
+           (unless (= scale (or (enhanced-dirvish-prefs-browser-text-scale p) 0))
+             (setf (enhanced-dirvish-prefs-browser-text-scale p) scale)
+             (enhanced-dirvish-prefs-save))))
+       (when (and (bound-and-true-p enhanced-dirvish-workspace-tabs)
+                  (fboundp 'enhanced-dirvish-tabs-save))
+         (enhanced-dirvish-tabs-save))))
+    (`(parent . ,pane)
+     (enhanced-dirvish-panes--set-zoom pane scale t))
+    (`(window . ,win)
+     (when (window-live-p win)
+       (set-window-parameter win 'enhanced-dirvish-browser-text-scale scale)))
+    (`(parent-window . ,win)
+     (when (window-live-p win)
+       (set-window-parameter win 'enhanced-dirvish-parent-text-scale scale)))
+    (`(buffer . ,buf)
+     (when (buffer-live-p buf)
+       (with-current-buffer buf
+         (setq-local enhanced-dirvish-view--local-text-scale scale))))))
+
+(defun enhanced-dirvish-view--set-browser-text-scale (&optional window)
+  "Apply saved per-pane text zoom to the current browser buffer in WINDOW."
   (when (enhanced-dirvish-view--browser-zoom-buffer-p)
-    (let* ((target (or (enhanced-dirvish-prefs-browser-text-scale (enhanced-dirvish-prefs)) 0))
+    (let* ((target (enhanced-dirvish-view--zoom-target (current-buffer) window))
+           (wanted (enhanced-dirvish-view--get-zoom target))
            (current (if (bound-and-true-p text-scale-mode)
                         (or (bound-and-true-p text-scale-mode-amount) 0)
                       0))
            (enhanced-dirvish-view--applying-text-zoom t))
-      (unless (= current target)
-        (text-scale-set target)))))
-
-(defun enhanced-dirvish-view--sync-live-browser-text-scales (&optional exclude-buf)
-  "Sync `browser-text-scale' across live directory browser buffers.
-Skip EXCLUDE-BUF when non-nil."
-  (let ((enhanced-dirvish-view--applying-text-zoom t))
-    (dolist (buf (buffer-list))
-      (when (and (buffer-live-p buf)
-                 (not (eq buf exclude-buf))
-                 (enhanced-dirvish-view--browser-zoom-buffer-p buf))
-        (with-current-buffer buf
-          (enhanced-dirvish-view--set-browser-text-scale))))))
+      (unless (= current wanted)
+        (text-scale-set wanted)))))
 
 (defun enhanced-dirvish-view--remember-browser-text-scale ()
-  "Persist native Emacs text zoom changes made inside any browser view."
+  "Persist native Emacs text zoom changes for the owning pane only."
   (when (and (not enhanced-dirvish-view--applying-text-zoom)
              (enhanced-dirvish-view--browser-zoom-buffer-p))
-    (let* ((p (enhanced-dirvish-prefs))
+    (let* ((target (enhanced-dirvish-view--zoom-target))
            (scale (if (bound-and-true-p text-scale-mode)
                       (or (bound-and-true-p text-scale-mode-amount) 0)
                     0)))
-      (unless (= scale (or (enhanced-dirvish-prefs-browser-text-scale p) 0))
-        (setf (enhanced-dirvish-prefs-browser-text-scale p) scale)
-        (enhanced-dirvish-prefs-save)
-        (enhanced-dirvish-view--sync-live-browser-text-scales (current-buffer))))))
+      (unless (= scale (enhanced-dirvish-view--get-zoom target))
+        (enhanced-dirvish-view--store-zoom target scale)))))
 
-(defun enhanced-dirvish-view--install-browser-text-zoom ()
-  "Hook and apply persisted browser text zoom in the current buffer."
+(defun enhanced-dirvish-view--install-browser-text-zoom (&optional window)
+  "Hook and apply saved per-pane text zoom in the current buffer for WINDOW."
   (when (enhanced-dirvish-view--browser-zoom-buffer-p)
     (add-hook 'text-scale-mode-hook #'enhanced-dirvish-view--remember-browser-text-scale nil t)
-    (enhanced-dirvish-view--set-browser-text-scale)))
+    (enhanced-dirvish-view--set-browser-text-scale window)))
+
+(defun enhanced-dirvish-view--on-window-buffer-change (win-or-frame)
+  "Keep browser buffer text zoom aligned with its owning pane in WIN-OR-FRAME."
+  (dolist (win (if (windowp win-or-frame) (list win-or-frame) (window-list win-or-frame 'nomini)))
+    (when (window-live-p win)
+      (with-current-buffer (window-buffer win)
+        (when (enhanced-dirvish-view--browser-zoom-buffer-p)
+          (enhanced-dirvish-view--install-browser-text-zoom win))))))
 
 ;;;; File Selection & Cursor Introspection Across All 4 Views
 
@@ -3164,7 +3251,6 @@ folder cannot itself become the drop target."
     ;; source buffer leaves stale labels when Dired is reused from another view.
     (setq-local enhanced-dirvish-local-view-mode mode)
     (enhanced-dirvish-view--install-browser-text-zoom)
-    (enhanced-dirvish-view--sync-live-browser-text-scales (current-buffer))
     (when (fboundp 'enhanced-dirvish-panes--set-active-view)
       (enhanced-dirvish-panes--set-active-view (current-buffer) (selected-window)))
     (force-mode-line-update t)

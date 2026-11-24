@@ -572,7 +572,10 @@ Shift-F10."
           (insert (format "   Loaded Custom Actions: %d  (Press [a] to run or [i] to install starter recipe)\n"
                           (length (enhanced-dirvish-actions-load))))
           (insert (format "   Browser Text Zoom:     %+d\n"
-                          (enhanced-dirvish-prefs-browser-text-scale p)))
+                          (or (when (and (fboundp 'enhanced-dirvish-active-pane)
+                                         (bound-and-true-p enhanced-dirvish-workspace-tabs))
+                                (enhanced-dirvish-pane-state-text-scale (enhanced-dirvish-active-pane)))
+                              (enhanced-dirvish-prefs-browser-text-scale p))))
           (insert (format "   Preview Zoom Levels:   Text %+d · Image %.0f%% · PDF %.0f%%\n\n"
                           (enhanced-dirvish-prefs-preview-text-scale p)
                           (* 100 (enhanced-dirvish-prefs-preview-image-scale p))
@@ -681,7 +684,7 @@ Shift-F10."
                     (,(if tenx "C-. / ." "C-.") "Toggle Hidden Dot-files")
                     (,(if tenx "M-v / W / M-w" "M-v / M-w") "Toggle Rendered Document Mode / Preview Line Wrap")
                     ("C-+ / C-- / C-0" "Independent Preview Zoom (Text / Image / PDF)")
-                    ("C-Wheel / C-x C-+/−/0" "Persistent Browser View Text Zoom across folders & layouts")
+                    ("C-Wheel / C-x C-+/−/0" "Per-pane Browser View Text Zoom across folders & layouts")
                     ("C-M-+ / C-M-- / C-M-0" "Icons Grid Thumbnail Size")
                     ("10xer: J / K" "Scroll Preview Window Down / Up"))
                    ("PANES, TERMINAL & TABS"

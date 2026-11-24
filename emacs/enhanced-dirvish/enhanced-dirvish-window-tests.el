@@ -497,14 +497,21 @@ sidebar (28 -> 14 columns), because the split halved the whole browser."
           (should (equal (directory-file-name (expand-file-name default-directory))
                          (directory-file-name deep)))
           (should (= (funcall scale-of (selected-window)) 2))
-          ;; In `columns` layout, the Miller parent pane shares browser text zoom too.
+          ;; In `columns` layout, the Miller parent pane keeps its own independent zoom.
           (when (eq mode 'columns)
             (when-let* ((pwin (cl-find-if
                                (lambda (w)
                                  (with-current-buffer (window-buffer w)
                                    (derived-mode-p 'dirvish-directory-view-mode)))
                                (window-list))))
-              (should (= (funcall scale-of pwin) 2))))
+              (should (= (funcall scale-of pwin) 0))
+              (with-selected-window pwin
+                (execute-kbd-macro (kbd "C-x C-+"))
+                (should (= (funcall scale-of pwin) 1)))
+              (should (= (funcall scale-of (selected-window)) 2))
+              (with-selected-window pwin
+                (execute-kbd-macro (kbd "C-x C-0"))
+                (should (= (funcall scale-of pwin) 0)))))
           ;; Mouse Back (`<mouse-8>`) returns through `literature/` to `directory` keeping zoom.
           (dotimes (_ 2)
             (let ((ev `(mouse-8 (,(selected-window) 1 (10 . 10) 0))))
@@ -537,6 +544,80 @@ sidebar (28 -> 14 columns), because the split halved the whole browser."
             (let ((last-input-event back))
               (enhanced-dirvish-mouse-history-back back)))
           (should (= (funcall scale-of (selected-window)) 0)))))))
+
+(ert-deftest enhanced-dirvish-test-window-split-panes-zoom-independently ()
+  "Each split pane owns and persists its own zoom across navigation and restarts."
+  (dolist (mode '(compact icons list))
+    (ert-info ((format "split-zoom-%s" mode))
+      (enhanced-dirvish-window-test--with-browser mode
+        (let* ((sub1 (expand-file-name "literature" directory))
+               (deep1 (expand-file-name "deep1" sub1))
+               (sub2 (expand-file-name "pane2-dir" directory))
+               (deep2 (expand-file-name "deep2" sub2))
+               (scale-of (lambda (win)
+                           (with-current-buffer (window-buffer win)
+                             (if (bound-and-true-p text-scale-mode)
+                                 text-scale-mode-amount
+                               0)))))
+          (make-directory deep1 t)
+          (make-directory deep2 t)
+          (setf (enhanced-dirvish-prefs-restore-tabs (enhanced-dirvish-prefs)) t)
+          (call-interactively (key-binding (kbd "<f3>")))
+          (let* ((tab (enhanced-dirvish-active-tab))
+                 (p1 (enhanced-dirvish-tab-state-pane1 tab))
+                 (p2 (enhanced-dirvish-tab-state-pane2 tab))
+                 (w1 (enhanced-dirvish-pane-state-window p1))
+                 (w2 (enhanced-dirvish-pane-state-window p2)))
+            (should (window-live-p w1))
+            (should (window-live-p w2))
+            ;; Move Pane 2 into `sub2' first so Dired buffers do not collide either.
+            (select-window w2)
+            (enhanced-dirvish-panes--sync-active-pane-from-window w2)
+            (enhanced-dirvish-open-location sub2 t)
+            ;; Zoom Pane 1 via C-x C-+ twice: Pane 2 must remain unzoomed (0).
+            (select-window w1)
+            (enhanced-dirvish-panes--sync-active-pane-from-window w1)
+            (execute-kbd-macro (kbd "C-x C-+ +"))
+            (should (= (funcall scale-of w1) 2))
+            (should (= (funcall scale-of w2) 0))
+            ;; Navigate Pane 1 into `sub1' and Back via `<mouse-8>': Pane 1 keeps 2, Pane 2 stays 0.
+            (enhanced-dirvish-goto-file sub1)
+            (let ((click `(mouse-1 (,w1 ,(point) (20 . 20) 0) 1)))
+              (let ((last-input-event click)) (enhanced-dirvish-mouse-click-entry click)))
+            (should (= (funcall scale-of w1) 2))
+            (should (= (funcall scale-of w2) 0))
+            (let ((back `(mouse-8 (,w1 1 (10 . 10) 0))))
+              (let ((last-input-event back)) (enhanced-dirvish-mouse-history-back back)))
+            (should (= (funcall scale-of w1) 2))
+            (should (= (funcall scale-of w2) 0))
+            ;; Hover-zoom Pane 2 via `C-wheel-up' while Pane 1 is still selected: Pane 1 stays 2!
+            (let* ((wheel-fn (key-binding [C-wheel-up]))
+                   (ev `(C-wheel-up (,w2 ,(with-current-buffer (window-buffer w2) (point-min)) (10 . 10) 0))))
+              (let ((last-input-event ev)) (funcall wheel-fn ev)))
+            (should (= (funcall scale-of w2) 1))
+            (should (= (funcall scale-of w1) 2))
+            ;; Navigate inside Pane 2 (`mouse-1` into `deep2' and `<mouse-8>` Back): Pane 2 keeps 1, Pane 1 keeps 2.
+            (select-window w2)
+            (enhanced-dirvish-goto-file deep2)
+            (let ((click `(mouse-1 (,w2 ,(point) (20 . 20) 0) 1)))
+              (let ((last-input-event click)) (enhanced-dirvish-mouse-click-entry click)))
+            (should (= (funcall scale-of w2) 1))
+            (should (= (funcall scale-of w1) 2))
+            (let ((back `(mouse-8 (,w2 1 (10 . 10) 0))))
+              (let ((last-input-event back)) (enhanced-dirvish-mouse-history-back back)))
+            (should (= (funcall scale-of w2) 1))
+            (should (= (funcall scale-of w1) 2))
+            ;; Tab save/load preserves each pane's scale independently.
+            (enhanced-dirvish-tabs-save)
+            (setq enhanced-dirvish-workspace-tabs nil)
+            (enhanced-dirvish-tabs-load)
+            (let ((restored (enhanced-dirvish-active-tab)))
+              (should (= (enhanced-dirvish-pane-state-text-scale
+                          (enhanced-dirvish-tab-state-pane1 restored))
+                         2))
+              (should (= (enhanced-dirvish-pane-state-text-scale
+                          (enhanced-dirvish-tab-state-pane2 restored))
+                         1)))))))))
 
 (provide 'enhanced-dirvish-window-tests)
 ;;; enhanced-dirvish-window-tests.el ends here

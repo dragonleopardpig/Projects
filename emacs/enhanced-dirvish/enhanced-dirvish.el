@@ -338,6 +338,7 @@ advice and Dirvish settings, and the keys of
                    dirvish-special-preview-mode-map))
       (when (boundp map) (enhanced-dirvish-mouse-install-history-bindings (symbol-value map))))
     (add-hook 'dirvish-directory-view-mode-hook #'enhanced-dirvish--dirview-setup)
+    (add-hook 'window-buffer-change-functions #'enhanced-dirvish-view--on-window-buffer-change)
     (advice-add 'dirvish-post-command-h :around #'enhanced-dirvish-view--dirvish-post-command)
     (when (fboundp 'dirvish--create-parent-buffer)
       (advice-add 'dirvish--create-parent-buffer :filter-return #'enhanced-dirvish--parent-buffer-filter))

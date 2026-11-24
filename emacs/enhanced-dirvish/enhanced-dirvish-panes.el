@@ -40,6 +40,8 @@
   (view-mode nil)
   (buffer nil)
   (window nil)
+  (text-scale 0)
+  (parent-text-scale 0)
   (history-back nil)
   (history-fwd nil)
   (terminal-buf nil)
@@ -83,7 +85,9 @@
            (d (if (enhanced-dirvish-valid-location-p pref-dir)
                   pref-dir
                 (expand-file-name "~/")))
-           (p1 (make-enhanced-dirvish-pane-state :id 1 :dir d))
+           (p1 (make-enhanced-dirvish-pane-state
+                :id 1 :dir d
+                :text-scale (or (enhanced-dirvish-prefs-browser-text-scale (enhanced-dirvish-prefs)) 0)))
            (tab (make-enhanced-dirvish-tab-state :id (cl-incf enhanced-dirvish-next-tab-id)
                                        :label (let ((nm (file-name-nondirectory
                                                          (directory-file-name d))))
@@ -119,6 +123,18 @@
       (setf (enhanced-dirvish-pane-state-buffer pane) buffer
             (enhanced-dirvish-pane-state-window pane) window))))
 
+(defun enhanced-dirvish-panes--get-zoom (pane &optional parent-p)
+  "Return stored text zoom step for PANE (or its parent pane with PARENT-P)."
+  (if parent-p
+      (or (enhanced-dirvish-pane-state-parent-text-scale pane) 0)
+    (or (enhanced-dirvish-pane-state-text-scale pane) 0)))
+
+(defun enhanced-dirvish-panes--set-zoom (pane scale &optional parent-p)
+  "Store SCALE on PANE (or its parent pane when PARENT-P) cleanly."
+  (if parent-p
+      (setf (enhanced-dirvish-pane-state-parent-text-scale pane) scale)
+    (setf (enhanced-dirvish-pane-state-text-scale pane) scale)))
+
 (defun enhanced-dirvish-other-pane ()
   "Return the inactive `enhanced-dirvish-pane-state' when split is open, or nil."
   (let ((tab (enhanced-dirvish-active-tab)))
@@ -141,9 +157,10 @@
 (defun enhanced-dirvish-panes--pane-for-window (win)
   "Return the pane owning browser or embedded terminal window WIN."
   (or (and (window-live-p win)
-           (memq (window-parameter win 'enhanced-dirvish-window-role) '(index terminal))
+           (or (memq (window-parameter win 'enhanced-dirvish-window-role) '(index parent terminal))
+               (enhanced-dirvish-panes--valid-main-window-p win))
            (window-parameter win 'enhanced-dirvish-window-pane))
-      (when (and (enhanced-dirvish-split-active-p)
+      (when (and (consp enhanced-dirvish-workspace-tabs)
                  (enhanced-dirvish-panes--valid-main-window-p win))
         (let* ((tab (enhanced-dirvish-active-tab))
                (p1 (enhanced-dirvish-tab-state-pane1 tab))
@@ -155,9 +172,11 @@
                (wbuf (window-buffer win)))
           (cond
            ((and p1 (eq win w1)) p1)
-           ((and p2 (eq win w2)) p2)
-           ((and p1 (not (window-live-p w1)) (not (eq b1 b2)) (eq wbuf b1)) p1)
-           ((and p2 (not (window-live-p w2)) (not (eq b1 b2)) (eq wbuf b2)) p2))))))
+           ((and p2 (enhanced-dirvish-tab-state-split-p tab) (eq win w2)) p2)
+           ((and p1 (enhanced-dirvish-split-active-p)
+                 (not (window-live-p w1)) (not (eq b1 b2)) (eq wbuf b1)) p1)
+           ((and p2 (enhanced-dirvish-split-active-p)
+                 (not (window-live-p w2)) (not (eq b1 b2)) (eq wbuf b2)) p2))))))
 
 (defun enhanced-dirvish-panes--sync-active-pane-from-window (&optional win)
   "Sync active split pane to match main browser WIN (default `selected-window')."
@@ -383,6 +402,9 @@ Esc to cancel): Emacs would otherwise freeze on its first look inside."
                    (not (eq (selected-window) (enhanced-dirvish-pane-state-window pane)))))
       (when-let ((main-win (enhanced-dirvish-panes--main-window pane)))
         (select-window main-win)))
+    (when (enhanced-dirvish-panes--valid-main-window-p (selected-window))
+      (setf (enhanced-dirvish-pane-state-window pane) (selected-window))
+      (set-window-parameter (selected-window) 'enhanced-dirvish-window-pane pane))
     (cond
      ((string= resolved "computer:///")
       (enhanced-dirvish--flatten-layout)
@@ -443,8 +465,9 @@ Esc to cancel): Emacs would otherwise freeze on its first look inside."
           (user-error "Location does not exist: %s" resolved)))))
     (setf (enhanced-dirvish-pane-state-buffer pane) (current-buffer)
           (enhanced-dirvish-pane-state-window pane) (selected-window))
+    (when (enhanced-dirvish-panes--valid-main-window-p (selected-window))
+      (set-window-parameter (selected-window) 'enhanced-dirvish-window-pane pane))
     (enhanced-dirvish-view--install-browser-text-zoom)
-    (enhanced-dirvish-view--sync-live-browser-text-scales (current-buffer))
     (ignore record-history)
     (enhanced-dirvish-tabs-save)
     (unless (enhanced-dirvish-sidebar-ensure)
@@ -687,13 +710,20 @@ Keeps shell process & CWD alive while hidden."
                                0)
                      :tabs (mapcar (lambda (tab)
                                      (list :dir (enhanced-dirvish-tab-state-dir tab)
+                                           :pane1-text-scale (and (enhanced-dirvish-tab-state-pane1 tab)
+                                                                  (enhanced-dirvish-pane-state-text-scale
+                                                                   (enhanced-dirvish-tab-state-pane1 tab)))
                                            :split-p (and (enhanced-dirvish-tab-state-split-p tab)
                                                          (enhanced-dirvish-tab-state-pane2 tab)
                                                          t)
                                            :pane2-dir (and (enhanced-dirvish-tab-state-split-p tab)
                                                            (enhanced-dirvish-tab-state-pane2 tab)
                                                            (enhanced-dirvish-pane-state-dir
-                                                            (enhanced-dirvish-tab-state-pane2 tab)))))
+                                                            (enhanced-dirvish-tab-state-pane2 tab)))
+                                           :pane2-text-scale (and (enhanced-dirvish-tab-state-split-p tab)
+                                                                  (enhanced-dirvish-tab-state-pane2 tab)
+                                                                  (enhanced-dirvish-pane-state-text-scale
+                                                                   (enhanced-dirvish-tab-state-pane2 tab)))))
                                    live))
                (current-buffer))
         (insert "\n")))))
@@ -732,9 +762,18 @@ Keeps shell process & CWD alive while hidden."
                              ;; choice); F3 reopens pane 2 where it was.
                              :split-p nil
                              :active-pane 1
-                             :pane1 (make-enhanced-dirvish-pane-state :id 1 :dir d)
+                             :pane1 (make-enhanced-dirvish-pane-state
+                                     :id 1 :dir d
+                                     :text-scale (or (plist-get entry :pane1-text-scale)
+                                                     (and (= i 0)
+                                                          (or (enhanced-dirvish-prefs-browser-text-scale
+                                                               (enhanced-dirvish-prefs))
+                                                              0))
+                                                     0))
                              :pane2 (when has-split
-                                      (make-enhanced-dirvish-pane-state :id 2 :dir p2d)))
+                                      (make-enhanced-dirvish-pane-state
+                                       :id 2 :dir p2d
+                                       :text-scale (or (plist-get entry :pane2-text-scale) 0))))
                             live)
                       (cl-incf i))))
                 (setq enhanced-dirvish-workspace-tabs (nreverse live)
