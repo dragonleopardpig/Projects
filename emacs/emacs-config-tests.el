@@ -22,6 +22,8 @@
 (declare-function pdf-cache--data-get "pdf-cache" (key &optional page))
 (declare-function pdf-info-getannots "pdf-info" (&optional pages file-or-buffer))
 (declare-function my/pdf-prefetch-pages-forward "init-documents" ())
+(declare-function my/study--open-right-window "init-study" ())
+(declare-function my/study--root-columns "init-study" ())
 
 (defconst my/test-emacs-dir
   (file-name-directory (or load-file-name buffer-file-name))
@@ -415,6 +417,28 @@
         (with-current-buffer buffer (set-buffer-modified-p nil))
         (kill-buffer buffer))
       (delete-directory dir t))))
+
+(ert-deftest my/test-study-pane-preserves-two-pane-layout ()
+  "Opening the Study AI pane adds a balanced rightmost column and dividers."
+  (should (bound-and-true-p window-divider-mode))
+  (should (>= window-divider-default-right-width 4))
+  (save-window-excursion
+    (set-frame-size (selected-frame) 180 40)
+    (delete-other-windows)
+    (let* ((left (selected-window))
+           (right (split-window-right))
+           (ai nil))
+      (select-window left)
+      (should (= (my/study--root-columns) 2))
+      (setq ai (my/study--open-right-window))
+      (should (window-live-p ai))
+      (should (= (my/study--root-columns) 3))
+      (should (<= 55 (window-total-width left) 65))
+      (should (<= 55 (window-total-width right) 65))
+      (should (<= 55 (window-total-width ai) 65))
+      (should (< (nth 2 (window-edges right)) (nth 2 (window-edges ai))))
+      (should (> (window-resizable left 10 t) 0))
+      (should (< (window-resizable ai -10 t) 0)))))
 
 (provide 'emacs-config-tests)
 ;;; emacs-config-tests.el ends here

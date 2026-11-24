@@ -242,10 +242,13 @@
                               (when (process-live-p proc)
                                 (delete-process proc))))))
   (when (buffer-live-p my/study--webkit-buffer)
-    (let ((kill-buffer-query-functions
+    (let ((win (get-buffer-window my/study--webkit-buffer t))
+          (kill-buffer-query-functions
            (delq 'xwidget-kill-buffer-query-function
                  (copy-sequence kill-buffer-query-functions))))
-      (kill-buffer my/study--webkit-buffer)))
+      (kill-buffer my/study--webkit-buffer)
+      (when (and (window-live-p win) (not (one-window-p t)))
+        (delete-window win))))
   (setq my/study--webkit-buffer nil))
 
 (add-hook 'kill-emacs-hook
@@ -255,26 +258,56 @@
 
 ;;;; The WebKit pane
 
-(defun my/study--display-action ()
-  "Return the `display-buffer' action placing the pane on the right."
-  (cons '(display-buffer-in-direction)
-        `((direction . right) (window-width . ,my/study-pane-width))))
+(defun my/study--count-columns (win)
+  "Count horizontal leaf columns spanned by window tree node WIN."
+  (let ((left (window-left-child win)))
+    (if (not left)
+        1
+      (let ((total 0))
+        (while left
+          (setq total (+ total (my/study--count-columns left))
+                left (window-next-sibling left)))
+        total))))
+
+(defun my/study--root-columns ()
+  "Return the number of top-level horizontal window columns on the frame."
+  (my/study--count-columns (frame-root-window)))
+
+(defun my/study--open-right-window ()
+  "Open a right-hand Study AI pane sized evenly alongside existing panes."
+  (let* ((root (frame-root-window))
+         (cols (my/study--root-columns))
+         (frac (if (> cols 1)
+                   (min my/study-pane-width (/ 1.0 (1+ cols)))
+                 my/study-pane-width))
+         (total (window-total-width root))
+         (target (max window-min-width
+                      (min (round (* total frac))
+                           (- total window-min-width)))))
+    (or (ignore-errors (split-window root (- target) 'right))
+        (split-window (selected-window) nil 'right))))
 
 (defun my/study--show-pane ()
-  "Show the Study AI pane, creating the WebKit session when necessary."
+  "Show the Study AI pane on the right without crushing existing panes."
   (unless (and (fboundp 'xwidget-webkit-browse-url) (display-graphic-p))
     (user-error "The Study AI pane needs a graphical Emacs with xwidgets"))
-  (if (buffer-live-p my/study--webkit-buffer)
-      (unless (get-buffer-window my/study--webkit-buffer t)
-        (display-buffer my/study--webkit-buffer (my/study--display-action)))
-    (let ((display-buffer-overriding-action (my/study--display-action))
-          (switch-to-buffer-obey-display-actions t))
-      (xwidget-webkit-browse-url (my/study--url) t))
-    (let ((xwidget (xwidget-webkit-last-session)))
-      (setq my/study--webkit-buffer (and xwidget (xwidget-buffer xwidget))))
-    (when (and (buffer-live-p my/study--webkit-buffer)
-               (not (get-buffer-window my/study--webkit-buffer t)))
-      (display-buffer my/study--webkit-buffer (my/study--display-action)))))
+  (cond
+   ((and (buffer-live-p my/study--webkit-buffer)
+         (get-buffer-window my/study--webkit-buffer t))
+    nil)
+   ((buffer-live-p my/study--webkit-buffer)
+    (set-window-buffer (my/study--open-right-window) my/study--webkit-buffer))
+   (t
+    (let ((win (my/study--open-right-window)))
+      (with-selected-window win
+        (let ((switch-to-buffer-obey-display-actions nil)
+              (display-buffer-overriding-action nil))
+          (xwidget-webkit-browse-url (my/study--url) t)))
+      (let ((xwidget (xwidget-webkit-last-session)))
+        (setq my/study--webkit-buffer (and xwidget (xwidget-buffer xwidget))))
+      (when (and (buffer-live-p my/study--webkit-buffer)
+                 (not (get-buffer-window my/study--webkit-buffer t)))
+        (set-window-buffer win my/study--webkit-buffer))))))
 
 ;;;###autoload
 (defun my/study-open ()
