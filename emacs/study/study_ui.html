@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emacs Study AI</title>
+<link rel="stylesheet" href="/assets/katex/katex.min.css">
+<style>
+:root {
+  --bg: #fbfbf8; --fg: #1f2328; --accent: #1a5fb4; --muted: #6a7078;
+  --panel: rgba(127,127,127,.08); --border: rgba(127,127,127,.28); --zoom: 1;
+  --code-bg: rgba(127,127,127,.12);
+}
+:root[data-mode="dark"] { --bg: #20242c; --fg: #e6e9ef; --accent: #64baff; --muted: #9aa3b0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+  font: 15px/1.55 "Charis SIL", "Source Serif 4", Georgia, serif; }
+body { display: flex; flex-direction: column; }
+button, select, textarea { font: inherit; color: inherit; }
+button { background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  padding: 3px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+select { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); font: 13px/1.3 system-ui, sans-serif; }
+header .spacer { flex: 1; }
+.badge { padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
+  max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tray { margin: 8px 12px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); font: 13px/1.4 system-ui, sans-serif; display: none; }
+#tray .row { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+#tray .excerpt { max-height: 6em; overflow: auto; white-space: pre-wrap; color: var(--muted); }
+#tray img.snap { max-width: 100%; max-height: 180px; margin-top: 6px; cursor: zoom-in;
+  background: #fff; border-radius: 4px; }
+#transcript { flex: 1; overflow: auto; padding: 8px 16px 24px; font-size: calc(15px * var(--zoom)); }
+.turn { margin: 14px 0; }
+.turn .who { font: 600 12px system-ui, sans-serif; color: var(--accent); text-transform: uppercase;
+  letter-spacing: .04em; margin-bottom: 2px; }
+.turn.user .body { white-space: pre-wrap; }
+.turn .actions { margin-top: 6px; display: flex; gap: 6px; font: 12px system-ui, sans-serif; }
+.error { color: #c01c28; font-family: system-ui, sans-serif; }
+.streaming { white-space: pre-wrap; color: var(--muted); }
+.body table { border-collapse: collapse; margin: 8px 0; }
+.body th, .body td { border: 1px solid var(--border); padding: 3px 10px; }
+.body code { background: var(--code-bg); padding: 0 3px; border-radius: 3px; font-size: .9em; }
+.code-block { position: relative; margin: 8px 0; }
+.code-block pre { background: var(--code-bg); padding: 8px 10px; border-radius: 6px; overflow: auto; margin: 0; }
+.code-block pre code { background: none; padding: 0; }
+.copy-btn { position: absolute; right: 6px; top: 6px; font-size: 11px; padding: 0 6px; opacity: .7; }
+.math-display { overflow-x: auto; overflow-y: hidden; text-align: center; margin: 6px 0; }
+.vector-figure { margin: 10px auto; text-align: center; cursor: zoom-in; }
+.vector-figure svg { max-width: 100%; height: auto; background: transparent; }
+.codehilite .k, .codehilite .kn, .codehilite .kd { color: #a626a4; }
+.codehilite .s, .codehilite .s1, .codehilite .s2 { color: #50a14f; }
+.codehilite .c, .codehilite .c1, .codehilite .cm { color: var(--muted); font-style: italic; }
+.codehilite .m, .codehilite .mi, .codehilite .mf { color: #986801; }
+.codehilite .nf, .codehilite .nb { color: #4078f2; }
+footer { border-top: 1px solid var(--border); padding: 8px 12px; font: 13px system-ui, sans-serif; }
+#composer { display: flex; gap: 8px; align-items: flex-end; }
+#question { flex: 1; resize: none; min-height: 2.4em; max-height: 10em; padding: 6px 8px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+#status { color: var(--muted); min-height: 1.2em; margin-bottom: 4px; }
+#lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.82); display: none; z-index: 10;
+  overflow: auto; cursor: grab; }
+#lightbox .bar { position: fixed; top: 8px; right: 12px; display: flex; gap: 6px; z-index: 11; }
+#lightbox .stage { padding: 56px; min-width: 100%; min-height: 100%; display: flex;
+  align-items: center; justify-content: center; }
+#lightbox .stage > * { background: #fff; display: block; }
+</style>
+</head>
+<body>
+<header>
+  <select id="agent" title="AI agent"></select>
+  <span class="badge" id="target" title="Target Org file">no Org file</span>
+  <button id="chooseOrg">Choose Org…</button>
+  <span class="spacer"></span>
+  <button id="zoomOut" title="Zoom out (Ctrl+-)">−</button>
+  <button id="zoomReset" title="Reset zoom">100%</button>
+  <button id="zoomIn" title="Zoom in (Ctrl++)">+</button>
+  <button id="saveThread">Save Thread</button>
+  <button id="newChat">New Chat</button>
+</header>
+<section id="tray">
+  <div class="row"><button id="ctxSource" class="badge"></button><span class="spacer" style="flex:1"></span>
+    <button id="ctxClear">Clear</button></div>
+  <div class="excerpt" id="ctxText"></div>
+  <img class="snap" id="ctxSnap" alt="PDF snapshot" hidden>
+</section>
+<main id="transcript"></main>
+<footer>
+  <div id="status"></div>
+  <div id="composer">
+    <textarea id="question" rows="1" placeholder="Ask about the selection…  (Enter sends, Shift+Enter = newline)"></textarea>
+    <button id="send" class="primary">Send</button>
+  </div>
+</footer>
+<div id="lightbox"><div class="bar"><button id="lbOut">−</button><button id="lbIn">+</button>
+  <button id="lbClose">Close</button></div><div class="stage" id="lbStage"></div></div>
+<script>
+const TOKEN = new URLSearchParams(location.search).get('token') || '';
+const $ = (id) => document.getElementById(id);
+let state = null, zoom = Number(localStorage.getItem('study-zoom') || 100), savePending = {};
+let katexReady = false, streamingText = null;
+
+function api(path, body) {
+  return fetch(path, {method: body === undefined ? 'GET' : 'POST',
+    headers: {'X-Study-Token': TOKEN, 'Content-Type': 'application/json'},
+    body: body === undefined ? undefined : JSON.stringify(body)}).then((r) => r.json());
+}
+const snipUrl = (name) => '/api/snip/' + encodeURIComponent(name) + '?token=' + TOKEN;
+
+// ---- KaTeX (vector web fonts, fully offline) --------------------------
+const script = document.createElement('script');
+script.src = '/assets/katex/katex.min.js';
+script.onload = () => { katexReady = true; typeset(document.body); };
+document.head.appendChild(script);
+
+function typeset(root) {
+  if (!katexReady || !window.katex) return;
+  root.querySelectorAll('.math-display:not([data-done]), .math-inline:not([data-done])').forEach((el) => {
+    const display = el.classList.contains('math-display');
+    let tex = el.textContent.trim();
+    tex = tex.replace(/^\\[\[(]/, '').replace(/\\[\])]$/, '');
+    try {
+      window.katex.render(tex, el, {displayMode: display, throwOnError: false, strict: 'ignore', trust: false});
+    } catch (e) { /* leave source text visible */ }
+    el.dataset.done = '1';
+  });
+}
+
+// ---- rendering --------------------------------------------------------
+function applyTheme(theme) {
+  const root = document.documentElement;
+  const mode = theme.mode === 'dark' || theme.mode === 'light' ? theme.mode : (
+    matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  root.dataset.mode = mode;
+  if (theme.bg) root.style.setProperty('--bg', theme.bg);
+  if (theme.fg) root.style.setProperty('--fg', theme.fg);
+  if (theme.accent) root.style.setProperty('--accent', theme.accent);
+}
+function scaleVectorFigures() {
+  document.querySelectorAll('.vector-figure svg').forEach((svg) => {
+    if (!svg.dataset.baseW) {
+      const vb = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal.width : 0;
+      const attrW = parseFloat(svg.getAttribute('width')) || 0;
+      svg.dataset.baseW = vb || attrW || svg.getBoundingClientRect().width || 480;
+    }
+    const scaled = Math.round(Number(svg.dataset.baseW) * (zoom / 100));
+    svg.style.width = scaled + 'px';
+    svg.style.maxWidth = '100%';
+    svg.style.height = 'auto';
+  });
+}
+function applyZoom() {
+  zoom = Math.max(60, Math.min(260, zoom));
+  document.documentElement.style.setProperty('--zoom', zoom / 100);
+  $('zoomReset').textContent = zoom + '%';
+  scaleVectorFigures();
+  localStorage.setItem('study-zoom', zoom);
+}
+function renderHeader() {
+  const agent = $('agent');
+  agent.innerHTML = '';
+  Object.entries(state.agents).forEach(([key, info]) => {
+    const option = new Option(info.label + (info.available ? '' : ' (not installed)'), key);
+    option.disabled = !info.available;
+    agent.add(option);
+  });
+  agent.value = state.agent;
+  $('target').textContent = state.target_org ? state.target_org.split('/').slice(-2).join('/') : 'no Org file';
+  $('target').title = state.target_org || 'Choose a target Org file';
+  applyTheme(state.theme || {});
+}
+function renderContext() {
+  const ctx = state.context, tray = $('tray');
+  tray.style.display = ctx ? 'block' : 'none';
+  if (!ctx) return;
+  $('ctxSource').textContent = ctx.book ? ctx.book + (ctx.page ? ' · p.' + ctx.page : '') : 'selection';
+  $('ctxSource').title = 'Open in Sioyek';
+  $('ctxText').textContent = ctx.text || '';
+  $('ctxText').style.display = ctx.text ? 'block' : 'none';
+  const snap = $('ctxSnap'), name = ctx.svg || ctx.png;
+  snap.hidden = !name;
+  if (name) snap.src = snipUrl(name);
+}
+function renderTranscript(scroll) {
+  const box = $('transcript');
+  box.innerHTML = '';
+  state.turns.forEach((turn) => {
+    const div = document.createElement('div');
+    div.className = 'turn ' + turn.role;
+    const who = document.createElement('div');
+    who.className = 'who';
+    who.textContent = turn.role === 'user' ? 'You' : (turn.label || 'Assistant');
+    const body = document.createElement('div');
+    body.className = 'body';
+    if (turn.role === 'user') body.textContent = turn.md;
+    else if (turn.error) { body.className = 'body error'; body.textContent = turn.error; }
+    else body.innerHTML = turn.html;
+    div.append(who, body);
+    if (turn.role === 'assistant' && !turn.error) {
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const save = document.createElement('button');
+      save.textContent = savePending[turn.id] || 'Save to Org';
+      save.onclick = () => saveToOrg({turn_id: turn.id}, turn.id, save);
+      const copy = document.createElement('button');
+      copy.textContent = 'Copy MD';
+      copy.onclick = () => navigator.clipboard.writeText(turn.md).then(() => { copy.textContent = 'Copied'; });
+      actions.append(save, copy);
+      div.append(actions);
+    }
+    box.append(div);
+  });
+  if (state.busy) {
+    const wait = document.createElement('div');
+    wait.className = 'turn';
+    wait.innerHTML = '<div class="who">Thinking…</div><div class="body streaming" id="stream"></div>';
+    box.append(wait);
+    if (streamingText) $('stream').textContent = streamingText;
+  }
+  typeset(box);
+  scaleVectorFigures();
+  $('send').textContent = state.busy ? 'Cancel' : 'Send';
+  if (scroll) box.scrollTop = box.scrollHeight;
+}
+function saveToOrg(body, key, button) {
+  savePending[key || 'thread'] = 'Saving…';
+  button.textContent = 'Saving…';
+  api('/api/save-org', body).then((reply) => {
+    if (!reply.ok) { button.textContent = 'Failed'; $('status').textContent = reply.error; }
+    else setTimeout(() => { if (button.textContent === 'Saving…') button.textContent = 'Sent to Emacs'; }, 8000);
+  });
+}
+async function refresh(scroll) {
+  state = await api('/api/state');
+  renderHeader(); renderContext(); renderTranscript(scroll);
+}
+
+// ---- lightbox (resizes the vector, so it never blurs) -------------------
+let lbElement = null, lbBase = 0, lbZoom = 1;
+function openLightbox(source) {
+  const stage = $('lbStage');
+  stage.innerHTML = '';
+  lbElement = source.cloneNode(true);
+  lbElement.removeAttribute('hidden');
+  stage.append(lbElement);
+  $('lightbox').style.display = 'block';
+  lbZoom = 1;
+  requestAnimationFrame(() => {
+    const natural = lbElement.getBoundingClientRect().width || 600;
+    lbBase = Math.min(natural, innerWidth - 120);
+    setLightboxZoom(1);
+  });
+}
+function setLightboxZoom(value) {
+  lbZoom = Math.max(0.5, Math.min(8, value));
+  if (lbElement) { lbElement.style.maxWidth = 'none'; lbElement.style.width = (lbBase * lbZoom) + 'px'; lbElement.style.height = 'auto'; }
+}
+
+// ---- events -----------------------------------------------------------
+$('send').onclick = () => {
+  if (state && state.busy) { api('/api/cancel', {}); return; }
+  const text = $('question').value.trim();
+  if (!text) return;
+  $('question').value = '';
+  streamingText = null;
+  $('status').textContent = '';
+  api('/api/chat', {question: text}).then((reply) => { if (!reply.ok) $('status').textContent = reply.error; });
+};
+$('question').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('send').click(); }
+});
+$('question').addEventListener('input', (e) => {
+  e.target.style.height = 'auto';
+  e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
+});
+$('agent').onchange = (e) => api('/api/agent', {agent: e.target.value});
+$('chooseOrg').onclick = () => api('/api/choose-org', {});
+$('newChat').onclick = () => api('/api/reset', {});
+$('saveThread').onclick = (e) => saveToOrg({thread: true}, null, e.target);
+$('ctxClear').onclick = () => api('/api/context/clear', {});
+$('ctxSource').onclick = () => state.context && state.context.file &&
+  api('/api/open-sioyek', {file: state.context.file, page: state.context.page});
+$('ctxSnap').onclick = (e) => openLightbox(e.target);
+$('zoomIn').onclick = () => { zoom += 10; applyZoom(); };
+$('zoomOut').onclick = () => { zoom -= 10; applyZoom(); };
+$('zoomReset').onclick = () => { zoom = 100; applyZoom(); };
+$('lbIn').onclick = () => setLightboxZoom(lbZoom * 1.25);
+$('lbOut').onclick = () => setLightboxZoom(lbZoom / 1.25);
+$('lbClose').onclick = () => { $('lightbox').style.display = 'none'; };
+$('lightbox').addEventListener('wheel', (e) => {
+  if (e.ctrlKey || e.metaKey) { e.preventDefault(); setLightboxZoom(lbZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }
+}, {passive: false});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('lbClose').click(); });
+document.addEventListener('wheel', (e) => {
+  if ((e.ctrlKey || e.metaKey) && $('lightbox').style.display !== 'block') {
+    e.preventDefault(); zoom += e.deltaY < 0 ? 10 : -10; applyZoom();
+  }
+}, {passive: false});
+$('transcript').addEventListener('click', (e) => {
+  const copy = e.target.closest('.copy-btn');
+  if (copy) {
+    navigator.clipboard.writeText(copy.parentElement.querySelector('pre').innerText);
+    copy.textContent = 'Copied';
+    return;
+  }
+  const fig = e.target.closest('.vector-figure');
+  if (fig) openLightbox(fig.querySelector('svg'));
+});
+
+const events = new EventSource('/api/events?token=' + TOKEN);
+['context', 'turn', 'reset', 'target', 'theme', 'agent'].forEach((name) =>
+  events.addEventListener(name, () => { if (name !== 'turn') streamingText = null; refresh(name === 'turn' || name === 'reset'); }));
+events.addEventListener('chunk', (e) => {
+  streamingText = JSON.parse(e.data).text;
+  const stream = $('stream');
+  if (stream) { stream.textContent = streamingText; $('transcript').scrollTop = $('transcript').scrollHeight; }
+});
+events.addEventListener('saved', (e) => {
+  const info = JSON.parse(e.data);
+  $('status').textContent = info.ok ? '✓ Saved to ' + (info.file || 'Org file') : 'Save failed: ' + (info.error || '');
+  document.querySelectorAll('.actions button').forEach((b) => { if (b.textContent === 'Saving…' || b.textContent === 'Sent to Emacs') b.textContent = info.ok ? '✓ Saved' : 'Failed'; });
+});
+applyZoom();
+refresh(true);
+</script>
+</body>
+</html>

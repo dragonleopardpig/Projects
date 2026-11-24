@@ -20,6 +20,11 @@ let
     epc orjson sexpdata six setuptools paramiko rapidfuzz watchdog packaging
   ]);
 
+  # Python runtime for the Emacs Study AI workbench & Sioyek vector bridge.
+  emacsStudyPython = pkgs.python3.withPackages (ps: with ps; [
+    pymupdf markdown-it-py mdit-py-plugins pygments pillow
+  ]);
+
   # Precompiled Tree-sitter grammars and syntax highlighting queries for Lapce.
   # Lapce 0.4.6 attempts to download grammars from GitHub releases matching its version (v0.4.6),
   # but tree-sitter-grammars releases only exist up to v0.4.5+1f9f9dd, causing syntax highlighting
@@ -558,6 +563,10 @@ in
     # Save a cropped PNG and make it available to Ask AI.
     snip_document s
     ask_ai_choose_agent <C-A>
+
+    # Bridge selections and dragged vector snapshots to Emacs Study AI Workbench.
+    _emacs_send_text E
+    _emacs_send_rect S
   '';
 
   # Sioyek reads a prefs_user.config from both ~/.local/share/sioyek and
@@ -599,6 +608,10 @@ in
     # QProcess with an argv list, not a shell, so %{file_path} survives spaces
     # in the filename without quoting.
     new_command _snip sioyek-snip %{selected_rect} %{file_path}
+
+    # Send selected text or a dragged vector PDF region straight to Emacs Study AI.
+    new_command _emacs_send_text sioyek-to-emacs --mode text --file=%{file_path} --page %{page_number} --text=%{selected_text}
+    new_command _emacs_send_rect sioyek-to-emacs --mode rect --file=%{file_path} --rect=%{selected_rect}
 
     # sioyek-python-extensions. These act on the *running* instance over its
     # local socket, so they see the document you have open.
@@ -3041,6 +3054,32 @@ in
     text = ''
       #!${pkgs.runtimeShell}
       exec ${lspBridgePython}/bin/python3 "$@"
+    '';
+  };
+
+  # Emacs Study AI workbench backend Python, offline KaTeX bundle, and Sioyek bridge.
+  home.file.".local/bin/emacs-study-python" = {
+    executable = true;
+    force = true;
+    text = ''
+      #!${pkgs.runtimeShell}
+      exec ${emacsStudyPython}/bin/python3 "$@"
+    '';
+  };
+
+  home.file.".local/share/emacs-study/katex" = {
+    source = "${pkgs.katex}/lib/node_modules/katex/dist";
+    force = true;
+  };
+
+  home.file.".local/bin/sioyek-to-emacs" = {
+    executable = true;
+    force = true;
+    text = ''
+      #!/usr/bin/env bash
+      set -euo pipefail
+      export PATH="$HOME/.local/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin:${pkgs.djvulibre}/bin:${pkgs.libnotify}/bin:${pkgs.pandoc}/bin:$PATH"
+      exec ${emacsStudyPython}/bin/python3 "$HOME/Projects/emacs/study/sioyek-to-emacs.py" "$@"
     '';
   };
 

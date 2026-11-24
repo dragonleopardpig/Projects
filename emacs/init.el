@@ -72,6 +72,7 @@ Appends rather than prepends so Nix-built packages always take precedence."
 (require 'init-programming)
 (require 'init-documents)
 (require 'init-ai)
+(require 'init-study)
 
 (provide 'init)
 ;;; init.el ends here

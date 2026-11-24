@@ -31,6 +31,7 @@
                   init-programming
                   init-documents
                   init-ai
+                  init-study
                   org-scimax-markup
                   org-scimax-latex
                   org-scimax-babel
@@ -91,6 +92,14 @@
   (should (eq (key-binding (kbd "C-c j")) #'my/jupyter-org-hydra/body))
   (should (eq (key-binding (kbd "s-j")) #'my/jupyter-org-hydra/body))
   (should (eq (key-binding (kbd "C-c e")) 'my/agent-map))
+  (should (eq (key-binding (kbd "C-c n")) 'my/study-map))
+  (should (eq (key-binding (kbd "C-c n o")) #'my/study-open))
+  (should (eq (key-binding (kbd "C-c n s")) #'my/study-send-region))
+  (should (eq (key-binding (kbd "C-c n a")) #'my/study-ask))
+  (should (eq (key-binding (kbd "C-c n t")) #'my/study-choose-target-org))
+  (should (eq (key-binding (kbd "C-c n g")) #'my/study-select-agent))
+  (should (eq (key-binding (kbd "C-c n h")) #'my/study-browse-sioyek-highlights))
+  (should (eq (key-binding (kbd "C-c n b")) #'my/study-import-book-highlights))
   (with-temp-buffer
     (org-mode)
     (should (eq (key-binding (kbd "C-c E")) #'my/editmarks-hydra/body))
@@ -277,6 +286,81 @@
       (let ((exec-path nil))
         (should (equal (my/jupyter-find-executable "/home/thinky/Projects/org")
                        org-jup))))))
+
+(ert-deftest my/test-study-sioyek-sqlite-and-org-insert ()
+  "Study AI reads a Sioyek-shaped SQLite pair and files Org notes cleanly."
+  (require 'org)
+  (let* ((dir (make-temp-file "study-test-" t))
+         (pdf (expand-file-name "book.pdf" dir))
+         (org-file (expand-file-name "notes.org" dir))
+         (buffer nil))
+    (unwind-protect
+        (progn
+          (with-temp-file pdf (insert "%PDF-1.4\n"))
+          (let ((db (sqlite-open (expand-file-name "local.db" dir))))
+            (sqlite-execute db "CREATE TABLE document_hash (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT, hash TEXT, UNIQUE(path, hash))")
+            (sqlite-execute db "INSERT INTO document_hash (path, hash) VALUES (?, ?)"
+                            (list "/gone/old-copy.pdf" "h1"))
+            (sqlite-execute db "INSERT INTO document_hash (path, hash) VALUES (?, ?)"
+                            (list pdf "h1"))
+            (sqlite-close db))
+          (let ((db (sqlite-open (expand-file-name "shared.db" dir))))
+            (sqlite-execute db "CREATE TABLE highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, document_path TEXT, desc TEXT, text_annot TEXT, type char, creation_time timestamp, begin_y real)")
+            (sqlite-execute db "CREATE TABLE bookmarks (id INTEGER PRIMARY KEY AUTOINCREMENT, document_path TEXT, desc TEXT, creation_time timestamp, offset_y real)")
+            (sqlite-execute db "INSERT INTO highlights (document_path, desc, text_annot, type, creation_time, begin_y) VALUES ('h1', 'Later  highlight', 'why?', 'a', '2026-01-01', 900.5)")
+            (sqlite-execute db "INSERT INTO highlights (document_path, desc, text_annot, type, creation_time, begin_y) VALUES ('h1', 'Early highlight', '', 'b', '2026-01-02', 100)")
+            (sqlite-execute db "INSERT INTO highlights (document_path, desc, text_annot, type, creation_time, begin_y) VALUES ('orphan', 'No such book', '', 'a', '2026-01-03', 5)")
+            (sqlite-execute db "INSERT INTO bookmarks (document_path, desc, creation_time, offset_y) VALUES ('h1', 'My note', '2026-01-04', 500)")
+            (sqlite-close db))
+          (let ((entries (my/study-sioyek-read-entries dir)))
+            (should (equal (mapcar (lambda (e) (plist-get e :text)) entries)
+                           '("Early highlight" "My note" "Later  highlight")))
+            (should (equal (plist-get (car entries) :file) pdf))
+            (should (eq (plist-get (nth 1 entries) :kind) 'note))
+            (should (equal (plist-get (nth 2 entries) :note) "why?"))
+            (should (equal (my/study--entry-line (nth 2 entries) 7)
+                           (format "- [[sioyek:%s::7][book.pdf · p.7]] Later highlight — why?\n"
+                                   pdf))))
+          ;; links
+          (should (eq (org-link-get-parameter "sioyek" :follow)
+                      #'my/study--follow-link))
+          (let (opened)
+            (cl-letf (((symbol-function 'my/study-open-in-sioyek)
+                       (lambda (file &optional page) (setq opened (list file page)))))
+              (my/study--follow-link "/x/y.pdf::42"))
+            (should (equal opened '("/x/y.pdf" 42))))
+          ;; heading shifting leaves non-headings alone
+          (should (equal (my/study--shift-headings "* A\n** B\nx * y\n" 2)
+                         "*** A\n**** B\nx * y\n"))
+          ;; insertion: end of file when not visible, saved because buffer was clean
+          (with-temp-file org-file
+            (insert "* Chapter\n** Section\nbody\n* Other\n"))
+          (my/study--insert-org-note org-file "* Note A\n:PROPERTIES:\n:X: 1\n:END:\ntext\n")
+          (setq buffer (find-buffer-visiting org-file))
+          (should (buffer-live-p buffer))
+          (should-not (buffer-modified-p buffer))
+          (should (string-suffix-p "* Other\n* Note A\n:PROPERTIES:\n:X: 1\n:END:\ntext\n"
+                                   (with-temp-buffer
+                                     (insert-file-contents org-file)
+                                     (buffer-string))))
+          ;; insertion as a child of the heading under the window cursor
+          (save-window-excursion
+            (switch-to-buffer buffer)
+            (goto-char (point-min))
+            (search-forward "body")
+            (set-window-point (selected-window) (point))
+            (my/study--insert-org-note org-file "* Note B\nmore\n"))
+          (with-current-buffer buffer
+            (let ((text (buffer-string)))
+              (should (string-match-p "\\*\\* Section\nbody\n\\*\\*\\* Note B\nmore\n" text))
+              (should (< (string-match "\\*\\*\\* Note B" text)
+                         (string-match "^\\* Other" text)))
+              (primitive-undo 1 buffer-undo-list)))
+          )
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer (set-buffer-modified-p nil))
+        (kill-buffer buffer))
+      (delete-directory dir t))))
 
 (provide 'emacs-config-tests)
 ;;; emacs-config-tests.el ends here
