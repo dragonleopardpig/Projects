@@ -78,10 +78,15 @@
     "Create a fresh Mind Map buffer." t)
   (autoload 'emacs-minder-open-org "emacs-minder"
     "Open the current Org file as a native Mind Map." t)
+  (autoload 'emacs-minder-paste-clipboard-latex "emacs-minder"
+    "Recognize a clipboard formula image to LaTeX via formulaocr-offline." t)
+  (autoload 'emacs-minder-formula-ocr-warmup "emacs-minder"
+    "Start and warm up the persistent formulaocr-offline worker." t)
   (add-to-list 'auto-mode-alist '("\\.minder\\'" . emacs-minder-mode))
   (global-set-key (kbd "C-c M") #'emacs-minder-new)
   (with-eval-after-load 'org
-    (define-key org-mode-map (kbd "C-c m") #'emacs-minder-open-org)))
+    (define-key org-mode-map (kbd "C-c m") #'emacs-minder-open-org)
+    (define-key org-mode-map (kbd "C-c M-v") #'emacs-minder-paste-clipboard-latex)))
 
 (provide 'init-documents)
 ;;; init-documents.el ends here

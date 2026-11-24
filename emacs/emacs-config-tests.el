@@ -94,7 +94,8 @@
   (with-temp-buffer
     (org-mode)
     (should (eq (key-binding (kbd "C-c E")) #'my/editmarks-hydra/body))
-    (should (eq (key-binding (kbd "C-c b")) #'scimax-ob/body))))
+    (should (eq (key-binding (kbd "C-c b")) #'scimax-ob/body))
+    (should (eq (key-binding (kbd "C-c M-v")) #'emacs-minder-paste-clipboard-latex))))
 
 (ert-deftest my/test-zero-arg-startup-dashboard ()
   "Running `dashboard-open' creates and displays `*dashboard*' cleanly."

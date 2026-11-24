@@ -333,5 +333,126 @@
           (should (eq (car-safe (get-text-property (point-min) 'display)) 'image)))
       (emacs-minder--cancel-smooth-timers))))
 
+(ert-deftest emacs-minder-test-formula-ocr-paste ()
+  "Clipboard formula OCR formats delimiters, uses persistent worker & one-shot modes."
+  (emacs-minder-ensure-module)
+  (should (eq (lookup-key emacs-minder-mode-map (kbd "C-M-v"))
+              #'emacs-minder-paste-clipboard-latex))
+  (should (eq (lookup-key emacs-minder-mode-map (kbd "M-l"))
+              #'emacs-minder-paste-clipboard-latex))
+  (should (eq (lookup-key emacs-minder-inline-edit-mode-map (kbd "C-M-v"))
+              #'emacs-minder-paste-clipboard-latex))
+  (with-temp-buffer
+    (let ((emacs-minder-formula-delimiters 'auto))
+      (should (equal (emacs-minder--format-formula "E = mc^2" "/tmp/map.minder") "$$E = mc^2$$"))
+      (should (equal (emacs-minder--format-formula "$$E = mc^2$$" "/tmp/map.minder") "$$E = mc^2$$"))
+      (should (equal (emacs-minder--format-formula "\\(E = mc^2\\)" "/tmp/notes.org") "\\(E = mc^2\\)"))
+      (should (equal (emacs-minder--format-formula "E = mc^2" "/tmp/notes.org") "\\(E = mc^2\\)")))
+    (let ((emacs-minder-formula-delimiters 'none))
+      (should (equal (emacs-minder--format-formula "$$E = mc^2$$" nil) "E = mc^2"))))
+  (let* ((tmp-dir (make-temp-file "minder-ocr-test-" t))
+         (mock-script (expand-file-name "formulaocr-offline" tmp-dir))
+         (clip-tag "ok")
+         (created-imgs nil)
+         (emacs-minder-formula-ocr-command mock-script)
+         (emacs-minder-formula-ocr-use-worker t)
+         (emacs-minder-formula-ocr-timeout 15)
+         (emacs-minder-formula-delimiters 'auto))
+    (with-temp-file mock-script
+      (insert "#!/usr/bin/env python3\n"
+              "import json, sys\n"
+              "args = sys.argv[1:]\n"
+              "if '--worker' in args:\n"
+              "    print(json.dumps({'ready': True}), flush=True)\n"
+              "    for line in sys.stdin:\n"
+              "        line = line.strip()\n"
+              "        if not line:\n"
+              "            continue\n"
+              "        req = json.loads(line)\n"
+              "        if 'notformula' in req['image']:\n"
+              "            print(json.dumps({'id': req['id'], 'ok': False, 'error': 'Not a formula'}), flush=True)\n"
+              "        else:\n"
+              "            print(json.dumps({'id': req['id'], 'ok': True, 'formula': 'E = mc^2'}), flush=True)\n"
+              "else:\n"
+              "    no_cls = '--no-classify' in args\n"
+              "    print('F = ma' if no_cls else 'a^2 + b^2 = c^2', flush=True)\n"))
+    (set-file-modes mock-script #o755)
+    (let ((wait-until (lambda (pred)
+                        (let ((deadline (+ (float-time) 5.0)))
+                          (while (and (not (funcall pred)) (< (float-time) deadline))
+                            (accept-process-output nil 0.02)))
+                        (should (funcall pred)))))
+      (unwind-protect
+          (cl-letf (((symbol-function 'emacs-minder--grab-clipboard-image-async)
+                     (lambda (cb)
+                       (let ((f (make-temp-file (format "clip-%s-" clip-tag) nil ".png")))
+                         (push f created-imgs)
+                         (funcall cb f nil)))))
+            ;; 1. Minder canvas default (worker cold start -> new child node) + C-u append + C-u C-u one-shot
+            (let ((mbuf (generate-new-buffer " *minder-ocr-map*")))
+              (unwind-protect
+                  (with-current-buffer mbuf
+                    (emacs-minder-mode)
+                    (setq emacs-minder--file-path (expand-file-name "demo.minder" tmp-dir)
+                          emacs-minder--handle (emacs-minder-core-new "Optics")
+                          emacs-minder--state (emacs-minder--parse-json
+                                               (emacs-minder-core-state-json emacs-minder--handle)))
+                    (emacs-minder-paste-clipboard-latex)
+                    (funcall wait-until (lambda () (= 2 (alist-get 'node_count emacs-minder--state))))
+                    (should (equal (alist-get 'text (alist-get 'selected emacs-minder--state))
+                                   "$$E = mc^2$$"))
+                    (should (process-live-p emacs-minder--ocr-worker-proc))
+                    (let ((worker-pid (process-id emacs-minder--ocr-worker-proc)))
+                      ;; C-u reuses live worker and appends to selected node
+                      (emacs-minder-paste-clipboard-latex '(4))
+                      (funcall wait-until
+                               (lambda ()
+                                 (equal (alist-get 'text (alist-get 'selected emacs-minder--state))
+                                        "$$E = mc^2$$ $$E = mc^2$$")))
+                      (should (= worker-pid (process-id emacs-minder--ocr-worker-proc)))
+                      ;; C-u C-u runs one-shot --no-classify
+                      (emacs-minder-paste-clipboard-latex '(16))
+                      (funcall wait-until (lambda () (= 3 (alist-get 'node_count emacs-minder--state))))
+                      (should (equal (alist-get 'text (alist-get 'selected emacs-minder--state))
+                                     "$$F = ma$$"))
+                      ;; Non-formula image error keeps worker alive & preserves node count
+                      (setq clip-tag "notformula")
+                      (emacs-minder-paste-clipboard-latex)
+                      (funcall wait-until (lambda () (null emacs-minder--ocr-pending)))
+                      (should (= 3 (alist-get 'node_count emacs-minder--state)))
+                      (should (process-live-p emacs-minder--ocr-worker-proc))
+                      (setq clip-tag "ok")))
+                (when (buffer-live-p mbuf) (kill-buffer mbuf))))
+            ;; 2. Org-mode buffer inserts \(...\) at saved point
+            (with-temp-buffer
+              (org-mode)
+              (insert "Wavefront: ")
+              (emacs-minder-paste-clipboard-latex)
+              (funcall wait-until (lambda () (string-search "\\(E = mc^2\\)" (buffer-string))))
+              (should (equal (buffer-string) "Wavefront: \\(E = mc^2\\)")))
+            ;; 3. Inline-edit buffer backing an .org file inserts \(...\) at point
+            (let ((org-src (generate-new-buffer " *minder-org-src*"))
+                  (inline-buf (generate-new-buffer " *minder-org-inline*")))
+              (unwind-protect
+                  (progn
+                    (with-current-buffer org-src
+                      (setq emacs-minder--file-path (expand-file-name "optics.org" tmp-dir)))
+                    (with-current-buffer inline-buf
+                      (emacs-minder-inline-edit-mode)
+                      (setq emacs-minder--source-buffer org-src)
+                      (insert "Phase ")
+                      (emacs-minder-paste-clipboard-latex)
+                      (funcall wait-until (lambda () (string-search "\\(E = mc^2\\)" (buffer-string))))
+                      (should (equal (buffer-string) "Phase \\(E = mc^2\\)"))))
+                (when (buffer-live-p inline-buf) (kill-buffer inline-buf))
+                (when (buffer-live-p org-src) (kill-buffer org-src))))
+            ;; Every temporary clipboard image must have been cleaned up
+            (dolist (f created-imgs)
+              (should-not (file-exists-p f))))
+        (emacs-minder-formula-ocr-stop-worker)
+        (dolist (f created-imgs)
+          (ignore-errors (delete-file f)))
+        (delete-directory tmp-dir t)))))
+
 (provide 'emacs-minder-tests)
 ;;; emacs-minder-tests.el ends here
