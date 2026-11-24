@@ -948,19 +948,20 @@ When IS-NEW is non-nil, cancelling with empty text undoes the new node."
 (defun emacs-minder--find-formula-ocr ()
   "Locate the configured formula OCR executable, or return nil."
   (let ((env-cmd (getenv "MINDER_FORMULA_OCR")))
-    (cl-loop for cand in (list emacs-minder-formula-ocr-command
-                               (and env-cmd (not (string-empty-p env-cmd)) env-cmd)
-                               "formulaocr-offline")
-             when (and (stringp cand) (not (string-empty-p cand)))
-             for expanded = (expand-file-name cand)
-             for resolved = (cond
-                             ((file-executable-p expanded) expanded)
-                             ((executable-find cand)))
-             when resolved return resolved)))
+    (cl-some
+     (lambda (cand)
+       (when (and (stringp cand) (not (string-empty-p cand)))
+         (if (file-name-directory cand)
+             (let ((expanded (expand-file-name cand)))
+               (and (not (file-directory-p expanded))
+                    (file-executable-p expanded)
+                    expanded))
+           (executable-find cand))))
+     (list emacs-minder-formula-ocr-command env-cmd "formulaocr-offline"))))
 
 (defun emacs-minder--formula-ocr-supports-worker-p (cmd)
   "Return non-nil if CMD should run as a persistent `--worker' daemon."
-  (and cmd
+  (and (stringp cmd)
        (or (eq emacs-minder-formula-ocr-use-worker 'force)
            (and emacs-minder-formula-ocr-use-worker
                 (string-match-p "formulaocr-offline"
@@ -1127,7 +1128,7 @@ BACKING-FILE helps `'auto' distinguish `.org' from `.minder' buffers."
         (let* ((trimmed (string-trim line))
                (msg (and (not (string-empty-p trimmed))
                          (ignore-errors (emacs-minder--parse-json trimmed)))))
-          (when msg
+          (when (and (consp msg) (consp (car msg)))
             (cond
              ((alist-get 'ready msg)
               (setq emacs-minder--ocr-worker-ready t)

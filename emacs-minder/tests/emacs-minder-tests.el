@@ -377,6 +377,20 @@
               "    no_cls = '--no-classify' in args\n"
               "    print('F = ma' if no_cls else 'a^2 + b^2 = c^2', flush=True)\n"))
     (set-file-modes mock-script #o755)
+    ;; Regression checks for `emacs-minder--find-formula-ocr' with nil custom command
+    ;; and a directory literally named `formulaocr-offline' in `default-directory'.
+    (let* ((shadow-dir (expand-file-name "shadow" tmp-dir))
+           (shadow-sub (expand-file-name "formulaocr-offline" shadow-dir)))
+      (make-directory shadow-sub t)
+      (let ((emacs-minder-formula-ocr-command nil)
+            (process-environment (cons (concat "MINDER_FORMULA_OCR=" mock-script)
+                                       process-environment)))
+        (should (equal (emacs-minder--find-formula-ocr) mock-script)))
+      (let ((emacs-minder-formula-ocr-command nil)
+            (process-environment (cons "MINDER_FORMULA_OCR=" process-environment))
+            (default-directory (file-name-as-directory shadow-dir))
+            (exec-path (list tmp-dir)))
+        (should (equal (emacs-minder--find-formula-ocr) mock-script))))
     (let ((wait-until (lambda (pred)
                         (let ((deadline (+ (float-time) 5.0)))
                           (while (and (not (funcall pred)) (< (float-time) deadline))
