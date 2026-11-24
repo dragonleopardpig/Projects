@@ -4121,6 +4121,7 @@ after the folder, so the second pane must not reuse the first one's."
     (dotimes (i 80)
       (make-directory (expand-file-name (format "folder-%02d" i) enhanced-dirvish-test--dir)))
     (enhanced-dirvish-compact-refresh)
+    (should-not cursor-type)
     (let ((entries (enhanced-dirvish-view--entry-order))
           (win (selected-window)))
       (dolist (kind '(mouse-1 native mouse-3))
@@ -4144,10 +4145,17 @@ after the folder, so the second pane must not reuse the first one's."
           (redisplay t)
           (should (= (window-start win) start))
           (should (= (window-hscroll win) hscroll))
+          (should-not (eobp))
+          (should-not cursor-type)
           (should (equal entries (enhanced-dirvish-view--entry-order)))
           (should-not (enhanced-dirvish-current-file))
           (should-not (enhanced-dirvish-marked-files-only))
           (should-not enhanced-dirvish--selection-overlays)
+          ;; Same-directory live refresh retains cleared selection & viewport.
+          (enhanced-dirvish-compact-refresh)
+          (should (= (window-start win) start))
+          (should (= (window-hscroll win) hscroll))
+          (should-not (enhanced-dirvish-current-file))
           ;; Every directory still has a rendered cell, including the first.
           (dolist (file entries)
             (should (save-excursion

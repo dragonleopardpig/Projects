@@ -1200,8 +1200,24 @@ pass `pos-visible-in-window-p'."
                           (< pt (point-max))
                           (or (not require-visible)
                               (pos-visible-in-window-p pt win)))))
+             (visible-on-first-line
+              (lambda ()
+                (save-excursion
+                  (goto-char start)
+                  (let ((eol (line-end-position))
+                        (cand start)
+                        (hit nil))
+                    (while (and (not hit) (< cand eol))
+                      (if (funcall ok-p cand)
+                          (setq hit cand)
+                        (setq cand (or (next-single-property-change
+                                        cand 'enhanced-dirvish-entry nil eol)
+                                       eol))))
+                    hit))))
              (safe-pt (cond ((funcall ok-p wpt) wpt)
                             ((funcall ok-p fallback-pt) fallback-pt)
+                            ((funcall ok-p start) start)
+                            ((and require-visible (funcall visible-on-first-line)))
                             (t start))))
         (list safe-pt start (window-hscroll win) (window-vscroll win t) win)))))
 
@@ -1352,7 +1368,7 @@ move that window too, as with a folder holding a same-named subfolder."
   "Recursion guard while suppressing `visual-line-mode' in views.")
 
 (defun enhanced-dirvish--enforce-no-wrap ()
-  "Disable `visual-line-mode' and enforce single-line truncation in Compact/Icons."
+  "Disable wrapping, hl-line, and cursor in Compact/Icons views."
   (unless enhanced-dirvish--enforcing-no-wrap
     (let ((enhanced-dirvish--enforcing-no-wrap t))
       (when (bound-and-true-p visual-line-mode)
@@ -1361,7 +1377,8 @@ move that window too, as with a folder holding a same-named subfolder."
         (hl-line-mode -1))
       (setq-local truncate-lines t
                   word-wrap nil
-                  truncate-partial-width-windows nil))))
+                  truncate-partial-width-windows nil
+                  cursor-type nil))))
 
 (define-derived-mode enhanced-dirvish-compact-mode special-mode "Enhanced-Dirvish-Compact"
   "Enhanced Dirvish Compact view: entries in columns, read top to bottom.
@@ -1548,8 +1565,7 @@ In Columns, List, Compact and Icons views."
 (define-derived-mode enhanced-dirvish-icons-mode special-mode "Enhanced-Dirvish-Icons"
   "Enhanced Dirvish Icons thumbnail grid view with live thumbnail caching."
   (enhanced-dirvish--enforce-no-wrap)
-  (setq-local line-spacing 3
-              cursor-type nil)
+  (setq-local line-spacing 3)
   (add-hook 'visual-line-mode-hook #'enhanced-dirvish--enforce-no-wrap nil t)
   (add-hook 'after-change-major-mode-hook #'enhanced-dirvish--enforce-no-wrap 90 t)
   (setq-local header-line-format
