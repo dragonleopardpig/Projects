@@ -571,5 +571,19 @@
               (should (eq edit-state nil))))
         (when (buffer-live-p wb) (kill-buffer wb))))))
 
+(ert-deftest my/test-study-close-lightbox-hook-runs ()
+  "Dismissing via `my/study-close-lightbox' dispatches JS close when pane has xwidget."
+  (let* ((wb (generate-new-buffer " *test-study-lb*"))
+         (my/study--webkit-buffer wb)
+         (scripts nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'xwidget-at) (lambda (_pos) 'fake-xw))
+                  ((symbol-function 'xwidget-webkit-execute-script)
+                   (lambda (_xw script &optional _cb) (push script scripts))))
+          (my/study-close-lightbox)
+          (should (= (length scripts) 1))
+          (should (string-match-p "lightbox" (car scripts))))
+      (when (buffer-live-p wb) (kill-buffer wb)))))
+
 (provide 'emacs-config-tests)
 ;;; emacs-config-tests.el ends here

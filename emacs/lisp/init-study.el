@@ -23,6 +23,8 @@
 (declare-function xwidget-webkit-last-session "xwidget" ())
 (declare-function xwidget-webkit-edit-mode "xwidget" (&optional arg))
 (declare-function xwidget-webkit-pass-command-event "xwidget" ())
+(declare-function xwidget-webkit-execute-script "xwidget.c" (xwidget script &optional callback))
+(declare-function xwidget-at "xwidget" (pos))
 (declare-function xwidget-buffer "xwidget.c" (xwidget))
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-current-level "org" ())
@@ -454,14 +456,32 @@ dragging, then restore and resize them once the drag completes."
                       (bound-and-true-p xwidget-webkit-edit-mode))
             (xwidget-webkit-edit-mode target)))))))
 
+(defvar xwidget-webkit-mode-map)
 (defvar xwidget-webkit-edit-mode-map)
 
+(defun my/study-close-lightbox (&rest _)
+  "Close any open image lightbox in the Study AI pane."
+  (interactive)
+  (when (and (buffer-live-p my/study--webkit-buffer)
+             (fboundp 'xwidget-webkit-execute-script))
+    (when-let* ((xw (with-current-buffer my/study--webkit-buffer
+                      (xwidget-at (point-min)))))
+      (ignore-errors
+        (xwidget-webkit-execute-script
+         xw "var lb=document.getElementById('lightbox'); if (lb && lb.style.display==='block') { var c=document.getElementById('lbClose'); if (c) c.click(); else lb.style.display='none'; }")))))
+
 (defun my/study--configure-webkit-edit-keys ()
-  "Pass standard editing navigation keys through during `xwidget-webkit-edit-mode'."
+  "Bind lightbox dismissal and editing navigation keys for Study AI."
+  (when (boundp 'xwidget-webkit-mode-map)
+    (define-key xwidget-webkit-mode-map [escape] #'my/study-close-lightbox)
+    (define-key xwidget-webkit-mode-map (kbd "q") #'my/study-close-lightbox))
   (when (boundp 'xwidget-webkit-edit-mode-map)
     (dolist (key '([delete] [C-delete] [home] [end] [S-home] [S-end]))
       (define-key xwidget-webkit-edit-mode-map key
                   #'xwidget-webkit-pass-command-event))))
+
+(advice-add 'keyboard-quit :before #'my/study-close-lightbox)
+(advice-add 'keyboard-escape-quit :before #'my/study-close-lightbox)
 
 (with-eval-after-load 'xwidget
   (advice-add 'xwidget-webkit-adjust-size-in-frame

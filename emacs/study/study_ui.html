@@ -62,11 +62,14 @@ footer { border-top: 1px solid var(--border); padding: 8px 12px; font: 13px syst
   background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
 #status { color: var(--muted); min-height: 1.2em; margin-bottom: 4px; }
 #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.82); display: none; z-index: 10;
-  overflow: auto; cursor: grab; }
+  overflow: auto; cursor: zoom-out; }
 #lightbox .bar { position: fixed; top: 8px; right: 12px; display: flex; gap: 6px; z-index: 11; }
+#lightbox .bar button { background: rgba(28,32,40,.92); color: #f4f6f8;
+  border: 1px solid rgba(255,255,255,.38); font-weight: 500; }
+#lightbox .bar button:hover { background: rgba(48,54,66,.96); border-color: #ffffff; }
 #lightbox .stage { padding: 56px; min-width: 100%; min-height: 100%; display: flex;
   align-items: center; justify-content: center; }
-#lightbox .stage > * { background: #fff; display: block; }
+#lightbox .stage > * { background: #fff; display: block; cursor: default; }
 </style>
 </head>
 <body>
@@ -300,13 +303,26 @@ $('ctxSnap').onclick = (e) => openLightbox(e.target);
 $('zoomIn').onclick = () => { zoom += 10; applyZoom(); };
 $('zoomOut').onclick = () => { zoom -= 10; applyZoom(); };
 $('zoomReset').onclick = () => { zoom = 100; applyZoom(); };
+function closeLightbox() {
+  $('lightbox').style.display = 'none';
+  $('lbStage').innerHTML = '';
+  lbElement = null;
+}
 $('lbIn').onclick = () => setLightboxZoom(lbZoom * 1.25);
 $('lbOut').onclick = () => setLightboxZoom(lbZoom / 1.25);
-$('lbClose').onclick = () => { $('lightbox').style.display = 'none'; };
+$('lbClose').onclick = closeLightbox;
+$('lightbox').addEventListener('click', (e) => {
+  if (e.target === $('lightbox') || e.target === $('lbStage')) closeLightbox();
+});
 $('lightbox').addEventListener('wheel', (e) => {
   if (e.ctrlKey || e.metaKey) { e.preventDefault(); setLightboxZoom(lbZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }
 }, {passive: false});
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('lbClose').click(); });
+document.addEventListener('keydown', (e) => {
+  if ($('lightbox').style.display === 'block' && (e.key === 'Escape' || e.key === 'q')) {
+    e.preventDefault();
+    closeLightbox();
+  }
+});
 document.addEventListener('wheel', (e) => {
   if ((e.ctrlKey || e.metaKey) && $('lightbox').style.display !== 'block') {
     e.preventDefault(); zoom += e.deltaY < 0 ? 10 : -10; applyZoom();
