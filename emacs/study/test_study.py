@@ -274,5 +274,27 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(ctx2["svg"].endswith(".svg"))
 
 
+class UiTests(unittest.TestCase):
+    def test_study_ui_wraps_controls_as_links_for_emacs_xwidget_cursors(self):
+        html = (HERE / "study_ui.html").read_text(encoding="utf-8")
+        # Emacs xwidget cursor_for_hit only switches from I-bar to hand2 on links.
+        for needle in (
+            "function wrapHitLink(el, extraClass)",
+            "function enhanceHitTargets(root)",
+            "a.href = 'javascript:void(0)'",
+            "enhanceHitTargets(document);",
+            "enhanceHitTargets(div);",
+            "snap.parentElement.hidden = !name;",
+            "copy.closest('.code-block')",
+            "document.addEventListener('click'",
+            "document.addEventListener('auxclick'",
+            "document.addEventListener('dragstart'",
+            "a.xw-hit-copy",
+            "a.xw-hit-snap",
+            "a.xw-hit-zoom",
+        ):
+            self.assertIn(needle, html)
+
+
 if __name__ == "__main__":
     unittest.main()
