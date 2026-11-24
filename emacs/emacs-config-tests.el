@@ -135,6 +135,8 @@
               (setq buf (find-file-noselect pdf))
               (with-current-buffer buf
                 (should (derived-mode-p 'pdf-view-mode))
+                (should (eq pdf-view-continuous t))
+                (should (eq (key-binding (kbd "c")) #'pdf-view-roll-minor-mode))
                 (should (eq (key-binding (kbd "d")) #'pdf-view-follow-minor-mode))
                 (should (= (pdf-cache-number-of-pages) 6))
                 (should (= pdf-view-resize-factor 1.02))

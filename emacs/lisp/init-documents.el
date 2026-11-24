@@ -13,12 +13,16 @@
 (defvar pdf-view-continuous)
 (defvar pdf-view-use-scaling)
 (defvar pdf-view-mode-map)
+(defvar pdf-view-roll-minor-mode)
 (defvar pdf-cache-prefetch-delay)
 (defvar pdf-cache-image-limit)
 (defvar pdf-cache-prefetch-pages-function)
 (defvar pdf-cache--prefetch-pages)
 (defvar pdf-info--queue)
 (defvar pdf-info-asynchronous)
+(defvar mouse-wheel-scroll-amount)
+(defvar mwheel-scroll-up-function)
+(defvar mwheel-scroll-down-function)
 (defvar visual-line-mode)
 (defvar undo-tree-mode)
 (defvar org-mode-map)
@@ -31,6 +35,9 @@
 (declare-function pdf-view-current-page "pdf-view" (&optional window))
 (declare-function pdf-view-goto-page "pdf-view" (page &optional window))
 (declare-function pdf-view-desired-image-size "pdf-view" (&optional page window))
+(declare-function pdf-view-roll-minor-mode "pdf-roll" (&optional arg))
+(declare-function pdf-roll-scroll-forward "pdf-roll" (&optional n window pixels))
+(declare-function pdf-roll-scroll-backward "pdf-roll" (&optional n window pixels))
 (declare-function pdf-util-pdf-buffer-p "pdf-util" (&optional buffer))
 (declare-function tq-queue-empty "tq" (tq))
 (declare-function visual-line-mode "simple" (&optional arg))
@@ -219,11 +226,26 @@
            pages)))
     (funcall orig-fn pages file-or-buffer)))
 
+(defun my/pdf--roll-scroll-forward-around (orig-fn &optional n window pixels)
+  "Redirect negative counts in `pdf-roll-scroll-forward' to backward scroll."
+  (if (< (or n 1) 0)
+      (pdf-roll-scroll-backward (- (or n 1)) window pixels)
+    (funcall orig-fn n window pixels)))
+
+(defun my/pdf--roll-scroll-backward-around (orig-fn &optional n window pixels)
+  "Fix upstream self-recursion on negative counts in `pdf-roll-scroll-backward'."
+  (if (< (or n 1) 0)
+      (pdf-roll-scroll-forward (- (or n 1)) window pixels)
+    (funcall orig-fn n window pixels)))
+
 (defun my/pdf--setup-buffer ()
-  "Configure smooth scrolling and fast async look-ahead for `pdf-view-mode'."
+  "Configure smooth continuous scrolling and look-ahead for `pdf-view-mode'."
   (my/pdf--disable-text-minor-modes)
   (setq-local fast-but-imprecise-scrolling t
               redisplay-skip-fontification-on-input t)
+  (when (boundp 'mouse-wheel-scroll-amount)
+    (let ((tail (cdr-safe (default-value 'mouse-wheel-scroll-amount))))
+      (setq-local mouse-wheel-scroll-amount (cons 3 tail))))
   (my/pdf--sync-window-scaling)
   (add-hook 'after-change-major-mode-hook #'my/pdf--disable-text-minor-modes 90 t)
   (add-hook 'window-configuration-change-hook #'my/pdf--sync-window-scaling -50 t)
@@ -231,6 +253,10 @@
   (add-hook 'image-mode-new-window-functions #'my/pdf--sync-window-scaling -50 t)
   (add-hook 'pdf-view-after-change-page-hook #'my/pdf--schedule-prefetch nil t)
   (add-hook 'kill-buffer-hook #'my/pdf--cancel-prefetch nil t)
+  (when (and (not noninteractive)
+             (require 'pdf-roll nil t)
+             (not (bound-and-true-p pdf-view-roll-minor-mode)))
+    (pdf-view-roll-minor-mode 1))
   (my/pdf--schedule-prefetch))
 
 (with-eval-after-load 'pdf-cache
@@ -240,11 +266,17 @@
   (advice-add 'pdf-cache--prefetch-stop :around #'my/pdf--prefetch-stop-around)
   (advice-add 'pdf-info-getannots :around #'my/pdf--getannots-cached-around))
 
+(with-eval-after-load 'pdf-roll
+  (advice-add 'pdf-roll-scroll-forward :around #'my/pdf--roll-scroll-forward-around)
+  (advice-add 'pdf-roll-scroll-backward :around #'my/pdf--roll-scroll-backward-around))
+
 (with-eval-after-load 'pdf-view
+  (require 'mwheel nil t)
   (require 'pdf-cache nil t)
   (setq pdf-view-resize-factor 1.02
-        pdf-view-continuous nil)
+        pdf-view-continuous t)
   (add-hook 'pdf-view-mode-hook #'my/pdf--setup-buffer 90)
+  (define-key pdf-view-mode-map (kbd "c") #'pdf-view-roll-minor-mode)
   (define-key pdf-view-mode-map (kbd "d") #'pdf-view-follow-minor-mode))
 
 ;;;; Native Mind Mapping (`emacs-minder`)
