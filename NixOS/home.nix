@@ -555,9 +555,9 @@ in
     increase_freetext_font_size <C-+>
     decrease_freetext_font_size <C-->
 
-    # Area snapshot: drag a box, get a cropped PNG. Sioyek ships no such command,
-    # so _snip is defined in prefs_user.config below.
-    _snip s
+    # Save a cropped PNG and make it available to Ask AI.
+    snip_document s
+    ask_ai_choose_agent <C-A>
   '';
 
   # Sioyek reads a prefs_user.config from both ~/.local/share/sioyek and

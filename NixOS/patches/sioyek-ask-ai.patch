@@ -36,10 +36,10 @@ index 58e6d61..99f6e26 100644
          pdf_viewer/synctex/synctex_parser.c pdf_viewer/synctex/synctex_parser.h
 diff --git a/pdf_viewer/ai_panel.cpp b/pdf_viewer/ai_panel.cpp
 new file mode 100644
-index 0000000..b5b645c
+index 0000000..cd5ac9d
 --- /dev/null
 +++ b/pdf_viewer/ai_panel.cpp
-@@ -0,0 +1,503 @@
+@@ -0,0 +1,516 @@
 +#include "ai_panel.h"
 +
 +#if defined(SIOYEK_JKQT_MATHTEXT_SUPPORT) && !defined(SIOYEK_ANDROID)
@@ -239,6 +239,9 @@ index 0000000..b5b645c
 +    setWidget(content);
 +    setMinimumWidth(260);
 +    connect(question, &QLineEdit::returnPressed, this, &AiPanel::submit);
++    connect(agent, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
++        QTimer::singleShot(0, question, [this] { question->setFocus(Qt::OtherFocusReason); });
++    });
 +    connect(send, &QPushButton::clicked, this, [this] {
 +        if (pending || agentProcess)
 +            stopRequest();
@@ -251,7 +254,8 @@ index 0000000..b5b645c
 +    stopRequest();
 +}
 +
-+void AiPanel::beginConversation(const QString& context, const QString& text, const QImage& image) {
++void AiPanel::beginConversation(const QString& context, const QString& text, const QImage& image,
++                                bool chooseAgent) {
 +    stopRequest();
 +    source = context;
 +    excerpt = text;
@@ -290,7 +294,16 @@ index 0000000..b5b645c
 +    } else if (!excerpt.isEmpty()) {
 +        appendMessage(tr("Selected text"), excerpt, false);
 +    }
-+    question->setFocus(Qt::OtherFocusReason);
++    if (chooseAgent) {
++        QTimer::singleShot(0, agent, [this] {
++            if (isVisible()) {
++                agent->setFocus(Qt::ShortcutFocusReason);
++                agent->showPopup();
++            }
++        });
++    } else {
++        question->setFocus(Qt::OtherFocusReason);
++    }
 +}
 +
 +void AiPanel::closeEvent(QCloseEvent* event) {
@@ -545,10 +558,10 @@ index 0000000..b5b645c
 +#endif
 diff --git a/pdf_viewer/ai_panel.h b/pdf_viewer/ai_panel.h
 new file mode 100644
-index 0000000..e7d16da
+index 0000000..7bf86ce
 --- /dev/null
 +++ b/pdf_viewer/ai_panel.h
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,56 @@
 +#pragma once
 +
 +#if defined(SIOYEK_JKQT_MATHTEXT_SUPPORT) && !defined(SIOYEK_ANDROID)
@@ -573,7 +586,8 @@ index 0000000..e7d16da
 +public:
 +    explicit AiPanel(QWidget* parent);
 +    ~AiPanel() override;
-+    void beginConversation(const QString& source, const QString& excerpt, const QImage& snapshot);
++    void beginConversation(const QString& source, const QString& excerpt, const QImage& snapshot,
++                           bool chooseAgent = false);
 +
 +signals:
 +    void closed();
@@ -636,10 +650,10 @@ index f3c4a39..11bef38 100644
      add_string(L"paper_download_title_path", &PAPER_SEARCH_TILE_PATH);
      add_string(L"paper_download_contrib_path", &PAPER_SEARCH_CONTRIB_PATH);
 diff --git a/pdf_viewer/input.cpp b/pdf_viewer/input.cpp
-index 279bc94..bdd0c67 100644
+index 279bc94..f24be45 100644
 --- a/pdf_viewer/input.cpp
 +++ b/pdf_viewer/input.cpp
-@@ -2285,6 +2285,35 @@ public:
+@@ -2285,6 +2285,62 @@ public:
  
  };
  
@@ -670,24 +684,53 @@ index 279bc94..bdd0c67 100644
 +private:
 +    std::optional<AbsoluteRect> region;
 +};
++
++class AskAiChooseAgent : public Command {
++public:
++    static inline const std::string cname = "ask_ai_choose_agent";
++    static inline const std::string hname = "Ask AI and choose an agent";
++    explicit AskAiChooseAgent(MainWidget* widget) : Command(cname, widget) {}
++    void perform() override { widget->ask_ai({}, true); }
++};
++
++class SnipDocument : public Command {
++public:
++    static inline const std::string cname = "snip_document";
++    static inline const std::string hname = "Take a document snapshot";
++    explicit SnipDocument(MainWidget* widget) : Command(cname, widget) {}
++
++    std::optional<Requirement> next_requirement(MainWidget*) override {
++        if (!region)
++            return Requirement{RequirementType::Rect, "Select a region to snapshot"};
++        return {};
++    }
++
++    void set_rect_requirement(AbsoluteRect rect) override { region = rect; }
++    void perform() override { widget->snip_document(*region); }
++
++private:
++    std::optional<AbsoluteRect> region;
++};
 +#endif
 +
  class CopyScreenshotToClipboard : public Command {
  
  public:
-@@ -7569,6 +7598,10 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
+@@ -7569,6 +7625,12 @@ CommandManager::CommandManager(ConfigManager* config_manager) {
      register_command<CopyDrawingsFromScratchpadCommand>();
      register_command<CopyScreenshotToScratchpad>();
      register_command<CopyScreenshotToClipboard>();
 +#if defined(SIOYEK_JKQT_MATHTEXT_SUPPORT) && !defined(SIOYEK_ANDROID)
 +    register_command<AskAi>();
 +    register_command<AskAiSnapshot>();
++    register_command<AskAiChooseAgent>();
++    register_command<SnipDocument>();
 +#endif
      register_command<AddHighlightCommand>();
      register_command<GotoTableOfContentsCommand>();
      register_command<GotoHighlightCommand>();
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index ced4a61..541778d 100644
+index ced4a61..347aec7 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
 @@ -14,6 +14,7 @@
@@ -698,7 +741,15 @@ index ced4a61..541778d 100644
  #include <QPlainTextEdit>
  #include <QClipboard>
  #include <QTextDocument>
-@@ -490,6 +491,10 @@ void MainWidget::resizeEvent(QResizeEvent* resize_event) {
+@@ -26,6 +27,7 @@
+ #include <unordered_map>
+ #include <optional>
+ #include <memory>
++#include <utility>
+ #include <cctype>
+ #include <cstdlib>
+ #include <qpainterpath.h>
+@@ -490,6 +492,10 @@ void MainWidget::resizeEvent(QResizeEvent* resize_event) {
      QWidget::resizeEvent(resize_event);
  
      main_window_width = size().width();
@@ -709,7 +760,7 @@ index ced4a61..541778d 100644
      main_window_height = size().height();
  
      if (scratchpad) {
-@@ -7891,10 +7896,16 @@ bool MainWidget::show_contextual_context_menu() {
+@@ -7891,10 +7897,16 @@ bool MainWidget::show_contextual_context_menu() {
          }
      }
      else if (is_pos_inside_selected_text(window_pos)) {
@@ -726,7 +777,7 @@ index ced4a61..541778d 100644
      }
      else {
          int sel_highlight = main_document_view->get_highlight_index_in_pos(window_pos);
-@@ -7902,10 +7913,16 @@ bool MainWidget::show_contextual_context_menu() {
+@@ -7902,10 +7914,16 @@ bool MainWidget::show_contextual_context_menu() {
  
          if (sel_highlight != -1) {
              set_selected_highlight_index(sel_highlight);
@@ -743,7 +794,7 @@ index ced4a61..541778d 100644
          }
          if (sel_bookmark != -1) {
              set_selected_bookmark_index(sel_bookmark);
-@@ -12717,6 +12734,13 @@ void MainWidget::handle_move_smooth_hold(bool down) {
+@@ -12717,6 +12735,13 @@ void MainWidget::handle_move_smooth_hold(bool down) {
  }
  
  void MainWidget::handle_toggle_two_page_mode() {
@@ -757,12 +808,66 @@ index ced4a61..541778d 100644
      main_document_view->toggle_two_page();
      if (NUM_CACHED_PAGES < 6) {
          if (main_document_view->is_two_page_mode()) {
-@@ -12728,6 +12752,83 @@ void MainWidget::handle_toggle_two_page_mode() {
+@@ -12728,6 +12753,150 @@ void MainWidget::handle_toggle_two_page_mode() {
      }
  }
  
 +#if defined(SIOYEK_JKQT_MATHTEXT_SUPPORT) && !defined(SIOYEK_ANDROID)
-+void MainWidget::ask_ai(std::optional<AbsoluteRect> region) {
++void MainWidget::snip_document(const AbsoluteRect& region) {
++    clear_selected_rect();
++    set_rect_select_mode(false);
++    if (!doc())
++        return;
++
++    clear_selected_text();
++    set_selected_highlight_index(-1);
++    choose_agent_after_snip = false;
++
++    const DocumentRect crop = region.to_document(doc());
++    const QString document = QString::fromStdWString(doc()->get_path());
++    recent_ai_snip = AiSnip{document, {}, crop.page};
++    const QString rectangle = QStringLiteral("%1,%2,%3,%4,%5").arg(crop.page)
++        .arg(crop.rect.x0).arg(crop.rect.y0).arg(crop.rect.x1).arg(crop.rect.y1);
++    auto* process = new QProcess(this);
++    ai_snip_process = process;
++    auto finish = [this, process, document, page = crop.page](bool success) {
++        process->deleteLater();
++        if (ai_snip_process != process)
++            return;
++        ai_snip_process = nullptr;
++        const bool open_picker = std::exchange(choose_agent_after_snip, false);
++        if (!doc() || QString::fromStdWString(doc()->get_path()) != document) {
++            recent_ai_snip.reset();
++            return;
++        }
++        QString file = QString::fromUtf8(process->readAllStandardOutput());
++        if (file.endsWith('\n'))
++            file.chop(1);
++        if (file.endsWith('\r'))
++            file.chop(1);
++        if (success && QFileInfo(file).isFile()) {
++            recent_ai_snip = AiSnip{document, file, page};
++            if (open_picker)
++                set_status_message(L"");
++        } else {
++            recent_ai_snip.reset();
++            set_status_message(L"Could not save the document snapshot.");
++        }
++        if (open_picker)
++            ask_ai({}, true);
++    };
++    connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
++            [finish](int code, QProcess::ExitStatus status) {
++        finish(code == 0 && status == QProcess::NormalExit);
++    });
++    connect(process, &QProcess::errorOccurred, this, [finish](QProcess::ProcessError error) {
++        if (error == QProcess::FailedToStart)
++            finish(false);
++    });
++    process->start(QStringLiteral("sioyek-snip"), {rectangle, document});
++}
++
++void MainWidget::ask_ai(std::optional<AbsoluteRect> region, bool choose_agent) {
 +    QString excerpt;
 +    QString source;
 +    QImage snapshot;
@@ -793,8 +898,21 @@ index ced4a61..541778d 100644
 +            const auto& highlight = doc()->get_highlights().at(selected_highlight_index);
 +            page = highlight.selection_begin.to_document(doc()).page;
 +            excerpt = QString::fromStdWString(highlight.description);
++        } else if (choose_agent && recent_ai_snip
++                   && recent_ai_snip->document == QString::fromStdWString(doc()->get_path())) {
++            if (ai_snip_process) {
++                choose_agent_after_snip = true;
++                set_status_message(L"Preparing the snapshot for Ask AI…");
++                return;
++            }
++            page = recent_ai_snip->page;
++            snapshot.load(recent_ai_snip->file);
 +        }
 +        source = tr("%1 · Page %2").arg(QFileInfo(QString::fromStdWString(doc()->get_path())).fileName()).arg(page + 1);
++    }
++    if (choose_agent) {
++        recent_ai_snip.reset();
++        choose_agent_after_snip = false;
 +    }
 +
 +    const bool opening = !ai_panel || !ai_panel->isVisible();
@@ -822,7 +940,7 @@ index ced4a61..541778d 100644
 +    ai_panel->show();
 +    if (opening)
 +        resizeDocks({ai_panel}, {width() / 2}, Qt::Horizontal);
-+    ai_panel->beginConversation(source, excerpt, snapshot);
++    ai_panel->beginConversation(source, excerpt, snapshot, choose_agent);
 +    QTimer::singleShot(0, this, &MainWidget::update_ai_layout);
 +}
 +
@@ -841,7 +959,7 @@ index ced4a61..541778d 100644
  
  void MainWidget::ensure_zero_interval_timer(){
      validation_interval_timer->setInterval(INTERVAL_TIME);
-@@ -13014,6 +13115,10 @@ QMenuBar* MainWidget::create_main_menu_bar(){
+@@ -13014,6 +13183,10 @@ QMenuBar* MainWidget::create_main_menu_bar(){
              new MenuNode{ "toggle_presentation_mode", "", {} },
              new MenuNode{ "-", "", {} },
              new MenuNode{ "toggle_two_page_mode", "", {} },
@@ -853,10 +971,10 @@ index ced4a61..541778d 100644
              new MenuNode{ "toggle_custom_color", "", {} },
              new MenuNode{ "toggle_scrollbar", "", {} },
 diff --git a/pdf_viewer/main_widget.h b/pdf_viewer/main_widget.h
-index 5ecea16..864a843 100644
+index 5ecea16..ce8ced6 100644
 --- a/pdf_viewer/main_widget.h
 +++ b/pdf_viewer/main_widget.h
-@@ -24,6 +24,7 @@ extern float VERTICAL_MOVE_AMOUNT;
+@@ -24,10 +24,12 @@ extern float VERTICAL_MOVE_AMOUNT;
  extern float HORIZONTAL_MOVE_AMOUNT;
  
  class SelectionIndicator;
@@ -864,14 +982,28 @@ index 5ecea16..864a843 100644
  class QLocalSocket;
  class QLineEdit;
  class QTextEdit;
-@@ -1148,6 +1149,12 @@ public:
+ class QPlainTextEdit;
++class QProcess;
+ class QTimer;
+ class QDragEvent;
+ class QDropEvent;
+@@ -1148,6 +1150,21 @@ public:
      void handle_move_smooth_hold(bool down);
      void handle_move_smooth_horizontal_hold(bool left);
      void handle_toggle_two_page_mode();
 +#if defined(SIOYEK_JKQT_MATHTEXT_SUPPORT) && !defined(SIOYEK_ANDROID)
-+    void ask_ai(std::optional<AbsoluteRect> region = {});
++    void ask_ai(std::optional<AbsoluteRect> region = {}, bool choose_agent = false);
++    void snip_document(const AbsoluteRect& region);
 +    void update_ai_layout();
 +    AiPanel* ai_panel = nullptr;
++    struct AiSnip {
++        QString document;
++        QString file;
++        int page;
++    };
++    std::optional<AiSnip> recent_ai_snip;
++    QProcess* ai_snip_process = nullptr;
++    bool choose_agent_after_snip = false;
 +    bool restore_two_page_after_ai = false;
 +#endif
      void ensure_zero_interval_timer();

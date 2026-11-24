@@ -33,7 +33,7 @@ let
     import sys
     import time
 
-    import fitz
+    import pymupdf
     from PIL import Image
 
     DPI = int(os.environ.get("SIOYEK_SNIP_DPI", "300"))
@@ -88,13 +88,13 @@ let
         if not os.path.isfile(path):
             sys.exit("sioyek-snip: cannot read " + path)
 
-        clip = fitz.Rect(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+        clip = pymupdf.Rect(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
         page_index = int(page_no)
         try:
             if os.path.splitext(path)[1].lower() in DJVU_EXTENSIONS:
                 pix = render_djvu(path, page_index, clip)
             else:
-                doc = fitz.open(path)
+                doc = pymupdf.open(path)
                 try:
                     page = doc[page_index]
                     clip = clip & page.rect          # a drag can run past the page edge
