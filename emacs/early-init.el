@@ -10,7 +10,7 @@
 (setq gc-cons-threshold (* 64 1024 1024))
 (add-hook 'emacs-startup-hook
           (lambda ()
-            (setq gc-cons-threshold (* 16 1024 1024))))
+            (setq gc-cons-threshold (* 64 1024 1024))))
 
 ;; Nix `emacsWithPackages' populates `load-path' via site-start.el.
 (setq package-enable-at-startup nil)

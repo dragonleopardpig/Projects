@@ -9,6 +9,20 @@
 (require 'ert)
 (require 'cl-lib)
 
+(defvar pdf-view-resize-factor)
+(defvar pdf-view-use-scaling)
+(defvar pdf-cache-prefetch-delay)
+(defvar pdf-cache-image-limit)
+(defvar pdf-cache-prefetch-pages-function)
+(defvar pdf-cache--prefetch-pages)
+(defvar save-place-alist)
+(declare-function pdf-cache-number-of-pages "pdf-cache" ())
+(declare-function pdf-cache--prefetch-stop "pdf-cache" ())
+(declare-function pdf-cache-clear-data-of-pages "pdf-cache" (&rest pages))
+(declare-function pdf-cache--data-get "pdf-cache" (key &optional page))
+(declare-function pdf-info-getannots "pdf-info" (&optional pages file-or-buffer))
+(declare-function my/pdf-prefetch-pages-forward "init-documents" ())
+
 (defconst my/test-emacs-dir
   (file-name-directory (or load-file-name buffer-file-name))
   "Directory containing the standalone Emacs configuration.")
@@ -113,16 +127,38 @@
     (should (locate-library "pdf-tools"))
     (should (fboundp 'pdf-loader-install))
     (when (file-exists-p pdf)
-      (unwind-protect
-          (progn
-            (setq buf (find-file-noselect pdf))
-            (with-current-buffer buf
-              (should (derived-mode-p 'pdf-view-mode))
-              (should (eq (key-binding (kbd "d")) #'pdf-view-follow-minor-mode))
-              (should (= (pdf-cache-number-of-pages) 6))
-              (should (= pdf-view-resize-factor 1.02))))
-        (when (buffer-live-p buf)
-          (kill-buffer buf))))))
+      (let ((save-place-alist nil))
+        (unwind-protect
+            (progn
+              (setq buf (find-file-noselect pdf))
+              (with-current-buffer buf
+                (should (derived-mode-p 'pdf-view-mode))
+                (should (eq (key-binding (kbd "d")) #'pdf-view-follow-minor-mode))
+                (should (= (pdf-cache-number-of-pages) 6))
+                (should (= pdf-view-resize-factor 1.02))
+                (should (= pdf-cache-prefetch-delay 0.15))
+                (should (= pdf-cache-image-limit 128))
+                (should (eq pdf-cache-prefetch-pages-function
+                            #'my/pdf-prefetch-pages-forward))
+                (should (equal (my/pdf-prefetch-pages-forward) '(2 3 4 5 6)))
+                (cl-letf (((symbol-function 'pdf-view-current-page)
+                           (lambda (&optional _w) 3)))
+                  (should (equal (my/pdf-prefetch-pages-forward) '(4 5 6 2))))
+                (should-not (bound-and-true-p visual-line-mode))
+                (should-not (bound-and-true-p undo-tree-mode))
+                (pdf-info-getannots 1)
+                (should (car (pdf-cache--data-get 'getannots 1)))
+                (pdf-cache-clear-data-of-pages 1)
+                (should-not (car (pdf-cache--data-get 'getannots 1)))
+                (let ((pdf-cache--prefetch-pages '(4 5 6))
+                      (this-command 'mwheel-scroll))
+                  (pdf-cache--prefetch-stop)
+                  (should (equal pdf-cache--prefetch-pages '(4 5 6)))
+                  (setq this-command 'pdf-view-goto-page)
+                  (pdf-cache--prefetch-stop)
+                  (should-not pdf-cache--prefetch-pages))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
 
 (ert-deftest my/test-zero-arg-startup-dashboard ()
   "Running `dashboard-open' creates and displays `*dashboard*' cleanly."
