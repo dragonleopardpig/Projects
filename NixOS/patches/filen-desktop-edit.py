@@ -27,6 +27,35 @@ crash = ("""        electron_1.crashReporter.start({
                 release: os_1.default.release()
             }
         });""", """        // Local crash reporting disabled by the NixOS overlay.""")
+# Electron removed the legacy Unity badge probe.
+unity = ("""        this.isUnityRunning = process.platform === "linux" ? electron_1.app.isUnityRunning() : false;""",
+         """        this.isUnityRunning = process.platform === "linux" && (electron_1.app.isUnityRunning?.() ?? false);""")
+
+# Establish the profile before taking its single-instance lock.
+lock = ("""            const lock = electron_1.app.requestSingleInstanceLock();
+            if (!lock) {
+                electron_1.app.exit(0);
+                return;
+            }
+            electron_1.app.setName("Filen Desktop");
+            electron_1.app.setPath("userData", path_1.default.join(electron_1.app.getPath("appData"), "@filen", "desktop"));""",
+        """            electron_1.app.setName("Filen Desktop");
+            electron_1.app.setPath("userData", path_1.default.join(electron_1.app.getPath("appData"), "@filen", "desktop"));
+            const lock = electron_1.app.requestSingleInstanceLock();
+            if (!lock) {
+                electron_1.app.exit(0);
+                return;
+            }
+            electron_1.app.on("second-instance", (_event, argv) => {
+                if (this.shouldExitOnQuit || argv.includes("--hidden")) {
+                    return;
+                }
+                this.showWindowRequested = true;
+                if (this.driveWindow) {
+                    this.showOrOpenDriveWindow();
+                }
+            });""")
+
 # Tray mode is known from the start, not only once the renderer reports it.
 init = ("""            const options = await this.options.get();
             await electron_1.app.whenReady();""", """            const options = await this.options.get();
@@ -48,7 +77,38 @@ minimize = ("""        // Open links in default external browser.""", """       
             }
         });
         // Open links in default external browser.""")
-edit(app / "dist/index.js", [crash, init, close, minimize], "main")
+
+open_requested = ("""        this.minimizeToTray = false;""", """        this.minimizeToTray = false;
+        this.showWindowRequested = process.argv.includes("--filen-show-window");""")
+second_instance = ("""            electron_1.app.on("second-instance", () => {
+                // Never resurrect the window while we're quitting - a launch racing the teardown must not bring the app back.
+                if (this.shouldExitOnQuit) {
+                    return;
+                }
+                if (this.driveWindow) {
+                    if (this.driveWindow.isMinimized()) {
+                        this.driveWindow.restore();
+                    }
+                    this.driveWindow.focus();
+                }
+            });
+""", "")
+focus = ("""            (_c = this.driveWindow) === null || _c === void 0 ? void 0 : _c.show();
+        }
+    }
+    async createMainWindow()""", """            (_c = this.driveWindow) === null || _c === void 0 ? void 0 : _c.show();
+        }
+        this.driveWindow?.focus();
+    }
+    async createMainWindow()""")
+
+# An explicit launcher click takes precedence over the start-minimized preference.
+show_launcher = ("""        if (!electron_1.app.commandLine.hasSwitch("hidden") && !process.argv.includes("--hidden") && !startMinimized) {""",
+                 """        if (this.showWindowRequested || (!electron_1.app.commandLine.hasSwitch("hidden") && !process.argv.includes("--hidden") && !startMinimized)) {""")
+show_drive = ("""        if (!electron_1.app.commandLine.hasSwitch("hidden") && !process.argv.includes("--hidden") && !options.startMinimized) {""",
+              """        if (this.showWindowRequested || (!electron_1.app.commandLine.hasSwitch("hidden") && !process.argv.includes("--hidden") && !options.startMinimized)) {""")
+edit(app / "dist/index.js",
+     [crash, unity, lock, init, close, minimize, open_requested, second_instance, focus, show_launcher, show_drive], "main")
 
 ipc = [("""        electron_1.ipcMain.handle("minimizeWindow", async () => {
             var _a;

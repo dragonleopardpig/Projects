@@ -290,15 +290,17 @@ in
 
       export XDG_CURRENT_DESKTOP=Hyprland
 
-      # Single-instance guard. Filen-desktop has no single-instance lock, so a
-      # second launch spawns a duplicate that registers its OWN tray icon.
-      # Quitting one instance then leaves the other's icon orphaned in the bar.
-      # If one is already running, reveal its window instead of starting another.
-      if ${pkgs.procps}/bin/pgrep -f '@filen/desktop/dist/index\.js' >/dev/null 2>&1; then
-        if [ "''${1:-}" != "--hidden" ]; then
-          hyprctl dispatch focuswindow 'class:^([Ff]ilen[ -][Dd]esktop)$' >/dev/null 2>&1 || true
+      # The second Electron invocation forwards the request to the running client.
+      if ${pkgs.systemd}/bin/systemctl --user --quiet is-active filen-desktop.service; then
+        if [ "''${1:-}" = "--hidden" ]; then
+          exit 0
         fi
-        exit 0
+        ulimit -c 0
+        exec ${pkgs.filen-desktop}/bin/filen-desktop "$@" --filen-show-window
+      fi
+
+      if [ "''${1:-}" != "--hidden" ]; then
+        set -- "$@" --filen-show-window
       fi
 
       # Start Filen as a low-priority background UWSM service so it is stopped
