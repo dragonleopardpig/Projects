@@ -261,10 +261,10 @@ index 0000000..97c7ad4
 +#endif
 diff --git a/pdf_viewer/ai_panel.cpp b/pdf_viewer/ai_panel.cpp
 new file mode 100644
-index 0000000..0be22b6
+index 0000000..92edcc6
 --- /dev/null
 +++ b/pdf_viewer/ai_panel.cpp
-@@ -0,0 +1,1175 @@
+@@ -0,0 +1,1186 @@
 +#include "ai_panel.h"
 +#include "database.h"
 +
@@ -411,12 +411,15 @@ index 0000000..0be22b6
 +        static_cast<float>(data.value(QStringLiteral("y")).toDouble())}};
 +}
 +
-+QString chatMarkdown(const AiChatState& chat) {
-+    if (chat.turns.isEmpty())
-+        return chat.previousMarkdown;
-+    QString text = chat.previousMarkdown.isEmpty() ? QStringLiteral("# Ask AI\n") : chat.previousMarkdown;
++QString selectionMarkdown(const AiChatState& chat, const QString& selectionId) {
++    QString text;
 +    for (const auto item : chat.turns) {
 +        const auto turn = item.toObject();
++        const auto id = turn.value(QStringLiteral("anchor")).toObject().value(QStringLiteral("id")).toString();
++        if (id != selectionId)
++            continue;
++        if (text.isEmpty())
++            text = QStringLiteral("# Ask AI\n");
 +        const auto source = turn.value(QStringLiteral("source")).toString();
 +        if (!source.isEmpty())
 +            text += QStringLiteral("\n") + quoteMarkdown(source) + u'\n';
@@ -427,6 +430,15 @@ index 0000000..0be22b6
 +            + QStringLiteral("\n\n## Answer\n\n") + turn.value(QStringLiteral("answer")).toString() + u'\n';
 +    }
 +    return text;
++}
++
++QString currentSessionMarkdown(const AiChatState& chat, const std::optional<AiNoteAnchor>& selection) {
++    if (selection)
++        return selectionMarkdown(chat, selection->id);
++    if (chat.turns.isEmpty())
++        return chat.previousMarkdown;
++    const auto latest = turnAnchor(chat.turns.last().toObject());
++    return selectionMarkdown(chat, latest ? latest->id : QString());
 +}
 +
 +QString agentExecutable(Agent agent) {
@@ -889,14 +901,17 @@ index 0000000..0be22b6
 +        question->setFocus(Qt::OtherFocusReason);
 +}
 +
-+void AiPanel::showSavedNote(const QString& markdown) {
++void AiPanel::showSavedNote(const QString& markdown, const std::string& documentChecksum, const QString& selectionId) {
 +    stopRequest();
 +    setWindowTitle(tr("Saved AI answer"));
 +    excerpt.clear();
 +    snapshot = {};
 +    pendingAnchor.reset();
 +    attachmentPage = -1;
-+    noteMarkdown = markdown;
++    // Earlier versions saved the whole transcript against each marker.
++    const auto saved = database->select_ai_chat(documentChecksum);
++    const auto scoped = saved ? selectionMarkdown(*saved, selectionId) : QString();
++    noteMarkdown = scoped.isEmpty() ? markdown : scoped;
 +    exportButton->setEnabled(true);
 +    agent->hide();
 +    undoButton->hide();
@@ -905,7 +920,7 @@ index 0000000..0be22b6
 +    question->hide();
 +    send->hide();
 +    status->clear();
-+    transcriptMessages = {{ {}, markdown, true }};
++    transcriptMessages = {{ {}, noteMarkdown, true }};
 +    rebuildTranscript();
 +    transcript->verticalScrollBar()->setValue(0);
 +    focusQuestion();
@@ -1106,7 +1121,7 @@ index 0000000..0be22b6
 +        transcriptMessages.push_back({tr("Selected text"), excerpt, false});
 +    if (!pendingPrompt.isEmpty())
 +        transcriptMessages.push_back({tr("You"), pendingPrompt, false});
-+    noteMarkdown = chatMarkdown(chat);
++    noteMarkdown = currentSessionMarkdown(chat, pendingAnchor);
 +    exportButton->setEnabled(!noteMarkdown.isEmpty());
 +    rebuildTranscript();
 +    if (scrollToEnd)
@@ -1131,12 +1146,8 @@ index 0000000..0be22b6
 +    const auto anchor = turnAnchor(last);
 +    std::optional<AiNoteUpdate> note;
 +    if (anchor) {
-+        note = AiNoteUpdate{*anchor, std::nullopt};
-+        for (const auto item : updated.turns) {
-+            const auto earlier = turnAnchor(item.toObject());
-+            if (earlier && earlier->id == anchor->id)
-+                note->markdown = chatMarkdown(updated);
-+        }
++        const auto remaining = selectionMarkdown(updated, anchor->id);
++        note = AiNoteUpdate{*anchor, remaining.isEmpty() ? std::nullopt : std::optional(remaining)};
 +    }
 +    if (!storeChat(updated, note)) {
 +        status->setText(tr("Could not undo the exchange. Reopen this chat if it changed in another window."));
@@ -1417,12 +1428,12 @@ index 0000000..0be22b6
 +    const auto anchor = turnAnchor(turn);
 +    std::optional<AiNoteUpdate> note;
 +    if (anchor)
-+        note = AiNoteUpdate{*anchor, chatMarkdown(updated)};
++        note = AiNoteUpdate{*anchor, selectionMarkdown(updated, anchor->id)};
 +    if (!storeChat(updated, note)) {
 +        refreshChatTranscript(true);
 +        appendMessage(tr("You"), prompt, false);
 +        appendMessage(tr("AI"), answer, true);
-+        noteMarkdown = chatMarkdown(updated);
++        noteMarkdown = currentSessionMarkdown(updated, anchor);
 +        exportButton->setEnabled(true);
 +        question->setText(prompt);
 +        status->setText(tr("The answer could not be saved. The chat may have changed in another window."));
@@ -1442,7 +1453,7 @@ index 0000000..0be22b6
 +#endif
 diff --git a/pdf_viewer/ai_panel.h b/pdf_viewer/ai_panel.h
 new file mode 100644
-index 0000000..d4d793a
+index 0000000..9fcf30a
 --- /dev/null
 +++ b/pdf_viewer/ai_panel.h
 @@ -0,0 +1,130 @@
@@ -1503,7 +1514,7 @@ index 0000000..d4d793a
 +                           const std::optional<AiNoteAnchor>& anchor, bool chooseAgent = false);
 +    void setReadingPage(int page);
 +    bool isShowingChat() const;
-+    void showSavedNote(const QString& markdown);
++    void showSavedNote(const QString& markdown, const std::string& documentChecksum, const QString& selectionId);
 +    void focusQuestion();
 +
 +signals:
@@ -1912,7 +1923,7 @@ index 279bc94..f24be45 100644
      register_command<GotoTableOfContentsCommand>();
      register_command<GotoHighlightCommand>();
 diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
-index ced4a61..be758d2 100644
+index ced4a61..37bd6c2 100644
 --- a/pdf_viewer/main_widget.cpp
 +++ b/pdf_viewer/main_widget.cpp
 @@ -14,7 +14,10 @@
@@ -2039,7 +2050,7 @@ index ced4a61..be758d2 100644
      main_document_view->toggle_two_page();
      if (NUM_CACHED_PAGES < 6) {
          if (main_document_view->is_two_page_mode()) {
-@@ -12728,6 +12787,289 @@ void MainWidget::handle_toggle_two_page_mode() {
+@@ -12728,6 +12787,290 @@ void MainWidget::handle_toggle_two_page_mode() {
      }
  }
  
@@ -2215,14 +2226,15 @@ index ced4a61..be758d2 100644
 +void MainWidget::open_ai_note(const AiNoteAnchor& anchor) {
 +    if (!ai_note_checksum || doc() != ai_note_document)
 +        return;
-+    const auto markdown = db_manager->select_ai_note_markdown(*ai_note_checksum, anchor.id);
++    const auto checksum = *ai_note_checksum;
++    const auto markdown = db_manager->select_ai_note_markdown(checksum, anchor.id);
 +    if (!markdown) {
 +        set_status_message(tr("Could not open the saved AI answer.").toStdWString());
 +        return;
 +    }
 +    ai_chat_document = doc();
 +    show_ai_panel(anchor.position);
-+    ai_panel->showSavedNote(*markdown);
++    ai_panel->showSavedNote(*markdown, checksum, anchor.id);
 +}
 +
 +void MainWidget::update_ai_note_markers() {
@@ -2329,7 +2341,7 @@ index ced4a61..be758d2 100644
  
  void MainWidget::ensure_zero_interval_timer(){
      validation_interval_timer->setInterval(INTERVAL_TIME);
-@@ -13014,6 +13356,10 @@ QMenuBar* MainWidget::create_main_menu_bar(){
+@@ -13014,6 +13357,10 @@ QMenuBar* MainWidget::create_main_menu_bar(){
              new MenuNode{ "toggle_presentation_mode", "", {} },
              new MenuNode{ "-", "", {} },
              new MenuNode{ "toggle_two_page_mode", "", {} },
