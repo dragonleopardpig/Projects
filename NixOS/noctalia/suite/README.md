@@ -117,10 +117,10 @@ NixOS directory, and the status bridge is included in the Suite flake checks.
 
 ## Appearance and scaling
 
-The official Emacs template is enabled and generates `noctalia-theme.el` in
-Emacs's themes directory. `Projects/emacs/noctalia.el` loads it after startup;
-the template uses the Emacs server to reload colors when the palette changes.
-F4 remains available for manually selecting the existing light/dark themes.
+Noctalia's built-in Emacs template is disabled by default so desktop reloads do
+not push Noctalia's dark palette over Emacs's `heaven-and-hell` light/dark
+themes (`ef-spring` / `ef-bio` on F4) via `emacsclient`.
+`Projects/emacs/noctalia.el` keeps `my/load-noctalia-theme` strictly opt-in.
 
 [OLO-Neon](theme/README.md) uses teal control fills with dark text, mint/cyan
 secondary colors, and magenta window outlines and orbital wallpaper curves.

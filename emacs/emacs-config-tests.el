@@ -189,6 +189,46 @@
       (mapc #'enable-theme (reverse orig-themes))
       (setq heaven-and-hell-theme-type orig-type))))
 
+(ert-deftest my/test-noctalia-blocks-unsolicited-load-theme ()
+  "Background `(load-theme 'noctalia t)' (emacsclient) must not override ef-spring."
+  (let* ((orig-themes (copy-sequence custom-enabled-themes))
+         (orig-type heaven-and-hell-theme-type)
+         (orig-load-path custom-theme-load-path)
+         (tmp (make-temp-file "noctalia-test-" t))
+         (my/noctalia-theme-directory (file-name-as-directory tmp)))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name "noctalia-theme.el" tmp)
+            (insert ";;; noctalia-theme.el --- test -*- lexical-binding: t; -*-\n"
+                    "(deftheme noctalia \"Test Noctalia theme.\")\n"
+                    "(provide-theme 'noctalia)\n"))
+          (setq custom-theme-load-path (cons tmp custom-theme-load-path))
+          (setq heaven-and-hell-theme-type 'light)
+          (heaven-and-hell-init-hook)
+          (should (equal custom-enabled-themes '(ef-spring)))
+          ;; Unsolicited background load is ignored.
+          (let ((this-command nil))
+            (should-not (load-theme 'noctalia t)))
+          (should (equal custom-enabled-themes '(ef-spring)))
+          ;; Explicit opt-in works.
+          (my/load-noctalia-theme)
+          (should (equal custom-enabled-themes '(noctalia)))
+          ;; Already enabled: background reload is allowed.
+          (let ((this-command nil))
+            (should (load-theme 'noctalia t)))
+          (should (memq 'noctalia custom-enabled-themes))
+          ;; Interactive `load-theme' is allowed.
+          (disable-theme 'noctalia)
+          (enable-theme 'ef-spring)
+          (let ((this-command 'load-theme))
+            (load-theme 'noctalia t))
+          (should (memq 'noctalia custom-enabled-themes)))
+      (mapc #'disable-theme (copy-sequence custom-enabled-themes))
+      (mapc #'enable-theme (reverse orig-themes))
+      (setq heaven-and-hell-theme-type orig-type
+            custom-theme-load-path orig-load-path)
+      (delete-directory tmp t))))
+
 (ert-deftest my/test-org-markup-bold-and-math ()
   "Org smart markup commands wrap words cleanly without Ivy."
   (with-temp-buffer
