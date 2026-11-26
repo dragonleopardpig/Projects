@@ -384,6 +384,43 @@ sidebar (28 -> 14 columns), because the split halved the whole browser."
                   (should enhanced-dirvish-preview--document-rendered)
                   (select-window main))))))))))
 
+(ert-deftest enhanced-dirvish-test-window-markdown-preview-edit-highlights ()
+  "Use Markdown font-lock in both source preview and direct editing."
+  (skip-unless (or (locate-library "markdown-mode")
+                   (and (locate-library "markdown-ts-mode")
+                        (treesit-language-available-p 'markdown)
+                        (treesit-language-available-p 'markdown-inline))))
+  (dolist (mode '(columns compact))
+    (enhanced-dirvish-window-test--with-browser mode
+      (let* ((file (expand-file-name "notes.md" directory))
+             (auto-mode-alist (cl-remove-if
+                               (lambda (entry) (string-match-p (car entry) file))
+                               auto-mode-alist))
+             (global-font-lock-mode t))
+        (write-region "# Highlighted heading\n\n**Bold** text\n" nil file nil 'silent)
+        (let ((existing (find-file-noselect file)))
+          (unwind-protect
+              (progn
+                (with-current-buffer existing (should (eq major-mode 'fundamental-mode)))
+                (enhanced-dirvish-refresh-active-view)
+                (enhanced-dirvish-goto-file file)
+                (should (eq (enhanced-dirvish-preview-edit-file file) existing))
+                (should (derived-mode-p 'markdown-mode 'markdown-ts-mode))
+                (should enhanced-dirvish-preview-edit-mode)
+                (should-not buffer-read-only)
+                (font-lock-ensure)
+                (goto-char (point-min))
+                (should (search-forward "Highlighted" nil t))
+                (should (get-text-property (match-beginning 0) 'face))
+                (enhanced-dirvish-preview-edit-exit)
+                (setf (enhanced-dirvish-prefs-render-documents-by-default (enhanced-dirvish-prefs)) nil)
+                (enhanced-dirvish-preview-at-point)
+                (with-current-buffer (window-buffer (enhanced-dirvish-preview--active-window))
+                  (goto-char (point-min))
+                  (should (search-forward "Highlighted" nil t))
+                  (should (get-text-property (match-beginning 0) 'face))))
+            (kill-buffer existing)))))))
+
 (ert-deftest enhanced-dirvish-test-window-preview-zoom-survives-return-and-refresh ()
   "Keyboard zoom persists after leaving/rebuilding previews in every layout."
   (dolist (mode '(compact icons list columns))

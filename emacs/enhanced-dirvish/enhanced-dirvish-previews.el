@@ -114,8 +114,9 @@
     ("\\.lua\\'"                             "probe.lua"       lua-ts-mode        lua        lua-mode)
     ("\\.exs?\\'"                            "probe.ex"        elixir-ts-mode     elixir)
     ("\\.nix\\'"                             "probe.nix"       nix-ts-mode        nix        nix-mode)
+    ("\\.\\(?:md\\|markdown\\|mdown\\|mkd\\)\\'" "probe.md" markdown-ts-mode (markdown markdown-inline) markdown-mode)
     ("\\.rs\\'"                              "probe.rs"        rust-ts-mode       rust       rust-mode))
-  "Common extension/filename mode specs: (RE PROBE-FILE TS-MODE LANG [FALLBACK]).")
+  "Common filename mode specs: (RE PROBE-FILE TS-MODE LANGUAGES [FALLBACK]).")
 
 (defconst enhanced-dirvish-preview--lang-filename-alist
   '(("elisp" . "snippet.el") ("emacs-lisp" . "snippet.el")
@@ -155,7 +156,7 @@ major mode so user preferences in `init.el' remain untouched."
            (existing (assoc-default probe-name auto-mode-alist #'string-match-p))
            (ts-ok (and (or (fboundp ts-mode) (locate-library (symbol-name ts-mode)))
                        (fboundp 'treesit-language-available-p)
-                       (treesit-language-available-p ts-lang)))
+                       (cl-every #'treesit-language-available-p (ensure-list ts-lang))))
            (chosen (cond
                     (ts-ok
                      (ignore-errors (require ts-mode nil t))
@@ -1278,6 +1279,11 @@ MODE may be:
         (setf (dv-preview-buffers dv) (delq buf (dv-preview-buffers dv))))
       (with-current-buffer buf
         (setq-local delay-mode-hooks nil)
+        (when (and (eq major-mode 'fundamental-mode)
+                   (memq (assoc-default file auto-mode-alist #'string-match-p)
+                         '(markdown-ts-mode markdown-mode)))
+          ;; An existing buffer may have been opened before registration.
+          (set-auto-mode t))
         (when (bound-and-true-p enhanced-dirvish-preview-read-mode)
           (enhanced-dirvish-preview-read-mode -1))
         (when (and (or was-preview was-read-preview)
