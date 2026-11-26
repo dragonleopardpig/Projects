@@ -9,7 +9,7 @@
 ;;; Commentary:
 ;; Implements Enhanced Dirvish's preview ecosystem inside Dirvish:
 ;; - Independent per-type zoom (text / image / pdf) via C-+/C--/C-0
-;; - Rendered Markdown (with Mermaid/LaTeX/relative image support) & Source toggle
+;; - Rendered Markdown (with LaTeX/SVG/relative image support) & Source toggle
 ;; - Offline safe HTML, DOCX/ODT/RTF (pandoc), interactive CSV/TSV/XLSX tables
 ;; - PDF page preview & EXIF RAW/Image preview
 ;; - Audio/Video storyboard + headless mpv IPC playback controls & external handoff
@@ -24,9 +24,11 @@
 (require 'cl-lib)
 (require 'dirvish)
 (require 'face-remap)
+(require 'json)
 (require 'mwheel)
 (require 'shr)
 (require 'subr-x)
+(require 'url-util)
 (require 'enhanced-dirvish-prefs)
 (require 'enhanced-dirvish-devices)
 
@@ -80,6 +82,23 @@
 (defvar enhanced-dirvish-preview--applying-text-zoom nil
   "Non-nil while restoring saved text zoom during preview rendering.")
 
+(defcustom enhanced-dirvish-markdown-mathjax-directory
+  (expand-file-name "enhanced-dirvish/mathjax"
+                    (or (getenv "XDG_DATA_HOME") "~/.local/share"))
+  "Directory of the local MathJax bundle used for Markdown equations."
+  :type 'directory
+  :group 'enhanced-dirvish)
+
+(defconst enhanced-dirvish-preview--math-script
+  (expand-file-name "enhanced-dirvish-math.cjs" (file-name-directory load-file-name)))
+
+(defvar enhanced-dirvish-preview--math-cache nil
+  "Last batch of Markdown formulas and their neutral-color SVGs.")
+
+(defvar enhanced-dirvish-preview--markdown-directory nil)
+(defvar enhanced-dirvish-preview--markdown-width nil)
+(defvar enhanced-dirvish-preview--math-images nil)
+
 (defconst enhanced-dirvish-preview--common-mode-specs
   '(("\\.ts\\'"                              "probe.ts"        typescript-ts-mode typescript)
     ("\\.[cm]ts\\'"                          "probe.mts"       typescript-ts-mode typescript)
@@ -91,6 +110,7 @@
     ("\\.php\\'"                             "probe.php"       php-ts-mode        php)
     ("\\.lua\\'"                             "probe.lua"       lua-ts-mode        lua        lua-mode)
     ("\\.exs?\\'"                            "probe.ex"        elixir-ts-mode     elixir)
+    ("\\.nix\\'"                             "probe.nix"       nix-ts-mode        nix        nix-mode)
     ("\\.rs\\'"                              "probe.rs"        rust-ts-mode       rust       rust-mode))
   "Common extension/filename mode specs: (RE PROBE-FILE TS-MODE LANG [FALLBACK]).")
 
@@ -137,7 +157,9 @@ major mode so user preferences in `init.el' remain untouched."
                     (ts-ok
                      (ignore-errors (require ts-mode nil t))
                      (and (fboundp ts-mode) ts-mode))
-                    ((and fb-mode (or (fboundp fb-mode) (locate-library (symbol-name fb-mode))))
+                    ((and fb-mode (or (fboundp fb-mode)
+                                      (and (ignore-errors (require fb-mode nil t))
+                                           (fboundp fb-mode))))
                      fb-mode))))
       (when (and chosen
                  (or (null existing)
@@ -349,7 +371,8 @@ previews."
 (defun enhanced-dirvish-preview--set-text-scale ()
   "Restore saved text zoom without treating rendering as a user zoom change."
   (let ((enhanced-dirvish-preview--applying-text-zoom t))
-    (text-scale-set (enhanced-dirvish-prefs-preview-text-scale (enhanced-dirvish-prefs)))))
+    (text-scale-set (enhanced-dirvish-prefs-preview-text-scale (enhanced-dirvish-prefs))))
+  (enhanced-dirvish-preview--resize-markdown-images))
 
 (defun enhanced-dirvish-preview--sync-text-scale ()
   "Give the current preview buffer the zoom its preview kind owns.
@@ -371,7 +394,8 @@ zoom commands do."
            (scale (if text-scale-mode text-scale-mode-amount 0)))
       (unless (= scale (enhanced-dirvish-prefs-preview-text-scale p))
         (setf (enhanced-dirvish-prefs-preview-text-scale p) scale)
-        (enhanced-dirvish-prefs-save)))))
+        (enhanced-dirvish-prefs-save))
+      (enhanced-dirvish-preview--resize-markdown-images))))
 
 (defun enhanced-dirvish-preview--bind-zoom-keys (map &optional plain)
   "Bind preview zoom controls in MAP, including plain keys when PLAIN."
@@ -1294,8 +1318,214 @@ MODE may be:
       (enhanced-dirvish-preview--sync-text-scale))
     buf))
 
-(defun enhanced-dirvish-preview--safe-insert-markdown (file buf)
-  "Render Markdown FILE cleanly into BUF with headings, code blocks, math & images."
+(defun enhanced-dirvish-preview--safe-insert-markdown (file buf &optional window)
+  "Render Markdown FILE in BUF at the width of preview WINDOW."
+  (let* ((text (with-temp-buffer
+                 (insert-file-contents file nil 0 enhanced-dirvish-preview-max-bytes)
+                 (buffer-string)))
+         (dom (enhanced-dirvish-preview--markdown-dom text)))
+    (if (not dom)
+        (enhanced-dirvish-preview--insert-basic-markdown file buf)
+      (let* ((window (or window (selected-window)))
+             (shr-width (max 12 (- (window-body-width window) 3)))
+             (shr-use-fonts (display-graphic-p (window-frame window)))
+             (shr-bullet "• ")
+             (shr-hr-line ?─)
+             (shr-inhibit-images t)
+             (shr-blocked-images ".*")
+             (shr-external-rendering-functions
+              '((pre . enhanced-dirvish-preview--markdown-code)
+                (img . enhanced-dirvish-preview--markdown-image)
+                (dirvish-svg . enhanced-dirvish-preview--markdown-svg)
+                (input . enhanced-dirvish-preview--markdown-checkbox)
+                (span . enhanced-dirvish-preview--markdown-span)))
+             (enhanced-dirvish-preview--markdown-directory (file-name-directory file))
+             (enhanced-dirvish-preview--markdown-width (max 1 (window-body-width window t)))
+             (enhanced-dirvish-preview--math-images
+              (when (and (display-graphic-p) (image-type-available-p 'svg))
+                (enhanced-dirvish-preview--markdown-math dom))))
+        (with-current-buffer buf
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (shr-insert-document dom)
+            (enhanced-dirvish-preview--resize-markdown-images)
+            (goto-char (point-min))))))))
+
+(defun enhanced-dirvish-preview--markdown-dom (text)
+  "Convert Markdown TEXT to an offline HTML document for shr."
+  (when (and (executable-find "pandoc") (libxml-available-p))
+    (with-temp-buffer
+      (insert text)
+      (let ((default-directory temporary-file-directory)
+            (coding-system-for-read 'utf-8-unix)
+            (coding-system-for-write 'utf-8-unix))
+        (when (eq 0 (call-process-region
+                     (point-min) (point-max) "timeout" t '(t nil) nil "3"
+                     "pandoc" "--sandbox" "--from=markdown+tex_math_single_backslash-raw_tex-smart"
+                     "--to=html5" "--wrap=none" "--katex" "--no-highlight"))
+          (enhanced-dirvish-preview--protect-inline-svg)
+          (libxml-parse-html-region (point-min) (point-max)))))))
+
+(defun enhanced-dirvish-preview--protect-inline-svg ()
+  "Keep SVG element and attribute spelling through the HTML parser."
+  ;; Pandoc escapes SVG inside code fences. Only raw SVG reaches this scan.
+  (let ((tag "<\\(/?\\)svg\\(?:[[:space:]]\\(?:[^\"'>]\\|\"[^\"]*\"\\|'[^']*'\\)*\\)?/?>")
+        (case-fold-search t)
+        (depth 0)
+        start)
+    (goto-char (point-min))
+    (while (re-search-forward (concat "<!--\\(?:.\\|\n\\)*?-->\\|" tag) nil t)
+      (when (match-beginning 1)
+        (if (equal (match-string 1) "/")
+            (setq depth (max 0 (1- depth)))
+          (when (zerop depth) (setq start (match-beginning 0)))
+          (unless (string-suffix-p "/>" (match-string 0)) (cl-incf depth)))
+        (when (and start (zerop depth))
+          (let ((svg (buffer-substring-no-properties start (point))))
+            (delete-region start (point))
+            (insert "<dirvish-svg data=\""
+                    (base64-encode-string (encode-coding-string svg 'utf-8) t)
+                    "\"></dirvish-svg>")
+            (setq start nil)))))))
+
+(defun enhanced-dirvish-preview--math-key (node)
+  "Return (DISPLAY . TEX) for a Pandoc math span NODE."
+  (let ((class (dom-attr node 'class)))
+    (when (member class '("math inline" "math display"))
+      (cons (equal class "math display") (dom-texts node "")))))
+
+(defun enhanced-dirvish-preview--markdown-math (dom)
+  "Return the SVG results for the TeX spans in DOM."
+  (when-let* (((executable-find "node"))
+              ((file-readable-p enhanced-dirvish-preview--math-script))
+              ((file-readable-p (expand-file-name "tex-svg.js" enhanced-dirvish-markdown-mathjax-directory)))
+              (keys (delete-dups (delq nil (mapcar #'enhanced-dirvish-preview--math-key
+                                                  (dom-by-tag dom 'span))))))
+    (if (equal keys (car enhanced-dirvish-preview--math-cache))
+        (cdr enhanced-dirvish-preview--math-cache)
+      (with-temp-buffer
+        (insert (json-serialize
+                 (vconcat (mapcar (lambda (key)
+                                   `((tex . ,(cdr key)) (display . ,(or (car key) :false))))
+                                 keys))))
+        (let ((default-directory temporary-file-directory)
+              (coding-system-for-read 'utf-8-unix)
+              (coding-system-for-write 'utf-8-unix))
+          (when (eq 0 (call-process-region
+                       (point-min) (point-max) "timeout" t '(t nil) nil "3" "node"
+                       enhanced-dirvish-preview--math-script
+                       (expand-file-name enhanced-dirvish-markdown-mathjax-directory)))
+            (goto-char (point-min))
+            (when-let* ((results (ignore-errors (json-parse-buffer :object-type 'alist
+                                                                   :array-type 'list :null-object nil))))
+              (let ((images (make-hash-table :test #'equal)))
+                (cl-mapc (lambda (key result) (puthash key result images)) keys results)
+                (setq enhanced-dirvish-preview--math-cache (cons keys images))
+                images))))))))
+
+(defun enhanced-dirvish-preview--markdown-span (node)
+  "Insert NODE, using a baseline-aligned SVG if it is a rendered formula."
+  (if-let* ((key (enhanced-dirvish-preview--math-key node)))
+      (let* ((result (and enhanced-dirvish-preview--math-images
+                          (gethash key enhanced-dirvish-preview--math-images)))
+             (svg (alist-get 'svg result))
+             (foreground (or (face-foreground 'default nil t) "black"))
+             (image (when svg
+                      (create-image
+                       (string-replace "currentColor" foreground svg) 'svg t
+                       :width (max 1 (round (* (frame-char-height) (alist-get 'ems result))))
+                       :ascent (alist-get 'ascent result)))))
+        (enhanced-dirvish-preview--insert-markdown-image image (cdr key) (car key)))
+    (shr-tag-span node)))
+
+(defun enhanced-dirvish-preview--markdown-code (node)
+  "Show a fenced SVG or fontify the code inside NODE."
+  (let* ((code (car (dom-by-tag node 'code)))
+         (language (car (split-string (or (dom-attr node 'class) ""))))
+         (raw (dom-texts (or code node) "")))
+    (if (equal language "svg")
+        (enhanced-dirvish-preview--insert-markdown-svg raw "[SVG diagram]" t)
+      (let* ((syntax (alist-get (downcase (or language ""))
+                                enhanced-dirvish-preview--lang-filename-alist nil nil #'string=))
+             (styled (if syntax (enhanced-dirvish-preview--fontify-string raw syntax) raw)))
+        (shr-ensure-newline)
+        (add-face-text-property 0 (length styled) 'enhanced-dirvish-preview-code t styled)
+        (insert styled)
+        (shr-ensure-newline)))))
+
+(defun enhanced-dirvish-preview--markdown-svg (node)
+  "Insert raw inline SVG preserved in NODE."
+  (let ((data (dom-attr node 'data)))
+    (enhanced-dirvish-preview--insert-markdown-svg
+     (and data (ignore-errors (decode-coding-string (base64-decode-string data) 'utf-8)))
+     "[SVG diagram]" t)))
+
+(defun enhanced-dirvish-preview--insert-markdown-svg (svg description &optional block)
+  "Show self-contained SVG data or DESCRIPTION, on its own line if BLOCK."
+  ;; Loading data without a base URI also keeps librsvg from opening files
+  ;; referred to by a diagram.
+  (enhanced-dirvish-preview--insert-markdown-image
+   (when (and svg (display-graphic-p) (image-type-available-p 'svg))
+     (ignore-errors
+       (create-image svg 'svg t :max-width enhanced-dirvish-preview--markdown-width)))
+   description block))
+
+(defun enhanced-dirvish-preview--markdown-image (node)
+  "Insert a local Markdown image from NODE, or show its description."
+  (let* ((src (dom-attr node 'src))
+         (alt (or (dom-attr node 'alt) "[Image]"))
+         (path (and src (car (split-string src "[?#]" t))))
+         (file (when (and path (not (string-match-p "\\`\\(?:[[:alpha:]][[:alnum:]+.-]*:\\|//\\)" src)))
+                 (expand-file-name (url-unhex-string path)
+                                   enhanced-dirvish-preview--markdown-directory))))
+    (if (and (display-graphic-p) file
+             (not (enhanced-dirvish-path-unsafe-probe-p file))
+             (file-regular-p file) (file-readable-p file))
+        (if (equal (downcase (or (file-name-extension file) "")) "svg")
+            (enhanced-dirvish-preview--insert-markdown-svg
+             (ignore-errors
+               (with-temp-buffer
+                 (insert-file-contents file nil 0 enhanced-dirvish-preview-max-bytes)
+                 (buffer-string)))
+             alt)
+          (enhanced-dirvish-preview--insert-markdown-image
+           (ignore-errors
+             (create-image file nil nil :max-width enhanced-dirvish-preview--markdown-width))
+           alt nil))
+      (shr-insert alt))))
+
+(defun enhanced-dirvish-preview--markdown-checkbox (node)
+  "Show a task marker for a Pandoc checkbox NODE."
+  (when (equal (dom-attr node 'type) "checkbox")
+    (shr-insert (if (assq 'checked (dom-attributes node)) "☑ " "☐ "))))
+
+(defun enhanced-dirvish-preview--insert-markdown-image (image alt block)
+  "Insert IMAGE into shr output, or ALT if unavailable.  BLOCK breaks lines."
+  (when block (shr-ensure-newline))
+  (if-let* ((size (and image (ignore-errors (image-size image t)))))
+      (shr-insert (propertize "￼" 'display image 'help-echo alt
+                              'enhanced-dirvish-markdown-image (cons image (car size))))
+    (shr-insert alt))
+  (when block (shr-ensure-newline)))
+
+(defun enhanced-dirvish-preview--resize-markdown-images ()
+  "Scale embedded images to match the preview's current text size."
+  (when (text-property-not-all (point-min) (point-max) 'enhanced-dirvish-markdown-image nil)
+    (let ((scale (if text-scale-mode (expt text-scale-mode-step text-scale-mode-amount) 1))
+          (inhibit-read-only t))
+      (with-silent-modifications
+        (save-excursion
+          (goto-char (point-min))
+          (while-let ((match (text-property-search-forward 'enhanced-dirvish-markdown-image)))
+            (pcase-let* ((`(,original . ,width) (prop-match-value match))
+                         (image (copy-tree original)))
+              (setf (image-property image :max-width) nil
+                    (image-property image :width) (max 1 (round (* scale width))))
+              (put-text-property (prop-match-beginning match) (prop-match-end match)
+                                 'display image))))))))
+
+(defun enhanced-dirvish-preview--insert-basic-markdown (file buf)
+  "Show headings and fenced code in FILE if the full renderer is unavailable."
   (let ((dir (file-name-directory file))
         (text (with-temp-buffer
                 (insert-file-contents file nil 0 enhanced-dirvish-preview-max-bytes)
@@ -1670,7 +1900,7 @@ When TURNING, retain the current page if Poppler cannot render the new one."
           (enhanced-dirvish-preview--sync-text-scale))
         `(buffer . ,buf)))))
 
-(dirvish-define-preview enhanced-dirvish-rich-document (file ext _preview-window dv)
+(dirvish-define-preview enhanced-dirvish-rich-document (file ext preview-window dv)
   "Render Markdown, Org, HTML, DOCX, ODT, RTF, CSV, XLSX, Fonts, 3D/Routes & Archives."
   (when (and file (not (file-directory-p file)))
     (let* ((ext (downcase (or ext "")))
@@ -1689,7 +1919,7 @@ When TURNING, retain the current page if Poppler cannot render the new one."
            ((not rendered)
             (enhanced-dirvish-preview--render-source-file
              file buf (cond (markdown "preview.md") (html "preview.html") (t "preview.xml"))))
-           (markdown (enhanced-dirvish-preview--safe-insert-markdown file buf))
+           (markdown (enhanced-dirvish-preview--safe-insert-markdown file buf preview-window))
            (html (enhanced-dirvish-preview--safe-insert-html file buf)))
           (with-current-buffer buf
             (setq-local enhanced-dirvish-preview--file file)

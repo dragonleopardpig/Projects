@@ -3041,6 +3041,9 @@ in
     '';
   };
 
+  # Enhanced Dirvish renders TeX math to SVG with the local MathJax bundle.
+  xdg.dataFile."enhanced-dirvish/mathjax".source = "${pkgs.mathjax}/lib/node_modules/mathjax";
+
   # Native Rust/Cairo/LaTeX dynamic module + Elisp for `emacs-minder', built
   # declaratively so all hosts get matching `libemacs_minder.so' and Elisp on rebuild.
   home.file.".emacs.d/modules/emacs-minder" = {

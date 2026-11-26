@@ -629,6 +629,83 @@ network mount; local and removable folders are searched as usual."
       (ignore-errors (delete-directory tmp t))
       (ignore-errors (delete-directory enhanced-dirvish-state-dir t)))))
 
+(ert-deftest enhanced-dirvish-test-markdown-preview-formatting ()
+  "Render ordinary Markdown syntax and interpret escapes outside code."
+  (skip-unless (and (executable-find "pandoc") (libxml-available-p)))
+  (let ((file (make-temp-file
+               "enhanced-dirvish-markdown-" nil ".md"
+               (concat "# Heading\n\n"
+                       "**Bold text** and *italic text*. File\\.pdf, literal \\*star\\*.\n\n"
+                       "- [x] checked task\n- [ ] unchecked task\n\n"
+                       "| Column A | Column B |\n| --- | --- |\n| first cell | second cell |\n\n"
+                       "[Link label](https://example.invalid/) and `code\\.literal`.\n"))))
+    (unwind-protect
+        (with-temp-buffer
+          (enhanced-dirvish-preview--safe-insert-markdown file (current-buffer))
+          (goto-char (point-min))
+          (should (search-forward "Bold text" nil t))
+          (should (memq 'bold (ensure-list (get-text-property (match-beginning 0) 'face))))
+          (should (search-forward "italic text" nil t))
+          (should (memq 'italic (ensure-list (get-text-property (match-beginning 0) 'face))))
+          (dolist (text '("File.pdf" "*star*" "☑" "☐" "first cell" "Link label" "code\\.literal"))
+            (goto-char (point-min))
+            (should (search-forward text nil t)))
+          (should-not (string-search "File\\.pdf" (buffer-string)))
+          (should-not (string-search "**Bold text**" (buffer-string))))
+      (delete-file file))))
+
+(ert-deftest enhanced-dirvish-test-markdown-preview-vector-graphics ()
+  "Display fenced, inline and linked SVG and baseline-aligned math as images."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'svg)
+                    (libxml-available-p) (executable-find "pandoc") (executable-find "node")
+                    (file-readable-p (expand-file-name "tex-svg.js" enhanced-dirvish-markdown-mathjax-directory))))
+  (let* ((dir (make-temp-file "enhanced-dirvish-markdown-" t))
+         (file (expand-file-name "graphics.md" dir))
+         (svg "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\"><rect width=\"24\" height=\"24\"/></svg>"))
+    (unwind-protect
+        (progn
+          (write-region svg nil (expand-file-name "my vector.svg" dir) nil 'silent)
+          (write-region (concat "Inline $x^2$ and \\(y^2\\).\n\n"
+                                "$$\\frac{1}{2}$$\n\n"
+                                "```svg\n" svg "\n```\n\n"
+                                svg "\n\n![Linked vector](my%20vector.svg)\n")
+                        nil file nil 'silent)
+          (with-temp-buffer
+            (enhanced-dirvish-preview--safe-insert-markdown file (current-buffer))
+            (goto-char (point-min))
+            (let ((images 0) (math 0) first-width)
+              (while-let ((match (text-property-search-forward 'enhanced-dirvish-markdown-image)))
+                (let* ((pos (prop-match-beginning match))
+                       (image (get-text-property pos 'display)))
+                  (should (eq (image-property image :type) 'svg))
+                  (when (numberp (image-property image :ascent)) (cl-incf math))
+                  (unless first-width (setq first-width (image-property image :width)))
+                  (cl-incf images)))
+              (should (= images 6))
+              (should (= math 3))
+              (text-scale-set 2)
+              (enhanced-dirvish-preview--resize-markdown-images)
+              (goto-char (point-min))
+              (let* ((match (text-property-search-forward 'enhanced-dirvish-markdown-image))
+                     (image (get-text-property (prop-match-beginning match) 'display)))
+                (should (> (image-property image :width) first-width))))))
+      (delete-directory dir t))))
+
+(ert-deftest enhanced-dirvish-test-nix-preview-highlights-without-mode-association ()
+  "Associate Nix syntax even when the preview runs before opening a Nix file."
+  (skip-unless (or (locate-library "nix-mode") (locate-library "nix-ts-mode")))
+  (let* ((file (make-temp-file "enhanced-dirvish-config-" nil ".nix"
+                               "let value = \"text\"; in value\n"))
+         (auto-mode-alist (cl-remove-if (lambda (entry) (string-match-p (car entry) file))
+                                       auto-mode-alist)))
+    (unwind-protect
+        (with-temp-buffer
+          (enhanced-dirvish-preview--render-source-file file (current-buffer))
+          (goto-char (point-min))
+          (should (search-forward "let" nil t))
+          (should (get-text-property (match-beginning 0) 'face)))
+      (delete-file file))))
+
 (ert-deftest enhanced-dirvish-test-rendered-markdown-and-dashboard-install ()
   (let ((md (make-temp-file "enhanced-dirvish-md-" nil ".md" "# Heading\n\n- `code` item\n"))
         (buf (get-buffer-create " *enhanced-dirvish-ert-md*")))

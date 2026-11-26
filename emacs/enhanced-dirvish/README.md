@@ -37,13 +37,19 @@ Optional external tools, each enabling one feature (Settings & Diagnostics,
 | `mpv`, `mediainfo` | Audio/video preview and badges |
 | `pdftoppm` | PDF previews |
 | `7z` | Archive preview, compress, extract |
-| `pandoc` | DOCX / ODT / RTF previews |
+| `pandoc` | Rendered Markdown and DOCX / ODT / RTF previews |
+| Node.js and MathJax | Offline vector equations in Markdown previews |
 | `exiftool` | Camera RAW / EXIF metadata |
 | `fc-query` | Font previews |
 | `wl-paste` | Pasting clipboard images and text as files (Wayland) |
 
 Optional Emacs packages: `vterm` (the pane terminal falls back to
 `ansi-term`), `dashboard` (adds navigator buttons) and `transpose-frame`.
+
+Set `enhanced-dirvish-markdown-mathjax-directory` to the directory containing
+`tex-svg.js` and the MathJax components if the bundle is installed outside
+`$XDG_DATA_HOME/enhanced-dirvish/mathjax` (or `~/.local/share/enhanced-dirvish/mathjax`
+when `XDG_DATA_HOME` is unset).
 
 ## Installation
 
