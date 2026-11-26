@@ -428,13 +428,14 @@ zoom commands do."
   "Display the current mode and a control for switching from RENDERED."
   (setq-local enhanced-dirvish-preview--document-rendered rendered
               header-line-format
-              (list (if rendered "  Rendered    " "  Source    ")
+              (list (if rendered "  Rendered  " "  Source  ")
                     (propertize (if rendered " Show Source " " Show Rendered ")
                                 'face 'enhanced-dirvish-header-accent
                                 'mouse-face 'highlight
                                 'pointer 'hand
                                 'help-echo "Switch document preview (M-v)"
-                                'local-map enhanced-dirvish-preview--document-header-map))))
+                                'local-map enhanced-dirvish-preview--document-header-map)
+                    (propertize " Alt+V (M-v)" 'face 'enhanced-dirvish-hint-desc))))
 
 (defun enhanced-dirvish-toggle-preview-wrap ()
   "Toggle soft line wrapping inside preview buffer (`W')."
