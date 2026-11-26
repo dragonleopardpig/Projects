@@ -1431,10 +1431,16 @@ MODE may be:
              (svg (alist-get 'svg result))
              (foreground (or (face-foreground 'default nil t) "black"))
              (image (when svg
-                      (create-image
-                       (string-replace "currentColor" foreground svg) 'svg t
-                       :width (max 1 (round (* (frame-char-height) (alist-get 'ems result))))
-                       :ascent (alist-get 'ascent result)))))
+                      (let* ((background (face-background 'default nil t))
+                             (rgb (and background (color-values background))))
+                        ;; Emacs flattens SVGs against a background before
+                        ;; drawing them. Mask that color so frame alpha shows.
+                        (create-image
+                         (string-replace "currentColor" foreground svg) 'svg t
+                         :width (max 1 (round (* (frame-char-height) (alist-get 'ems result))))
+                         :ascent (alist-get 'ascent result)
+                         :background background
+                         :mask (if rgb (list 'heuristic rgb) 'heuristic))))))
         (enhanced-dirvish-preview--insert-markdown-image image (cdr key) (car key)))
     (shr-tag-span node)))
 

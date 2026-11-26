@@ -678,7 +678,11 @@ network mount; local and removable folders are searched as usual."
                 (let* ((pos (prop-match-beginning match))
                        (image (get-text-property pos 'display)))
                   (should (eq (image-property image :type) 'svg))
-                  (when (numberp (image-property image :ascent)) (cl-incf math))
+                  (if (numberp (image-property image :ascent))
+                      (progn
+                        (should (image-mask-p image))
+                        (cl-incf math))
+                    (should-not (image-property image :mask)))
                   (unless first-width (setq first-width (image-property image :width)))
                   (cl-incf images)))
               (should (= images 6))
@@ -688,7 +692,8 @@ network mount; local and removable folders are searched as usual."
               (goto-char (point-min))
               (let* ((match (text-property-search-forward 'enhanced-dirvish-markdown-image))
                      (image (get-text-property (prop-match-beginning match) 'display)))
-                (should (> (image-property image :width) first-width))))))
+                (should (> (image-property image :width) first-width))
+                (should (image-mask-p image))))))
       (delete-directory dir t))))
 
 (ert-deftest enhanced-dirvish-test-nix-preview-highlights-without-mode-association ()
