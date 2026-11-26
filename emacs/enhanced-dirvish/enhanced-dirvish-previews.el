@@ -70,6 +70,9 @@
 (defvar-local enhanced-dirvish-preview--document-rendered nil
   "Whether a switchable document preview currently shows its rendered view.")
 
+(defvar-local enhanced-dirvish-preview--markdown-document nil
+  "Parsed Markdown source and the width and scale used to lay it out.")
+
 (defvar enhanced-dirvish-media-proc nil "Active headless mpv playback process.")
 (defvar enhanced-dirvish-media-socket nil "Unix domain IPC socket for active mpv playback.")
 (defvar enhanced-dirvish-media-file nil "Currently loaded media path.")
@@ -465,6 +468,8 @@ zoom commands do."
         (setf (enhanced-dirvish-prefs-preview-text-scale p) scale)
         (enhanced-dirvish-prefs-save))
       (enhanced-dirvish-preview--resize-markdown-images)
+      (when-let* ((window (get-buffer-window)))
+        (enhanced-dirvish-preview--reflow-markdown window))
       (force-mode-line-update))))
 
 (defun enhanced-dirvish-preview--bind-zoom-keys (map &optional plain)
@@ -487,7 +492,8 @@ zoom commands do."
               (buf (window-buffer win)))
     (with-current-buffer buf
       (enhanced-dirvish-preview--set-text-scale)
-      (setq-local truncate-lines (not (enhanced-dirvish-prefs-preview-text-wrap (enhanced-dirvish-prefs)))))))
+      (setq-local truncate-lines (not (enhanced-dirvish-prefs-preview-text-wrap (enhanced-dirvish-prefs))))
+      (enhanced-dirvish-preview--reflow-markdown win))))
 
 (defun enhanced-dirvish-toggle-rendered-document ()
   "Switch between rendered and source previews (`M-v')."
@@ -1398,6 +1404,7 @@ MODE may be:
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (erase-buffer))
+      (setq enhanced-dirvish-preview--markdown-document nil)
       (setq buffer-read-only t
             enhanced-dirvish-active-preview-kind (or kind 'text))
       (setq-local truncate-lines (not (enhanced-dirvish-prefs-preview-text-wrap (enhanced-dirvish-prefs))))
@@ -1410,32 +1417,148 @@ MODE may be:
                  (insert-file-contents file nil 0 enhanced-dirvish-preview-max-bytes)
                  (buffer-string)))
          (dom (enhanced-dirvish-preview--markdown-dom text)))
-    (if (not dom)
-        (enhanced-dirvish-preview--insert-basic-markdown file buf)
-      (let* ((window (or window (selected-window)))
-             (shr-width (max 12 (- (window-body-width window) 3)))
-             (shr-use-fonts (display-graphic-p (window-frame window)))
-             (shr-bullet "• ")
-             (shr-hr-line ?─)
-             (shr-inhibit-images t)
-             (shr-blocked-images ".*")
-             (shr-external-rendering-functions
-              '((pre . enhanced-dirvish-preview--markdown-code)
-                (img . enhanced-dirvish-preview--markdown-image)
-                (dirvish-svg . enhanced-dirvish-preview--markdown-svg)
-                (input . enhanced-dirvish-preview--markdown-checkbox)
-                (span . enhanced-dirvish-preview--markdown-span)))
-             (enhanced-dirvish-preview--markdown-directory (file-name-directory file))
-             (enhanced-dirvish-preview--markdown-width (max 1 (window-body-width window t)))
-             (enhanced-dirvish-preview--math-images
-              (when (and (display-graphic-p) (image-type-available-p 'svg))
-                (enhanced-dirvish-preview--markdown-math dom))))
-        (with-current-buffer buf
-          (let ((inhibit-read-only t))
-            (erase-buffer)
-            (shr-insert-document dom)
-            (enhanced-dirvish-preview--resize-markdown-images)
-            (goto-char (point-min))))))))
+    (with-current-buffer buf
+      (setq enhanced-dirvish-preview--markdown-document (and dom (list file dom nil nil)))
+      (if (not dom)
+          (enhanced-dirvish-preview--insert-basic-markdown file buf)
+        (enhanced-dirvish-preview--reflow-markdown (or window (selected-window)))
+        (add-hook 'window-size-change-functions
+                  #'enhanced-dirvish-preview--markdown-window-resized nil t)))))
+
+(defun enhanced-dirvish-preview--markdown-window-resized (window)
+  "Reflow a displayed Markdown preview after WINDOW finishes redisplay."
+  (when (and enhanced-dirvish-preview--markdown-document
+             (not (equal (nth 2 enhanced-dirvish-preview--markdown-document)
+                         (window-body-width window t))))
+    (run-at-time 0 nil
+                 (lambda (win buf)
+                   (when (and (window-live-p win) (eq (window-buffer win) buf))
+                     (with-current-buffer buf
+                       (enhanced-dirvish-preview--reflow-markdown win))))
+                 window (current-buffer))))
+
+(defun enhanced-dirvish-preview--reflow-markdown (window)
+  "Lay out the current Markdown preview for WINDOW when its geometry changes."
+  (when enhanced-dirvish-preview--markdown-document
+    (pcase-let ((`(,file ,dom ,old-width ,old-scale)
+                 enhanced-dirvish-preview--markdown-document)
+                (width (window-body-width window t))
+                (scale (if text-scale-mode text-scale-mode-amount 0)))
+      (unless (and (equal width old-width) (equal scale old-scale))
+        (let* ((shown (eq (current-buffer) (window-buffer window)))
+               (old-size (max 1 (buffer-size)))
+               (cursor (and shown (- (window-point window) (point-min))))
+               (start (and shown (- (window-start window) (point-min)))))
+          (enhanced-dirvish-preview--render-markdown file dom window)
+          (setq enhanced-dirvish-preview--markdown-document
+                (list file dom (window-body-width window t) scale))
+          (when start
+            (set-window-point window (+ (point-min) (/ (* cursor (buffer-size)) old-size)))
+            (set-window-start window (+ (point-min) (/ (* start (buffer-size)) old-size)) t)))))))
+
+(defun enhanced-dirvish-preview--render-markdown (file dom window)
+  "Insert Markdown DOM for FILE into the current buffer, laid out for WINDOW."
+  (let* ((buffer (current-buffer))
+         (font-remapping face-remapping-alist)
+         (shr-width (max 1 (- (window-body-width window) 5)))
+         (shr-use-fonts (display-graphic-p (window-frame window)))
+         (shr-bullet "• ")
+         (shr-hr-line ?─)
+         (shr-inhibit-images t)
+         (shr-blocked-images ".*")
+         (shr-external-rendering-functions
+          '((pre . enhanced-dirvish-preview--markdown-code)
+            (img . enhanced-dirvish-preview--markdown-image)
+            (dirvish-svg . enhanced-dirvish-preview--markdown-svg)
+            (input . enhanced-dirvish-preview--markdown-checkbox)
+            (table . enhanced-dirvish-preview--markdown-table)
+            (li . enhanced-dirvish-preview--markdown-list-item)
+            (span . enhanced-dirvish-preview--markdown-span)))
+         (enhanced-dirvish-preview--markdown-directory (file-name-directory file))
+         (enhanced-dirvish-preview--markdown-width (max 1 (window-body-width window t)))
+         (enhanced-dirvish-preview--math-images
+          (when (and shr-use-fonts (image-type-available-p 'svg))
+            (enhanced-dirvish-preview--markdown-math dom))))
+    (with-selected-window window
+      ;; SHR measures table cells in fresh buffers. Give those buffers the
+      ;; preview's font size too, so that the measured columns match display.
+      (with-temp-buffer
+        (let ((face-remapping-alist font-remapping))
+          (with-current-buffer buffer
+            (let ((inhibit-read-only t)
+                  (truncate-lines nil))
+              (erase-buffer)
+              (shr-insert-document (copy-tree dom))
+              (enhanced-dirvish-preview--resize-markdown-images)
+              (goto-char (point-min)))))))))
+
+(defun enhanced-dirvish-preview--markdown-list-item (node)
+  "Render a list item NODE with a bullet or a decimal marker."
+  (if (not (numberp shr-list-mode))
+      (shr-tag-li node)
+    (let ((shr-internal-bullet
+           (let ((marker (format "%d. " shr-list-mode)))
+             (cons marker (if shr-use-fonts
+                              (string-pixel-width marker (current-buffer))
+                            (length marker))))))
+      (cl-incf shr-list-mode)
+      (let ((shr-list-mode 'ul))
+        (shr-tag-li node)))))
+
+(defun enhanced-dirvish-preview--markdown-table (node)
+  "Render table NODE with a visible grid and distinct column headings."
+  (let* ((rows (cl-mapcan (lambda (child)
+                           (pcase (dom-tag child)
+                             ('tr (list child))
+                             ((or 'thead 'tbody 'tfoot)
+                              (cl-loop for row in (dom-non-text-children child)
+                                       when (eq (dom-tag row) 'tr) collect row))))
+                         (dom-non-text-children node)))
+         (table `(table ,(dom-attributes node) (tbody nil ,@rows)))
+         (shr-table-horizontal-line ?─)
+         (shr-table-vertical-line ?│)
+         (shr-table-corner ?┼)
+         (shr-table-separator-pixel-width
+          (if shr-use-fonts (max 1 (string-pixel-width "─" (current-buffer))) 1))
+         (columns (shr-max-columns (car (dom-children table))))
+         (shr-internal-width
+          (max 1 (- shr-internal-width shr-indentation
+                    (* (1+ columns) shr-table-separator-pixel-width))))
+         (fill-find-break-point-function-table
+          (copy-sequence fill-find-break-point-function-table)))
+    ;; Keep header and body in the same grid, and let long file names wrap.
+    (dolist (char '(?_ ?/ ?- ?.))
+      (set-char-table-range fill-find-break-point-function-table char t))
+    (when-let* ((caption (dom-child-by-tag node 'caption)))
+      (shr-ensure-paragraph)
+      (shr-descend caption))
+    (dolist (row rows)
+      (dolist (cell (dom-non-text-children row))
+        (when (eq (dom-tag cell) 'th)
+          (setcdr (cdr cell) (list `(strong nil ,@(dom-children cell)))))))
+    (if (not rows)
+        (shr-generic node)
+      (let ((start (point))
+            (available (- (if shr-use-fonts
+                              enhanced-dirvish-preview--markdown-width
+                            (window-body-width))
+                          shr-table-separator-pixel-width)))
+        (shr-tag-table (copy-tree table))
+        (when (save-excursion
+                (goto-char start)
+                (catch 'overflow
+                  (while-let ((gap (text-property-search-forward 'shr-table-indent)))
+                    (let ((align (get-text-property (prop-match-beginning gap) 'display)))
+                      (when (> (car (nth 2 align)) available)
+                        (throw 'overflow t))))
+                  nil))
+          (delete-region start (point))
+          (set-char-table-range fill-find-break-point-function-table t t)
+          ;; A narrow pane may require splitting otherwise unbreakable words.
+          ;; Reserve a glyph per cell for pixel filling's character rounding.
+          (let ((shr-internal-width
+                 (max 1 (- shr-internal-width (* columns shr-table-separator-pixel-width)))))
+            (shr-tag-table table)))))))
 
 (defun enhanced-dirvish-preview--markdown-dom (text)
   "Convert Markdown TEXT to an offline HTML document for shr."

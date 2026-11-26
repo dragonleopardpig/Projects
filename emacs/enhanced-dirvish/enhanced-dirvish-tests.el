@@ -637,6 +637,8 @@ network mount; local and removable folders are searched as usual."
                (concat "# Heading\n\n"
                        "**Bold text** and *italic text*. File\\.pdf, literal \\*star\\*.\n\n"
                        "- [x] checked task\n- [ ] unchecked task\n\n"
+                       "- Top-level bullet\n\n    8. Nested step\n    9. Next nested step\n\n"
+                       "7. First step\n\n   Continuation paragraph.\n\n8. Second step\n\n"
                        "| Column A | Column B |\n| --- | --- |\n| first cell | second cell |\n\n"
                        "[Link label](https://example.invalid/) and `code\\.literal`.\n"))))
     (unwind-protect
@@ -650,8 +652,46 @@ network mount; local and removable folders are searched as usual."
           (dolist (text '("File.pdf" "*star*" "☑" "☐" "first cell" "Link label" "code\\.literal"))
             (goto-char (point-min))
             (should (search-forward text nil t)))
+          (goto-char (point-min))
+          (dolist (line '("^• Top-level bullet" "^ +8\\. Nested step" "^ +9\\. Next nested step"
+                          "^7\\. First step" "^ +Continuation paragraph" "^8\\. Second step"))
+            (should (re-search-forward line nil t)))
+          (should (re-search-forward "^│Column A +│Column B +│$" nil t))
+          (should (memq 'bold (ensure-list (get-text-property (1+ (match-beginning 0)) 'face))))
+          (should (re-search-forward "^│first cell +│second cell +│$" nil t))
           (should-not (string-search "File\\.pdf" (buffer-string)))
           (should-not (string-search "**Bold text**" (buffer-string))))
+      (delete-file file))))
+
+(ert-deftest enhanced-dirvish-test-markdown-table-reflows-at-text-zoom ()
+  "Keep table rows inside the preview when the text grows."
+  (skip-unless (and (display-graphic-p) (executable-find "pandoc") (libxml-available-p)))
+  (let ((file (make-temp-file
+               "enhanced-dirvish-table-" nil ".md"
+               (concat "| File | Details |\n| --- | --- |\n"
+                       "| `long_file_name_with_several_words_and_an_extension.json` | "
+                       "Give this column enough text to wrap across several lines. |\n")))
+        (enhanced-dirvish-prefs-current (enhanced-dirvish-prefs--create)))
+    (unwind-protect
+        (save-window-excursion
+          (with-temp-buffer
+            (let ((window (selected-window))
+                  (truncate-lines t))
+              (switch-to-buffer (current-buffer))
+              (enhanced-dirvish-preview--safe-insert-markdown file (current-buffer) window)
+              (let ((before (count-lines (point-min) (point-max))))
+                (setf (enhanced-dirvish-prefs-preview-text-scale (enhanced-dirvish-prefs)) 5)
+                (cl-letf (((symbol-function 'enhanced-dirvish-preview--active-window)
+                           (lambda () window)))
+                  (enhanced-dirvish-preview--apply-text-zoom))
+                (should (= text-scale-mode-amount 5))
+                (should (> (count-lines (point-min) (point-max)) before)))
+              (setq truncate-lines t)
+              (goto-char (point-min))
+              (while (re-search-forward "^│" nil t)
+                (should (<= (car (window-text-pixel-size
+                                  window (line-beginning-position) (line-end-position) t))
+                            (window-body-width window t)))))))
       (delete-file file))))
 
 (ert-deftest enhanced-dirvish-test-markdown-preview-vector-graphics ()
