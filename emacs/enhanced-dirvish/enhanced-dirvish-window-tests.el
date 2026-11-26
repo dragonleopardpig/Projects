@@ -384,6 +384,40 @@ sidebar (28 -> 14 columns), because the split halved the whole browser."
                   (should enhanced-dirvish-preview--document-rendered)
                   (select-window main))))))))))
 
+(ert-deftest enhanced-dirvish-test-window-regular-open-ignores-preview-buffer ()
+  "Ctrl+Enter opens the full editable file even with a legacy literal preview."
+  (enhanced-dirvish-window-test--with-browser 'columns
+    (let* ((file (expand-file-name "long.txt" directory))
+           (contents "This first line is only a preview.\nThe full file ends here.\n")
+           (dirvish-preview-large-file-threshold 24)
+           (dv (dirvish-curr))
+           editor)
+      (write-region contents nil file nil 'silent)
+      (enhanced-dirvish-refresh-active-view)
+      (enhanced-dirvish-goto-file file)
+      (let ((preview (window-buffer (dv-preview-window dv))))
+        (unwind-protect
+            (progn
+              (unless (string-prefix-p "PREVIEW :: " (buffer-name preview))
+                (setq preview (cdr (dirvish--preview-file-maybe-truncate dv file (length contents)))))
+              (with-current-buffer preview
+                (should-not buffer-file-name)
+                (should (equal enhanced-dirvish-preview--file file))
+                (should-not (string-search "The full file ends here." (buffer-string)))
+                ;; Match a cached preview from before this fix.
+                (setq buffer-file-name file))
+              (should (eq (find-buffer-visiting file) preview))
+              (should (eq (key-binding (kbd "C-<return>")) #'enhanced-dirvish-open-in-new-tab))
+              (execute-kbd-macro (kbd "C-<return>"))
+              (setq editor (current-buffer))
+              (should-not (eq editor preview))
+              (should (equal buffer-file-name file))
+              (should (equal (buffer-string) contents))
+              (should-not buffer-read-only)
+              (should-not enhanced-dirvish-preview-read-mode)
+              (should-not enhanced-dirvish-preview-edit-mode))
+          (when (buffer-live-p editor) (kill-buffer editor)))))))
+
 (ert-deftest enhanced-dirvish-test-window-markdown-preview-edit-highlights ()
   "Use Markdown font-lock in both source preview and direct editing."
   (skip-unless (or (locate-library "markdown-mode")

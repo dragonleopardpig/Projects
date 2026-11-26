@@ -31,6 +31,7 @@
 (declare-function enhanced-dirvish-windows--delete "enhanced-dirvish-windows" (window))
 (declare-function enhanced-dirvish-windows--reconcile "enhanced-dirvish-windows" (&optional frame))
 (declare-function enhanced-dirvish-file-manager-keys-for "enhanced-dirvish-keys" (command))
+(declare-function enhanced-dirvish-preview--find-file-buffer "enhanced-dirvish-previews" (file))
 
 ;;;; Workspace, Tab & Dual-Pane State
 
@@ -867,20 +868,25 @@ Keeps shell process & CWD alive while hidden."
       (message "Moved tab to position %d" (1+ next)))))
 
 (defun enhanced-dirvish-open-in-new-tab ()
-  "Open folder at point in a new Enhanced Dirvish tab (`C-RET')."
+  "Open the folder in a Dirvish tab or visit the file for normal editing."
   (interactive)
-  (let ((f (enhanced-dirvish-current-file)))
-    (if (and f (file-directory-p f))
-        (enhanced-dirvish-tab-new f)
-      (find-file f))))
+  (let ((file (or (enhanced-dirvish-current-file)
+                  (user-error "No file or folder at point"))))
+    (if (file-directory-p file)
+        (enhanced-dirvish-tab-new file)
+      (pop-to-buffer-same-window (enhanced-dirvish-preview--find-file-buffer file)))))
 
 (defun enhanced-dirvish-open-in-new-frame ()
-  "Open folder at point in a new Emacs frame (`S-RET')."
+  "Open the file or folder at point in a new Emacs frame (`S-RET')."
   (interactive)
-  (let ((f (or (enhanced-dirvish-current-file) default-directory))
-        (frame (make-frame)))
+  (let* ((file (or (enhanced-dirvish-current-file) default-directory))
+         (directory (file-directory-p file))
+         (buffer (unless directory (enhanced-dirvish-preview--find-file-buffer file)))
+         (frame (make-frame)))
     (select-frame-set-input-focus frame)
-    (if (file-directory-p f) (enhanced-dirvish-open-location f) (find-file f))))
+    (if directory
+        (enhanced-dirvish-open-location file)
+      (pop-to-buffer-same-window buffer))))
 
 ;;;; Enhanced Dirvish Left Sidebar (Places + Pinned Bookmarks + Grouped Devices w/ Capacity Bars)
 

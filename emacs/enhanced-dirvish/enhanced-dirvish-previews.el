@@ -221,14 +221,38 @@ Returns fontified `buffer-string' with realized `face' text properties."
           (string= nm "*Enhanced Dirvish Preview*")))))
 
 (defun enhanced-dirvish-preview--setup-dirvish-fontlock-h ()
-  "Materialize font-lock faces immediately in Dirvish `PREVIEW ::' buffers."
+  "Fontify Dirvish's preview and keep its file separate from editing buffers."
   (when (or font-lock-defaults
             (and (fboundp 'treesit-parser-list) (treesit-parser-list)))
     (font-lock-mode 1)
     (ignore-errors
       (font-lock-ensure (point-min) (min (point-max) enhanced-dirvish-preview-max-bytes))))
   (when (eq enhanced-dirvish-active-preview-kind 'text)
-    (enhanced-dirvish-preview--set-text-scale)))
+    (enhanced-dirvish-preview--set-text-scale))
+  (when (and buffer-file-name (string-prefix-p "PREVIEW :: " (buffer-name)))
+    (enhanced-dirvish-preview--detach-file)))
+
+(defun enhanced-dirvish-preview--detach-file ()
+  "Keep this preview's source path without visiting the file."
+  (setq-local enhanced-dirvish-preview--file buffer-file-name)
+  (setq buffer-file-name nil))
+
+(defun enhanced-dirvish-preview--find-file-buffer (file)
+  "Return the normal file-visiting buffer for FILE."
+  (enhanced-dirvish-preview--ensure-common-auto-modes)
+  (enhanced-dirvish-preview--cancel-delay)
+  ;; A preview created before file detachment was enabled may still visit FILE.
+  (while-let ((buffer (find-buffer-visiting file))
+              ((enhanced-dirvish-preview--preview-buffer-p buffer)))
+    (with-current-buffer buffer
+      (enhanced-dirvish-preview--detach-file)))
+  (let ((buffer (find-file-noselect file)))
+    (with-current-buffer buffer
+      (when (bound-and-true-p enhanced-dirvish-preview-read-mode)
+        (enhanced-dirvish-preview-read-mode -1))
+      (when (bound-and-true-p enhanced-dirvish-preview-edit-mode)
+        (enhanced-dirvish-preview-edit-mode -1)))
+    buffer))
 
 
 (defun enhanced-dirvish--same-file-key (file)
