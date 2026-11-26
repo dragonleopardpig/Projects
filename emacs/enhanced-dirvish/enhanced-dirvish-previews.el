@@ -64,6 +64,9 @@
 (defvar-local enhanced-dirvish-preview--pdf-state nil
   "File, page, and metadata of the PDF shown in this preview buffer.")
 
+(defvar-local enhanced-dirvish-preview--image-scale nil
+  "Scale at which the current image preview was rendered.")
+
 (defvar-local enhanced-dirvish-preview--document-rendered nil
   "Whether a switchable document preview currently shows its rendered view.")
 
@@ -279,25 +282,65 @@ previews."
 
 (defun enhanced-dirvish-preview--refresh-now (&optional file)
   "Force immediate re-render of active preview, using FILE when supplied."
-  (when-let* ((win (enhanced-dirvish-preview--active-window)))
-    (if-let* ((pdf (buffer-local-value 'enhanced-dirvish-preview--pdf-state
-                                      (window-buffer win))))
+  (when-let* ((win (enhanced-dirvish-preview--active-window))
+              (buf (window-buffer win)))
+    (if-let* ((pdf (buffer-local-value 'enhanced-dirvish-preview--pdf-state buf)))
         (enhanced-dirvish-preview--render-pdf
-         (plist-get pdf :file) win (window-buffer win) (plist-get pdf :page))
-      (when-let* ((target (or file enhanced-dirvish-active-preview-file)))
-        (when (and (not file) (eq enhanced-dirvish-active-preview-kind 'image))
-          (dolist (b (buffer-list))
-            (when (string-prefix-p " *Dirvish-preview-img-" (buffer-name b))
-              (kill-buffer b))))
+         (plist-get pdf :file) win buf (plist-get pdf :page))
+      (when-let* ((target (or file (buffer-local-value 'enhanced-dirvish-preview--file buf)
+                             enhanced-dirvish-active-preview-file)))
         (enhanced-dirvish-preview--dispatch-dirvish-or-standalone
          (enhanced-dirvish-preview--session-for-window win) target win)))))
 
 (defun enhanced-dirvish-preview--zoom-kind ()
-  "Return the preview kind to zoom, using the visible PDF when present."
-  (if (when-let* ((win (enhanced-dirvish-preview--active-window)))
-        (buffer-local-value 'enhanced-dirvish-preview--pdf-state (window-buffer win)))
-      'pdf
+  "Return the zoom kind of the visible preview."
+  (if-let* ((win (enhanced-dirvish-preview--active-window)))
+      (with-current-buffer (window-buffer win)
+        (cond (enhanced-dirvish-preview--pdf-state 'pdf)
+              (enhanced-dirvish-preview--image-scale 'image)
+              (t 'text)))
     enhanced-dirvish-active-preview-kind))
+
+(defun enhanced-dirvish-preview--zoom-percent ()
+  "Return the current preview buffer's zoom as a percentage."
+  (round (* 100 (or (plist-get enhanced-dirvish-preview--pdf-state :scale)
+                    enhanced-dirvish-preview--image-scale
+                    (if text-scale-mode
+                        (expt text-scale-mode-step text-scale-mode-amount)
+                      1)))))
+
+(defun enhanced-dirvish-preview--zoom-menu (event)
+  "Open zoom controls for the preview clicked by EVENT."
+  (interactive "e")
+  (with-selected-window (posn-window (event-start event))
+    (popup-menu
+     '("Preview Zoom"
+       ["Zoom In" enhanced-dirvish-preview-zoom-in t]
+       ["Zoom Out" enhanced-dirvish-preview-zoom-out t]
+       ["Reset to 100%" enhanced-dirvish-preview-zoom-reset t])
+     event)))
+
+(defvar enhanced-dirvish-preview--zoom-header-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [header-line mouse-1] #'enhanced-dirvish-preview--zoom-menu)
+    map)
+  "Mouse binding for the preview's zoom percentage.")
+
+(defun enhanced-dirvish-preview--header ()
+  "Show document controls and a right-aligned zoom percentage."
+  (let* ((label (format " Zoom %d%% " (enhanced-dirvish-preview--zoom-percent)))
+         (width (1+ (string-width label)))
+         (room (max 0 (- (window-body-width (get-buffer-window)) width)))
+         (document (when (local-variable-p 'enhanced-dirvish-preview--document-rendered)
+                     (enhanced-dirvish-preview--document-controls room))))
+    (concat document
+            (propertize " " 'display `(space :align-to (- right ,width)))
+            (propertize (string-replace "%" "%%" label)
+                        'face 'enhanced-dirvish-header-accent
+                        'mouse-face 'highlight
+                        'pointer 'hand
+                        'help-echo "Click for preview zoom controls"
+                        'local-map enhanced-dirvish-preview--zoom-header-map))))
 
 (defun enhanced-dirvish-preview-zoom-in ()
   "Zoom in ONLY the currently active preview type (`text', `image', or `pdf')."
@@ -372,7 +415,8 @@ previews."
   "Restore saved text zoom without treating rendering as a user zoom change."
   (let ((enhanced-dirvish-preview--applying-text-zoom t))
     (text-scale-set (enhanced-dirvish-prefs-preview-text-scale (enhanced-dirvish-prefs))))
-  (enhanced-dirvish-preview--resize-markdown-images))
+  (enhanced-dirvish-preview--resize-markdown-images)
+  (force-mode-line-update))
 
 (defun enhanced-dirvish-preview--sync-text-scale ()
   "Give the current preview buffer the zoom its preview kind owns.
@@ -395,7 +439,8 @@ zoom commands do."
       (unless (= scale (enhanced-dirvish-prefs-preview-text-scale p))
         (setf (enhanced-dirvish-prefs-preview-text-scale p) scale)
         (enhanced-dirvish-prefs-save))
-      (enhanced-dirvish-preview--resize-markdown-images))))
+      (enhanced-dirvish-preview--resize-markdown-images)
+      (force-mode-line-update))))
 
 (defun enhanced-dirvish-preview--bind-zoom-keys (map &optional plain)
   "Bind preview zoom controls in MAP, including plain keys when PLAIN."
@@ -448,18 +493,25 @@ zoom commands do."
     map)
   "Mouse binding for the document preview's Source/Rendered control.")
 
+(defun enhanced-dirvish-preview--document-controls (room)
+  "Show the document toggle and fit its labels in ROOM columns."
+  (let* ((rendered enhanced-dirvish-preview--document-rendered)
+         (mode (if rendered "  Rendered  " "  Source  "))
+         (toggle (propertize (if rendered " Show Source " " Show Rendered ")
+                             'face 'enhanced-dirvish-header-accent
+                             'mouse-face 'highlight 'pointer 'hand
+                             'help-echo "Switch document preview (M-v)"
+                             'local-map enhanced-dirvish-preview--document-header-map))
+         (hint (propertize " Alt+V (M-v)" 'face 'enhanced-dirvish-hint-desc))
+         (with-hint (concat toggle hint)))
+    (cond ((>= room (string-width (concat mode with-hint))) (concat mode with-hint))
+          ((>= room (string-width with-hint)) with-hint)
+          (t (truncate-string-to-width toggle room)))))
+
 (defun enhanced-dirvish-preview--set-document-header (rendered)
-  "Display the current mode and a control for switching from RENDERED."
+  "Show the controls for a document currently displayed as RENDERED."
   (setq-local enhanced-dirvish-preview--document-rendered rendered
-              header-line-format
-              (list (if rendered "  Rendered  " "  Source  ")
-                    (propertize (if rendered " Show Source " " Show Rendered ")
-                                'face 'enhanced-dirvish-header-accent
-                                'mouse-face 'highlight
-                                'pointer 'hand
-                                'help-echo "Switch document preview (M-v)"
-                                'local-map enhanced-dirvish-preview--document-header-map)
-                    (propertize " Alt+V (M-v)" 'face 'enhanced-dirvish-hint-desc))))
+              header-line-format '(:eval (enhanced-dirvish-preview--header))))
 
 (defun enhanced-dirvish-toggle-preview-wrap ()
   "Toggle soft line wrapping inside preview buffer (`W')."
@@ -547,6 +599,8 @@ zoom commands do."
          (when-let* ((pdf (buffer-local-value 'enhanced-dirvish-preview--pdf-state b)))
            (setq enhanced-dirvish-preview--pdf-state pdf)
            (enhanced-dirvish-preview-pdf-mode 1))
+         (setq-local enhanced-dirvish-preview--image-scale
+                     (buffer-local-value 'enhanced-dirvish-preview--image-scale b))
          (setq-local truncate-lines (not (enhanced-dirvish-prefs-preview-text-wrap (enhanced-dirvish-prefs))))
          (goto-char (point-min))))
       (`(shell . ,cmd)
@@ -904,6 +958,8 @@ browser (`SPC')."
             (setq enhanced-dirvish-preview--file enhanced-dirvish-active-preview-file))
           (unless enhanced-dirvish-preview-read-mode
             (enhanced-dirvish-preview-read-mode 1))
+          (unless header-line-format
+            (setq-local header-line-format '(:eval (enhanced-dirvish-preview--header))))
           (setq buffer-read-only t)
           (unless cursor-type
             (setq-local cursor-type t)))
@@ -1789,15 +1845,15 @@ except Exception as e:
             (ignore-errors (process-file "timeout" nil nil nil "3" "magick" file "-auto-orient" "-resize" (format "%dx%d>" w h) tmp))
           (ignore-errors (process-file "timeout" nil nil nil "2" "vipsthumbnail" file "-s" (format "%dx%d" w h) "-o" tmp))))
       (with-current-buffer buf
+        (setq-local enhanced-dirvish-preview--image-scale scale
+                    enhanced-dirvish-preview--file file)
         (when svg
-          (setq-local enhanced-dirvish-preview--file file)
           (enhanced-dirvish-preview--set-document-header t))
         (let ((inhibit-read-only t)
               (img-src (if (and (not native-svg) (file-exists-p tmp)) tmp file)))
           (insert (concat "  "
                           (enhanced-dirvish-icon-glyph 'pictures 'enhanced-dirvish-header-accent)
-                          (propertize (format "  %s   Zoom: %.0f%%  ([C-+/C--/C-0])\n\n"
-                                              (file-name-nondirectory file) (* 100 scale))
+                          (propertize (format "  %s\n\n" (file-name-nondirectory file))
                                       'face 'enhanced-dirvish-header-accent)))
           (when (and (display-graphic-p) (file-readable-p img-src))
             (when-let ((img (create-image img-src (and native-svg 'svg) nil :max-width w :max-height h)))
@@ -1865,9 +1921,9 @@ When TURNING, retain the current page if Poppler cannot render the new one."
             (let ((inhibit-read-only t))
               (erase-buffer)
               (insert (propertize
-                       (format "  %s PDF Page %d%s · Zoom %.0f%%\n\n"
+                       (format "  %s PDF Page %d%s\n\n"
                                (enhanced-dirvish-icon-glyph 'file-pdf 'enhanced-dirvish-header-accent)
-                               page (if count (format " of %d" count) "") (* 100 scale))
+                               page (if count (format " of %d" count) ""))
                        'face 'enhanced-dirvish-header-accent))
               (if rendered
                   (when (display-graphic-p (window-frame win))
@@ -1878,7 +1934,7 @@ When TURNING, retain the current page if Poppler cannot render the new one."
                 (insert "  Could not render this PDF page.\n\n"))
               (when info (insert info))
               (setq enhanced-dirvish-preview--pdf-state
-                    (list :file file :revision revision :info info :count count :page page))
+                    (list :file file :revision revision :info info :count count :page page :scale scale))
               (setq-local enhanced-dirvish-preview--file file
                           buffer-read-only t
                           truncate-lines (not (enhanced-dirvish-prefs-preview-text-wrap

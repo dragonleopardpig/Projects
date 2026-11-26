@@ -1127,7 +1127,8 @@ Return the snapshot, if any."
          (arrow (if (eq (enhanced-dirvish-prefs-sort-direction p) 'desc) "↓" "↑"))
          (sort-lbl (capitalize (symbol-name (enhanced-dirvish-prefs-sort-key p))))
          (tenx (when (enhanced-dirvish-prefs-tenxer-mode p)
-                 (propertize " 10X " 'face 'enhanced-dirvish-pill-10x))))
+                 (propertize " 10xer keys " 'face 'enhanced-dirvish-pill-10x
+                             'help-echo "10xer keyboard navigation is active (C-S-m to switch)"))))
     (concat
      (propertize (format " [Sort By… %s %s] " sort-lbl arrow)
                  'face 'enhanced-dirvish-header-accent
