@@ -79,6 +79,7 @@ start with:
 | `C-k`, `C-f` | Search, filter the folder |
 | `F2`, `<delete>`, `C-z` | Rename, move to Trash, undo |
 | `S-F10` / right click | Context menu |
+| `M-v` (Alt+V) | Switch HTML, Markdown and SVG previews between rendered and source |
 | `C-,` | Settings & Diagnostics |
 | `g` | Refresh (default key scheme) |
 

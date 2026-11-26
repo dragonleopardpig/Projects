@@ -543,7 +543,7 @@ Shift-F10."
                       (lambda (pr v) (setf (enhanced-dirvish-prefs-show-hidden pr) v)))
 
           (insert "\n" (propertize "  APPEARANCE & PREVIEWS\n" 'face 'enhanced-dirvish-section-heading))
-          (toggle-row "Render Markdown & Docs by default" "Toggle raw source with [V]"
+          (toggle-row "Render documents and SVG by default" "Switch between rendered and source with M-v"
                       #'enhanced-dirvish-prefs-render-documents-by-default
                       (lambda (pr v) (setf (enhanced-dirvish-prefs-render-documents-by-default pr) v)))
           (toggle-row "Show full names in Compact view" "Disable ellipsis truncation in Compact"

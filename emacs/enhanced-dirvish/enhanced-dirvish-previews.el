@@ -62,6 +62,9 @@
 (defvar-local enhanced-dirvish-preview--pdf-state nil
   "File, page, and metadata of the PDF shown in this preview buffer.")
 
+(defvar-local enhanced-dirvish-preview--document-rendered nil
+  "Whether a switchable document preview currently shows its rendered view.")
+
 (defvar enhanced-dirvish-media-proc nil "Active headless mpv playback process.")
 (defvar enhanced-dirvish-media-socket nil "Unix domain IPC socket for active mpv playback.")
 (defvar enhanced-dirvish-media-file nil "Currently loaded media path.")
@@ -252,21 +255,20 @@ previews."
 
 ;;;; Independent Per-Type Zoom Controls (Text / Image / PDF)
 
-(defun enhanced-dirvish-preview--refresh-now ()
-  "Force immediate re-render of active Dirvish or standalone preview buffer."
+(defun enhanced-dirvish-preview--refresh-now (&optional file)
+  "Force immediate re-render of active preview, using FILE when supplied."
   (when-let* ((win (enhanced-dirvish-preview--active-window)))
     (if-let* ((pdf (buffer-local-value 'enhanced-dirvish-preview--pdf-state
                                       (window-buffer win))))
         (enhanced-dirvish-preview--render-pdf
          (plist-get pdf :file) win (window-buffer win) (plist-get pdf :page))
-      (when enhanced-dirvish-active-preview-file
-        (when (eq enhanced-dirvish-active-preview-kind 'image)
+      (when-let* ((target (or file enhanced-dirvish-active-preview-file)))
+        (when (and (not file) (eq enhanced-dirvish-active-preview-kind 'image))
           (dolist (b (buffer-list))
             (when (string-prefix-p " *Dirvish-preview-img-" (buffer-name b))
               (kill-buffer b))))
-        (let ((dv (ignore-errors (dirvish-curr))))
-          (enhanced-dirvish-preview--dispatch-dirvish-or-standalone
-           dv enhanced-dirvish-active-preview-file win))))))
+        (enhanced-dirvish-preview--dispatch-dirvish-or-standalone
+         (enhanced-dirvish-preview--session-for-window win) target win)))))
 
 (defun enhanced-dirvish-preview--zoom-kind ()
   "Return the preview kind to zoom, using the visible PDF when present."
@@ -394,15 +396,45 @@ zoom commands do."
       (setq-local truncate-lines (not (enhanced-dirvish-prefs-preview-text-wrap (enhanced-dirvish-prefs)))))))
 
 (defun enhanced-dirvish-toggle-rendered-document ()
-  "Toggle Rendered Document view vs Raw Source view (`V')."
+  "Switch between rendered and source previews (`M-v')."
   (interactive)
-  (let ((p (enhanced-dirvish-prefs)))
-    (setf (enhanced-dirvish-prefs-render-documents-by-default p)
-          (not (enhanced-dirvish-prefs-render-documents-by-default p)))
+  (let* ((p (enhanced-dirvish-prefs))
+         (win (enhanced-dirvish-preview--active-window))
+         (buf (and win (window-buffer win)))
+         (document (and buf (local-variable-p 'enhanced-dirvish-preview--document-rendered buf)))
+         (rendered (if document
+                       (buffer-local-value 'enhanced-dirvish-preview--document-rendered buf)
+                     (enhanced-dirvish-prefs-render-documents-by-default p)))
+         (file (and document (buffer-local-value 'enhanced-dirvish-preview--file buf))))
+    (setf (enhanced-dirvish-prefs-render-documents-by-default p) (not rendered))
     (enhanced-dirvish-prefs-save)
-    (enhanced-dirvish-preview--refresh-now)
+    (enhanced-dirvish-preview--refresh-now file)
     (message "Document preview mode: %s"
-             (if (enhanced-dirvish-prefs-render-documents-by-default p) "Rendered" "Source"))))
+             (if rendered "Source" "Rendered"))))
+
+(defun enhanced-dirvish-preview--toggle-header (event)
+  "Switch the document preview whose header received mouse EVENT."
+  (interactive "e")
+  (with-selected-window (posn-window (event-start event))
+    (enhanced-dirvish-toggle-rendered-document)))
+
+(defvar enhanced-dirvish-preview--document-header-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [header-line mouse-1] #'enhanced-dirvish-preview--toggle-header)
+    map)
+  "Mouse binding for the document preview's Source/Rendered control.")
+
+(defun enhanced-dirvish-preview--set-document-header (rendered)
+  "Display the current mode and a control for switching from RENDERED."
+  (setq-local enhanced-dirvish-preview--document-rendered rendered
+              header-line-format
+              (list (if rendered "  Rendered    " "  Source    ")
+                    (propertize (if rendered " Show Source " " Show Rendered ")
+                                'face 'enhanced-dirvish-header-accent
+                                'mouse-face 'highlight
+                                'pointer 'hand
+                                'help-echo "Switch document preview (M-v)"
+                                'local-map enhanced-dirvish-preview--document-header-map))))
 
 (defun enhanced-dirvish-toggle-preview-wrap ()
   "Toggle soft line wrapping inside preview buffer (`W')."
@@ -413,12 +445,13 @@ zoom commands do."
     (enhanced-dirvish-preview--apply-text-zoom)
     (message "Preview wrap: %s" (if (enhanced-dirvish-prefs-preview-text-wrap p) "ON" "OFF"))))
 
-(defun enhanced-dirvish-preview--render-source-file (file out-buf)
-  "Render syntax-highlighted source/text FILE preview into OUT-BUF cleanly."
+(defun enhanced-dirvish-preview--render-source-file (file out-buf &optional syntax-file)
+  "Show literal FILE in OUT-BUF, using SYNTAX-FILE to select a highlighting mode."
   (let* ((ext (downcase (or (file-name-extension file) "")))
          (disabled (and (boundp 'dirvish-preview-disabled-exts)
                         (member ext dirvish-preview-disabled-exts)))
          (binary-ext (and (boundp 'dirvish-binary-exts)
+                          (not (equal ext "svg"))
                           (member ext dirvish-binary-exts)))
          (attrs (ignore-errors (file-attributes file)))
          (size (and attrs (file-attribute-size attrs))))
@@ -455,7 +488,7 @@ zoom commands do."
                          (format "  Binary file preview skipped: %s\n"
                                  (file-name-nondirectory file))
                          'face 'shadow))
-              (insert (enhanced-dirvish-preview--fontify-string raw file))
+              (insert (enhanced-dirvish-preview--fontify-string raw (or syntax-file file)))
               (when (and size (> size enhanced-dirvish-preview-max-bytes))
                 (insert (propertize "\n\n  File truncated. End of partial preview.\n"
                                     'face 'shadow))))))
@@ -547,6 +580,11 @@ zoom commands do."
     ;; `*Enhanced Dirvish Preview*' is shared by every kind: an image after a zoomed
     ;; text file must not inherit the text zoom, nor a text file after it 0.
     (with-current-buffer out-buf
+      (setq-local enhanced-dirvish-preview--file file)
+      (when (and (eq (car-safe res) 'buffer)
+                 (local-variable-p 'enhanced-dirvish-preview--document-rendered (cdr res)))
+        (enhanced-dirvish-preview--set-document-header
+         (buffer-local-value 'enhanced-dirvish-preview--document-rendered (cdr res))))
       (enhanced-dirvish-preview--sync-text-scale))
     (when (window-live-p win)
       (set-window-buffer win out-buf)
@@ -561,6 +599,15 @@ zoom commands do."
       (and (window-live-p enhanced-dirvish-preview-standalone-window)
            enhanced-dirvish-preview-standalone-window)
       (get-buffer-window "*Enhanced Dirvish Preview*")))
+
+(defun enhanced-dirvish-preview--session-for-window (win)
+  "Return the Dirvish session that owns preview WIN."
+  (let ((current (ignore-errors (dirvish-curr))))
+    (if (and current (eq win (dv-preview-window current)))
+        current
+      (when (and (boundp 'dirvish--sessions) (hash-table-p dirvish--sessions))
+        (cl-loop for dv being the hash-values of dirvish--sessions
+                 when (eq win (dv-preview-window dv)) return dv)))))
 
 (defun enhanced-dirvish-preview--close-standalone ()
   "Close any open standalone `*Enhanced Dirvish Preview*' window cleanly."
@@ -825,12 +872,7 @@ browser (`SPC')."
 (defun enhanced-dirvish-preview--sync-read-buffer (pwin buf &optional ctx)
   "Give BUF in PWIN `enhanced-dirvish-preview-read-mode' and browser context."
   (when (and (window-live-p pwin) (buffer-live-p buf))
-    (let ((dv (or (ignore-errors (dirvish-curr))
-                  (and (boundp 'dirvish--sessions)
-                       (hash-table-p dirvish--sessions)
-                       (cl-loop for s being the hash-values of dirvish--sessions
-                                when (eq pwin (dv-preview-window s))
-                                return s)))))
+    (let ((dv (enhanced-dirvish-preview--session-for-window pwin)))
       (when (enhanced-dirvish-preview--read-buffer-eligible-p buf dv)
         (with-current-buffer buf
           (when (and enhanced-dirvish-active-preview-file (not enhanced-dirvish-preview--file))
@@ -894,6 +936,7 @@ browser (`SPC')."
   "Keymap active while navigating the preview pane in read-only mode.")
 
 (enhanced-dirvish-preview--bind-zoom-keys enhanced-dirvish-preview-read-mode-map t)
+(define-key enhanced-dirvish-preview-read-mode-map (kbd "M-v") #'enhanced-dirvish-toggle-rendered-document)
 
 (define-minor-mode enhanced-dirvish-preview-read-mode
   "Minor mode active while reading/scrolling inside the preview pane.
@@ -1279,7 +1322,7 @@ MODE may be:
         (erase-buffer)
         (insert (concat "  "
                         (enhanced-dirvish-icon-glyph 'markdown 'enhanced-dirvish-hint-desc)
-                        (propertize (format " Markdown (Rendered · toggle [V] for Source) — %s\n\n"
+                        (propertize (format " Markdown — %s\n\n"
                                             (file-name-nondirectory file))
                                     'face 'enhanced-dirvish-hint-desc)))
         (dolist (line (split-string text "\n"))
@@ -1334,7 +1377,7 @@ MODE may be:
         (erase-buffer)
         (insert (concat "  "
                         (enhanced-dirvish-icon-glyph 'network 'enhanced-dirvish-hint-desc)
-                        (propertize " HTML Document (Offline Rendered · [V] Source)\n\n"
+                        (propertize " HTML Document\n\n"
                                     'face 'enhanced-dirvish-hint-desc)))
         (if dom (shr-insert-document dom) (insert-file-contents file nil 0 enhanced-dirvish-preview-max-bytes))
         (goto-char (point-min))))))
@@ -1486,7 +1529,9 @@ except Exception as e:
   "Enhanced Dirvish Image & Camera RAW preview honoring independent `preview-image-scale' & EXIF."
   (when (and file (not (file-directory-p file))
              (member (downcase (or ext ""))
-                     '("png" "jpg" "jpeg" "gif" "webp" "svg" "bmp" "tif" "tiff" "avif" "cr2" "nef" "arw" "dng")))
+                     '("png" "jpg" "jpeg" "gif" "webp" "svg" "bmp" "tif" "tiff" "avif" "cr2" "nef" "arw" "dng"))
+             (or (not (equal ext "svg"))
+                 (enhanced-dirvish-prefs-render-documents-by-default (enhanced-dirvish-prefs))))
     (setq enhanced-dirvish-active-preview-file file
           enhanced-dirvish-active-preview-kind 'image)
     (let* ((scale (enhanced-dirvish-prefs-preview-image-scale (enhanced-dirvish-prefs)))
@@ -1494,25 +1539,31 @@ except Exception as e:
            (base-h (* (window-pixel-height preview-window) 0.78))
            (w (round (* base-w scale)))
            (h (round (* base-h scale)))
+           (svg (equal ext "svg"))
+           (native-svg (and svg (image-type-available-p 'svg)))
            (raw-p (member (downcase ext) '("cr2" "nef" "arw" "dng")))
            (tmp (expand-file-name (format "img-%s-%d.png" (md5 file) (round (* 100 scale)))
                                   enhanced-dirvish-thumbnail-dir))
            (buf (enhanced-dirvish-preview--make-buffer (format " *Dirvish-preview-img-%s*" (md5 file)) 'image)))
-      (make-directory enhanced-dirvish-thumbnail-dir t)
-      (when (and (not (file-exists-p tmp)) (executable-find (if raw-p "magick" "vipsthumbnail")))
+      (when (and (not native-svg) (not (file-exists-p tmp))
+                 (executable-find (if raw-p "magick" "vipsthumbnail")))
+        (make-directory enhanced-dirvish-thumbnail-dir t)
         (if raw-p
             (ignore-errors (process-file "timeout" nil nil nil "3" "magick" file "-auto-orient" "-resize" (format "%dx%d>" w h) tmp))
           (ignore-errors (process-file "timeout" nil nil nil "2" "vipsthumbnail" file "-s" (format "%dx%d" w h) "-o" tmp))))
       (with-current-buffer buf
+        (when svg
+          (setq-local enhanced-dirvish-preview--file file)
+          (enhanced-dirvish-preview--set-document-header t))
         (let ((inhibit-read-only t)
-              (img-src (if (file-exists-p tmp) tmp file)))
+              (img-src (if (and (not native-svg) (file-exists-p tmp)) tmp file)))
           (insert (concat "  "
                           (enhanced-dirvish-icon-glyph 'pictures 'enhanced-dirvish-header-accent)
                           (propertize (format "  %s   Zoom: %.0f%%  ([C-+/C--/C-0])\n\n"
                                               (file-name-nondirectory file) (* 100 scale))
                                       'face 'enhanced-dirvish-header-accent)))
           (when (and (display-graphic-p) (file-readable-p img-src))
-            (when-let ((img (create-image img-src nil nil :max-width w :max-height h)))
+            (when-let ((img (create-image img-src (and native-svg 'svg) nil :max-width w :max-height h)))
               (insert "  ")
               (insert-image img "[image]")
               (insert "\n\n")))
@@ -1618,22 +1669,30 @@ When TURNING, retain the current page if Poppler cannot render the new one."
           (enhanced-dirvish-preview--sync-text-scale))
         `(buffer . ,buf)))))
 
-(dirvish-define-preview enhanced-dirvish-rich-document (file ext _preview-window _dv)
+(dirvish-define-preview enhanced-dirvish-rich-document (file ext _preview-window dv)
   "Render Markdown, Org, HTML, DOCX, ODT, RTF, CSV, XLSX, Fonts, 3D/Routes & Archives."
   (when (and file (not (file-directory-p file)))
     (let* ((ext (downcase (or ext "")))
            (p (enhanced-dirvish-prefs))
-           (rendered (enhanced-dirvish-prefs-render-documents-by-default p)))
+           (rendered (enhanced-dirvish-prefs-render-documents-by-default p))
+           (markdown (member ext '("md" "markdown" "mdown" "mkd")))
+           (html (member ext '("html" "htm" "xhtml" "xht" "shtml"))))
       (cond
-       ((and rendered (member ext '("md" "markdown")))
+       ((or markdown html (and (not rendered) (equal ext "svg")))
         (setq enhanced-dirvish-active-preview-file file enhanced-dirvish-active-preview-kind 'text)
-        (let ((buf (enhanced-dirvish-preview--make-buffer " *Enhanced-Dirvish-Preview-Doc*" 'text)))
-          (enhanced-dirvish-preview--safe-insert-markdown file buf)
-          `(buffer . ,buf)))
-       ((and rendered (member ext '("html" "htm" "xhtml")))
-        (setq enhanced-dirvish-active-preview-file file enhanced-dirvish-active-preview-kind 'text)
-        (let ((buf (enhanced-dirvish-preview--make-buffer " *Enhanced-Dirvish-Preview-Doc*" 'text)))
-          (enhanced-dirvish-preview--safe-insert-html file buf)
+        (let ((buf (enhanced-dirvish-preview--make-buffer
+                    (format " *Enhanced-Dirvish-Preview-Document-%s*"
+                            (if dv (dv-timestamp dv) "standalone"))
+                    'text)))
+          (cond
+           ((not rendered)
+            (enhanced-dirvish-preview--render-source-file
+             file buf (cond (markdown "preview.md") (html "preview.html") (t "preview.xml"))))
+           (markdown (enhanced-dirvish-preview--safe-insert-markdown file buf))
+           (html (enhanced-dirvish-preview--safe-insert-html file buf)))
+          (with-current-buffer buf
+            (setq-local enhanced-dirvish-preview--file file)
+            (enhanced-dirvish-preview--set-document-header rendered))
           `(buffer . ,buf)))
        ((and rendered (member ext '("csv" "tsv" "xlsx" "ods")))
         (setq enhanced-dirvish-active-preview-file file enhanced-dirvish-active-preview-kind 'text)
