@@ -43,7 +43,7 @@ export type FileLuStatusData = {
 }
 
 const helperDirectory = `${GLib.get_home_dir()}/.local/bin`
-const fileluFallbackIcon = Gio.FileIcon.new(Gio.File.new_for_path(`${GLib.get_home_dir()}/.local/opt/filelusync/app.png`))
+const fileluFallbackIcon = Gio.FileIcon.new(Gio.File.new_for_path(`${GLib.get_home_dir()}/.local/share/icons/hicolor/256x256/apps/filelusync.png`))
 
 const defaultFileLuStatus: FileLuStatusData = {
     state: "idle",

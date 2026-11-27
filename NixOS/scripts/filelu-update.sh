@@ -17,7 +17,8 @@ notify() {
     local msg="$2"
     local urgency="${3:-normal}"
     if command -v notify-send >/dev/null 2>&1; then
-        local icon="$APP_DIR/app.png"
+        local icon="$HOME/.local/share/icons/hicolor/256x256/apps/filelusync.png"
+        [ -f "$icon" ] || icon="$APP_DIR/app.png"
         [ -f "$icon" ] || icon="cloud"
         notify-send -a "FileLuSync" -i "$icon" -u "$urgency" "$title" "$msg" 2>/dev/null || true
     fi

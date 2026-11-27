@@ -1280,10 +1280,6 @@ in
     terminal = false;
   };
 
-  home.file.".local/opt/filelusync/app.png" = {
-    source = ./assets/filelu.png;
-  };
-
   xdg.desktopEntries.antigravity = {
     name = "Google Antigravity";
     genericName = "AI Coding Agent";
