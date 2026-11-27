@@ -174,7 +174,7 @@ in
     taskbar = { only_active_workspace = true; taskbar_max_width = 280; };
     active_window = { display = "text_only"; max_length = 800; title_scroll = "none"; show_empty_label = false; };
     media = { color = barAccents.mint; hide_when_no_media = true; hide_artist = true; max_length = 100; };
-    weather = { color = barAccents.brightViolet; show_condition = false; actions.left = "panel-toggle control-center weather"; };
+    weather = { color = barAccents.amber; show_condition = false; actions.left = "panel-toggle control-center weather"; };
     clock = { color = barAccents.neonYellowGreen; format = "{:%a %d %b  %H:%M}"; actions.left = "panel-toggle control-center calendar"; };
     control-center = { color = barAccents.brightRose; glyph = "adjustments"; };
     privacy = { color = barAccents.apricot; hide_inactive = true; };
@@ -198,7 +198,7 @@ in
       type = "custom_button";
       glyph = "skull";
       tooltip = "Kill window: click, then click any frozen window (Esc cancels) · Super+Shift+K / Ctrl+Alt+Escape";
-      color = barAccents.amber;
+      color = barAccents.brightViolet;
       actions.left = "exec ${killWindowCommand}";
     };
     session.color = "#FFFFFF";
@@ -217,7 +217,7 @@ in
     rclone-status = { type = "local/rclone-status:bar"; color = barAccents.brightVermilion; actions.left = "panel-toggle local/rclone-status:panel"; };
     backup-status = { type = "local/backup-status:bar"; color = barAccents.brightMagenta; actions.left = "panel-toggle local/backup-status:panel"; };
     gpu-status = { type = "local/gpu-status:bar"; color = barAccents.springBud; actions.left = "panel-toggle prponkshe/umbriel-displays:panel"; };
-    umbriel-displays = { type = "prponkshe/umbriel-displays:bar"; color = barAccents.coral; actions.left = "panel-toggle prponkshe/umbriel-displays:panel"; };
-    kitty-control = { type = "community/kitty-control:bar"; color = barAccents.brightPurple; actions.left = "panel-toggle community/kitty-control:panel"; };
+    umbriel-displays = { type = "prponkshe/umbriel-displays:bar"; color = barAccents.brightPurple; actions.left = "panel-toggle prponkshe/umbriel-displays:panel"; };
+    kitty-control = { type = "community/kitty-control:bar"; color = barAccents.coral; actions.left = "panel-toggle community/kitty-control:panel"; };
   };
 }

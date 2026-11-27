@@ -165,7 +165,8 @@ in
     # (bash by its full path: the portal's own PATH has none, and an entry whose program it
     # cannot find is no entry to it -- "App info not found" still)
     exec = ''${pkgs.bash}/bin/bash -lc "cd /home/thinky/Projects/trident-optics && exec direnv exec . trident-ui"'';
-    icon = "applications-science";
+    # (trident's own logo, square and still -- the ribbon's moving one: trident.ui.ribbon_logo)
+    icon = "/home/thinky/Projects/trident-optics/src/trident/ui/logo/trident_icon.svg";
     comment = "trident-optics: optical design, simulation and fabrication workbenches";
     categories = [ "Science" "Physics" "Engineering" ];
     terminal = false;
