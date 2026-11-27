@@ -1,0 +1,1048 @@
+diff --git a/assets/translations/en.json b/assets/translations/en.json
+index 887b3d8..4edc917 100644
+--- a/assets/translations/en.json
++++ b/assets/translations/en.json
+@@ -344,7 +344,8 @@
+       "show-past-events": "Show {count} past event",
+       "show-past-events-plural": "Show {count} past events",
+       "today": "Today",
+-      "toggle-events-card": "Toggle events card"
++      "toggle-events-card": "Toggle events card",
++      "toggle-lunar-calendar": "Toggle lunar calendar"
+     },
+     "display": {
+       "disabled": "Disabled",
+@@ -3167,6 +3168,10 @@
+           "description": "Show ISO 8601 week numbers alongside the calendar grid",
+           "label": "Week Numbers"
+         },
++        "calendar-lunar": {
++          "description": "Overlay Chinese lunar dates, 24 solar terms, and traditional festivals in the calendar",
++          "label": "Lunar Calendar"
++        },
+         "custom-schedule": {
+           "description": "Use manual sunrise/sunset times instead of computing from coordinates",
+           "label": "Custom Schedule"
+diff --git a/meson.build b/meson.build
+index 9bb6adc..31a32d7 100644
+--- a/meson.build
++++ b/meson.build
+@@ -884,6 +884,7 @@ _noctalia_sources = files(
+   'src/system/weather_service.cpp',
+   'src/time/time_service.cpp',
+   'src/shell/calendar/calendar_view.cpp',
++  'src/shell/calendar/lunar_calendar.cpp',
+   'src/scripting/ui/pixel_stream_view.cpp',
+   'src/scripting/ui/ui_tree_reconciler.cpp',
+   'src/shell/palette_swatch_preview.cpp',
+diff --git a/src/calendar/calendar_service.cpp b/src/calendar/calendar_service.cpp
+index 6c3d875..bf899ed 100644
+--- a/src/calendar/calendar_service.cpp
++++ b/src/calendar/calendar_service.cpp
+@@ -1100,9 +1100,10 @@ void CalendarService::fetchVdir(const CalendarConfig::Account& account) {
+   const std::filesystem::path rootPath =
+       account.path.empty() ? calendar::defaultVdirPath() : std::filesystem::path(account.path);
+ 
++  constexpr auto kVdirWindow = std::chrono::hours{24 * 365 * 5};
+   const auto now = std::chrono::system_clock::now();
+-  const auto windowStart = now - kWindowBefore;
+-  const auto windowEnd = now + kWindowAfter;
++  const auto windowStart = now - kVdirWindow;
++  const auto windowEnd = now + kVdirWindow;
+ 
+   const std::string accountId = account.id;
+ 
+diff --git a/src/config/config_types.h b/src/config/config_types.h
+index aab4287..42614b8 100644
+--- a/src/config/config_types.h
++++ b/src/config/config_types.h
+@@ -1882,6 +1882,7 @@ struct ControlCenterConfig {
+   struct CalendarTabConfig {
+     bool showEventsCard = true;
+     bool showWeekNumbers = false;
++    bool showLunarCalendar = false;
+     bool showEventsLocation = false;
+     bool hidePastEvents = false; // false keeps every finished event in today's list
+     // With hidePastEvents, hide today's events that ended more than this many minutes ago. 0 = as soon as they end.
+diff --git a/src/config/schema/config_schema.cpp b/src/config/schema/config_schema.cpp
+index bed8169..86a0f03 100644
+--- a/src/config/schema/config_schema.cpp
++++ b/src/config/schema/config_schema.cpp
+@@ -535,6 +535,7 @@ namespace noctalia::config::schema {
+       static const Schema<ControlCenterConfig::CalendarTabConfig> s = {
+           field(&ControlCenterConfig::CalendarTabConfig::showEventsCard, "show_events_card"),
+           field(&ControlCenterConfig::CalendarTabConfig::showWeekNumbers, "show_week_numbers"),
++          field(&ControlCenterConfig::CalendarTabConfig::showLunarCalendar, "show_lunar_calendar"),
+           field(&ControlCenterConfig::CalendarTabConfig::showEventsLocation, "show_events_location"),
+           field(&ControlCenterConfig::CalendarTabConfig::hidePastEvents, "hide_past_events"),
+           field(
+diff --git a/src/shell/calendar/calendar_view.cpp b/src/shell/calendar/calendar_view.cpp
+index 0588c27..1ce3110 100644
+--- a/src/shell/calendar/calendar_view.cpp
++++ b/src/shell/calendar/calendar_view.cpp
+@@ -9,6 +9,7 @@
+ #include "render/core/color.h"
+ #include "render/scene/input_area.h"
+ #include "render/scene/node.h"
++#include "shell/calendar/lunar_calendar.h"
+ #include "ui/builders.h"
+ #include "ui/controls/button.h"
+ #include "ui/controls/flex.h"
+@@ -28,6 +29,7 @@
+ #include <ctime>
+ #include <format>
+ #include <memory>
++#include <optional>
+ #include <string>
+ #include <utility>
+ #include <vector>
+@@ -238,6 +240,8 @@ namespace calendar_view {
+     const int nextYear = month == 11 ? year + 1 : year;
+ 
+     std::array<std::vector<ColorSpec>, 32> eventDots;
++    std::array<std::vector<std::string>, 32> eventTitles;
++    std::array<std::optional<ColorSpec>, 32> holidayColors;
+     if (options.snapshot != nullptr) {
+       const int firstKey = dateKey({.year = year, .month = month, .day = 1});
+       const int lastKey = dateKey({.year = year, .month = month, .day = monthDays});
+@@ -251,9 +255,18 @@ namespace calendar_view {
+         const ColorSpec color = eventColor(event, eventAlpha);
+         for (int day = 1; day <= monthDays; ++day) {
+           const int key = dateKey({.year = year, .month = month, .day = day});
+-          auto& dots = eventDots[static_cast<std::size_t>(day)];
+-          if (key >= eventStart && key <= eventEnd && dots.size() < 3) {
+-            dots.push_back(color);
++          if (key >= eventStart && key <= eventEnd) {
++            auto& dots = eventDots[static_cast<std::size_t>(day)];
++            if (dots.size() < 3) {
++              dots.push_back(color);
++            }
++            auto& titles = eventTitles[static_cast<std::size_t>(day)];
++            if (!event.title.empty() && titles.size() < 4) {
++              titles.push_back(event.title);
++            }
++            if (event.allDay && !holidayColors[static_cast<std::size_t>(day)].has_value()) {
++              holidayColors[static_cast<std::size_t>(day)] = color;
++            }
+           }
+         }
+       }
+@@ -266,6 +279,10 @@ namespace calendar_view {
+     dayGrid->setSize(dayGridWidth, 6.0F * layout.dayCellHeight + 5.0F * layout.gap);
+     dayGrid->setMinCellHeight(layout.dayCellHeight);
+ 
++    const float btnWidth = layout.dayButtonWidth > 0.0F ? layout.dayButtonWidth : layout.dayButtonSize;
++    const float btnHeight = layout.dayButtonSize;
++    const float solarFontSize = (options.showLunarCalendar ? Style::fontSizeCaption : Style::fontSizeBody) * options.scale;
++
+     int inMonthDay = 1;
+     int trailingDay = 1;
+     for (int index = 0; index < 42; ++index) {
+@@ -293,17 +310,22 @@ namespace calendar_view {
+       tile->setJustify(FlexJustify::Center);
+       tile->setGap(layout.dotGap);
+ 
++      const bool isSelected = inMonth && options.selected == date;
++      const bool isToday = inMonth && state.isCurrentMonth && date.day == state.current.day;
++      const std::optional<ColorSpec> holidayColor =
++          inMonth ? holidayColors[static_cast<std::size_t>(date.day)] : std::nullopt;
++
+       auto button = ui::button({
+           .text = std::to_string(date.day),
+-          .fontSize = Style::fontSizeBody * options.scale,
++          .fontSize = solarFontSize,
+           .contentAlign = ButtonContentAlign::Center,
+           .variant = ButtonVariant::Ghost,
+-          .minWidth = layout.dayButtonSize,
+-          .minHeight = layout.dayButtonSize,
++          .minWidth = btnWidth,
++          .minHeight = btnHeight,
+           .padding = 0.0F,
+           .radius = Style::scaledRadiusMd(options.scale),
+-          .width = layout.dayButtonSize,
+-          .height = layout.dayButtonSize,
++          .width = btnWidth,
++          .height = btnHeight,
+       });
+       if (button->label() != nullptr) {
+         button->label()->setFontFamily(options.fontFamily);
+@@ -313,19 +335,88 @@ namespace calendar_view {
+         Button::ButtonPalette muted = Button::defaultPalette(ButtonVariant::Ghost);
+         muted.normal.label = colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.75F);
+         button->setCustomPalette(muted);
+-      } else if (options.selected == date) {
++      } else if (isSelected) {
+         button->setVariant(ButtonVariant::Primary);
+       } else {
+-        if (state.isCurrentMonth && date.day == state.current.day) {
++        if (isToday) {
+           Button::ButtonPalette today = Button::defaultPalette(ButtonVariant::Ghost);
+           today.normal.label = colorSpecFromRole(ColorRole::Primary);
+           button->setCustomPalette(today);
++        } else if (holidayColor.has_value()) {
++          Button::ButtonPalette holiday = Button::defaultPalette(ButtonVariant::Ghost);
++          holiday.normal.label = *holidayColor;
++          button->setCustomPalette(holiday);
+         }
+         if (button->label() != nullptr) {
+           button->label()->setFontWeight(FontWeight::Bold);
+         }
+       }
+ 
++      std::string tooltip;
++      if (options.showLunarCalendar) {
++        const lunar_calendar::LunarDayInfo lunar = lunar_calendar::lookup(date.year, date.month + 1, date.day);
++        if (lunar.valid) {
++          button->setDirection(FlexDirection::Vertical);
++          button->setAlign(FlexAlign::Center);
++          button->setGap(0.0F);
++
++          ColorSpec lunarColor = colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.85F);
++          FontWeight lunarWeight = FontWeight::Normal;
++          if (isSelected) {
++            lunarColor = colorSpecFromRole(ColorRole::OnPrimary, 0.85F);
++          } else if (!inMonth) {
++            lunarColor = colorSpecFromRole(ColorRole::OnSurfaceVariant, 0.45F);
++          } else if (isToday) {
++            lunarColor = colorSpecFromRole(ColorRole::Primary, 0.9F);
++          } else if (
++              lunar.cellKind == lunar_calendar::CellKind::Festival
++              || lunar.cellKind == lunar_calendar::CellKind::MonthFirst
++          ) {
++            lunarColor = colorSpecFromRole(ColorRole::Secondary);
++            lunarWeight = FontWeight::Medium;
++          } else if (lunar.cellKind == lunar_calendar::CellKind::SolarTerm) {
++            lunarColor = colorSpecFromRole(ColorRole::Tertiary);
++            lunarWeight = FontWeight::Medium;
++          }
++
++          // Wrap inside a Flex so Button::applyColors does not overwrite the lunar label's accent color.
++          button->addChild(
++              ui::row(
++                  {.align = FlexAlign::Center, .justify = FlexJustify::Center},
++                  ui::label({
++                      .text = lunar.cellLabel,
++                      .fontSize = 9.5F * options.scale,
++                      .fontWeight = lunarWeight,
++                      .fontFamily = options.fontFamily,
++                      .color = lunarColor,
++                      .maxWidth = btnWidth,
++                      .maxLines = 1,
++                      .ellipsize = TextEllipsize::End,
++                  })
++              )
++          );
++
++          tooltip = "农历 " + lunar.ganzhiYear + "（" + lunar.zodiac + "） " + lunar.fullDate;
++          if (!lunar.festival.empty()) {
++            tooltip += " · " + lunar.festival;
++          }
++          if (!lunar.solarTerm.empty()) {
++            tooltip += " · " + lunar.solarTerm;
++          }
++        }
++      }
++      if (inMonth) {
++        for (const std::string& title : eventTitles[static_cast<std::size_t>(date.day)]) {
++          if (!tooltip.empty()) {
++            tooltip += '\n';
++          }
++          tooltip += title;
++        }
++      }
++      if (!tooltip.empty()) {
++        button->setTooltip(tooltip);
++      }
++
+       const auto selectDate = [callback = options.onDateSelected, date, monthShift] {
+         if (callback) {
+           callback(date, monthShift);
+@@ -342,7 +433,7 @@ namespace calendar_view {
+           .justify = FlexJustify::Center,
+           .gap = layout.dotGap,
+       });
+-      dots->setSize(layout.dayButtonSize, layout.dotDiameter);
++      dots->setSize(btnWidth, layout.dotDiameter);
+       if (inMonth) {
+         for (const ColorSpec& color : eventDots[static_cast<std::size_t>(date.day)]) {
+           dots->addChild(
+@@ -356,7 +447,7 @@ namespace calendar_view {
+         }
+       }
+       auto dotArea = ui::inputArea({});
+-      dotArea->setSize(layout.dayButtonSize, layout.dotDiameter);
++      dotArea->setSize(btnWidth, layout.dotDiameter);
+       dotArea->setOnClick([selectDate](const InputArea::PointerData&) { selectDate(); });
+       dotArea->addChild(std::move(dots));
+       tile->addChild(std::move(dotArea));
+@@ -534,6 +625,52 @@ namespace calendar_view {
+     const auto now = std::chrono::system_clock::now();
+     const bool selectedIsToday = selectedKey == localDateKey(now);
+     bool hasEvents = false;
++    bool hasLunarNote = false;
++    if (options.showLunarCalendar) {
++      const lunar_calendar::LunarDayInfo lunar =
++          lunar_calendar::lookup(options.selected.year, options.selected.month + 1, options.selected.day);
++      if (lunar.valid) {
++        content->addChild(
++            ui::label({
++                .text = "农历 " + lunar.ganzhiYear + "（" + lunar.zodiac + "） " + lunar.fullDate,
++                .fontSize = Style::fontSizeCaption * options.scale,
++                .fontWeight = FontWeight::Medium,
++                .fontFamily = options.fontFamily,
++                .color = colorSpecFromRole(ColorRole::Secondary),
++                .maxWidth = textMaxWidth + dotWidth + rowGap,
++                .maxLines = 1,
++            })
++        );
++        const auto addLunarNote = [&](ColorRole role, const std::string& labelText) {
++          hasLunarNote = true;
++          content->addChild(
++              ui::row(
++                  {.align = FlexAlign::Stretch, .gap = rowGap},
++                  ui::box({
++                      .fill = colorSpecFromRole(role),
++                      .radius = dotWidth * 0.5F,
++                      .width = dotWidth,
++                      .flexGrow = 0.0F,
++                  }),
++                  ui::label({
++                      .text = labelText,
++                      .fontSize = Style::fontSizeBody * options.scale,
++                      .fontFamily = options.fontFamily,
++                      .color = colorSpecFromRole(ColorRole::OnSurface),
++                      .maxWidth = textMaxWidth,
++                      .maxLines = 2,
++                  })
++              )
++          );
++        };
++        if (!lunar.festival.empty()) {
++          addLunarNote(ColorRole::Secondary, "节日 · " + lunar.festival);
++        }
++        if (!lunar.solarTerm.empty()) {
++          addLunarNote(ColorRole::Tertiary, "节气 · " + lunar.solarTerm);
++        }
++      }
++    }
+     const bool expanded = options.state != nullptr && options.state->showHiddenPast;
+     if (options.snapshot != nullptr && options.state != nullptr) {
+       const int hiddenCount = countHiddenPastEvents(
+@@ -681,7 +818,7 @@ namespace calendar_view {
+       }
+     }
+ 
+-    if (!hasEvents) {
++    if (!hasEvents && !hasLunarNote) {
+       content->addChild(
+           ui::label({
+               .text = i18n::tr("control-center.calendar.no-events"),
+diff --git a/src/shell/calendar/calendar_view.h b/src/shell/calendar/calendar_view.h
+index 3e25383..d0f591b 100644
+--- a/src/shell/calendar/calendar_view.h
++++ b/src/shell/calendar/calendar_view.h
+@@ -37,6 +37,7 @@ namespace calendar_view {
+     float weekdayHeight = 0.0F;
+     float dayCellHeight = 0.0F;
+     float dayButtonSize = 0.0F;
++    float dayButtonWidth = 0.0F;
+     float gap = 0.0F;
+     float dotDiameter = 0.0F;
+     float dotGap = 0.0F;
+@@ -53,6 +54,7 @@ namespace calendar_view {
+     Date selected;
+     int monthOffset = 0;
+     bool showWeekNumbers = false;
++    bool showLunarCalendar = false;
+     float scale = 1.0F;
+     MonthLayout layout;
+     std::string fontFamily;
+@@ -77,6 +79,7 @@ namespace calendar_view {
+     Date selected;
+     float scale = 1.0F;
+     bool showEventsLocation = false;
++    bool showLunarCalendar = false;
+     std::string_view dateFormat;
+     std::string_view timeFormat;
+     std::string fontFamily;
+diff --git a/src/shell/calendar/lunar_calendar.cpp b/src/shell/calendar/lunar_calendar.cpp
+new file mode 100644
+index 0000000..828984f
+--- /dev/null
++++ b/src/shell/calendar/lunar_calendar.cpp
+@@ -0,0 +1,378 @@
++#include "shell/calendar/lunar_calendar.h"
++
++#include <array>
++#include <chrono>
++#include <cstddef>
++#include <cstdint>
++#include <string>
++#include <string_view>
++
++namespace lunar_calendar {
++
++  namespace {
++
++    constexpr int kTableStartYear = 1887;
++    constexpr int kMinSupportedYear = 1900;
++    constexpr int kMaxSupportedYear = 2100;
++
++    // Exact bit-packed Chinese lunar calendar tables (years 1888..2111, index 0 is header year 1887).
++    // Bit layout per lunar year entry:
++    //   bits 13..16: leap month (1..12, 0 = none)
++    //   bits 0..12:  month length flags (MSB bit 12 = month 1, 1 = 30 days, 0 = 29 days)
++    constexpr std::array<std::uint32_t, 225> kLunarMonthDays = {
++      0x75fU, 0x1694U, 0x16aaU, 0x4ad5U, 0xab6U, 0xc4b7U, 0x4aeU, 0xa56U,
++      0xb52aU, 0x1d2aU, 0xd54U, 0x75aaU, 0x156aU, 0x1096dU, 0x95cU, 0x14aeU,
++      0xaa4dU, 0x1a4cU, 0x1b2aU, 0x8d55U, 0xad4U, 0x135aU, 0x495dU, 0x95cU,
++      0xd49bU, 0x149aU, 0x1a4aU, 0xbaa5U, 0x16a8U, 0x1ad4U, 0x52daU, 0x12b6U,
++      0xe937U, 0x92eU, 0x1496U, 0xb64bU, 0xd4aU, 0xda8U, 0x95b5U, 0x56cU,
++      0x12aeU, 0x492fU, 0x92eU, 0xcc96U, 0x1a94U, 0x1d4aU, 0xada9U, 0xb5aU,
++      0x56cU, 0x726eU, 0x125cU, 0xf92dU, 0x192aU, 0x1a94U, 0xdb4aU, 0x16aaU,
++      0xad4U, 0x955bU, 0x4baU, 0x125aU, 0x592bU, 0x152aU, 0xf695U, 0xd94U,
++      0x16aaU, 0xaab5U, 0x9b4U, 0x14b6U, 0x6a57U, 0xa56U, 0x1152aU, 0x1d2aU,
++      0xd54U, 0xd5aaU, 0x156aU, 0x96cU, 0x94aeU, 0x14aeU, 0xa4cU, 0x7d26U,
++      0x1b2aU, 0xeb55U, 0xad4U, 0x12daU, 0xa95dU, 0x95aU, 0x149aU, 0x9a4dU,
++      0x1a4aU, 0x11aa5U, 0x16a8U, 0x16d4U, 0xd2daU, 0x12b6U, 0x936U, 0x9497U,
++      0x1496U, 0x1564bU, 0xd4aU, 0xda8U, 0xd5b4U, 0x156cU, 0x12aeU, 0xa92fU,
++      0x92eU, 0xc96U, 0x6d4aU, 0x1d4aU, 0x10d65U, 0xb58U, 0x156cU, 0xb26dU,
++      0x125cU, 0x192cU, 0x9a95U, 0x1a94U, 0x1b4aU, 0x4b55U, 0xad4U, 0xf55bU,
++      0x4baU, 0x125aU, 0xb92bU, 0x152aU, 0x1694U, 0x96aaU, 0x15aaU, 0x12ab5U,
++      0x974U, 0x14b6U, 0xca57U, 0xa56U, 0x1526U, 0x8e95U, 0xd54U, 0x15aaU,
++      0x49b5U, 0x96cU, 0xd4aeU, 0x149cU, 0x1a4cU, 0xbd26U, 0x1aa6U, 0xb54U,
++      0x6d6aU, 0x12daU, 0x1695dU, 0x95aU, 0x149aU, 0xda4bU, 0x1a4aU, 0x1aa4U,
++      0xbb54U, 0x16b4U, 0xadaU, 0x495bU, 0x936U, 0xf497U, 0x1496U, 0x154aU,
++      0xb6a5U, 0xda4U, 0x15b4U, 0x6ab6U, 0x126eU, 0x1092fU, 0x92eU, 0xc96U,
++      0xcd4aU, 0x1d4aU, 0xd64U, 0x956cU, 0x155cU, 0x125cU, 0x792eU, 0x192cU,
++      0xfa95U, 0x1a94U, 0x1b4aU, 0xab55U, 0xad4U, 0x14daU, 0x8a5dU, 0xa5aU,
++      0x1152bU, 0x152aU, 0x1694U, 0xd6aaU, 0x15aaU, 0xab4U, 0x94baU, 0x14b6U,
++      0xa56U, 0x7527U, 0xd26U, 0xee53U, 0xd54U, 0x15aaU, 0xa9b5U, 0x96cU,
++      0x14aeU, 0x8a4eU, 0x1a4cU, 0x11d26U, 0x1aa4U, 0x1b54U, 0xcd6aU, 0xadaU,
++      0x95cU, 0x949dU, 0x149aU, 0x1a2aU, 0x5b25U, 0x1aa4U, 0xfb52U, 0x16b4U,
++      0xabaU, 0xa95bU, 0x936U, 0x1496U, 0x9a4bU, 0x154aU, 0x136a5U, 0xda4U,
++      0x15acU,
++    };
++
++    // Bit-packed Gregorian date of Lunar 1/1 (Chinese New Year) for each year:
++    //   bits 9..20: year, bits 5..8: month (1..12), bits 0..4: day (1..31)
++    constexpr std::array<std::uint32_t, 225> kSolarNewYear = {
++      0x75fU, 0xec04cU, 0xec23fU, 0xec435U, 0xec649U, 0xec83eU, 0xeca51U, 0xecc46U,
++      0xece3aU, 0xed04dU, 0xed242U, 0xed436U, 0xed64aU, 0xed83fU, 0xeda53U, 0xedc48U,
++      0xede3dU, 0xee050U, 0xee244U, 0xee439U, 0xee64dU, 0xee842U, 0xeea36U, 0xeec4aU,
++      0xeee3eU, 0xef052U, 0xef246U, 0xef43aU, 0xef64eU, 0xef843U, 0xefa37U, 0xefc4bU,
++      0xefe41U, 0xf0054U, 0xf0248U, 0xf043cU, 0xf0650U, 0xf0845U, 0xf0a38U, 0xf0c4dU,
++      0xf0e42U, 0xf1037U, 0xf124aU, 0xf143eU, 0xf1651U, 0xf1846U, 0xf1a3aU, 0xf1c4eU,
++      0xf1e44U, 0xf2038U, 0xf224bU, 0xf243fU, 0xf2653U, 0xf2848U, 0xf2a3bU, 0xf2c4fU,
++      0xf2e45U, 0xf3039U, 0xf324dU, 0xf3442U, 0xf3636U, 0xf384aU, 0xf3a3dU, 0xf3c51U,
++      0xf3e46U, 0xf403bU, 0xf424eU, 0xf4443U, 0xf4638U, 0xf484cU, 0xf4a3fU, 0xf4c52U,
++      0xf4e48U, 0xf503cU, 0xf524fU, 0xf5445U, 0xf5639U, 0xf584dU, 0xf5a42U, 0xf5c35U,
++      0xf5e49U, 0xf603eU, 0xf6251U, 0xf6446U, 0xf663bU, 0xf684fU, 0xf6a43U, 0xf6c37U,
++      0xf6e4bU, 0xf703fU, 0xf7252U, 0xf7447U, 0xf763cU, 0xf7850U, 0xf7a45U, 0xf7c39U,
++      0xf7e4dU, 0xf8042U, 0xf8254U, 0xf8449U, 0xf863dU, 0xf8851U, 0xf8a46U, 0xf8c3bU,
++      0xf8e4fU, 0xf9044U, 0xf9237U, 0xf944aU, 0xf963fU, 0xf9853U, 0xf9a47U, 0xf9c3cU,
++      0xf9e50U, 0xfa045U, 0xfa238U, 0xfa44cU, 0xfa641U, 0xfa836U, 0xfaa49U, 0xfac3dU,
++      0xfae52U, 0xfb047U, 0xfb23aU, 0xfb44eU, 0xfb643U, 0xfb837U, 0xfba4aU, 0xfbc3fU,
++      0xfbe53U, 0xfc048U, 0xfc23cU, 0xfc450U, 0xfc645U, 0xfc839U, 0xfca4cU, 0xfcc41U,
++      0xfce36U, 0xfd04aU, 0xfd23dU, 0xfd451U, 0xfd646U, 0xfd83aU, 0xfda4dU, 0xfdc43U,
++      0xfde37U, 0xfe04bU, 0xfe23fU, 0xfe453U, 0xfe648U, 0xfe83cU, 0xfea4fU, 0xfec44U,
++      0xfee38U, 0xff04cU, 0xff241U, 0xff436U, 0xff64aU, 0xff83eU, 0xffa51U, 0xffc46U,
++      0xffe3aU, 0x10004eU, 0x100242U, 0x100437U, 0x10064bU, 0x100841U, 0x100a53U, 0x100c48U,
++      0x100e3cU, 0x10104fU, 0x101244U, 0x101438U, 0x10164cU, 0x101842U, 0x101a35U, 0x101c49U,
++      0x101e3dU, 0x102051U, 0x102245U, 0x10243aU, 0x10264eU, 0x102843U, 0x102a37U, 0x102c4bU,
++      0x102e3fU, 0x103053U, 0x103247U, 0x10343bU, 0x10364fU, 0x103845U, 0x103a38U, 0x103c4cU,
++      0x103e42U, 0x104036U, 0x104249U, 0x10443dU, 0x104651U, 0x104846U, 0x104a3aU, 0x104c4eU,
++      0x104e43U, 0x105038U, 0x10524aU, 0x10543eU, 0x105652U, 0x105847U, 0x105a3bU, 0x105c4fU,
++      0x105e45U, 0x106039U, 0x10624cU, 0x106441U, 0x106635U, 0x106849U, 0x106a3dU, 0x106c51U,
++      0x106e47U, 0x10703cU, 0x10724fU, 0x107444U, 0x107638U, 0x10784cU, 0x107a3fU, 0x107c53U,
++      0x107e48U,
++    };
++
++    // 24 solar terms (ordered from LiChun to DaHan) for years 1900..2100.
++    // Each year packs 24 x 2-bit offsets above kSolarTermBaseDays[termIdx].
++    constexpr std::array<int, 24> kSolarTermMonths = {
++        2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 1, 1
++    };
++    constexpr std::array<int, 24> kSolarTermBaseDays = {
++        3, 18, 4, 19, 4, 19, 4, 20, 4, 20, 6, 22, 6, 22, 6, 22, 7, 22, 6, 21, 6, 21, 4, 19
++    };
++    constexpr std::array<const char*, 24> kSolarTermNames = {
++        "立春", "雨水", "惊蛰", "春分", "清明", "谷雨", "立夏", "小满", "芒种", "夏至", "小暑", "大暑", "立秋", "处暑", "白露", "秋分", "寒露", "霜降", "立冬", "小雪", "大雪", "冬至", "小寒", "大寒"
++    };
++    constexpr std::array<std::uint64_t, 201> kPackedSolarTerms = {
++      0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL, 0xaaaaaaabaaa6ULL, 0xaaaabbabbafaULL,
++      0xb5aa665a65aaULL, 0xa6aaaa6aa9a5ULL, 0xaaaaaaaaaaa6ULL, 0xaaaabbabbafaULL,
++      0xb5aa665a65aaULL, 0xa6aaaa6aa9a5ULL, 0xaaaaaaaaaaa6ULL, 0xaaaabbabbafaULL,
++      0xb56a665a65aaULL, 0x66aa6a6aa9a5ULL, 0xaaaaaaaaa9a5ULL, 0xaaaabaabaaeaULL,
++      0xa569665a65aaULL, 0x66aa6a6a69a5ULL, 0xa6aaaaaaa9a5ULL, 0xaaaabaabaaeaULL,
++      0xa569665a65aaULL, 0x65aa6a6a65a5ULL, 0xa6aaaaaaa9a5ULL, 0xaaaabaabaaa6ULL,
++      0xa569665a65aaULL, 0x65aa6a6a65a5ULL, 0xa6aaaa6aa9a5ULL, 0xaaaabaabaaa6ULL,
++      0xa555665a65aaULL, 0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL, 0xaaaaaaabaaa6ULL,
++      0xa555665665aaULL, 0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL, 0xaaaaaaaaaaa6ULL,
++      0xa555665665aaULL, 0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL, 0xaaaaaaaaaaa6ULL,
++      0xa555665665aaULL, 0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL, 0xaaaaaaaaaaa6ULL,
++      0xa555665665aaULL, 0x6569665a65a5ULL, 0x66aaaa6aa9a5ULL, 0xaaaaaaaaa9a5ULL,
++      0xa5556656559aULL, 0x5569665a65a5ULL, 0x66aa6a6a65a5ULL, 0xa6aaaaaaa9a5ULL,
++      0xa5556556559aULL, 0x5569665a65a5ULL, 0x65aa6a6a65a5ULL, 0xa6aaaa6aa9a5ULL,
++      0xa5556556555aULL, 0x5569665a65a5ULL, 0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL,
++      0xa55555565556ULL, 0x5555665665a5ULL, 0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL,
++      0xa55555565556ULL, 0x5555665665a5ULL, 0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL,
++      0xa55555555556ULL, 0x5555665665a5ULL, 0x65aa665a65a5ULL, 0xa6aaaa6aa9a5ULL,
++      0xa55555555556ULL, 0x5555665655a5ULL, 0x65aa665a65a5ULL, 0xa6aa6a6aa9a5ULL,
++      0xa55555555456ULL, 0x5555655655a5ULL, 0x65a9665a65a5ULL, 0x66aa6a6a69a5ULL,
++      0xa55555555456ULL, 0x5555655655a5ULL, 0x6569665a65a5ULL, 0x66aa6a6a65a5ULL,
++      0xa55555155455ULL, 0x555565565595ULL, 0x5569665a65a5ULL, 0x65aa6a6a65a5ULL,
++      0xa15555155455ULL, 0x555565565555ULL, 0x5569665a65a5ULL, 0x65aa6a5a65a5ULL,
++      0xa15555155455ULL, 0x555555565551ULL, 0x5555665665a5ULL, 0x65aa665a65a5ULL,
++      0xa15555155455ULL, 0x555555555551ULL, 0x5555665665a5ULL, 0x65aa665a65a5ULL,
++      0xa15555155455ULL, 0x555555555551ULL, 0x5555665665a5ULL, 0x65aa665a65a5ULL,
++      0xa15555155455ULL, 0x555555555551ULL, 0x5555655655a5ULL, 0x65aa665a65a5ULL,
++      0xa15515155455ULL, 0x555555555451ULL, 0x5555655655a5ULL, 0x65a9665a65a5ULL,
++      0xa15515151455ULL, 0x555555155451ULL, 0x5555655655a5ULL, 0x6569665a65a5ULL,
++      0x615515151055ULL, 0x555555155450ULL, 0x555565565595ULL, 0x5569665665a5ULL,
++      0x615511051055ULL, 0x515555155450ULL, 0x555555565555ULL, 0x5569665665a5ULL,
++      0x605511051055ULL, 0x515555155450ULL, 0x555555555551ULL, 0x5555665665a5ULL,
++      0x605511051055ULL, 0x515555155450ULL, 0x555555555551ULL, 0x5555665665a5ULL,
++      0x605511051055ULL, 0x515555155450ULL, 0x555555555551ULL, 0x5555655655a5ULL,
++      0x605511051055ULL, 0x515555155450ULL, 0x555555555551ULL, 0x5555655655a5ULL,
++      0x605511051055ULL, 0x515515151450ULL, 0x555555555451ULL, 0x5555655655a5ULL,
++      0x605411051055ULL, 0x515515151050ULL, 0x555555155451ULL, 0x5555655655a5ULL,
++      0x601411011055ULL, 0x115511051050ULL, 0x555555155450ULL, 0x555555565555ULL,
++      0x501411011055ULL, 0x115511051050ULL, 0x555555155450ULL, 0x555555555555ULL,
++      0x501411011055ULL, 0x105511051050ULL, 0x515555155450ULL, 0x555555555555ULL,
++      0x500011011055ULL, 0x105511051050ULL, 0x515555155450ULL, 0x555555555551ULL,
++      0x500011011055ULL, 0x105511051050ULL, 0x515555155450ULL, 0x555555555551ULL,
++      0x500010010055ULL, 0x105511051050ULL, 0x515515151450ULL, 0x555555555551ULL,
++      0x500010010055ULL, 0x105411051050ULL, 0x515515151450ULL, 0x555555155451ULL,
++      0x500010010055ULL, 0x105411051050ULL, 0x515515051050ULL, 0x555555155451ULL,
++      0x500010010055ULL, 0x101411011050ULL, 0x515511051050ULL, 0x555555155450ULL,
++      0x500000010005ULL, 0x001411011050ULL, 0x115511051050ULL, 0x555555155450ULL,
++      0x500000000005ULL, 0x001411011050ULL, 0x105511051050ULL, 0x515555155450ULL,
++      0x500000000005ULL, 0x000011011050ULL, 0x105511051050ULL, 0x515555155450ULL,
++      0x500000000001ULL, 0x000010011050ULL, 0x105511051050ULL, 0x515555155450ULL,
++      0x555555555551ULL,
++    };
++
++    constexpr std::array<const char*, 10> kTianGan = {
++        "甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"
++    };
++    constexpr std::array<const char*, 12> kDiZhi = {
++        "子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"
++    };
++    constexpr std::array<const char*, 12> kZodiac = {
++        "鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"
++    };
++    constexpr std::array<const char*, 13> kLunarMonths = {
++        "", "正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "冬", "腊"
++    };
++    constexpr std::array<const char*, 31> kLunarDays = {
++        "",
++        "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
++        "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
++        "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十"
++    };
++
++    int bitSlice(std::uint32_t data, int length, int shift) noexcept {
++      return static_cast<int>((data >> shift) & ((1U << length) - 1U));
++    }
++
++    int solarToDays(int y, int m, int d) noexcept {
++      const auto ymd = std::chrono::year{y} / std::chrono::month{static_cast<unsigned>(m)} / std::chrono::day{static_cast<unsigned>(d)};
++      return static_cast<int>(std::chrono::sys_days{ymd}.time_since_epoch().count());
++    }
++
++    bool isValidSolar(int y, int m, int d) noexcept {
++      if (y < kMinSupportedYear || y > kMaxSupportedYear || m < 1 || m > 12 || d < 1 || d > 31) {
++        return false;
++      }
++      const auto ymd = std::chrono::year{y} / std::chrono::month{static_cast<unsigned>(m)} / std::chrono::day{static_cast<unsigned>(d)};
++      return ymd.ok();
++    }
++
++    LunarDate convertSolarToLunar(int solarYear, int solarMonth, int solarDay) noexcept {
++      std::size_t index = static_cast<std::size_t>(solarYear - kTableStartYear);
++      if (index == 0 || index >= kSolarNewYear.size()) {
++        return {};
++      }
++      const std::uint32_t packedSolar =
++          (static_cast<std::uint32_t>(solarYear) << 9) | (static_cast<std::uint32_t>(solarMonth) << 5)
++          | static_cast<std::uint32_t>(solarDay);
++      if (kSolarNewYear[index] > packedSolar) {
++        --index;
++      }
++      if (index == 0 || index >= kLunarMonthDays.size()) {
++        return {};
++      }
++
++      const std::uint32_t cnyPacked = kSolarNewYear[index];
++      const int cnyYear = bitSlice(cnyPacked, 12, 9);
++      const int cnyMonth = bitSlice(cnyPacked, 4, 5);
++      const int cnyDay = bitSlice(cnyPacked, 5, 0);
++      int offset = solarToDays(solarYear, solarMonth, solarDay) - solarToDays(cnyYear, cnyMonth, cnyDay) + 1;
++
++      const std::uint32_t monthBits = kLunarMonthDays[index];
++      const int leapMonth = bitSlice(monthBits, 4, 13);
++
++      int lunarMonth = 1;
++      for (int i = 0; i < 13; ++i) {
++        const int daysInLunarMonth = bitSlice(monthBits, 1, 12 - i) == 1 ? 30 : 29;
++        if (offset > daysInLunarMonth) {
++          ++lunarMonth;
++          offset -= daysInLunarMonth;
++        } else {
++          break;
++        }
++      }
++
++      LunarDate out;
++      out.year = kTableStartYear + static_cast<int>(index);
++      out.month = lunarMonth;
++      out.day = offset;
++      out.isLeap = false;
++      if (leapMonth != 0 && lunarMonth > leapMonth) {
++        out.month = lunarMonth - 1;
++        if (lunarMonth == leapMonth + 1) {
++          out.isLeap = true;
++        }
++      }
++      return out;
++    }
++
++    std::string_view solarTermFor(int solarYear, int solarMonth, int solarDay) noexcept {
++      if (solarYear < kMinSupportedYear || solarYear > kMaxSupportedYear) {
++        return {};
++      }
++      const std::uint64_t packed = kPackedSolarTerms[static_cast<std::size_t>(solarYear - kMinSupportedYear)];
++      for (std::size_t i = 0; i < 24; ++i) {
++        if (kSolarTermMonths[i] != solarMonth) {
++          continue;
++        }
++        const int offset = static_cast<int>((packed >> (2U * i)) & 0x3ULL);
++        if (kSolarTermBaseDays[i] + offset == solarDay) {
++          return kSolarTermNames[i];
++        }
++      }
++      return {};
++    }
++
++    struct FestivalMatch {
++      std::string_view full;
++      std::string_view compact;
++    };
++
++    FestivalMatch festivalFor(
++        int solarYear, int solarMonth, int solarDay, const LunarDate& lunar, std::string_view solarTerm
++    ) noexcept {
++      // Check Chinese New Year's Eve (除夕): the day immediately before non-leap 正月初一.
++      const auto nextSys =
++          std::chrono::sys_days{std::chrono::year{solarYear} / std::chrono::month{static_cast<unsigned>(solarMonth)} / std::chrono::day{static_cast<unsigned>(solarDay)}}
++          + std::chrono::days{1};
++      const std::chrono::year_month_day nextYmd{nextSys};
++      const LunarDate nextLunar = convertSolarToLunar(
++          static_cast<int>(nextYmd.year()), static_cast<int>(static_cast<unsigned>(nextYmd.month())),
++          static_cast<int>(static_cast<unsigned>(nextYmd.day()))
++      );
++      if (!nextLunar.isLeap && nextLunar.month == 1 && nextLunar.day == 1) {
++        return {"除夕", "除夕"};
++      }
++
++      if (!lunar.isLeap) {
++        if (lunar.month == 1 && lunar.day == 1) {
++          return {"春节", "春节"};
++        }
++        if (lunar.month == 1 && lunar.day == 5) {
++          return {"破五节", "破五"};
++        }
++        if (lunar.month == 1 && lunar.day == 15) {
++          return {"元宵节", "元宵"};
++        }
++        if (lunar.month == 2 && lunar.day == 2) {
++          return {"龙抬头", "龙抬头"};
++        }
++        if (lunar.month == 5 && lunar.day == 5) {
++          return {"端午节", "端午"};
++        }
++        if (lunar.month == 7 && lunar.day == 7) {
++          return {"七夕节", "七夕"};
++        }
++        if (lunar.month == 7 && lunar.day == 15) {
++          return {"中元节", "中元"};
++        }
++        if (lunar.month == 8 && lunar.day == 15) {
++          return {"中秋节", "中秋"};
++        }
++        if (lunar.month == 9 && lunar.day == 9) {
++          return {"重阳节", "重阳"};
++        }
++        if (lunar.month == 10 && lunar.day == 1) {
++          return {"寒衣节", "寒衣"};
++        }
++        if (lunar.month == 12 && lunar.day == 8) {
++          return {"腊八节", "腊八"};
++        }
++        if (lunar.month == 12 && lunar.day == 23) {
++          return {"小年", "小年"};
++        }
++      }
++
++      if (solarTerm == "清明") {
++        return {"清明节", "清明"};
++      }
++      return {};
++    }
++
++  } // namespace
++
++  LunarDayInfo lookup(int solarYear, int solarMonth1Based, int solarDay) {
++    LunarDayInfo info;
++    if (!isValidSolar(solarYear, solarMonth1Based, solarDay)) {
++      return info;
++    }
++
++    const LunarDate lunar = convertSolarToLunar(solarYear, solarMonth1Based, solarDay);
++    if (lunar.month < 1 || lunar.month > 12 || lunar.day < 1 || lunar.day > 30) {
++      return info;
++    }
++
++    info.valid = true;
++    info.lunar = lunar;
++
++    if (lunar.isLeap) {
++      info.monthName = "闰";
++    }
++    info.monthName += kLunarMonths[static_cast<std::size_t>(lunar.month)];
++    info.monthName += "月";
++    info.dayName = kLunarDays[static_cast<std::size_t>(lunar.day)];
++    info.fullDate = info.monthName + info.dayName;
++
++    const int ganIdx = ((lunar.year - 4) % 10 + 10) % 10;
++    const int zhiIdx = ((lunar.year - 4) % 12 + 12) % 12;
++    info.ganzhiYear = std::string(kTianGan[static_cast<std::size_t>(ganIdx)])
++        + kDiZhi[static_cast<std::size_t>(zhiIdx)] + "年";
++    info.zodiac = kZodiac[static_cast<std::size_t>(zhiIdx)];
++
++    const std::string_view term = solarTermFor(solarYear, solarMonth1Based, solarDay);
++    if (!term.empty()) {
++      info.solarTerm = std::string(term);
++    }
++
++    const FestivalMatch fest = festivalFor(solarYear, solarMonth1Based, solarDay, lunar, term);
++    if (!fest.full.empty()) {
++      info.festival = std::string(fest.full);
++    }
++
++    if (!fest.compact.empty()) {
++      info.cellLabel = std::string(fest.compact);
++      info.cellKind = CellKind::Festival;
++    } else if (!info.solarTerm.empty()) {
++      info.cellLabel = info.solarTerm;
++      info.cellKind = CellKind::SolarTerm;
++    } else if (lunar.day == 1) {
++      info.cellLabel = info.monthName;
++      info.cellKind = CellKind::MonthFirst;
++    } else {
++      info.cellLabel = info.dayName;
++      info.cellKind = CellKind::Normal;
++    }
++
++    return info;
++  }
++
++} // namespace lunar_calendar
+diff --git a/src/shell/calendar/lunar_calendar.h b/src/shell/calendar/lunar_calendar.h
+new file mode 100644
+index 0000000..3f5d8ac
+--- /dev/null
++++ b/src/shell/calendar/lunar_calendar.h
+@@ -0,0 +1,39 @@
++#pragma once
++
++#include <cstdint>
++#include <string>
++
++namespace lunar_calendar {
++
++  struct LunarDate {
++    int year = 0;
++    int month = 0; // 1..12
++    int day = 0;   // 1..30
++    bool isLeap = false;
++  };
++
++  enum class CellKind : std::uint8_t {
++    Normal,
++    MonthFirst,
++    SolarTerm,
++    Festival,
++  };
++
++  struct LunarDayInfo {
++    bool valid = false;
++    LunarDate lunar;
++    std::string monthName;  // e.g. "正月", "闰六月"
++    std::string dayName;    // e.g. "初一", "十五"
++    std::string fullDate;   // e.g. "正月初一"
++    std::string ganzhiYear; // e.g. "丙午年"
++    std::string zodiac;     // e.g. "马"
++    std::string festival;   // e.g. "春节" (empty when none)
++    std::string solarTerm;  // e.g. "立春" (empty when none)
++    std::string cellLabel;  // compact label for calendar grid cell
++    CellKind cellKind = CellKind::Normal;
++  };
++
++  // Convert a Gregorian date (1900..2100) into Chinese lunar calendar metadata.
++  LunarDayInfo lookup(int solarYear, int solarMonth1Based, int solarDay);
++
++} // namespace lunar_calendar
+diff --git a/src/shell/control_center/tabs/calendar_tab.cpp b/src/shell/control_center/tabs/calendar_tab.cpp
+index 19d82b0..3fa83d6 100644
+--- a/src/shell/control_center/tabs/calendar_tab.cpp
++++ b/src/shell/control_center/tabs/calendar_tab.cpp
+@@ -10,6 +10,7 @@
+ #include "render/core/renderer.h"
+ #include "render/scene/input_area.h"
+ #include "shell/calendar/calendar_view.h"
++#include "shell/calendar/lunar_calendar.h"
+ #include "shell/control_center/tab.h"
+ #include "shell/panel/panel_button_style.h"
+ #include "shell/panel/panel_manager.h"
+@@ -40,9 +41,18 @@ namespace {
+   constexpr float kCalendarWeekColumnRatio = 0.55F;
+   constexpr float kCalendarWeekColumnMinFontScale = 1.45F;
+ 
+-  std::string formatShellDate(const ConfigService* config) {
++  std::string formatShellDate(const ConfigService* config, bool includeLunar) {
+     const char* format = config != nullptr ? config->config().shell.dateFormat.c_str() : "%A, %x";
+-    return formatLocalTime(format);
++    std::string text = formatLocalTime(format);
++    if (includeLunar) {
++      const calendar_view::State state = calendar_view::stateForOffset(0);
++      const lunar_calendar::LunarDayInfo lunar =
++          lunar_calendar::lookup(state.current.year, state.current.month + 1, state.current.day);
++      if (lunar.valid) {
++        text += "  ·  " + lunar.ganzhiYear + " " + lunar.fullDate;
++      }
++    }
++    return text;
+   }
+ } // namespace
+ 
+@@ -62,6 +72,7 @@ std::unique_ptr<Flex> CalendarTab::create() {
+   if (m_config != nullptr) {
+     m_showEventsCard = m_config->config().controlCenter.calendarTab.showEventsCard;
+     m_showWeekNumbers = m_config->config().controlCenter.calendarTab.showWeekNumbers;
++    m_showLunarCalendar = m_config->config().controlCenter.calendarTab.showLunarCalendar;
+     m_showEventsLocation = m_config->config().controlCenter.calendarTab.showEventsLocation;
+   }
+ 
+@@ -96,7 +107,7 @@ std::unique_ptr<Flex> CalendarTab::create() {
+   calendarCard->addChild(
+       ui::label({
+           .out = &m_todayLabel,
+-          .text = formatShellDate(m_config),
++          .text = formatShellDate(m_config, m_showLunarCalendar),
+           .fontSize = Style::fontSizeTitle * scale,
+           .fontWeight = FontWeight::Medium,
+           .color = colorSpecFromRole(ColorRole::Secondary),
+@@ -220,12 +231,21 @@ std::unique_ptr<Flex> CalendarTab::createHeaderActions() {
+   const float scale = contentScale();
+   if (m_config != nullptr) {
+     m_showEventsCard = m_config->config().controlCenter.calendarTab.showEventsCard;
++    m_showLunarCalendar = m_config->config().controlCenter.calendarTab.showLunarCalendar;
+   }
+   return ui::row(
+       {
+           .align = FlexAlign::Center,
+           .gap = Style::spaceSm * scale,
+       },
++      ui::button({
++          .out = &m_toggleLunarButton,
++          .glyph = m_showLunarCalendar ? "moon" : "moon-off",
++          .selected = m_showLunarCalendar,
++          .tooltip = i18n::tr("control-center.calendar.toggle-lunar-calendar"),
++          .onClick = [this] { toggleLunarCalendar(); },
++          .configure = [scale](Button& button) { panel_button_style::configureHeaderIconButton(button, scale); },
++      }),
+       ui::button({
+           .out = &m_toggleEventsCardButton,
+           .glyph = m_showEventsCard ? "calendar-event" : "calendar-off",
+@@ -303,7 +323,7 @@ void CalendarTab::doLayout(Renderer& renderer, float contentWidth, float bodyHei
+ void CalendarTab::doUpdate(Renderer& renderer) {
+   (void)renderer;
+   if (m_todayLabel != nullptr) {
+-    m_todayLabel->setText(formatShellDate(m_config));
++    m_todayLabel->setText(formatShellDate(m_config, m_showLunarCalendar));
+   }
+ }
+ 
+@@ -347,6 +367,7 @@ void CalendarTab::onClose() {
+   m_monthLabel = nullptr;
+   m_previousButton = nullptr;
+   m_nextButton = nullptr;
++  m_toggleLunarButton = nullptr;
+   m_toggleEventsCardButton = nullptr;
+   m_gridViewport = nullptr;
+   m_grid = nullptr;
+@@ -489,25 +510,27 @@ void CalendarTab::rebuild() {
+   const float innerHeight = std::max(0.0F, m_card->height() - (m_card->paddingTop() + m_card->paddingBottom()));
+   const float navWidth = kCalendarNavButtonSize * scale * 2.0F + Style::spaceSm * scale * 2.0F;
+   const float monthWidth = std::max(0.0F, innerWidth - navWidth);
++  const float gridGap = (m_showLunarCalendar ? Style::spaceXs : kCalendarGridGap) * scale;
++  const float todayBlockHeight = (Style::fontSizeTitle + Style::spaceMd) * scale;
+   const float gridHeightAvailable =
+-      std::max(0.0F, innerHeight - kCalendarHeaderHeight * scale - kCalendarGridGap * scale);
++      std::max(0.0F, innerHeight - todayBlockHeight - kCalendarHeaderHeight * scale - Style::spaceMd * scale);
+   const float weekdayHeight = kCalendarWeekdayRowHeight * scale;
+   const float dayCellHeight = std::clamp(
+-      (gridHeightAvailable - weekdayHeight - kCalendarGridGap * scale * 6.0F) / 6.0F, kCalendarCellSizeMin * scale,
+-      kCalendarCellSizeMax * scale
++      (gridHeightAvailable - weekdayHeight - gridGap * 6.0F) / 6.0F, kCalendarCellSizeMin * scale,
++      (m_showLunarCalendar ? 52.0F : kCalendarCellSizeMax) * scale
+   );
+ 
+   // The week-number column takes its share of the row before the day columns split the rest. It is
+   // inset from the divider by one grid gap, which reads as balanced against the card padding on its
+   // other side without spending a full card padding's worth of width on a two-digit number.
+-  const float weekLaneInset = m_showWeekNumbers ? kCalendarGridGap * scale : 0.0F;
++  const float weekLaneInset = m_showWeekNumbers ? gridGap : 0.0F;
+   const float weekDividerWidth = m_showWeekNumbers ? std::round(1.0F * scale) : 0.0F;
+-  const float weekLaneOverhead = m_showWeekNumbers ? weekLaneInset + weekDividerWidth + kCalendarGridGap * scale : 0.0F;
++  const float weekLaneOverhead = m_showWeekNumbers ? weekLaneInset + weekDividerWidth + gridGap : 0.0F;
+   // Solve for a day column that leaves the week column its fraction, then floor the week column at the
+   // width of its text and give the day grid whatever is actually left.
+   const float provisionalDayColumn = std::max(
+       0.0F,
+-      (innerWidth - kCalendarGridGap * scale * 6.0F - weekLaneOverhead)
++      (innerWidth - gridGap * 6.0F - weekLaneOverhead)
+           / (m_showWeekNumbers ? 7.0F + kCalendarWeekColumnRatio : 7.0F)
+   );
+   const float weekColumnWidth = m_showWeekNumbers
+@@ -517,13 +540,17 @@ void CalendarTab::rebuild() {
+         )
+       : 0.0F;
+   const float dayGridWidth = std::max(0.0F, innerWidth - weekColumnWidth - weekLaneOverhead);
+-  const float dayColumnWidth = std::max(0.0F, (dayGridWidth - kCalendarGridGap * scale * 6.0F) / 7.0F);
++  const float dayColumnWidth = std::max(0.0F, (dayGridWidth - gridGap * 6.0F) / 7.0F);
+   // Reserve a fixed strip under each day number for event indicator dots so all cells stay aligned.
+   const float dotDiameter = std::round(5.0F * scale);
+   const float dotGap = std::round(2.0F * scale);
+   const float dotStripHeight = dotDiameter;
+   const float buttonBudget = std::max(0.0F, dayCellHeight - dotStripHeight - dotGap);
+-  const float dayButtonSize = std::floor(std::min({buttonBudget, dayColumnWidth, kCalendarDayButtonSizeMax * scale}));
++  const float dayButtonHeight =
++      std::floor(std::min(buttonBudget, (m_showLunarCalendar ? 44.0F : kCalendarDayButtonSizeMax) * scale));
++  const float dayButtonWidth =
++      m_showLunarCalendar ? std::floor(dayColumnWidth) : std::floor(std::min(dayButtonHeight, dayColumnWidth));
++  const float dayButtonSize = dayButtonHeight;
+ 
+   if (m_header != nullptr) {
+     m_header->setSize(innerWidth, kCalendarHeaderHeight * scale);
+@@ -545,9 +572,12 @@ void CalendarTab::rebuild() {
+   }
+   m_monthLabel->setMaxWidth(monthWidth);
+   if (m_todayLabel != nullptr) {
+-    m_todayLabel->setText(formatShellDate(m_config));
++    m_todayLabel->setText(formatShellDate(m_config, m_showLunarCalendar));
+     m_todayLabel->setMaxWidth(innerWidth);
+   }
++  if (m_grid != nullptr) {
++    m_grid->setGap(gridGap);
++  }
+ 
+   calendar_view::rebuildMonth({
+       .grid = *m_grid,
+@@ -556,6 +586,7 @@ void CalendarTab::rebuild() {
+       .selected = {.year = m_selectedYear, .month = m_selectedMonth, .day = m_selectedDay},
+       .monthOffset = m_monthOffset,
+       .showWeekNumbers = m_showWeekNumbers,
++      .showLunarCalendar = m_showLunarCalendar,
+       .scale = scale,
+       .layout =
+           {
+@@ -563,13 +594,14 @@ void CalendarTab::rebuild() {
+               .weekdayHeight = weekdayHeight,
+               .dayCellHeight = dayCellHeight,
+               .dayButtonSize = dayButtonSize,
+-              .gap = kCalendarGridGap * scale,
++              .dayButtonWidth = dayButtonWidth,
++              .gap = gridGap,
+               .dotDiameter = dotDiameter,
+               .dotGap = dotGap,
+               .weekColumnWidth = weekColumnWidth,
+               .weekLaneInset = weekLaneInset,
+               .weekDividerWidth = weekDividerWidth,
+-              .weekDaysGap = m_showWeekNumbers ? kCalendarGridGap * scale : 0.0F,
++              .weekDaysGap = m_showWeekNumbers ? gridGap : 0.0F,
+           },
+       .onDateSelected =
+           [this](calendar_view::Date date, int monthShift) {
+@@ -610,6 +642,7 @@ void CalendarTab::rebuildEventList(float scale) {
+       .selected = {.year = m_selectedYear, .month = m_selectedMonth, .day = m_selectedDay},
+       .scale = scale,
+       .showEventsLocation = m_showEventsLocation,
++      .showLunarCalendar = m_showLunarCalendar,
+       .dateFormat = calendarConfig.eventDateFormat,
+       .timeFormat = calendarConfig.eventTimeFormat,
+       .state = &m_eventListState,
+@@ -637,3 +670,17 @@ void CalendarTab::toggleEventsCard() {
+     m_eventsCard->setVisible(m_showEventsCard);
+   }
+ }
++
++void CalendarTab::toggleLunarCalendar() {
++  m_showLunarCalendar = !m_showLunarCalendar;
++  if (m_config != nullptr) {
++    m_config->setOverride({"control_center", "calendar", "show_lunar_calendar"}, m_showLunarCalendar);
++  }
++  if (m_toggleLunarButton != nullptr) {
++    m_toggleLunarButton->setGlyph(m_showLunarCalendar ? "moon" : "moon-off");
++    m_toggleLunarButton->setSelected(m_showLunarCalendar);
++  }
++  m_eventsDirty = true;
++  m_lastInnerWidth = -1.0F;
++  PanelManager::instance().refresh();
++}
+diff --git a/src/shell/control_center/tabs/calendar_tab.h b/src/shell/control_center/tabs/calendar_tab.h
+index 0200b9b..1e8b8c5 100644
+--- a/src/shell/control_center/tabs/calendar_tab.h
++++ b/src/shell/control_center/tabs/calendar_tab.h
+@@ -35,12 +35,14 @@ private:
+   void rebuild();
+   void rebuildEventList(float scale);
+   void toggleEventsCard();
++  void toggleLunarCalendar();
+ 
+   ConfigService* m_config = nullptr;
+   CalendarService* m_calendar = nullptr;
+   bool m_changeCallbackRegistered = false;
+   bool m_eventsDirty = false;
+   Flex* m_rootLayout = nullptr;
++  Button* m_toggleLunarButton = nullptr;
+   Button* m_toggleEventsCardButton = nullptr;
+   InputArea* m_calendarArea = nullptr;
+   Flex* m_card = nullptr;
+@@ -75,6 +77,7 @@ private:
+   AnimationManager::Id m_monthSlideAnimId = 0;
+   bool m_showEventsCard = true;
+   bool m_showWeekNumbers = false;
++  bool m_showLunarCalendar = false;
+   bool m_showEventsLocation = false;
+   Timer m_eventFadeTimer;
+ };
+diff --git a/src/shell/settings/settings_registry.cpp b/src/shell/settings/settings_registry.cpp
+index d397dde..4cd346f 100644
+--- a/src/shell/settings/settings_registry.cpp
++++ b/src/shell/settings/settings_registry.cpp
+@@ -3155,6 +3155,12 @@ namespace settings {
+         {"control_center", "calendar", "show_week_numbers"},
+         ToggleSetting{cfg.controlCenter.calendarTab.showWeekNumbers}, "calendar week numbers iso"
+     ));
++    entries.push_back(makeEntry(
++        SettingsSection::Calendar, "general", tr("settings.schema.services.calendar-lunar.label"),
++        tr("settings.schema.services.calendar-lunar.description"),
++        {"control_center", "calendar", "show_lunar_calendar"},
++        ToggleSetting{cfg.controlCenter.calendarTab.showLunarCalendar}, "calendar lunar chinese solar terms festivals"
++    ));
+     entries.push_back(makeEntry(
+         SettingsSection::Calendar, "general", tr("settings.schema.services.calendar-show-events-location.label"),
+         tr("settings.schema.services.calendar-show-events-location.description"),

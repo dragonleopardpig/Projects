@@ -44,6 +44,9 @@
           # (`[widget.<name>] enabled = false`) sits in the tray's down-arrow drawer, where a
           # click runs its left action and a right click offers Pin to bar.
           ./suite/tray-drawer-unpinned-widgets.patch
+          # Chinese lunar calendar overlay (dates, 24 solar terms, traditional festivals) and
+          # wider local vdir sync window for multi-year holiday feeds.
+          ./suite/calendar-lunar-overlay.patch
         ];
       });
       suite = import ./suite { inherit pkgs shell pluginInputs; };
@@ -51,7 +54,7 @@
       packages.${system} = {
         default = suite.suiteSession;
         noctalia = shell;
-        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings agentStatus agentHooks gpuStatus rsyncStatus rcloneStatus displayCycle killWindow;
+        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings agentStatus agentHooks gpuStatus rsyncStatus rcloneStatus displayCycle killWindow sgHolidaysUpdate;
         umbriel = suite.umbriel;
         greeter = suite.greeter;
       };
@@ -65,6 +68,8 @@
         suite = suite.validatedSuite;
         gpuSelection = suite.gpuSelectionCheck;
         killWindow = suite.killWindowCheck;
+        sgHolidaysUpdate = suite.sgHolidaysUpdateCheck;
+        lunarCalendar = suite.lunarCalendarCheck;
         syncSettings = suite.syncSettingsCheck;
         agentStatus = suite.agentStatusCheck;
         gpuStatus = suite.gpuStatusCheck;
@@ -79,7 +84,17 @@
         alwaysOnPlugin = suite.alwaysOnPluginCheck;
       };
       nixosModules.suite = import ./suite/nixos-module.nix { inherit suite pkgs; };
-      homeManagerModules.suite = { lib, ... }: {
+      homeManagerModules.suite = { lib, ... }:
+        let
+          sgHolidayFiles = builtins.readDir ./suite/calendars/sg-holidays;
+          sgHolidayDataFiles = lib.mapAttrs' (name: _: {
+            name = "noctalia-suite/calendars/sg-holidays/${name}";
+            value = {
+              source = ./suite/calendars/sg-holidays/${name};
+              force = true;
+            };
+          }) sgHolidayFiles;
+        in {
         xdg.configFile."umbriel/config.toml" = {
           source = suite.userCompositorConfig;
           force = true;
@@ -96,35 +111,56 @@
           source = suite.theme.palette;
           force = true;
         };
-        xdg.dataFile."noctalia-suite/noctalia/plugins/kitty-control" = {
-          source = noctalia-kitty-control.lib.pluginDir;
-          force = true;
+        xdg.dataFile = sgHolidayDataFiles // {
+          "noctalia-suite/noctalia/plugins/kitty-control" = {
+            source = noctalia-kitty-control.lib.pluginDir;
+            force = true;
+          };
+          "noctalia-suite/noctalia/plugins/agent-status" = {
+            source = noctalia-agent-status.lib.pluginDir;
+            force = true;
+          };
+          "noctalia-suite/noctalia/plugins/gpu-status" = {
+            source = noctalia-gpu-status.lib.pluginDir;
+            force = true;
+          };
+          "noctalia-suite/noctalia/plugins/always-on" = {
+            source = noctalia-always-on.lib.pluginDir;
+            force = true;
+          };
+          "noctalia-suite/noctalia/plugins/rsync-status" = {
+            source = noctalia-rsync-status.lib.pluginDir;
+            force = true;
+          };
+          "noctalia-suite/noctalia/plugins/rclone-status" = {
+            source = noctalia-rclone-control.lib.pluginDir;
+            force = true;
+          };
+          # Its helper, backup-pool, comes with the host's backup (hosts/M90aPro/backup.nix);
+          # on hosts without one the icon hides itself.
+          "noctalia-suite/noctalia/plugins/backup-status" = {
+            source = noctalia-backup-status.lib.pluginDir;
+            force = true;
+          };
         };
-        xdg.dataFile."noctalia-suite/noctalia/plugins/agent-status" = {
-          source = noctalia-agent-status.lib.pluginDir;
-          force = true;
+        systemd.user.services.sg-holidays-update = {
+          Unit = {
+            Description = "Update Singapore public holidays from MOM for Noctalia calendar";
+            After = [ "network-online.target" ];
+          };
+          Service = {
+            Type = "oneshot";
+            ExecStart = "${lib.getExe suite.sgHolidaysUpdate} --live-only --quiet";
+          };
         };
-        xdg.dataFile."noctalia-suite/noctalia/plugins/gpu-status" = {
-          source = noctalia-gpu-status.lib.pluginDir;
-          force = true;
-        };
-        xdg.dataFile."noctalia-suite/noctalia/plugins/always-on" = {
-          source = noctalia-always-on.lib.pluginDir;
-          force = true;
-        };
-        xdg.dataFile."noctalia-suite/noctalia/plugins/rsync-status" = {
-          source = noctalia-rsync-status.lib.pluginDir;
-          force = true;
-        };
-        xdg.dataFile."noctalia-suite/noctalia/plugins/rclone-status" = {
-          source = noctalia-rclone-control.lib.pluginDir;
-          force = true;
-        };
-        # Its helper, backup-pool, comes with the host's backup (hosts/M90aPro/backup.nix);
-        # on hosts without one the icon hides itself.
-        xdg.dataFile."noctalia-suite/noctalia/plugins/backup-status" = {
-          source = noctalia-backup-status.lib.pluginDir;
-          force = true;
+        systemd.user.timers.sg-holidays-update = {
+          Unit.Description = "Monthly check for new Singapore public holiday calendars";
+          Timer = {
+            OnCalendar = "monthly";
+            Persistent = true;
+            RandomizedDelaySec = "1h";
+          };
+          Install.WantedBy = [ "timers.target" ];
         };
         home.file.".local/bin/noctalia-agent-status".source = lib.getExe suite.agentStatus;
         home.file.".local/bin/noctalia-gpu-status".source = lib.getExe suite.gpuStatus;

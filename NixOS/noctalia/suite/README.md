@@ -181,6 +181,27 @@ accepts `cmd=msg` with `arg`. A small Shell patch adapts that transport,
 including targeted window actions, preserving the lock-frame acknowledgement
 before requesting power-off. Review this patch when updating either input.
 
+## Calendar: Lunar Overlay & Singapore Holidays
+
+Clicking the clock in the top bar opens `control-center calendar` with:
+
+* **Chinese Lunar Calendar overlay** (`calendar-lunar-overlay.patch`): displays lunar dates (`初一`..`三十`, `正月`..`腊月` + leap months), 24 solar terms (`立春`..`大寒`), and traditional festivals (`春节`, `除夕`, `元宵`, `清明`, `端午`, `中秋`, `重阳`, etc.) inside each day cell, in the Today header, and in the day's detail pane. Toggle live with the moon icon in the Calendar header or via **Settings → Calendar → Lunar Calendar** (`control_center.calendar.show_lunar_calendar`).
+* **Singapore Public Holidays** (`calendar.account.sg_holidays`): reads local `.ics` files from `~/.local/share/noctalia-suite/calendars/sg-holidays` (bundled declaratively for 2026 and 2027 from MOM, enriched with statutory Monday-in-lieu dates for Sunday holidays). Holidays tint the day number, show a rose-red dot, and list in the right-hand Events pane.
+
+### Updating Singapore Holidays Yearly
+
+MOM normally publishes the next year's `.ics` around May/June:
+
+* **Automatic**: the `sg-holidays-update.timer` systemd user timer runs monthly and downloads any newly published MOM holiday calendar into `~/.local/share/noctalia-suite/calendars/sg-holidays` (Noctalia's `vdir` watcher reloads it within ~300 ms).
+* **Manual & commit for all hosts**:
+  ```sh
+  sg-holidays-update 2028          # fetch from MOM, add Monday-in-lieu dates, update live + repo
+  sg-holidays-update --check       # check whether MOM has published current/next year yet
+  sg-holidays-update --list        # list installed holiday dates
+  sg-holidays-update --from-file ~/Downloads/public-holidays-sg-2028.ics 2028
+  ```
+  Then commit and push `/home/thinky/Projects/NixOS/noctalia/suite/calendars/sg-holidays/sg-holidays-2028.ics` so all four hosts receive it declaratively.
+
 ## Validation and diagnostics
 
 From the `noctalia` directory:

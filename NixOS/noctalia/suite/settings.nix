@@ -93,6 +93,23 @@ in
   notification.enable_daemon = true;
   location = { auto_locate = false; latitude = 1.3521; longitude = 103.8198; };
   weather = { enabled = true; unit = "celsius"; };
+  control_center = {
+    width = 800;
+    calendar = {
+      show_lunar_calendar = true;
+    };
+  };
+  calendar = {
+    enabled = true;
+    refresh_minutes = 60;
+    reminders.all_day_digest_time = "";
+    account.sg_holidays = {
+      type = "vdir";
+      name = "Singapore Public Holidays";
+      color = "error";
+      path = "~/.local/share/noctalia-suite/calendars/sg-holidays";
+    };
+  };
   # Auto-select kernel backlight per output, with DDC/CI for external monitors.
   brightness.enable_ddcutil = true;
   lockscreen = { enabled = true; lock_before_suspend = true; };

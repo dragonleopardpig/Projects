@@ -99,6 +99,31 @@ let
       exec python3 ${./kill-window.py} "$@"
     '';
   };
+  sgHolidaysUpdate = pkgs.writeShellApplication {
+    name = "sg-holidays-update";
+    runtimeInputs = [ pkgs.python3 ];
+    text = ''
+      exec python3 ${./sg-holidays-update.py} "$@"
+    '';
+  };
+  sgHolidaysUpdateCheck = pkgs.runCommand "sg-holidays-update-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    python3 ${./test-sg-holidays-update.py} ${./sg-holidays-update.py}
+    touch $out
+  '';
+  lunarCalendarCheck = pkgs.runCommand "noctalia-lunar-calendar-checked" {
+    nativeBuildInputs = [ pkgs.stdenv.cc ];
+  } ''
+    cp -r ${shell.src} src && chmod -R u+w src
+    patch -d src -p1 -s < ${./calendar-lunar-overlay.patch}
+    $CXX -std=c++23 -O2 -Wall -Wextra -I src/src \
+      src/src/shell/calendar/lunar_calendar.cpp \
+      ${./test-lunar-calendar.cpp} \
+      -o test-lunar-calendar
+    ./test-lunar-calendar
+    touch $out
+  '';
   agentStatus = pluginInputs.agent-status.packages.${system}.helper;
   agentHooks = pluginInputs.agent-status.packages.${system}.hooks;
   agentStatusCheck = pluginInputs.agent-status.checks.${system}.helper;
@@ -205,7 +230,7 @@ let
   '';
   suiteTools = pkgs.symlinkJoin {
     name = "noctalia-suite-tools";
-    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle killWindow gpuStatus rsyncStatus rcloneStatus ];
+    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle killWindow sgHolidaysUpdate gpuStatus rsyncStatus rcloneStatus ];
   };
   shellConfig = toml.generate "noctalia-suite.toml" (import ./settings.nix {
     themeName = theme.name;
@@ -260,6 +285,8 @@ let
     test -f ${gpuSelectionCheck}
     test -f ${displayCycleCheck}
     test -f ${killWindowCheck}
+    test -f ${sgHolidaysUpdateCheck}
+    test -f ${lunarCalendarCheck}
     test -f ${gpuStatusCheck}
     test -f ${rsyncStatusCheck}
     test -f ${rsyncStatusPluginCheck}
@@ -335,7 +362,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barIconsCheck pluginLintCheck displayCycle displayCycleCheck killWindow killWindowCheck alwaysOnPluginCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barIconsCheck pluginLintCheck displayCycle displayCycleCheck killWindow killWindowCheck sgHolidaysUpdate sgHolidaysUpdateCheck lunarCalendarCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest trayDrawerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;
