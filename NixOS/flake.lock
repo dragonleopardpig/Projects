@@ -196,11 +196,11 @@
         "quill-icons": "quill-icons"
       },
       "locked": {
-        "lastModified": 1795744014,
-        "narHash": "sha256-V18ZaHYVLA6rETXg96KMW7TTu1nfu9eUYqjDLJhF1Qg=",
+        "lastModified": 1795752221,
+        "narHash": "sha256-BQ5VlMqP1wbQHECLI+sD4SiUmpUQvAur3UHvVaSimZg=",
         "owner": "dragonleopardpig",
         "repo": "hyprfm",
-        "rev": "20220415ecb2216b1cb22d32adaa9b33a4c82343",
+        "rev": "f4d83a85eb5148e5dc6eea35af9b16b08b801129",
         "type": "github"
       },
       "original": {
