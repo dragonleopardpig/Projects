@@ -86,6 +86,19 @@ let
     runtimeInputs = [ pkgs.procps pkgs.coreutils pkgs.libnotify ];
     text = builtins.readFile ./stop-recording.sh;
   };
+  killWindowCheck = pkgs.runCommand "noctalia-kill-window-checked" {
+    nativeBuildInputs = [ pkgs.python3 ];
+  } ''
+    python3 ${./test-kill-window.py} ${./kill-window.py}
+    touch $out
+  '';
+  killWindow = pkgs.writeShellApplication {
+    name = "noctalia-kill-window";
+    runtimeInputs = [ umbriel pkgs.slurp pkgs.python3 pkgs.libnotify ];
+    text = ''
+      exec python3 ${./kill-window.py} "$@"
+    '';
+  };
   agentStatus = pluginInputs.agent-status.packages.${system}.helper;
   agentHooks = pluginInputs.agent-status.packages.${system}.hooks;
   agentStatusCheck = pluginInputs.agent-status.checks.${system}.helper;
@@ -192,12 +205,13 @@ let
   '';
   suiteTools = pkgs.symlinkJoin {
     name = "noctalia-suite-tools";
-    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle gpuStatus rsyncStatus rcloneStatus ];
+    paths = [ shell umbriel greeter pkgs.foot pkgs.wl-clipboard pkgs.libnotify displayCycle killWindow gpuStatus rsyncStatus rcloneStatus ];
   };
   shellConfig = toml.generate "noctalia-suite.toml" (import ./settings.nix {
     themeName = theme.name;
     inherit (theme) wallpaper barAccents;
     launcherIcon = "${pkgs.nixos-icons}/share/icons/hicolor/scalable/apps/nix-snowflake-white.svg";
+    killWindowCommand = lib.getExe killWindow;
   });
   configHome = pkgs.runCommand "noctalia-suite-config" { } ''
     mkdir -p $out/noctalia/palettes
@@ -225,6 +239,7 @@ let
     terminalCommand = "${lib.getExe pkgs.foot} --config=${theme.terminalConfig}";
     displayCycleCommand = lib.getExe displayCycle;
     stopRecordingCommand = lib.getExe stopRecording;
+    killWindowCommand = lib.getExe killWindow;
     agentCommand = "${lib.getExe agentStatus} run";
     lockCommand = lib.getExe lockAndBlank;
     inherit (theme) dark neon;
@@ -244,6 +259,7 @@ let
   validatedSuite = pkgs.runCommand "noctalia-suite-validated" { } ''
     test -f ${gpuSelectionCheck}
     test -f ${displayCycleCheck}
+    test -f ${killWindowCheck}
     test -f ${gpuStatusCheck}
     test -f ${rsyncStatusCheck}
     test -f ${rsyncStatusPluginCheck}
@@ -319,7 +335,7 @@ let
   '';
 in {
   inherit suiteTools suiteSession suiteConfig validatedSuite greeterSettings sessionEntry syncSettings syncSettingsCheck;
-  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barIconsCheck pluginLintCheck displayCycle displayCycleCheck alwaysOnPluginCheck;
+  inherit agentStatus agentHooks agentStatusCheck gpuStatus gpuStatusCheck rsyncStatus rsyncStatusCheck rsyncStatusPluginCheck rcloneStatus rcloneStatusCheck rcloneStatusPluginCheck backupStatusPluginCheck pluginGlyphsCheck barIconsCheck pluginLintCheck displayCycle displayCycleCheck killWindow killWindowCheck alwaysOnPluginCheck;
   inherit umbriel greeter drmLauncher gpuSelectionCheck userCompositorConfig userCompositorService lockPowerTest trayDrawerTest;
   sessionCompositorConfig = compositorConfig;
   userShellConfig = shellConfig;

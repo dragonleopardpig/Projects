@@ -1,4 +1,4 @@
-{ lib, pkgs, shellCommand, terminalCommand, dark, neon, displayCycleCommand, stopRecordingCommand, lockCommand, agentCommand }:
+{ lib, pkgs, shellCommand, terminalCommand, dark, neon, displayCycleCommand, stopRecordingCommand, killWindowCommand, lockCommand, agentCommand }:
 let
   spawn = cmd: { action = "spawn:${cmd}"; repeat = false; };
   control = cmd: {
@@ -81,6 +81,8 @@ in {
     "Mod+O" = "overview-toggle";
     "Pause" = "overview-toggle";
     "Mod+K" = { action = "window-close"; repeat = false; };
+    "Mod+Shift+K" = spawn killWindowCommand;
+    "Ctrl+Alt+Escape" = spawn killWindowCommand;
     "Mod+Escape" = "session-quit";
     "Mod+Shift+F" = "window-toggle-maximize";
     "Mod+Z" = "window-toggle-maximize-to-edges";

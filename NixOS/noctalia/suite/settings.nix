@@ -1,8 +1,8 @@
-{ themeName, wallpaper, barAccents, launcherIcon }:
+{ themeName, wallpaper, barAccents, launcherIcon, killWindowCommand }:
 let
   barStart = [ "launcher" "workspaces" "agent-status" "umbriel-companion" "taskbar" ];
   barCenter = [ "active_window" "xwayland" ];
-  barEnd = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "backup-status" "gpu-status" "umbriel-displays" "kitty-control" "session" ];
+  barEnd = [ "media" "weather" "clock" "control-center" "privacy" "caffeine" "always-on" "volume" "network" "bluetooth" "battery" "notifications" "keyboard_layout" "tray" "rsync-status" "rclone-status" "backup-status" "gpu-status" "umbriel-displays" "kitty-control" "kill-window" "session" ];
   # PIN / UNPIN (suite/tray-drawer-unpinned-widgets.patch): right click on any icon opens
   # Noctalia's native menu (the tray's look) with the icon's own right-click action first (if
   # it has one) and "Unpin from bar".  An unpinned icon moves into the tray's down-arrow
@@ -194,6 +194,13 @@ in
       actions.left = "exec fcitx5-remote -t";
     };
     tray = { color = barAccents.bubblegum; drawer = true; };
+    kill-window = {
+      type = "custom_button";
+      glyph = "skull";
+      tooltip = "Kill window: click, then click any frozen window (Esc cancels) · Super+Shift+K / Ctrl+Alt+Escape";
+      color = barAccents.amber;
+      actions.left = "exec ${killWindowCommand}";
+    };
     session.color = "#FFFFFF";
     # Plugin bar widgets (see plugins.enabled above).  A plugin's resting colour is this
     # `color`; it switches to its own colour only for a failure.  Their left click is spelt

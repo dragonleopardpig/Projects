@@ -37,6 +37,7 @@ Umbriel uses the dwindle layout by default.
 | Super+Shift+arrows | Move the focused tile in that direction |
 | Super+Alt+T | Toggle the focused tile's split direction |
 | Super+K | Close focused window |
+| Super+Shift+K, Ctrl+Alt+Escape | Kill window mode: click any frozen window to force-kill it (`Esc` cancels) |
 | Super+Shift+F | Maximize the column/window |
 | Super+1…9 | Select that workspace on the current output |
 | Super+Shift+1…9 | Move window to that workspace |

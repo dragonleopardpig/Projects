@@ -51,7 +51,7 @@
       packages.${system} = {
         default = suite.suiteSession;
         noctalia = shell;
-        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings agentStatus agentHooks gpuStatus rsyncStatus rcloneStatus displayCycle;
+        inherit (suite) suiteSession suiteConfig validatedSuite suiteTools drmLauncher lockPowerTest syncSettings agentStatus agentHooks gpuStatus rsyncStatus rcloneStatus displayCycle killWindow;
         umbriel = suite.umbriel;
         greeter = suite.greeter;
       };
@@ -64,6 +64,7 @@
       checks.${system} = {
         suite = suite.validatedSuite;
         gpuSelection = suite.gpuSelectionCheck;
+        killWindow = suite.killWindowCheck;
         syncSettings = suite.syncSettingsCheck;
         agentStatus = suite.agentStatusCheck;
         gpuStatus = suite.gpuStatusCheck;

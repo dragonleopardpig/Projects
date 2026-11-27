@@ -8,9 +8,11 @@ the other hosts retain SDDM.
 
 The desktop provides the launcher, taskbar, centered active-window title,
 right-side clock, clipboard history, notifications, tray, screenshots, media,
-network, Bluetooth, power profiles, and monitor brightness controls. The
-existing AGS desktop remains separate; its widgets are not required by the
-Noctalia session. There are no installed trial or preview launchers.
+network, Bluetooth, power profiles, monitor brightness controls, and a top-bar
+Kill button (`Super+Shift+K` / `Ctrl+Alt+Escape`) to point at and force-kill
+any frozen window. The existing AGS desktop remains separate; its widgets are
+not required by the Noctalia session. There are no installed trial or preview
+launchers.
 
 ## Integration
 
