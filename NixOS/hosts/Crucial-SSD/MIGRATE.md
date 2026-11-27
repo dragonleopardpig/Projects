@@ -2,7 +2,11 @@
 
 **Done 2026-11-20**: CRUCIAL-SSD runs the btrfs layout; `layouts.nix` defaults
 to `"btrfs"` and the temporary `CRUCIAL-SSD-btrfs` flake output is gone (so
-`prepare` no longer applies).  Left: B6 after a week of good boots.
+`prepare` no longer applies).  **B6 done 2026-11-27** after four good boots: the
+ext4 image is gone and `sda3` is an empty FAT32 `CRUCIALDATA` again, so there is
+no rollback any more.  The LUKS header backup taken in B1 (it matches the live
+header) is kept root-only in
+`~/.local/state/crucial-migration/luks-header-backup/`.
 
 One-time move of this host to the layout PortableSSD already uses: `/` wiped on
 every boot, regenerable dev artifacts cleaned, everything else kept.  The tool
@@ -105,7 +109,13 @@ impermanence pre-switch check; `.#CRUCIAL-SSD-btrfs` works meanwhile.
 sudo crucial-btrfs-migrate release-stage   # deletes the image; sda3 is an empty FAT32 CRUCIALDATA again
 ```
 
-## Rollback (any time before B6)
+The tool is only installed on PortableSSD.  From CRUCIAL-SSD itself (the root
+already open as `cryptroot`) the same steps are: check that `/` is btrfs and
+`sda3` is labelled `CRUCIAL-STAGE`; copy
+`crucial-migration/luks-header.img` off it; unmount it; then
+`sudo wipefs -a /dev/sda3 && sudo mkfs.vfat -F 32 -n CRUCIALDATA /dev/sda3`.
+
+## Rollback (any time before B6; gone since 2026-11-27)
 
 From PortableSSD:
 
